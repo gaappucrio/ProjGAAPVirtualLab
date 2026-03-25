@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sandbox GAAP - Labels Otimizados</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #fdfdfd; margin: 0; padding: 20px; color: #2c3e50; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; user-select: none; }
+        .gaap-header { text-align: center; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 15px; }
+        .gaap-header h2 { margin: 0; font-size: 26px; }
+        .gaap-header p { color: #95a5a6; font-size: 15px; margin-top: 5px;}
+        
+        .sandbox-container { display: flex; flex: 1; gap: 20px; border: 1px solid #e1e8ed; border-radius: 12px; overflow: hidden; background: #fff; box-shadow: 0 10px 20px rgba(0,0,0,0.06); }
+        
+        .palette-panel { width: 250px; background: #f4f7f6; border-right: 1px solid #e1e8ed; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
+        .palette-item { background: #fff; border: 2px dashed #95a5a6; border-radius: 8px; padding: 15px; text-align: center; font-weight: bold; cursor: grab; display: flex; flex-direction: column; align-items: center; gap: 10px; transition: 0.2s; position: relative; overflow: hidden;}
+        .palette-item:hover { background: #eaf2f8; border-color: #3498db; color: #3498db; }
+        
+        .workspace-panel { flex: 1; position: relative; background-color: #fdfdfd; background-image: linear-gradient(to right, #e1e8ed 1px, transparent 1px), linear-gradient(to bottom, #e1e8ed 1px, transparent 1px); background-size: 40px 40px; overflow: hidden; }
+        
+        .top-toolbar { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 100; display: flex; justify-content: space-between; background: rgba(255,255,255,0.95); padding: 10px; border-radius: 8px; border: 1px solid #eee; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .gaap-btn { padding: 8px 15px; border: 1px solid #bdc3c7; border-radius: 6px; font-weight: bold; cursor: pointer; background: #fff; color: #2c3e50; transition: 0.2s;}
+        .gaap-btn:hover { background: #ecf0f1; }
+        .gaap-btn.active { background: #3498db; color: white; border-color: #2980b9; }
+        
+        .placed-component { 
+            position: absolute; 
+            cursor: move; 
+            box-sizing: border-box;
+        }
+        
+        .placed-component.dragging { opacity: 0.8; z-index: 1000; filter: drop-shadow(0px 8px 12px rgba(0,0,0,0.2)); }
+        
+        .placed-component svg {
+            position: absolute;
+            overflow: visible;
+            pointer-events: none; 
+        }
+
+        @keyframes pulse-port {
+            0% { r: 5; stroke-width: 2; }
+            50% { r: 6; stroke-width: 4; }
+            100% { r: 5; stroke-width: 2; }
+        }
+        .port-node {
+            animation: pulse-port 2s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="gaap-header">
+        <h2>Sandbox Modular GAAP - Organização Visual</h2>
+        <p>Rótulos reposicionados para não obstruir os portos de conexão.</p>
+    </div>
+
+    <div class="sandbox-container">
+        <div class="palette-panel" id="palette">
+            <h3 style="margin-top: 0; font-size: 16px; border-bottom: 1px solid #ddd; padding-bottom: 5px;">Equipamentos</h3>
+            <div class="palette-item" draggable="true" data-type="tank"><span>Tanque T-01</span></div>
+            <div class="palette-item" draggable="true" data-type="pump"><span>Bomba P-01</span></div>
+            <div class="palette-item" draggable="true" data-type="valve"><span>Válvula V-01</span></div>
+        </div>
+
+        <div class="workspace-panel" id="workspace">
+            <div class="top-toolbar">
+                <button class="gaap-btn active" id="btn-run">Rodar Física (Teste)</button>
+                <button class="gaap-btn" id="btn-clear" style="border-color:#e74c3c; color:#e74c3c;">Limpar Tudo</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const GRID_SIZE = 40;
+
+        // ==========================================
+        // PADRÃO OBSERVER E CLASSES LÓGICAS
+        // ==========================================
+        class Observable {
+            constructor() { this.listeners = []; }
+            subscribe(fn) { this.listeners.push(fn); }
+            notify(data) { this.listeners.forEach(fn => fn(data)); }
+        }
+        class ComponenteFisico extends Observable {
+            constructor(id) { super(); this.id = id; this.inputs = []; this.outputs = []; }
+            conectarSaida(d) { this.outputs.push(d); d.inputs.push(this); }
+        }
+        class BombaLogica extends ComponenteFisico {
+            constructor(id) { super(id); this.isOn = false; this.maxFlow = 45.0; }
+            toggle() { this.isOn = !this.isOn; this.notify({ tipo: 'estado', isOn: this.isOn }); }
+            getVazao() { return this.isOn ? this.maxFlow : 0; }
+        }
+        class ValvulaLogica extends ComponenteFisico {
+            constructor(id) { super(id); this.aberta = false; this.k_v = 6.5; }
+            toggle() { this.aberta = !this.aberta; this.notify({ tipo: 'estado', aberta: this.aberta }); }
+            getVazao(nivelNormalizado) { return (!this.aberta || nivelNormalizado<=0) ? 0 : this.k_v * Math.sqrt(nivelNormalizado); }
+        }
+        class TanqueLogico extends ComponenteFisico {
+            constructor(id) { super(id); this.maxVolume = 1000.0; this.volume = 0; }
+            dVdt(V) {
+                let qIn = 0, qOut = 0;
+                this.inputs.forEach(c => { if (c instanceof BombaLogica) qIn += c.getVazao(); });
+                const nv = V / this.maxVolume;
+                this.outputs.forEach(c => { if (c instanceof ValvulaLogica) qOut += c.getVazao(nv * this.maxVolume); });
+                return qIn - qOut;
+            }
+            atualizarFisica(dt) {
+                const k1 = this.dVdt(this.volume), k2 = this.dVdt(this.volume + 0.5 * k1 * dt), k3 = this.dVdt(this.volume + 0.5 * k2 * dt), k4 = this.dVdt(this.volume + k3 * dt);
+                this.volume += (1/6) * (k1 + 2*k2 + 2*k3 + k4) * dt;
+                if (this.volume < 0) this.volume = 0; if (this.volume > this.maxVolume) this.volume = this.maxVolume;
+                this.notify({ tipo: 'volume', perc: this.volume / this.maxVolume }); 
+            }
+        }
+        class MotorSimulacao {
+            constructor() { this.componentes = []; this.lastTime = 0; this.isRunning = false; }
+            add(comp) { this.componentes.push(comp); }
+            clear() { this.componentes = []; this.isRunning = false; }
+            start() { this.isRunning = true; this.lastTime = performance.now(); requestAnimationFrame(this.tick.bind(this)); }
+            tick(timestamp) {
+                if(!this.isRunning) return;
+                let dt = (timestamp - this.lastTime) / 1000.0; this.lastTime = timestamp; if (dt > 0.1) dt = 0.1;
+                this.componentes.forEach(c => { if (c instanceof TanqueLogico) c.atualizarFisica(dt); });
+                requestAnimationFrame(this.tick.bind(this));
+            }
+        }
+        const ENGINE = new MotorSimulacao();
+
+        // ==========================================
+        // FACTORY METHOD (Com Labels Reposicionados)
+        // ==========================================
+        class FabricaDeEquipamentos {
+            static criar(tipo, x, y, isPalette = false) {
+                const id = tipo + '-' + Date.now();
+                const visual = document.createElement('div');
+                visual.className = 'placed-component';
+                visual.style.left = `${x}px`;
+                visual.style.top = `${y}px`;
+                visual.style.zIndex = '10';
+
+                let logica = null;
+                let logW, logH, svgOffsetX, svgOffsetY;
+
+                const colorPort = "#e67e22"; 
+                // Estilo para garantir que o texto não se misture com as linhas de grid
+                const labelStyle = `font-family="Arial" font-weight="bold" text-anchor="middle" fill="#2c3e50" paint-order="stroke" stroke="#fff" stroke-width="3"`;
+
+                if (tipo === 'tank') {
+                    logW = 160; logH = 160;
+                    svgOffsetX = 0; svgOffsetY = -40; 
+                    
+                    logica = new TanqueLogico(id);
+                    visual.innerHTML = `
+                        <svg viewBox="0 0 160 240" width="160" height="240" style="left:${svgOffsetX}px; top:${svgOffsetY}px;">
+                            <defs>
+                                <linearGradient id="grad-${id}" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="#3498db" stop-opacity="0.9"/>
+                                    <stop offset="100%" stop-color="#2980b9" stop-opacity="0.95"/>
+                                </linearGradient>
+                                <clipPath id="clip-${id}">
+                                    <path d="M 0 40 L 0 200 A 80 40 0 0 0 160 200 L 160 40 A 80 40 0 0 0 0 40 Z"/>
+                                </clipPath>
+                            </defs>
+                            <path d="M 0 40 L 0 200 A 80 40 0 0 0 160 200 L 160 40 A 80 40 0 0 0 0 40 Z" fill="#fff" stroke="#2c3e50" stroke-width="6"/>
+                            <rect id="agua-${id}" x="0" y="200" width="160" height="0" fill="url(#grad-${id})" clip-path="url(#clip-${id})" />
+                            
+                            <text x="80" y="100" font-size="16" ${labelStyle}>T-01</text>
+                            
+                            <g>
+                                <circle class="port-node" cx="80" cy="40" r="5" fill="#fff" stroke="${colorPort}" stroke-width="2"/>
+                                <circle class="port-node" cx="80" cy="200" r="5" fill="#fff" stroke="${colorPort}" stroke-width="2"/>
+                            </g>
+                        </svg>`;
+                    
+                    logica.subscribe((dados) => {
+                        if (dados.tipo === 'volume') {
+                            const rect = visual.querySelector(`#agua-${id}`);
+                            const maxAltura = 160; 
+                            const alturaAgua = dados.perc * maxAltura; 
+                            rect.setAttribute('height', alturaAgua);
+                            rect.setAttribute('y', 200 - alturaAgua); 
+                        }
+                    });
+
+                } else if (tipo === 'pump') {
+                    logW = 80; logH = 80;
+                    svgOffsetX = 0; svgOffsetY = 0; 
+                    
+                    logica = new BombaLogica(id);
+                    visual.innerHTML = `
+                        <svg viewBox="0 0 80 80" width="80" height="80" style="left:${svgOffsetX}px; top:${svgOffsetY}px;">
+                            <circle cx="40" cy="40" r="34" fill="#fff" stroke="#2c3e50" stroke-width="6"/>
+                            <circle id="led-${id}" cx="40" cy="40" r="10" fill="#e74c3c"/>
+                            
+                            <text x="40" y="100" font-size="16" ${labelStyle}>P-01</text>
+                            
+                            <g>
+                                <circle class="port-node" cx="4" cy="40" r="5" fill="#fff" stroke="${colorPort}" stroke-width="2"/>
+                                <circle class="port-node" cx="40" cy="4" r="5" fill="#fff" stroke="${colorPort}" stroke-width="2"/>
+                            </g>
+                        </svg>`;
+                    
+                    if(!isPalette) {
+                        visual.addEventListener('dblclick', () => logica.toggle());
+                        logica.subscribe((dados) => { visual.querySelector(`#led-${id}`).setAttribute('fill', dados.isOn ? '#2ecc71' : '#e74c3c'); });
+                    }
+
+                } else if (tipo === 'valve') {
+                    logW = 40; logH = 40;
+                    svgOffsetX = -20; svgOffsetY = -20; 
+
+                    logica = new ValvulaLogica(id);
+                    visual.innerHTML = `
+                        <svg viewBox="0 0 80 80" width="80" height="80" style="left:${svgOffsetX}px; top:${svgOffsetY}px;">
+                            <rect x="10" y="34" width="60" height="12" fill="#95a5a6" stroke="#2c3e50" stroke-width="2"/>
+                            <path id="corpo-${id}" d="M 20 20 L 20 60 L 60 20 L 60 60 Z" fill="#e74c3c" stroke="#2c3e50" stroke-width="3" stroke-linejoin="round"/>
+                            <rect x="36" y="5" width="8" height="35" fill="#c0392b" stroke="#2c3e50" stroke-width="2"/>
+                            <rect id="volante-${id}" x="25" y="0" width="30" height="10" fill="#e74c3c" stroke="#2c3e50" stroke-width="2" rx="3"/>
+                            
+                            <text x="40" y="100" font-size="16" ${labelStyle}>V-01</text>
+                            
+                            <g>
+                                <circle class="port-node" cx="20" cy="40" r="5" fill="#fff" stroke="${colorPort}" stroke-width="2"/>
+                                <circle class="port-node" cx="60" cy="40" r="5" fill="#fff" stroke="${colorPort}" stroke-width="2"/>
+                            </g>
+                        </svg>`;
+                    
+                    if(!isPalette) {
+                        visual.addEventListener('dblclick', () => logica.toggle());
+                        logica.subscribe((dados) => {
+                            const cor = dados.aberta ? '#f1c40f' : '#e74c3c';
+                            visual.querySelector(`#corpo-${id}`).setAttribute('fill', cor);
+                            visual.querySelector(`#volante-${id}`).setAttribute('fill', cor);
+                        });
+                    }
+                }
+
+                visual.style.width = `${logW}px`;
+                visual.style.height = `${logH}px`;
+                visual.dataset.logW = logW;
+                visual.dataset.logH = logH;
+
+                if(!isPalette) ENGINE.add(logica);
+                return visual;
+            }
+        }
+
+        // ==========================================
+        // UI & DRAG AND DROP
+        // ==========================================
+        const paletteItems = document.querySelectorAll('.palette-item');
+        const workspace = document.getElementById('workspace');
+        let draggedType = null;
+
+        paletteItems.forEach(item => {
+            const t = item.getAttribute('data-type');
+            const dummy = FabricaDeEquipamentos.criar(t, 0, 0, true);
+            dummy.style.position = 'relative'; 
+            dummy.style.transform = 'scale(0.5)';
+            dummy.style.transformOrigin = 'center';
+            dummy.style.margin = '20px auto';
+            item.insertBefore(dummy, item.firstChild);
+            item.addEventListener('dragstart', (e) => {
+                draggedType = t;
+                e.dataTransfer.setData('text/plain', draggedType);
+            });
+        });
+
+        workspace.addEventListener('dragover', e => e.preventDefault());
+
+        workspace.addEventListener('drop', e => {
+            e.preventDefault();
+            if(!draggedType) return;
+            const novoVisual = FabricaDeEquipamentos.criar(draggedType, 0, 0);
+            const w = parseInt(novoVisual.dataset.logW);
+            const h = parseInt(novoVisual.dataset.logH);
+            const rect = workspace.getBoundingClientRect();
+            const rawX = e.clientX - rect.left - (w / 2);
+            const rawY = e.clientY - rect.top - (h / 2);
+            const snapX = Math.round(rawX / GRID_SIZE) * GRID_SIZE;
+            const snapY = Math.round(rawY / GRID_SIZE) * GRID_SIZE;
+            
+            novoVisual.style.left = `${snapX}px`;
+            novoVisual.style.top = `${snapY}px`;
+            workspace.appendChild(novoVisual);
+            makeDraggable(novoVisual);
+            draggedType = null;
+        });
+
+        function makeDraggable(element) {
+            let isDragging = false, startX, startY, initX, initY;
+            element.addEventListener('mousedown', e => {
+                isDragging = true; startX = e.clientX; startY = e.clientY;
+                initX = parseInt(element.style.left); initY = parseInt(element.style.top);
+                e.stopPropagation(); 
+            });
+            document.addEventListener('mousemove', e => {
+                if(!isDragging) return;
+                const snapX = Math.round((initX + e.clientX - startX) / GRID_SIZE) * GRID_SIZE;
+                const snapY = Math.round((initY + e.clientY - startY) / GRID_SIZE) * GRID_SIZE;
+                element.style.left = `${snapX}px`; element.style.top = `${snapY}px`;
+            });
+            document.addEventListener('mouseup', () => isDragging = false);
+            document.addEventListener('mouseleave', () => isDragging = false);
+        }
+
+        document.getElementById('btn-run').addEventListener('click', () => {
+            let bomba = ENGINE.componentes.find(c => c instanceof BombaLogica);
+            let tanque = ENGINE.componentes.find(c => c instanceof TanqueLogico);
+            let valvula = ENGINE.componentes.find(c => c instanceof ValvulaLogica);
+            if(!bomba || !tanque) { alert("Coloque pelo menos 1 Bomba e 1 Tanque na tela!"); return; }
+            bomba.conectarSaida(tanque);
+            if(valvula) tanque.conectarSaida(valvula);
+            ENGINE.start();
+        });
+
+        document.getElementById('btn-clear').addEventListener('click', () => {
+            const items = workspace.querySelectorAll('.placed-component');
+            items.forEach(item => item.remove());
+            ENGINE.clear();
+        });
+    </script>
+</body>
+</html>

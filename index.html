@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sandbox GAAP - Modular</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="gaap-header">
+        <h2>Sandbox Modular GAAP</h2>
+        <p>Estrutura profissional com Design Patterns e múltiplos arquivos.</p>
+    </div>
+
+    <div class="sandbox-container">
+        <div class="palette-panel" id="palette">
+            <h3>Equipamentos</h3>
+            <div class="palette-item" draggable="true" data-type="tank"><span>Tanque T-01</span></div>
+            <div class="palette-item" draggable="true" data-type="pump"><span>Bomba P-01</span></div>
+            <div class="palette-item" draggable="true" data-type="valve"><span>Válvula V-01</span></div>
+        </div>
+
+        <div class="workspace-panel" id="workspace">
+            <div class="top-toolbar">
+                <button class="gaap-btn active" id="btn-run">Rodar Física (Teste)</button>
+                <button class="gaap-btn" id="btn-clear" style="border-color:#e74c3c; color:#e74c3c;">Limpar Tudo</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/MotorFisico.js"></script>
+    <script src="js/FabricaEquipamentos.js"></script>
+    <script src="js/App.js"></script>
+</body>
+</html>
