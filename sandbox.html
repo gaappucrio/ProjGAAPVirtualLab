@@ -551,6 +551,26 @@
                         }
                     }
                 });
+
+                // Para cada tanque com controlador ativo, força re-notificação
+                // do estado visual dos componentes de entrada E saída a cada tick
+                if (this.isRunning) {
+                    this.componentes.forEach(c => {
+                        if (c instanceof TanqueLogico && c.setpointAtivo) {
+                            
+                            const notificarEstado = (equipamento) => {
+                                if (equipamento instanceof ValvulaLogica) {
+                                    equipamento.notify({ tipo: 'estado', aberta: equipamento.aberta, grau: equipamento.grauAbertura });
+                                } else if (equipamento instanceof BombaLogica) {
+                                    equipamento.notify({ tipo: 'estado', isOn: equipamento.isOn, grau: equipamento.grauAcionamento });
+                                }
+                            };
+
+                            c.inputs.forEach(notificarEstado);
+                            c.outputs.forEach(notificarEstado);
+                        }
+                    });
+                }
             }
         }
         const ENGINE = new SistemaSimulacao();
@@ -653,17 +673,83 @@
         }
 
         class TanqueLogico extends ComponenteFisico {
-            constructor(id, tag, x, y) { super(id, tag, x, y); this.capacidadeMaxima = 1000.0; this.volumeAtual = 0; this.lastQin = 0; }
+            constructor(id, tag, x, y) {
+                super(id, tag, x, y);
+                this.capacidadeMaxima = 1000.0;
+                this.volumeAtual = 0;
+                this.lastQin = 0;
+                
+                // Controlador PI de nível
+                this.setpointAtivo = false;
+                this.setpoint = 50;       
+                
+                // GANHOS AJUSTADOS: Mais agressivos para parar de enrolar e cravar na marca
+                this.kp = 250;             
+                this.ki = 25;              
+                
+                this._ctrlIntegral = 0;   
+                this._lastErro = 0; // Guarda o erro anterior para detectar o cruzamento do alvo
+            }
+
+            _rodarControlador(dt) {
+                if (!this.setpointAtivo) return;
+                
+                const nivelAtual = this.capacidadeMaxima > 0 ? this.volumeAtual / this.capacidadeMaxima : 0;
+                const erro = (this.setpoint / 100) - nivelAtual;
+
+                // ANTI-WINDUP (A Mágica): Se o erro inverteu de sinal (cruzou a linha do Setpoint),
+                // zeramos a memória integral instantaneamente. Isso mata 100% o efeito de passar direto.
+                if (this._lastErro !== undefined && (this._lastErro * erro < 0)) {
+                    this._ctrlIntegral = 0;
+                }
+                this._lastErro = erro;
+
+                // Acumula integral
+                this._ctrlIntegral += erro * dt;
+
+                // Trava a integral num limite razoável pra não explodir
+                const clampInt = this.ki > 0 ? 1 / this.ki : 1;
+                this._ctrlIntegral = Math.max(-clampInt, Math.min(clampInt, this._ctrlIntegral));
+
+                // Saída PI
+                const u = Math.max(-1, Math.min(1, this.kp * erro + this.ki * this._ctrlIntegral));
+
+                const grauEntrada = Math.max(0, u * 100);
+                const grauSaida = Math.max(0, -u * 100);
+
+                // Atua nas bombas e válvulas conectadas na ENTRADA do tanque
+                this.inputs.forEach(c => {
+                    if (c instanceof ValvulaLogica) c.setAbertura(grauEntrada);
+                    else if (c instanceof BombaLogica) c.setAcionamento(grauEntrada);
+                });
+
+                // Atua nas bombas e válvulas conectadas na SAÍDA do tanque
+                this.outputs.forEach(c => {
+                    if (c instanceof ValvulaLogica) c.setAbertura(grauSaida);
+                    else if (c instanceof BombaLogica) c.setAcionamento(grauSaida);
+                });
+
+                this.notify({ tipo: 'ctrl_update', grau: u * 100, erro: erro });
+            }
+
+            resetControlador() {
+                this._ctrlIntegral = 0;
+                this._lastErro = 0;
+            }
+
             dVdt(V) {
                 let qIn = 0, qOut = 0;
                 this.inputs.forEach(c => { if (typeof c.getFluxoSaida === 'function') qIn += c.getFluxoSaida(); });
                 const nv = V / this.capacidadeMaxima;
                 this.outputs.forEach(c => { if (typeof c.getFluxoSaidaFromTank === 'function') qOut += c.getFluxoSaidaFromTank(nv > 0 ? nv : 0); });
-
                 this.lastQin = qIn;
                 return qIn - qOut;
             }
+
             atualizarFisica(dt, fluido) {
+                // Controlador age ANTES do passo de integração
+                this._rodarControlador(dt);
+
                 const k1 = this.dVdt(this.volumeAtual), k2 = this.dVdt(this.volumeAtual + 0.5 * k1 * dt), k3 = this.dVdt(this.volumeAtual + 0.5 * k2 * dt), k4 = this.dVdt(this.volumeAtual + k3 * dt);
                 this.volumeAtual += (1 / 6) * (k1 + 2 * k2 + 2 * k3 + k4) * dt;
 
@@ -672,6 +758,7 @@
 
                 this.notify({ tipo: 'volume', perc: this.volumeAtual / this.capacidadeMaxima, abs: this.volumeAtual, qIn: this.lastQin });
             }
+
             getFluxoSaida() {
                 const nv = this.capacidadeMaxima > 0 ? this.volumeAtual / this.capacidadeMaxima : 0;
                 return nv > 0 ? 10.0 * Math.sqrt(nv) : 0;
@@ -750,9 +837,20 @@
                                 </clipPath>
                             </defs>
                             <path d="M 0 40 L 0 200 A 80 40 0 0 0 160 200 L 160 40 A 80 40 0 0 0 0 40 Z" fill="#fff" stroke="none"/>
+                            
                             <rect id="agua-${id}" x="0" y="240" width="160" height="0" fill="url(#grad-${id})" clip-path="url(#clip-${id})" />
                             <line id="stream-${id}" x1="80" y1="40" x2="80" y2="200" stroke="#3498db" stroke-width="6" class="water-stream" opacity="0"/>
+                            
                             <path d="M 0 40 L 0 200 A 80 40 0 0 0 160 200 L 160 40 A 80 40 0 0 0 0 40 Z" fill="none" stroke="#2c3e50" stroke-width="6"/>
+                            
+                            <g clip-path="url(#clip-${id})">
+                                <line id="sp-line-${id}" x1="0" y1="120" x2="160" y2="120" stroke="#e74c3c" stroke-width="3" stroke-dasharray="8,4" opacity="0"/>
+                            </g>
+                            
+                            <text id="sp-label-${id}" x="165" y="124" font-size="11" font-family="Arial" font-weight="bold" fill="#e74c3c" text-anchor="start" opacity="0">SP</text>
+                            
+                            <rect id="sp-badge-${id}" x="4" y="44" width="44" height="14" rx="4" fill="#e74c3c" opacity="0"/>
+                            <text id="sp-badge-txt-${id}" x="26" y="54" font-size="9" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#fff" opacity="0">● SP ON</text>
                             <text id="cap-max-${id}" x="80" y="220" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#2c3e50">Capacidade: ${logica.capacidadeMaxima} L</text>
                             <text id="tag-${id}" x="80" y="100" font-size="20" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#1a252f">${logica.tag}</text>
                             <text id="vol-${id}" x="80" y="125" font-size="18" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#1a252f">0.0 L</text>
@@ -760,6 +858,30 @@
                         </svg>`;
                     
                     if(!isPalette) {
+                        const atualizarLinhaSetpoint = () => {
+                            const spFrac = logica.setpoint / 100;
+                            
+                            // Agora a escala acompanha a altura real total do tanque (240px)
+                            const spY = 240 - (spFrac * 240); 
+                            
+                            const spLine = visual.querySelector(`#sp-line-${id}`);
+                            const spLbl  = visual.querySelector(`#sp-label-${id}`);
+                            const spBadge = visual.querySelector(`#sp-badge-${id}`);
+                            const spBadgeTxt = visual.querySelector(`#sp-badge-txt-${id}`);
+                            const vis = logica.setpointAtivo ? '1' : '0';
+                            
+                            spLine.setAttribute('y1', spY); 
+                            spLine.setAttribute('y2', spY);
+                            spLine.setAttribute('opacity', vis);
+                            
+                            // Ajustamos o eixo Y da label "SP" para ela não sumir pra fora da tela quando o SP for 100% ou 0%
+                            spLbl.setAttribute('y', Math.max(10, Math.min(235, spY + 4))); 
+                            spLbl.setAttribute('opacity', vis);
+                            
+                            spBadge.setAttribute('opacity', vis); 
+                            spBadgeTxt.setAttribute('opacity', vis);
+                        };
+
                         logica.subscribe((dados) => {
                             if (dados.tipo === 'volume') {
                                 const rect = visual.querySelector(`#agua-${id}`);
@@ -770,6 +892,8 @@
                                 visual.querySelector(`#cap-max-${id}`).textContent = `Capacidade: ${logica.capacidadeMaxima} L`;
                             } else if (dados.tipo === 'tag_update') {
                                 visual.querySelector(`#tag-${id}`).textContent = logica.tag;
+                            } else if (dados.tipo === 'sp_update') {
+                                atualizarLinhaSetpoint();
                             }
                         });
                     }
@@ -844,7 +968,7 @@
         // ==========================================
         const propContent = document.getElementById('prop-content');
         
-        // Inicialização do Gráfico [cite: 35, 36, 37, 38, 39, 40, 41, 42, 43, 44]
+        // Inicialização do Gráfico
         const ctx = document.getElementById('gaap-volume-chart').getContext('2d');
         const volumeChart = new Chart(ctx, {
             type: 'line',
@@ -953,6 +1077,23 @@
                             <label>Volume Atual (L)</label>
                             <input type="text" id="disp-vol" value="${comp.volumeAtual.toFixed(1)}" disabled>
                         </div>
+                        <div class="prop-group" style="border-color: ${comp.setpointAtivo ? '#e74c3c' : '#eee'}; background: ${comp.setpointAtivo ? '#fdf5f4' : '#f9fbfb'};">
+                            <label style="color: #c0392b; font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">⚙ Controlador de Nível (PI)</label>
+                            <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+                                <input type="checkbox" id="input-sp-ativo" ${comp.setpointAtivo ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer;">
+                                <span style="font-size:13px; font-weight:bold;">Ativar controle automático</span>
+                            </div>
+                            <label>Setpoint <span id="val-sp" class="val-display" style="color:#e74c3c;">${comp.setpoint}%</span></label>
+                            <input type="range" id="input-sp" min="0" max="100" value="${comp.setpoint}" style="accent-color:#e74c3c;">
+                        </div>
+                        <div class="prop-group" id="group-ctrl-params" style="display:${comp.setpointAtivo ? 'block' : 'none'};">
+                            <label>Ganho Proporcional (Kp)</label>
+                            <input type="number" id="input-kp" value="${comp.kp}" step="5" min="1" max="500">
+                        </div>
+                        <div class="prop-group" id="group-ctrl-ki" style="display:${comp.setpointAtivo ? 'block' : 'none'};">
+                            <label>Ganho Integral (Ki)</label>
+                            <input type="number" id="input-ki" value="${comp.ki}" step="1" min="0" max="100">
+                        </div>
                     `;
                 } else if (comp instanceof BombaLogica) {
                     html += `
@@ -991,7 +1132,46 @@
                 document.getElementById('input-tag').addEventListener('input', e => { comp.tag = e.target.value; comp.notify({ tipo: 'tag_update' }); });
 
                 if (comp instanceof TanqueLogico) {
-                    document.getElementById('input-cap').addEventListener('change', e => { comp.capacidadeMaxima = parseFloat(e.target.value) || 100; comp.notify({ tipo: 'volume', perc: comp.volumeAtual / comp.capacidadeMaxima, abs: comp.volumeAtual, qIn: comp.lastQin }); });
+                    document.getElementById('input-cap').addEventListener('change', e => {
+                        comp.capacidadeMaxima = parseFloat(e.target.value) || 100;
+                        comp.notify({ tipo: 'volume', perc: comp.volumeAtual / comp.capacidadeMaxima, abs: comp.volumeAtual, qIn: comp.lastQin });
+                    });
+
+                    const spAtivoEl = document.getElementById('input-sp-ativo');
+                    const spGroupEl = document.getElementById('group-ctrl-params');
+                    const spKiEl   = document.getElementById('group-ctrl-ki');
+                    const spGroup  = document.querySelector('.prop-group:has(#input-sp-ativo)');
+
+                    spAtivoEl.addEventListener('change', e => {
+                        comp.setpointAtivo = e.target.checked;
+                        comp.resetControlador();
+                        spGroupEl.style.display = comp.setpointAtivo ? 'block' : 'none';
+                        spKiEl.style.display    = comp.setpointAtivo ? 'block' : 'none';
+                        if (spGroup) {
+                            spGroup.style.borderColor = comp.setpointAtivo ? '#e74c3c' : '#eee';
+                            spGroup.style.background  = comp.setpointAtivo ? '#fdf5f4' : '#f9fbfb';
+                        }
+                        comp.notify({ tipo: 'sp_update' });
+                    });
+
+                    document.getElementById('input-sp').addEventListener('input', e => {
+                        comp.setpoint = parseInt(e.target.value);
+                        comp.resetControlador();
+                        document.getElementById('val-sp').textContent = comp.setpoint + '%';
+                        comp.notify({ tipo: 'sp_update' });
+                    });
+
+                    document.getElementById('input-kp').addEventListener('change', e => {
+                        comp.kp = Math.max(1, parseFloat(e.target.value) || 50);
+                        e.target.value = comp.kp;
+                        comp.resetControlador();
+                    });
+
+                    document.getElementById('input-ki').addEventListener('change', e => {
+                        comp.ki = Math.max(0, parseFloat(e.target.value) || 0);
+                        e.target.value = comp.ki;
+                        comp.resetControlador();
+                    });
                 }
                 else if (comp instanceof BombaLogica) {
                     document.getElementById('input-acionamento').addEventListener('input', e => {
@@ -1036,12 +1216,26 @@
                 if (comp instanceof TanqueLogico && document.getElementById('disp-vol')) {
                     document.getElementById('disp-vol').value = comp.volumeAtual.toFixed(1);
                 }
-                // Atualiza display de vazão da válvula
-                if (comp instanceof ValvulaLogica && document.getElementById('disp-vazao-valvula')) {
-                    document.getElementById('disp-vazao-valvula').value = comp.fluxoReal.toFixed(2);
+                // Atualiza display de vazão da válvula + slider (pode estar sendo controlado por setpoint)
+                if (comp instanceof ValvulaLogica) {
+                    const grauAtual = Math.round(comp.grauAbertura);
+                    const abEl  = document.getElementById('input-abertura');
+                    const abLbl = document.getElementById('val-abertura');
+                    const vzEl  = document.getElementById('disp-vazao-valvula');
+                    if (abEl)  abEl.value = grauAtual;
+                    if (abLbl) abLbl.textContent = grauAtual + '%';
+                    if (vzEl)  vzEl.value = comp.fluxoReal.toFixed(2);
+                }
+                // Atualiza slider da bomba (pode estar sendo controlada por setpoint)
+                if (comp instanceof BombaLogica) {
+                    const grauAtual = Math.round(comp.grauAcionamento);
+                    const acEl  = document.getElementById('input-acionamento');
+                    const acLbl = document.getElementById('val-acionamento');
+                    if (acEl)  acEl.value = grauAtual;
+                    if (acLbl) acLbl.textContent = grauAtual + '%';
                 }
 
-                // Atualiza o Chart.js [cite: 45, 46, 47, 48, 49]
+                // Atualiza o Chart.js
                 chartUpdateTimer += dados.dt;
                 if (chartUpdateTimer >= 1.0) {
                     chartUpdateTimer = 0;
