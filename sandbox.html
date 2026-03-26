@@ -52,6 +52,7 @@
         #pipe-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
         .pipe-line { fill: none; stroke: #95a5a6; stroke-width: 5; stroke-linecap: round; transition: stroke 0.3s; }
         .pipe-line.active { stroke: #3498db; stroke-width: 6; animation: flow 1s linear infinite; stroke-dasharray: 12 12;}
+        .pipe-line.selected { stroke: #e74c3c; stroke-width: 6; filter: drop-shadow(0px 0px 5px rgba(231, 76, 60, 0.5)); cursor: pointer; }
         @keyframes flow { to { stroke-dashoffset: -24; } }
         
         .water-stream { animation: fall 0.4s linear infinite; stroke-dasharray: 8 8; }
@@ -218,9 +219,12 @@
             }
         }
 
-        // ==========================================
+// ==========================================
         // 2. FABRICA DE EQUIPAMENTOS (SVG)
         // ==========================================
+        // NOVO: Objeto global para rastrear a contagem de equipamentos criados
+        const ContadoresTag = { tank: 1, pump: 1, valve: 1 };
+
         class FabricaDeEquipamentos {
             static criar(tipo, x, y, isPalette = false) {
                 const id = tipo + '-' + Date.now();
@@ -231,13 +235,16 @@
 
                 let logica = null;
                 let logW, logH, svgOffsetX, svgOffsetY;
+                let tagGerada = ""; // NOVO: Variável que define o nome
+                
                 const colorPort = "#e67e22"; 
                 const labelStyle = `font-family="Arial" font-weight="bold" text-anchor="middle" fill="#2c3e50" paint-order="stroke" stroke="#fff" stroke-width="3"`;
                 const makePort = (cx, cy, inOut) => `<circle class="port-node" data-type="${inOut}" data-comp-id="${id}" cx="${cx}" cy="${cy}" r="5" fill="#fff" stroke="${colorPort}" stroke-width="2"/>`;
 
                 if (tipo === 'source') {
+                    tagGerada = 'FONTE';
                     logW = 40; logH = 40; svgOffsetX = -20; svgOffsetY = -20; 
-                    logica = new FonteLogica(id, 'FONTE', x, y); 
+                    logica = new FonteLogica(id, tagGerada, x, y); 
                     visual.innerHTML = `
                         <svg viewBox="0 0 80 80" width="80" height="80" style="left:${svgOffsetX}px; top:${svgOffsetY}px;">
                             <circle cx="40" cy="40" r="25" fill="#3498db" stroke="#2980b9" stroke-width="4"/>
@@ -246,8 +253,9 @@
                             <g> ${makePort(65, 40, 'out')} </g>
                         </svg>`;
                 } else if (tipo === 'sink') {
+                    tagGerada = 'DRENO';
                     logW = 40; logH = 40; svgOffsetX = -20; svgOffsetY = -20; 
-                    logica = new DrenoLogico(id, 'DRENO', x, y); 
+                    logica = new DrenoLogico(id, tagGerada, x, y); 
                     visual.innerHTML = `
                         <svg viewBox="0 0 80 80" width="80" height="80" style="left:${svgOffsetX}px; top:${svgOffsetY}px;">
                             <circle cx="40" cy="40" r="25" fill="#95a5a6" stroke="#7f8c8d" stroke-width="4"/>
@@ -256,17 +264,16 @@
                             <g> ${makePort(15, 40, 'in')} </g>
                         </svg>`;
                 } else if (tipo === 'tank') {
+                    // NOVO: Incrementa apenas se não for miniatura de paleta
+                    tagGerada = isPalette ? "T" : `T-${String(ContadoresTag.tank++).padStart(2, '0')}`;
                     logW = 160; logH = 160; svgOffsetX = 0; svgOffsetY = -40; 
-                    logica = new TanqueLogico(id, 'T-01', x, y); 
+                    logica = new TanqueLogico(id, tagGerada, x, y); 
                     visual.innerHTML = `
                         <svg viewBox="0 0 160 240" width="160" height="240" style="left:${svgOffsetX}px; top:${svgOffsetY}px;">
                             <defs><linearGradient id="grad-${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3498db" stop-opacity="0.9"/><stop offset="100%" stop-color="#2980b9" stop-opacity="0.95"/></linearGradient><clipPath id="clip-${id}"><path d="M 0 40 L 0 200 A 80 40 0 0 0 160 200 L 160 40 A 80 40 0 0 0 0 40 Z"/></clipPath></defs>
                             <path d="M 0 40 L 0 200 A 80 40 0 0 0 160 200 L 160 40 A 80 40 0 0 0 0 40 Z" fill="#fff" stroke="none"/>
-                            
                             <rect id="agua-${id}" x="0" y="200" width="160" height="0" fill="url(#grad-${id})" clip-path="url(#clip-${id})" />
-                            
                             <line id="stream-${id}" x1="80" y1="40" x2="80" y2="200" stroke="#3498db" stroke-width="6" class="water-stream" opacity="0"/>
-                            
                             <path d="M 0 40 L 0 200 A 80 40 0 0 0 160 200 L 160 40 A 80 40 0 0 0 0 40 Z" fill="none" stroke="#2c3e50" stroke-width="6"/>
                             <text id="tag-${id}" x="80" y="90" font-size="16" ${labelStyle}>${logica.tag}</text>
                             <text id="vol-${id}" x="80" y="115" font-size="13" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#3498db">0.0 L</text>
@@ -279,16 +286,16 @@
                             rect.setAttribute('height', dados.perc * 160); 
                             rect.setAttribute('y', 200 - (dados.perc * 160)); 
                             visual.querySelector(`#vol-${id}`).textContent = dados.abs.toFixed(1) + " L";
-                            
-                            // Ativa o jato de água se houver vazão de entrada
                             visual.querySelector(`#stream-${id}`).style.opacity = dados.qIn > 0.1 ? '0.7' : '0';
                         } else if (dados.tipo === 'tag_update') {
                             visual.querySelector(`#tag-${id}`).textContent = logica.tag;
                         }
                     });
                 } else if (tipo === 'pump') {
+                    // NOVO: Incrementa apenas se não for miniatura de paleta
+                    tagGerada = isPalette ? "P" : `P-${String(ContadoresTag.pump++).padStart(2, '0')}`;
                     logW = 80; logH = 80; svgOffsetX = 0; svgOffsetY = 0; 
-                    logica = new BombaLogica(id, 'P-01', x, y); 
+                    logica = new BombaLogica(id, tagGerada, x, y); 
                     visual.innerHTML = `
                         <svg viewBox="0 0 80 80" width="80" height="80" style="left:${svgOffsetX}px; top:${svgOffsetY}px;">
                             <circle cx="40" cy="40" r="34" fill="#fff" stroke="#2c3e50" stroke-width="6"/>
@@ -304,8 +311,10 @@
                         });
                     }
                 } else if (tipo === 'valve') {
+                    // NOVO: Incrementa apenas se não for miniatura de paleta
+                    tagGerada = isPalette ? "V" : `V-${String(ContadoresTag.valve++).padStart(2, '0')}`;
                     logW = 40; logH = 40; svgOffsetX = -20; svgOffsetY = -20; 
-                    logica = new ValvulaLogica(id, 'V-01', x, y); 
+                    logica = new ValvulaLogica(id, tagGerada, x, y); 
                     visual.innerHTML = `
                         <svg viewBox="0 0 80 80" width="80" height="80" style="left:${svgOffsetX}px; top:${svgOffsetY}px;">
                             <rect x="10" y="34" width="60" height="12" fill="#95a5a6" stroke="#2c3e50" stroke-width="2"/>
@@ -495,6 +504,17 @@
                 tempPipe.setAttribute("class", "pipe-line " + (ENGINE.isRunning ? "active" : ""));
                 tempPipe.setAttribute("marker-end", ENGINE.isRunning ? "url(#arrow-active)" : "url(#arrow)");
                 tempPipe.setAttribute("d", drawCurve(p1.x, p1.y, p1.x, p1.y));
+                
+                // NOVO: Permite que o cano desenhado seja selecionado ao clicar nele
+                tempPipe.addEventListener('mousedown', function(ev) {
+                    ENGINE.selectComponent(null); // Tira a seleção das máquinas
+                    document.querySelectorAll('.placed-component').forEach(el => el.classList.remove('selected'));
+                    document.querySelectorAll('.pipe-line').forEach(el => el.classList.remove('selected'));
+                    
+                    this.classList.add('selected'); // Destaca o cano de vermelho
+                    ev.stopPropagation(); // Evita que o clique passe para o fundo da tela
+                });
+
                 pipeLayer.appendChild(tempPipe);
                 e.stopPropagation(); 
             }
@@ -531,7 +551,20 @@
         document.querySelectorAll('.palette-item').forEach(item => {
             const t = item.getAttribute('data-type');
             const dummy = FabricaDeEquipamentos.criar(t, 0, 0, true);
-            dummy.style.position = 'relative'; dummy.style.transform = 'scale(0.5)'; dummy.style.transformOrigin = 'center'; dummy.style.margin = '20px auto';
+            dummy.style.position = 'relative'; 
+            
+            // NOVO: Escala reduzida para 0.4 para caber melhor no menu
+            dummy.style.transform = 'scale(0.4)'; 
+            dummy.style.transformOrigin = 'center'; 
+            
+            // NOVO: Controle de margem condicional para proteger o texto
+            if (t === 'tank') {
+                // O tanque vaza visualmente, então damos um respiro maior em cima e embaixo
+                dummy.style.margin = '40px auto 50px auto'; 
+            } else {
+                dummy.style.margin = '15px auto'; 
+            }
+
             item.insertBefore(dummy, item.firstChild);
             item.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', t); });
         });
@@ -541,11 +574,14 @@
             e.preventDefault();
             const t = e.dataTransfer.getData('text/plain');
             if(!t) return;
-            const temp = FabricaDeEquipamentos.criar(t, 0, 0);
+            
+            const temp = FabricaDeEquipamentos.criar(t, 0, 0, true); 
+            
             const rect = workspace.getBoundingClientRect();
             const snapX = Math.round((e.clientX - rect.left - (parseInt(temp.dataset.logW)/2)) / GRID_SIZE) * GRID_SIZE;
             const snapY = Math.round((e.clientY - rect.top - (parseInt(temp.dataset.logH)/2)) / GRID_SIZE) * GRID_SIZE;
             
+            // Aqui criamos o componente real definitivo que vai para a tela
             const novoVisual = FabricaDeEquipamentos.criar(t, snapX, snapY);
             workspace.appendChild(novoVisual);
             makeDraggable(novoVisual);
@@ -588,8 +624,68 @@
         });
 
         document.getElementById('btn-clear').addEventListener('click', () => {
-            document.querySelectorAll('.placed-component').forEach(item => item.remove());
+            // Adicione '#workspace ' antes da classe para limitar a deleção à área de trabalho
+            document.querySelectorAll('#workspace .placed-component').forEach(item => item.remove());
             ENGINE.clear();
+        });
+
+        // ==========================================
+        // 7. ATALHOS DE TECLADO (DELETAR)
+        // ==========================================
+        document.addEventListener('keydown', (e) => {
+            // Ignora a tecla Delete se o usuário estiver digitando o nome da Tag em um input
+            if (e.target.tagName.toLowerCase() === 'input') return;
+
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                
+                // Cenário A: Deletar Equipamento Selecionado
+                const selectedCompDiv = document.querySelector('.placed-component.selected');
+                if (selectedCompDiv) {
+                    const compId = selectedCompDiv.dataset.id;
+                    
+                    // 1. Remove visualmente os canos ligados a este equipamento
+                    ENGINE.conexoes = ENGINE.conexoes.filter(conn => {
+                        if (conn.sourceEl.dataset.compId === compId || conn.targetEl.dataset.compId === compId) {
+                            conn.path.remove(); 
+                            return false; 
+                        }
+                        return true;
+                    });
+
+                    // 2. Limpa as amarras lógicas nos componentes vizinhos
+                    ENGINE.componentes.forEach(c => {
+                        c.inputs = c.inputs.filter(input => input.id !== compId);
+                        c.outputs = c.outputs.filter(output => output.id !== compId);
+                    });
+
+                    // 3. Remove o equipamento do motor e do HTML
+                    ENGINE.componentes = ENGINE.componentes.filter(c => c.id !== compId);
+                    selectedCompDiv.remove();
+                    ENGINE.selectComponent(null);
+                }
+
+                // Cenário B: Deletar Tubo Selecionado
+                const selectedPipe = document.querySelector('.pipe-line.selected');
+                if (selectedPipe) {
+                    const connIndex = ENGINE.conexoes.findIndex(c => c.path === selectedPipe);
+                    if (connIndex !== -1) {
+                        const conn = ENGINE.conexoes[connIndex];
+                        
+                        // Desfaz a ligação lógica entre a saída de um e a entrada de outro
+                        const sourceLogic = ENGINE.componentes.find(c => c.id === conn.sourceEl.dataset.compId);
+                        const targetLogic = ENGINE.componentes.find(c => c.id === conn.targetEl.dataset.compId);
+                        
+                        if (sourceLogic && targetLogic) {
+                            sourceLogic.outputs = sourceLogic.outputs.filter(c => c !== targetLogic);
+                            targetLogic.inputs = targetLogic.inputs.filter(c => c !== sourceLogic);
+                        }
+                        
+                        // Remove do array de renderização e do HTML
+                        ENGINE.conexoes.splice(connIndex, 1);
+                        selectedPipe.remove();
+                    }
+                }
+            }
         });
     </script>
 </body>
