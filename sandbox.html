@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sandbox GAAP - Fronteiras e Fluxo Visual</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -61,20 +62,25 @@
             flex-shrink: 0;
         }
 
+        /* Ajuste para o painel da direita caber o gráfico confortavelmente */
+        #properties.side-panel {
+            width: 340px; 
+        }
+
         .side-panel-content {
             padding: 20px;
-            width: 240px;
+            width: 100%;
             display: flex;
             flex-direction: column;
             gap: 15px;
             overflow-y: auto;
             opacity: 1;
             transition: opacity 0.2s;
-            box-sizing: content-box;
+            box-sizing: border-box;
         }
 
         .side-panel.collapsed {
-            width: 0;
+            width: 0 !important;
         }
 
         .side-panel.collapsed .side-panel-content {
@@ -128,7 +134,7 @@
         }
 
         #toggle-right {
-            right: 280px;
+            right: 340px;
             border-radius: 8px 0 0 8px;
             border-right: none;
             transition: right 0.3s ease;
@@ -222,6 +228,18 @@
         .val-display {
             color: #3498db;
             font-weight: bold;
+        }
+
+        /* GRAFICO */
+        .chart-container {
+            width: 100%;
+            height: 220px;
+            background: #fff;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 10px;
+            box-sizing: border-box;
+            margin-top: 10px;
         }
 
         /* WORKSPACE */
@@ -344,6 +362,18 @@
             cursor: pointer;
         }
 
+        .pipe-flow-label {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            font-size: 12px;
+            font-weight: bold;
+            fill: #2c3e50;
+            pointer-events: none;
+            paint-order: stroke;
+            stroke: #ffffff;
+            stroke-width: 5px;
+            stroke-linejoin: round;
+        }
+
         @keyframes flow {
             to {
                 stroke-dashoffset: -24;
@@ -388,8 +418,7 @@
         <div class="workspace-panel" id="workspace">
             <div class="top-toolbar">
                 <button class="gaap-btn success" id="btn-run">▶ Iniciar Simulação Física</button>
-                <button class="gaap-btn" id="btn-clear" style="border-color:#e74c3c; color:#e74c3c;">Limpar
-                    Área</button>
+                <button class="gaap-btn" id="btn-clear" style="border-color:#e74c3c; color:#e74c3c;">Limpar Área</button>
             </div>
 
             <svg id="pipe-layer">
@@ -411,6 +440,11 @@
             <div class="side-panel-content">
                 <h3 class="panel-title">Propriedades</h3>
                 <div id="prop-content"></div>
+                
+                <h3 class="panel-title" style="margin-top: 10px;">Monitoramento Real</h3>
+                <div class="chart-container">
+                    <canvas id="gaap-volume-chart"></canvas>
+                </div>
             </div>
         </div>
     </div>
@@ -460,22 +494,30 @@
                 this.conexoes = [];
                 this.isRunning = false;
                 this.lastTime = 0;
+                this.elapsedTime = 0; // Novo controle de tempo global para o gráfico
+                this.selectedComponent = null;
             }
             add(comp) { this.componentes.push(comp); }
-            clear() { this.componentes = []; this.conexoes.forEach(c => c.path.remove()); this.conexoes = []; this.isRunning = false; this.notify({ tipo: 'selecao', componente: null }); }
+            clear() { this.componentes = []; this.conexoes.forEach(c => { c.path.remove(); if (c.label) c.label.remove(); }); this.conexoes = []; this.isRunning = false; this.elapsedTime = 0; this.notify({ tipo: 'selecao', componente: null }); }
             start() { this.isRunning = true; this.lastTime = performance.now(); requestAnimationFrame(this.tick.bind(this)); this.notify({ tipo: 'estado_motor', rodando: true }); }
             stop() { this.isRunning = false; this.notify({ tipo: 'estado_motor', rodando: false }); this.updatePipesVisual(); }
-            selectComponent(comp) { this.notify({ tipo: 'selecao', componente: comp }); }
+            
+            selectComponent(comp) { 
+                this.selectedComponent = comp;
+                this.notify({ tipo: 'selecao', componente: comp }); 
+            }
 
             tick(timestamp) {
                 if (!this.isRunning) return;
                 let dt = ((timestamp - this.lastTime) / 1000.0) * this.velocidade;
                 this.lastTime = timestamp; if (dt > 0.1) dt = 0.1;
 
+                this.elapsedTime += dt;
+
                 this.componentes.forEach(c => { if (c instanceof TanqueLogico) c.atualizarFisica(dt, this.fluidoOperante); });
 
                 this.updatePipesVisual();
-                this.notify({ tipo: 'update_painel' });
+                this.notify({ tipo: 'update_painel', dt: dt });
 
                 requestAnimationFrame(this.tick.bind(this));
             }
@@ -496,6 +538,17 @@
                     } else {
                         conn.path.classList.remove('active');
                         conn.path.setAttribute("marker-end", "url(#arrow)");
+                    }
+
+                    if (conn.label) {
+                        const flowVal = getConnectionFlow(conn);
+                        if (flowVal === null || flowVal === undefined) {
+                            conn.label.textContent = '';
+                        } else if (flowVal === Infinity) {
+                            conn.label.textContent = '∞ L/s';
+                        } else {
+                            conn.label.textContent = flowVal.toFixed(1) + ' L/s';
+                        }
                     }
                 });
             }
@@ -532,33 +585,70 @@
             getFluxoSaida() {
                 if (!this.isOn) { this.fluxoReal = 0; return 0; }
                 let fluxoEntradaDisp = 0;
-                this.inputs.forEach(c => { if (typeof c.getFluxoSaida === 'function') fluxoEntradaDisp += c.getFluxoSaida(); });
+                this.inputs.forEach(c => { 
+                    if (c instanceof TanqueLogico) {
+                        fluxoEntradaDisp += c.volumeAtual > 0 ? 99999 : 0;
+                    } else if (typeof c.getFluxoSaida === 'function') {
+                        fluxoEntradaDisp += c.getFluxoSaida(); 
+                    }
+                });
                 const fluxoDesejado = (this.grauAcionamento / 100.0) * this.vazaoNominal;
                 this.fluxoReal = Math.min(fluxoEntradaDisp, fluxoDesejado);
                 return this.fluxoReal;
             }
             getFluxoSaidaFromTank(nivelNormalizado) {
-                // Garante que o tanque perca exatamente o que a bomba envia para frente
                 return this.getFluxoSaida();
             }
         }
 
         class ValvulaLogica extends ComponenteFisico {
-            constructor(id, tag, x, y) { super(id, tag, x, y); this.aberta = false; this.k_v = 6.5; this.grauAbertura = 0; this.fluxoReal = 0; }
+            constructor(id, tag, x, y) {
+                super(id, tag, x, y);
+                this.aberta = false;
+                this.grauAbertura = 0;
+                this.fluxoReal = 0;
+                // Coeficiente de vazão (Cv): capacidade de passagem da válvula.
+                // Padrão = 1.0 → com ΔP=100 kPa e nv=1 resulta em 10 L/s (mesma base do sistema).
+                this.cv = 1.0;
+                // Queda de pressão de referência disponível (kPa).
+                // Representa a pressão hidrostática máxima que o tanque cheio exerce.
+                this.deltaP = 100.0;
+            }
+
             toggle() { this.setAbertura(this.aberta ? 0 : 100); }
             setAbertura(valor) {
-                this.grauAbertura = valor; this.aberta = this.grauAbertura > 0;
+                this.grauAbertura = valor;
+                this.aberta = this.grauAbertura > 0;
                 this.notify({ tipo: 'estado', aberta: this.aberta, grau: this.grauAbertura });
             }
+
+            // Equação clássica de válvula: Q = Cv × √(nv × ΔP) × abertura
+            // Calibrada: Cv=1, ΔP=100, nv=1, abertura=1 → Q = 10 L/s (base do sistema)
+            _calcFluxo(nivelNormalizado) {
+                if (nivelNormalizado <= 0) return 0;
+                return this.cv * Math.sqrt(nivelNormalizado * this.deltaP) * (this.grauAbertura / 100.0);
+            }
+
+            // Fluxo entregue ao componente a jusante
             getFluxoSaida() {
                 let fluxoMontante = 0;
-                this.inputs.forEach(c => { if (typeof c.getFluxoSaida === 'function') fluxoMontante += c.getFluxoSaida(); });
-                this.fluxoReal = fluxoMontante * (this.grauAbertura / 100.0);
+                this.inputs.forEach(c => {
+                    if (c instanceof TanqueLogico) {
+                        const nv = c.capacidadeMaxima > 0 ? c.volumeAtual / c.capacidadeMaxima : 0;
+                        fluxoMontante += this._calcFluxo(nv);
+                    } else if (typeof c.getFluxoSaida === 'function') {
+                        // Fonte ou bomba: repassa o fluxo e aplica só a restrição de abertura
+                        fluxoMontante += c.getFluxoSaida() * (this.grauAbertura / 100.0);
+                    }
+                });
+                this.fluxoReal = fluxoMontante;
                 return this.fluxoReal;
             }
+
+            // Fluxo drenado do tanque a montante — idêntico para conservar massa
             getFluxoSaidaFromTank(nivelNormalizado) {
-                // Sincroniza a perda de volume do tanque com o fluxo real que passa pela válvula
-                return this.getFluxoSaida();
+                this.fluxoReal = this._calcFluxo(nivelNormalizado);
+                return this.fluxoReal;
             }
         }
 
@@ -583,13 +673,11 @@
                 this.notify({ tipo: 'volume', perc: this.volumeAtual / this.capacidadeMaxima, abs: this.volumeAtual, qIn: this.lastQin });
             }
             getFluxoSaida() {
-                // Calcula a vazão de saída por gravidade baseada no nível atual
                 const nv = this.capacidadeMaxima > 0 ? this.volumeAtual / this.capacidadeMaxima : 0;
                 return nv > 0 ? 10.0 * Math.sqrt(nv) : 0;
             }
 
             getFluxoSaidaFromTank(nivelMontante) {
-                // Permite receber fluxo de outro tanque simulando uma "queda livre" de água
                 return nivelMontante > 0 ? 10.0 * Math.sqrt(nivelMontante) : 0;
             }
         }
@@ -597,7 +685,6 @@
         // ==========================================
         // 2. FABRICA DE EQUIPAMENTOS (SVG)
         // ==========================================
-        // Função para encontrar o menor número disponível para a Tag
         function obterProximaTag(prefixo) {
             const numerosEmUso = ENGINE.componentes
                 .map(c => c.tag)
@@ -652,32 +739,35 @@
                     logW = 160; logH = 160; svgOffsetX = 0; svgOffsetY = -40; 
                     logica = new TanqueLogico(id, tagGerada, x, y); 
                     visual.innerHTML = `
-                        <svg viewBox="0 0 160 240" width="160" height="240" style="left:${svgOffsetX}px; top:${svgOffsetY}px;">
-                            <defs><linearGradient id="grad-${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3498db" stop-opacity="0.9"/><stop offset="100%" stop-color="#2980b9" stop-opacity="0.95"/></linearGradient><clipPath id="clip-${id}"><path d="M 0 40 L 0 200 A 80 40 0 0 0 160 200 L 160 40 A 80 40 0 0 0 0 40 Z"/></clipPath></defs>
+                        <svg viewBox="0 0 160 240" width="160" height="240" style="left:${svgOffsetX}px; top:${svgOffsetY}px; overflow: visible;">
+                            <defs>
+                                <linearGradient id="grad-${id}" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="#3498db" stop-opacity="0.9"/>
+                                    <stop offset="100%" stop-color="#2980b9" stop-opacity="0.95"/>
+                                </linearGradient>
+                                <clipPath id="clip-${id}">
+                                    <path d="M 0 40 L 0 200 A 80 40 0 0 0 160 200 L 160 40 A 80 40 0 0 0 0 40 Z"/>
+                                </clipPath>
+                            </defs>
                             <path d="M 0 40 L 0 200 A 80 40 0 0 0 160 200 L 160 40 A 80 40 0 0 0 0 40 Z" fill="#fff" stroke="none"/>
-                            <rect id="agua-${id}" x="0" y="200" width="160" height="0" fill="url(#grad-${id})" clip-path="url(#clip-${id})" />
+                            <rect id="agua-${id}" x="0" y="240" width="160" height="0" fill="url(#grad-${id})" clip-path="url(#clip-${id})" />
                             <line id="stream-${id}" x1="80" y1="40" x2="80" y2="200" stroke="#3498db" stroke-width="6" class="water-stream" opacity="0"/>
                             <path d="M 0 40 L 0 200 A 80 40 0 0 0 160 200 L 160 40 A 80 40 0 0 0 0 40 Z" fill="none" stroke="#2c3e50" stroke-width="6"/>
-                            
-                            <text id="cap-max-${id}" x="80" y="55" font-size="10" font-family="'Arial', Tahoma, Geneva, Verdana, sans-serif" font-weight="bold" text-anchor="middle" fill="#2c3e50">Máx: ${logica.capacidadeMaxima} L</text>
-                            
-                            <text id="tag-${id}" x="80" y="90" font-size="16" ${labelStyle}>${logica.tag}</text>
-                            <text id="vol-${id}" x="80" y="115" font-size="14" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#3498db" stroke="#000" stroke-width="1" paint-order="stroke">0.0 L</text>
-                            
-                            <g> ${makePort(80, 40, 'in')} ${makePort(80, 200, 'out')} </g>
+                            <text id="cap-max-${id}" x="80" y="220" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#2c3e50">Capacidade: ${logica.capacidadeMaxima} L</text>
+                            <text id="tag-${id}" x="80" y="100" font-size="20" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#1a252f">${logica.tag}</text>
+                            <text id="vol-${id}" x="80" y="125" font-size="18" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#1a252f">0.0 L</text>
+                            <g> ${makePort(80, 0, 'in')} ${makePort(80, 240, 'out')} </g>
                         </svg>`;
                     
                     if(!isPalette) {
                         logica.subscribe((dados) => {
                             if (dados.tipo === 'volume') {
                                 const rect = visual.querySelector(`#agua-${id}`);
-                                rect.setAttribute('height', dados.perc * 160); 
-                                rect.setAttribute('y', 200 - (dados.perc * 160)); 
+                                rect.setAttribute('height', dados.perc * 240); 
+                                rect.setAttribute('y', 240 - (dados.perc * 240)); 
                                 visual.querySelector(`#vol-${id}`).textContent = dados.abs.toFixed(1) + " L";
                                 visual.querySelector(`#stream-${id}`).style.opacity = dados.qIn > 0.1 ? '0.7' : '0';
-                                
-                                // Atualiza a label de capacidade máxima dinamicamente
-                                visual.querySelector(`#cap-max-${id}`).textContent = `Máx: ${logica.capacidadeMaxima} L`;
+                                visual.querySelector(`#cap-max-${id}`).textContent = `Capacidade: ${logica.capacidadeMaxima} L`;
                             } else if (dados.tipo === 'tag_update') {
                                 visual.querySelector(`#tag-${id}`).textContent = logica.tag;
                             }
@@ -718,7 +808,12 @@
                         visual.addEventListener('dblclick', () => logica.toggle());
                         logica.subscribe((dados) => {
                             if (dados.tipo === 'estado') {
-                                const cor = dados.aberta ? '#f1c40f' : '#e74c3c';
+                                const perc = dados.grau / 100.0;
+                                const r = Math.round(231 + (46 - 231) * perc);
+                                const g = Math.round(76 + (204 - 76) * perc);
+                                const b = Math.round(60 + (113 - 60) * perc);
+                                const cor = `rgb(${r}, ${g}, ${b})`;
+                                
                                 visual.querySelector(`#corpo-${id}`).setAttribute('fill', cor);
                                 visual.querySelector(`#volante-${id}`).setAttribute('fill', cor);
                             } else if (dados.tipo === 'tag_update') {
@@ -745,9 +840,55 @@
         }
 
         // ==========================================
-        // 3. UI: BARRA DE PROPRIEDADES ATIVA
+        // 3. UI E INTEGRAÇÃO COM CHART.JS
         // ==========================================
         const propContent = document.getElementById('prop-content');
+        
+        // Inicialização do Gráfico [cite: 35, 36, 37, 38, 39, 40, 41, 42, 43, 44]
+        const ctx = document.getElementById('gaap-volume-chart').getContext('2d');
+        const volumeChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [0], 
+                datasets: [{
+                    label: 'Selecione um Tanque',
+                    data: [0], 
+                    borderColor: '#3498db',
+                    backgroundColor: 'rgba(52, 152, 219, 0.2)',
+                    borderWidth: 2,
+                    fill: true,
+                    pointRadius: 0,           
+                    pointHoverRadius: 6,      
+                    hitRadius: 15,            
+                    tension: 0.1 
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false, 
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    tooltip: {
+                        backgroundColor: 'rgba(44, 62, 80, 0.9)', 
+                        titleFont: { size: 14 },
+                        bodyFont: { size: 14, weight: 'bold' },
+                        padding: 10,
+                        callbacks: {
+                            title: function(context) { return 'Tempo: ' + context[0].label + 's'; },
+                            label: function(context) { return 'Volume: ' + context.parsed.y.toFixed(1) + ' Litros'; }
+                        }
+                    }
+                },
+                scales: {
+                    x: { title: { display: true, text: 'Tempo (s)' } },
+                    y: { min: 0, max: 1000, title: { display: true, text: 'Volume (L)' } }
+                }
+            }
+        });
+
+        let chartUpdateTimer = 0;
+        let chartedTankId = null; // Guarda o ID do tanque sendo traçado no gráfico
 
         document.getElementById('workspace').addEventListener('mousedown', (e) => {
             if (e.target === document.getElementById('workspace') || e.target === document.getElementById('pipe-layer')) {
@@ -760,6 +901,24 @@
         ENGINE.subscribe((dados) => {
             if (dados.tipo === 'selecao') {
                 const comp = dados.componente;
+                
+                // --- Lógica de Reset do Gráfico Baseada na Seleção ---
+                if (comp instanceof TanqueLogico) {
+                    if (chartedTankId !== comp.id) {
+                        chartedTankId = comp.id;
+                        volumeChart.data.labels = [Math.round(ENGINE.elapsedTime)];
+                        volumeChart.data.datasets[0].data = [comp.volumeAtual];
+                        volumeChart.data.datasets[0].label = `Volume: ${comp.tag}`;
+                        volumeChart.update();
+                    }
+                } else {
+                    chartedTankId = null;
+                    volumeChart.data.labels = [Math.round(ENGINE.elapsedTime)];
+                    volumeChart.data.datasets[0].data = [0];
+                    volumeChart.data.datasets[0].label = 'Selecione um Tanque';
+                    volumeChart.update();
+                }
+
                 if (!comp) {
                     propContent.innerHTML = `
                         <div class="prop-group">
@@ -812,6 +971,18 @@
                             <label>Abertura <span id="val-abertura" class="val-display">${comp.grauAbertura}%</span></label>
                             <input type="range" id="input-abertura" min="0" max="100" value="${comp.grauAbertura}">
                         </div>
+                        <div class="prop-group">
+                            <label>Coeficiente de Vazão (Cv)</label>
+                            <input type="number" id="input-cv" value="${comp.cv}" step="0.1" min="0.1" max="20">
+                        </div>
+                        <div class="prop-group">
+                            <label>Queda de Pressão — ΔP (kPa)</label>
+                            <input type="number" id="input-deltap" value="${comp.deltaP}" step="10" min="1" max="1000">
+                        </div>
+                        <div class="prop-group">
+                            <label>Vazão Atual (L/s)</label>
+                            <input type="text" id="disp-vazao-valvula" value="${comp.fluxoReal.toFixed(2)}" disabled>
+                        </div>
                     `;
                 }
 
@@ -842,6 +1013,14 @@
                         document.getElementById('val-abertura').textContent = val + '%';
                         comp.setAbertura(val);
                     });
+                    document.getElementById('input-cv').addEventListener('change', e => {
+                        comp.cv = Math.max(0.1, parseFloat(e.target.value) || 1.0);
+                        e.target.value = comp.cv;
+                    });
+                    document.getElementById('input-deltap').addEventListener('change', e => {
+                        comp.deltaP = Math.max(1, parseFloat(e.target.value) || 100.0);
+                        e.target.value = comp.deltaP;
+                    });
                     comp.subscribe(d => {
                         if (d.tipo === 'estado' && document.getElementById('input-abertura')) {
                             document.getElementById('input-abertura').value = d.grau;
@@ -852,8 +1031,33 @@
             }
             else if (dados.tipo === 'update_painel') {
                 const comp = ENGINE.selectedComponent;
+                
+                // Atualiza o display de volume na UI
                 if (comp instanceof TanqueLogico && document.getElementById('disp-vol')) {
                     document.getElementById('disp-vol').value = comp.volumeAtual.toFixed(1);
+                }
+                // Atualiza display de vazão da válvula
+                if (comp instanceof ValvulaLogica && document.getElementById('disp-vazao-valvula')) {
+                    document.getElementById('disp-vazao-valvula').value = comp.fluxoReal.toFixed(2);
+                }
+
+                // Atualiza o Chart.js [cite: 45, 46, 47, 48, 49]
+                chartUpdateTimer += dados.dt;
+                if (chartUpdateTimer >= 1.0) {
+                    chartUpdateTimer = 0;
+                    if (chartedTankId) {
+                        const tank = ENGINE.componentes.find(c => c.id === chartedTankId);
+                        if (tank) {
+                            volumeChart.data.labels.push(Math.round(ENGINE.elapsedTime));
+                            volumeChart.data.datasets[0].data.push(tank.volumeAtual);
+                            
+                            if (volumeChart.data.labels.length > 60) {
+                                volumeChart.data.labels.shift();
+                                volumeChart.data.datasets[0].data.shift();
+                            }
+                            volumeChart.update();
+                        }
+                    }
                 }
             }
         });
@@ -878,11 +1082,35 @@
             return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
         }
 
+        function getConnectionFlow(conn) {
+            const sourceLogic = ENGINE.componentes.find(c => c.id === conn.sourceEl.dataset.compId);
+            const targetLogic = ENGINE.componentes.find(c => c.id === conn.targetEl.dataset.compId);
+            if (!sourceLogic || !ENGINE.isRunning) return null;
+            if (sourceLogic instanceof FonteLogica) return Infinity;
+            if (sourceLogic instanceof BombaLogica || sourceLogic instanceof ValvulaLogica) {
+                return sourceLogic.fluxoReal || 0;
+            }
+            if (sourceLogic instanceof TanqueLogico) {
+                const nv = sourceLogic.capacidadeMaxima > 0 ? sourceLogic.volumeAtual / sourceLogic.capacidadeMaxima : 0;
+                if (targetLogic && typeof targetLogic.getFluxoSaidaFromTank === 'function') {
+                    return targetLogic.getFluxoSaidaFromTank(nv > 0 ? nv : 0);
+                }
+                return sourceLogic.getFluxoSaida();
+            }
+            return 0;
+        }
+
         function updateAllPipes() {
             ENGINE.conexoes.forEach(conn => {
                 const p1 = getPortCoords(conn.sourceEl);
                 const p2 = getPortCoords(conn.targetEl);
                 conn.path.setAttribute('d', drawCurve(p1.x, p1.y, p2.x, p2.y));
+                if (conn.label) {
+                    const mx = (p1.x + p2.x) / 2;
+                    const my = (p1.y + p2.y) / 2 - 10;
+                    conn.label.setAttribute('x', mx);
+                    conn.label.setAttribute('y', my);
+                }
             });
         }
 
@@ -918,7 +1146,12 @@
                         sourceLogic.conectarSaida(targetLogic);
                         const finalPipe = tempPipe;
 
-                        // Click para selecionar o cano (Local)
+                        const labelEl = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                        labelEl.setAttribute("class", "pipe-flow-label");
+                        labelEl.setAttribute("text-anchor", "middle");
+                        labelEl.textContent = '';
+                        pipeLayer.appendChild(labelEl);
+
                         finalPipe.addEventListener('mousedown', function (ev) {
                             ENGINE.selectComponent(null);
                             document.querySelectorAll('.placed-component').forEach(el => el.classList.remove('selected'));
@@ -927,15 +1160,18 @@
                             ev.stopPropagation();
                         });
 
-                        // Duplo-clique para deletar o cano (Main)
                         finalPipe.addEventListener('dblclick', function (ev) {
                             sourceLogic.desconectarSaida(targetLogic);
-                            ENGINE.conexoes = ENGINE.conexoes.filter(c => c.path !== finalPipe);
+                            const ci = ENGINE.conexoes.findIndex(c => c.path === finalPipe);
+                            if (ci !== -1) {
+                                if (ENGINE.conexoes[ci].label) ENGINE.conexoes[ci].label.remove();
+                                ENGINE.conexoes.splice(ci, 1);
+                            }
                             finalPipe.remove();
                             ev.stopPropagation();
                         });
 
-                        ENGINE.conexoes.push({ sourceEl: dragSourcePort, targetEl: dropTarget, path: finalPipe });
+                        ENGINE.conexoes.push({ sourceEl: dragSourcePort, targetEl: dropTarget, path: finalPipe, label: labelEl });
                         updateAllPipes();
                     } else { tempPipe.remove(); }
                 } else { tempPipe.remove(); }
@@ -967,7 +1203,6 @@
             if (!t) return;
 
             const temp = FabricaDeEquipamentos.criar(t, 0, 0, true);
-
             const rect = workspace.getBoundingClientRect();
             const snapX = Math.round((e.clientX - rect.left - (parseInt(temp.dataset.logW) / 2)) / GRID_SIZE) * GRID_SIZE;
             const snapY = Math.round((e.clientY - rect.top - (parseInt(temp.dataset.logH) / 2)) / GRID_SIZE) * GRID_SIZE;
@@ -1022,52 +1257,39 @@
         // 7. ATALHOS DE TECLADO (DELETAR GRAFO/COMPONENTE)
         // ==========================================
         document.addEventListener('keydown', (e) => {
-            // Ignora a tecla Delete se o usuário estiver digitando o nome da Tag em um input
             if (e.target.tagName.toLowerCase() === 'input') return;
 
             if (e.key === 'Delete' || e.key === 'Backspace') {
-
-                // Cenário A: Deletar Equipamento Selecionado
                 const selectedCompDiv = document.querySelector('.placed-component.selected');
                 if (selectedCompDiv) {
                     const compId = selectedCompDiv.dataset.id;
-
-                    // 1. Remove visualmente e logicamente os canos ligados a este equipamento
                     ENGINE.conexoes = ENGINE.conexoes.filter(conn => {
                         if (conn.sourceEl.dataset.compId === compId || conn.targetEl.dataset.compId === compId) {
-                            // Desconecta o fluxo logicamente entre as duas pontas
                             const sourceLogic = ENGINE.componentes.find(c => c.id === conn.sourceEl.dataset.compId);
                             const targetLogic = ENGINE.componentes.find(c => c.id === conn.targetEl.dataset.compId);
                             if (sourceLogic && targetLogic) sourceLogic.desconectarSaida(targetLogic);
-
+                            if (conn.label) conn.label.remove();
                             conn.path.remove();
                             return false;
                         }
                         return true;
                     });
-
-                    // 2. Remove o equipamento do motor e do HTML
                     ENGINE.componentes = ENGINE.componentes.filter(c => c.id !== compId);
                     selectedCompDiv.remove();
                     ENGINE.selectComponent(null);
                 }
 
-                // Cenário B: Deletar Tubo Selecionado
                 const selectedPipe = document.querySelector('.pipe-line.selected');
                 if (selectedPipe) {
                     const connIndex = ENGINE.conexoes.findIndex(c => c.path === selectedPipe);
                     if (connIndex !== -1) {
                         const conn = ENGINE.conexoes[connIndex];
-
-                        // Desfaz a ligação lógica entre a saída de um e a entrada de outro
                         const sourceLogic = ENGINE.componentes.find(c => c.id === conn.sourceEl.dataset.compId);
                         const targetLogic = ENGINE.componentes.find(c => c.id === conn.targetEl.dataset.compId);
-
                         if (sourceLogic && targetLogic) {
                             sourceLogic.desconectarSaida(targetLogic);
                         }
-
-                        // Remove do array de renderização e do HTML
+                        if (conn.label) conn.label.remove();
                         ENGINE.conexoes.splice(connIndex, 1);
                         selectedPipe.remove();
                     }
