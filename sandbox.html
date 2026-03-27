@@ -29,16 +29,8 @@
             flex-shrink: 0;
         }
 
-        .gaap-header h2 {
-            margin: 0;
-            font-size: 26px;
-        }
-
-        .gaap-header p {
-            color: #95a5a6;
-            font-size: 15px;
-            margin-top: 5px;
-        }
+        .gaap-header h2 { margin: 0; font-size: 26px; }
+        .gaap-header p { color: #95a5a6; font-size: 15px; margin-top: 5px; }
 
         /* CONTAINER PRINCIPAL E PAINÉIS LATERAIS */
         .sandbox-container {
@@ -58,14 +50,11 @@
             display: flex;
             flex-direction: column;
             z-index: 10;
-            transition: width 0.3s ease;
+            transition: transform 0.3s ease, width 0.3s ease;
             flex-shrink: 0;
         }
 
-        /* Ajuste para o painel da direita caber o gráfico confortavelmente */
-        #properties.side-panel {
-            width: 340px; 
-        }
+        #properties.side-panel { width: 340px; }
 
         .side-panel-content {
             padding: 20px;
@@ -79,23 +68,11 @@
             box-sizing: border-box;
         }
 
-        .side-panel.collapsed {
-            width: 0 !important;
-        }
+        .side-panel.collapsed { width: 0 !important; }
+        .side-panel.collapsed .side-panel-content { opacity: 0; pointer-events: none; }
 
-        .side-panel.collapsed .side-panel-content {
-            opacity: 0;
-            pointer-events: none;
-        }
-
-        .palette-panel {
-            border-right: 1px solid #e1e8ed;
-        }
-
-        .properties-panel {
-            border-left: 1px solid #e1e8ed;
-            background: #fff;
-        }
+        .palette-panel { border-right: 1px solid #e1e8ed; }
+        .properties-panel { border-left: 1px solid #e1e8ed; background: #fff; }
 
         /* BOTÕES DE COLAPSAR */
         .panel-toggle {
@@ -110,17 +87,14 @@
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            z-index: 20;
+            z-index: 60;
             color: #7f8c8d;
             font-size: 12px;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
             transition: 0.2s;
         }
 
-        .panel-toggle:hover {
-            background: #ecf0f1;
-            color: #2c3e50;
-        }
+        .panel-toggle:hover { background: #ecf0f1; color: #2c3e50; }
 
         #toggle-left {
             left: 280px;
@@ -128,10 +102,7 @@
             border-left: none;
             transition: left 0.3s ease;
         }
-
-        #toggle-left.collapsed {
-            left: 0;
-        }
+        #toggle-left.collapsed { left: 0; }
 
         #toggle-right {
             right: 340px;
@@ -139,10 +110,7 @@
             border-right: none;
             transition: right 0.3s ease;
         }
-
-        #toggle-right.collapsed {
-            right: 0;
-        }
+        #toggle-right.collapsed { right: 0; }
 
         h3.panel-title {
             margin-top: 0;
@@ -208,29 +176,12 @@
             font-size: 13px;
         }
 
-        .prop-group input[type="range"] {
-            width: 100%;
-            cursor: pointer;
-        }
+        .prop-group input[type="range"] { width: 100%; cursor: pointer; }
+        .prop-group input:focus { outline: none; border-color: #3498db; }
+        .prop-group input:disabled { background: #f2f4f4; color: #7f8c8d; font-weight: bold; border-color: #eee; }
+        .val-display { color: #3498db; font-weight: bold; }
 
-        .prop-group input:focus {
-            outline: none;
-            border-color: #3498db;
-        }
-
-        .prop-group input:disabled {
-            background: #f2f4f4;
-            color: #7f8c8d;
-            font-weight: bold;
-            border-color: #eee;
-        }
-
-        .val-display {
-            color: #3498db;
-            font-weight: bold;
-        }
-
-        /* GRAFICO */
+        /* GRÁFICO (BASE) */
         .chart-container {
             width: 100%;
             height: 220px;
@@ -240,9 +191,36 @@
             padding: 10px;
             box-sizing: border-box;
             margin-top: 10px;
+            display: flex;
+            flex-direction: column;
         }
 
-        /* WORKSPACE */
+        /* GRÁFICO MAXIMIZADO (DOCK NA PARTE INFERIOR) */
+        .chart-container.maximized {
+            position: fixed;
+            top: auto;
+            bottom: 0;
+            left: 0;
+            width: 100vw;
+            height: 35vh; /* Ocupa 35% da tela inferior */
+            z-index: 9999;
+            box-shadow: 0 -10px 30px rgba(0,0,0,0.15);
+            background: #fff;
+            border-radius: 16px 16px 0 0;
+            border: none;
+            border-top: 4px solid #3498db;
+            margin: 0;
+            padding: 15px 25px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .btn-maximize-chart {
+            background: #ecf0f1; border: none; cursor: pointer; padding: 4px 8px; border-radius: 4px; font-size: 11px; float: right; font-weight: bold; color: #2c3e50;
+        }
+        .btn-maximize-chart:hover { background: #bdc3c7; }
+
+        /* WORKSPACE & CAMERA */
         .workspace-panel {
             flex: 1;
             position: relative;
@@ -251,6 +229,14 @@
             background-size: 40px 40px;
             overflow: hidden;
             min-width: 0;
+        }
+
+        #workspace-canvas {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transform-origin: 0 0;
+            will-change: transform;
         }
 
         .top-toolbar {
@@ -266,6 +252,7 @@
             border-radius: 8px;
             border: 1px solid #eee;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            pointer-events: auto;
         }
 
         .gaap-btn {
@@ -279,15 +266,10 @@
             transition: 0.2s;
         }
 
-        .gaap-btn:hover {
-            background: #ecf0f1;
-        }
-
-        .gaap-btn.success {
-            background: #2ecc71;
-            color: white;
-            border-color: #27ae60;
-        }
+        .gaap-btn:hover { background: #ecf0f1; }
+        .gaap-btn.success { background: #2ecc71; color: white; border-color: #27ae60; }
+        .gaap-btn.danger { background: #e74c3c; color: white; border-color: #c0392b; }
+        .gaap-btn.danger:hover { background: #c0392b; }
 
         /* COMPONENTES NA TELA */
         .placed-component {
@@ -333,6 +315,7 @@
             height: 100%;
             pointer-events: none;
             z-index: 1;
+            overflow: visible;
         }
 
         .pipe-line {
@@ -344,9 +327,7 @@
             transition: stroke 0.3s;
         }
 
-        .pipe-line:hover {
-            stroke: #bdc3c7;
-        }
+        .pipe-line:hover { stroke: #bdc3c7; }
 
         .pipe-line.active {
             stroke: #3498db;
@@ -374,21 +355,37 @@
             stroke-linejoin: round;
         }
 
-        @keyframes flow {
-            to {
-                stroke-dashoffset: -24;
-            }
-        }
+        @keyframes flow { to { stroke-dashoffset: -24; } }
 
         .water-stream {
             animation: fall 0.4s linear infinite;
             stroke-dasharray: 8 8;
         }
 
-        @keyframes fall {
-            to {
-                stroke-dashoffset: -16;
+        @keyframes fall { to { stroke-dashoffset: -16; } }
+
+        /* RESPONSIVIDADE MOBILE (Gavetas flutuantes) */
+        @media (max-width: 800px) {
+            .sandbox-container { position: relative; }
+            
+            .side-panel {
+                position: absolute;
+                height: 100%;
+                top: 0;
+                box-shadow: 0 0 15px rgba(0,0,0,0.2);
             }
+
+            .palette-panel { left: 0; z-index: 50; }
+            .properties-panel { right: 0; z-index: 50; }
+            
+            .side-panel { transform: translateX(0); }
+            .palette-panel.collapsed { width: 0 !important; transform: translateX(-100%); border: none;}
+            .properties-panel.collapsed { width: 0 !important; transform: translateX(100%); border: none;}
+
+            #toggle-left { left: 280px; }
+            #toggle-left.collapsed { left: 0; }
+            #toggle-right { right: 340px; }
+            #toggle-right.collapsed { right: 0; }
         }
     </style>
 </head>
@@ -397,11 +394,11 @@
 
     <div class="gaap-header">
         <h2>Sandbox Modular GAAP - Fronteiras de Controle</h2>
-        <p>Teste a ligação completa. <b>Use a tecla DELETE ou duplo-clique num cano para apagá-lo.</b></p>
+        <p>Use o <b>scroll do mouse para zoom</b> e arraste segurando <b>Espaço</b> para navegar.</p>
     </div>
 
     <div class="sandbox-container">
-        <div class="side-panel palette-panel" id="palette">
+        <div class="side-panel palette-panel collapsed" id="palette">
             <div class="side-panel-content">
                 <h3 class="panel-title">Fronteiras</h3>
                 <div class="palette-item" draggable="true" data-type="source"><span>Fonte de Água (In)</span></div>
@@ -413,7 +410,7 @@
                 <div class="palette-item" draggable="true" data-type="valve"><span>Válvula de Controle</span></div>
             </div>
         </div>
-        <div id="toggle-left" class="panel-toggle">◀</div>
+        <div id="toggle-left" class="panel-toggle collapsed">▶</div>
 
         <div class="workspace-panel" id="workspace">
             <div class="top-toolbar">
@@ -421,29 +418,41 @@
                 <button class="gaap-btn" id="btn-clear" style="border-color:#e74c3c; color:#e74c3c;">Limpar Área</button>
             </div>
 
-            <svg id="pipe-layer">
-                <defs>
-                    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6"
-                        orient="auto-start-reverse">
-                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#95a5a6" />
-                    </marker>
-                    <marker id="arrow-active" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6"
-                        orient="auto-start-reverse">
-                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#3498db" />
-                    </marker>
-                </defs>
-            </svg>
+            <div id="workspace-canvas">
+                <svg id="pipe-layer">
+                    <defs>
+                        <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="#95a5a6" />
+                        </marker>
+                        <marker id="arrow-active" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="#3498db" />
+                        </marker>
+                    </defs>
+                </svg>
+            </div>
         </div>
 
-        <div id="toggle-right" class="panel-toggle">▶</div>
-        <div class="side-panel properties-panel" id="properties">
+        <div id="toggle-right" class="panel-toggle collapsed">◀</div>
+        <div class="side-panel properties-panel collapsed" id="properties">
             <div class="side-panel-content">
                 <h3 class="panel-title">Propriedades</h3>
-                <div id="prop-content"></div>
+                <div id="prop-content">
+                    <p style="font-size: 12px; color:#95a5a6; text-align:center;">Para ver as propriedades de um componente, clique nele.</p>
+                </div>
                 
-                <h3 class="panel-title" style="margin-top: 10px;">Monitoramento Real</h3>
-                <div class="chart-container">
-                    <canvas id="gaap-volume-chart"></canvas>
+                <h3 class="panel-title" style="margin-top: 10px;">
+                    Monitoramento
+                    <button id="btn-max-chart" class="btn-maximize-chart">⛶ Expandir</button>
+                </h3>
+                
+                <div class="chart-container" id="chart-wrapper">
+                    <div id="chart-max-header" style="display: none; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+                        <h3 style="margin: 0; color: #2c3e50; font-size: 16px;">Monitoramento Detalhado</h3>
+                        <button id="btn-close-max-chart" class="gaap-btn danger" style="padding: 5px 15px; font-size: 12px; margin: 0;">✖ Fechar Gráfico</button>
+                    </div>
+                    <div style="flex: 1; position: relative; min-height: 0; height: 100%;">
+                        <canvas id="gaap-volume-chart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
@@ -453,7 +462,7 @@
         const GRID_SIZE = 40;
 
         // ==========================================
-        // 0. UX DOS PAINÉIS COLAPSÁVEIS
+        // 0. UX DOS PAINÉIS E MAXIMIZAÇÃO DO GRÁFICO
         // ==========================================
         const toggleLeft = document.getElementById('toggle-left');
         const panelLeft = document.getElementById('palette');
@@ -471,6 +480,92 @@
             toggleRight.textContent = isCollapsed ? '◀' : '▶';
         });
 
+        const btnMaxChart = document.getElementById('btn-max-chart');
+        const chartWrapper = document.getElementById('chart-wrapper');
+        const chartMaxHeader = document.getElementById('chart-max-header');
+        const btnCloseMaxChart = document.getElementById('btn-close-max-chart');
+        let volumeChart; 
+
+        function toggleChartMaximize() {
+            const isMax = chartWrapper.classList.toggle('maximized');
+            btnMaxChart.textContent = isMax ? "✖ Fechar" : "⛶ Expandir";
+            chartMaxHeader.style.display = isMax ? "flex" : "none";
+            
+            if (volumeChart) volumeChart.resize(); // Força o chart.js a preencher o novo espaço
+        }
+
+        btnMaxChart.addEventListener('click', toggleChartMaximize);
+        btnCloseMaxChart.addEventListener('click', toggleChartMaximize);
+        
+        // Abre a paleta inicialmente apenas se não estiver em tela pequena
+        if (window.innerWidth > 800) {
+            panelLeft.classList.remove('collapsed');
+            toggleLeft.classList.remove('collapsed');
+            toggleLeft.textContent = '◀';
+            
+            panelRight.classList.remove('collapsed');
+            toggleRight.classList.remove('collapsed');
+            toggleRight.textContent = '▶';
+        }
+
+        // ==========================================
+        // 0.1 NAVEGAÇÃO ESPACIAL (ZOOM E PAN)
+        // ==========================================
+        const workspaceContainer = document.getElementById('workspace');
+        const workspaceCanvas = document.getElementById('workspace-canvas');
+        
+        const camera = { scale: 1, x: 0, y: 0, isPanning: false, startX: 0, startY: 0 };
+        let spacePressed = false;
+
+        document.addEventListener('keydown', e => { if (e.code === 'Space' && e.target.tagName !== 'INPUT') spacePressed = true; });
+        document.addEventListener('keyup', e => { if (e.code === 'Space') spacePressed = false; });
+
+        workspaceContainer.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomIntensity = 0.1;
+            const direction = Math.sign(e.deltaY) > 0 ? -1 : 1;
+            let newScale = camera.scale + (direction * zoomIntensity);
+            newScale = Math.max(0.4, Math.min(newScale, 3)); 
+
+            // Dá zoom focando na posição do mouse
+            const rect = workspaceContainer.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            camera.x = mouseX - ((mouseX - camera.x) * (newScale / camera.scale));
+            camera.y = mouseY - ((mouseY - camera.y) * (newScale / camera.scale));
+            camera.scale = newScale;
+            updateCameraTransform();
+        });
+
+        workspaceContainer.addEventListener('mousedown', (e) => {
+            if (e.button === 1 || spacePressed) { 
+                e.preventDefault(); 
+                camera.isPanning = true;
+                camera.startX = e.clientX - camera.x;
+                camera.startY = e.clientY - camera.y;
+                workspaceContainer.style.cursor = 'grabbing';
+            }
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!camera.isPanning) return;
+            camera.x = e.clientX - camera.startX;
+            camera.y = e.clientY - camera.startY;
+            updateCameraTransform();
+        });
+
+        window.addEventListener('mouseup', () => {
+            camera.isPanning = false;
+            workspaceContainer.style.cursor = 'default';
+        });
+
+        function updateCameraTransform() {
+            workspaceContainer.style.backgroundPosition = `${camera.x}px ${camera.y}px`;
+            workspaceContainer.style.backgroundSize = `${40 * camera.scale}px ${40 * camera.scale}px`;
+            workspaceCanvas.style.transform = `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`;
+        }
+
 
         // ==========================================
         // 1. LÓGICA E FÍSICA
@@ -481,9 +576,7 @@
             notify(data) { this.listeners.forEach(fn => fn(data)); }
         }
 
-        class Fluido {
-            constructor(nome, densidade) { this.nome = nome; this.densidade = densidade; }
-        }
+        class Fluido { constructor(nome, densidade) { this.nome = nome; this.densidade = densidade; } }
 
         class SistemaSimulacao extends Observable {
             constructor() {
@@ -494,7 +587,7 @@
                 this.conexoes = [];
                 this.isRunning = false;
                 this.lastTime = 0;
-                this.elapsedTime = 0; // Novo controle de tempo global para o gráfico
+                this.elapsedTime = 0;
                 this.selectedComponent = null;
             }
             add(comp) { this.componentes.push(comp); }
@@ -513,9 +606,7 @@
                 this.lastTime = timestamp; if (dt > 0.1) dt = 0.1;
 
                 this.elapsedTime += dt;
-
                 this.componentes.forEach(c => { if (c instanceof TanqueLogico) c.atualizarFisica(dt, this.fluidoOperante); });
-
                 this.updatePipesVisual();
                 this.notify({ tipo: 'update_painel', dt: dt });
 
@@ -552,20 +643,13 @@
                     }
                 });
 
-                // Para cada tanque com controlador ativo, força re-notificação
-                // do estado visual dos componentes de entrada E saída a cada tick
                 if (this.isRunning) {
                     this.componentes.forEach(c => {
                         if (c instanceof TanqueLogico && c.setpointAtivo) {
-                            
                             const notificarEstado = (equipamento) => {
-                                if (equipamento instanceof ValvulaLogica) {
-                                    equipamento.notify({ tipo: 'estado', aberta: equipamento.aberta, grau: equipamento.grauAbertura });
-                                } else if (equipamento instanceof BombaLogica) {
-                                    equipamento.notify({ tipo: 'estado', isOn: equipamento.isOn, grau: equipamento.grauAcionamento });
-                                }
+                                if (equipamento instanceof ValvulaLogica) equipamento.notify({ tipo: 'estado', aberta: equipamento.aberta, grau: equipamento.grauAbertura });
+                                else if (equipamento instanceof BombaLogica) equipamento.notify({ tipo: 'estado', isOn: equipamento.isOn, grau: equipamento.grauAcionamento });
                             };
-
                             c.inputs.forEach(notificarEstado);
                             c.outputs.forEach(notificarEstado);
                         }
@@ -585,15 +669,8 @@
             getFluxoSaida() { return 0; }
         }
 
-        class FonteLogica extends ComponenteFisico {
-            constructor(id, tag, x, y) { super(id, tag, x, y); }
-            getFluxoSaida() { return 99999; }
-        }
-
-        class DrenoLogico extends ComponenteFisico {
-            constructor(id, tag, x, y) { super(id, tag, x, y); }
-            getFluxoSaidaFromTank(nivelNormalizado) { return nivelNormalizado > 0 ? 10.0 * Math.sqrt(nivelNormalizado) : 0; }
-        }
+        class FonteLogica extends ComponenteFisico { getFluxoSaida() { return 99999; } }
+        class DrenoLogico extends ComponenteFisico { getFluxoSaidaFromTank(nivelNormalizado) { return nivelNormalizado > 0 ? 10.0 * Math.sqrt(nivelNormalizado) : 0; } }
 
         class BombaLogica extends ComponenteFisico {
             constructor(id, tag, x, y) { super(id, tag, x, y); this.isOn = false; this.vazaoNominal = 45.0; this.grauAcionamento = 0; this.fluxoReal = 0; }
@@ -606,137 +683,74 @@
                 if (!this.isOn) { this.fluxoReal = 0; return 0; }
                 let fluxoEntradaDisp = 0;
                 this.inputs.forEach(c => { 
-                    if (c instanceof TanqueLogico) {
-                        fluxoEntradaDisp += c.volumeAtual > 0 ? 99999 : 0;
-                    } else if (typeof c.getFluxoSaida === 'function') {
-                        fluxoEntradaDisp += c.getFluxoSaida(); 
-                    }
+                    if (c instanceof TanqueLogico) fluxoEntradaDisp += c.volumeAtual > 0 ? 99999 : 0;
+                    else if (typeof c.getFluxoSaida === 'function') fluxoEntradaDisp += c.getFluxoSaida(); 
                 });
                 const fluxoDesejado = (this.grauAcionamento / 100.0) * this.vazaoNominal;
                 this.fluxoReal = Math.min(fluxoEntradaDisp, fluxoDesejado);
                 return this.fluxoReal;
             }
-            getFluxoSaidaFromTank(nivelNormalizado) {
-                return this.getFluxoSaida();
-            }
+            getFluxoSaidaFromTank(nivelNormalizado) { return this.getFluxoSaida(); }
         }
 
         class ValvulaLogica extends ComponenteFisico {
             constructor(id, tag, x, y) {
                 super(id, tag, x, y);
-                this.aberta = false;
-                this.grauAbertura = 0;
-                this.fluxoReal = 0;
-                // Coeficiente de vazão (Cv): capacidade de passagem da válvula.
-                // Padrão = 1.0 → com ΔP=100 kPa e nv=1 resulta em 10 L/s (mesma base do sistema).
-                this.cv = 1.0;
-                // Queda de pressão de referência disponível (kPa).
-                // Representa a pressão hidrostática máxima que o tanque cheio exerce.
-                this.deltaP = 100.0;
+                this.aberta = false; this.grauAbertura = 0; this.fluxoReal = 0;
+                this.cv = 1.0; this.deltaP = 100.0;
             }
-
             toggle() { this.setAbertura(this.aberta ? 0 : 100); }
             setAbertura(valor) {
-                this.grauAbertura = valor;
-                this.aberta = this.grauAbertura > 0;
+                this.grauAbertura = valor; this.aberta = this.grauAbertura > 0;
                 this.notify({ tipo: 'estado', aberta: this.aberta, grau: this.grauAbertura });
             }
-
-            // Equação clássica de válvula: Q = Cv × √(nv × ΔP) × abertura
-            // Calibrada: Cv=1, ΔP=100, nv=1, abertura=1 → Q = 10 L/s (base do sistema)
             _calcFluxo(nivelNormalizado) {
                 if (nivelNormalizado <= 0) return 0;
                 return this.cv * Math.sqrt(nivelNormalizado * this.deltaP) * (this.grauAbertura / 100.0);
             }
-
-            // Fluxo entregue ao componente a jusante
             getFluxoSaida() {
                 let fluxoMontante = 0;
                 this.inputs.forEach(c => {
-                    if (c instanceof TanqueLogico) {
-                        const nv = c.capacidadeMaxima > 0 ? c.volumeAtual / c.capacidadeMaxima : 0;
-                        fluxoMontante += this._calcFluxo(nv);
-                    } else if (typeof c.getFluxoSaida === 'function') {
-                        // Fonte ou bomba: repassa o fluxo e aplica só a restrição de abertura
-                        fluxoMontante += c.getFluxoSaida() * (this.grauAbertura / 100.0);
-                    }
+                    if (c instanceof TanqueLogico) fluxoMontante += this._calcFluxo(c.capacidadeMaxima > 0 ? c.volumeAtual / c.capacidadeMaxima : 0);
+                    else if (typeof c.getFluxoSaida === 'function') fluxoMontante += c.getFluxoSaida() * (this.grauAbertura / 100.0);
                 });
                 this.fluxoReal = fluxoMontante;
                 return this.fluxoReal;
             }
-
-            // Fluxo drenado do tanque a montante — idêntico para conservar massa
-            getFluxoSaidaFromTank(nivelNormalizado) {
-                this.fluxoReal = this._calcFluxo(nivelNormalizado);
-                return this.fluxoReal;
-            }
+            getFluxoSaidaFromTank(nivelNormalizado) { this.fluxoReal = this._calcFluxo(nivelNormalizado); return this.fluxoReal; }
         }
 
         class TanqueLogico extends ComponenteFisico {
             constructor(id, tag, x, y) {
                 super(id, tag, x, y);
-                this.capacidadeMaxima = 1000.0;
-                this.volumeAtual = 0;
-                this.lastQin = 0;
-                
-                // Controlador PI de nível
-                this.setpointAtivo = false;
-                this.setpoint = 50;       
-                
-                // GANHOS AJUSTADOS: Mais agressivos para parar de enrolar e cravar na marca
-                this.kp = 250;             
-                this.ki = 25;              
-                
-                this._ctrlIntegral = 0;   
-                this._lastErro = 0; // Guarda o erro anterior para detectar o cruzamento do alvo
+                this.capacidadeMaxima = 1000.0; this.volumeAtual = 0; this.lastQin = 0;
+                this.setpointAtivo = false; this.setpoint = 50;       
+                this.kp = 250; this.ki = 25;       
+                this._ctrlIntegral = 0; this._lastErro = 0; 
             }
-
             _rodarControlador(dt) {
                 if (!this.setpointAtivo) return;
-                
-                const nivelAtual = this.capacidadeMaxima > 0 ? this.volumeAtual / this.capacidadeMaxima : 0;
-                const erro = (this.setpoint / 100) - nivelAtual;
-
-                // ANTI-WINDUP (A Mágica): Se o erro inverteu de sinal (cruzou a linha do Setpoint),
-                // zeramos a memória integral instantaneamente. Isso mata 100% o efeito de passar direto.
-                if (this._lastErro !== undefined && (this._lastErro * erro < 0)) {
-                    this._ctrlIntegral = 0;
-                }
+                const erro = (this.setpoint / 100) - (this.capacidadeMaxima > 0 ? this.volumeAtual / this.capacidadeMaxima : 0);
+                if (this._lastErro !== undefined && (this._lastErro * erro < 0)) this._ctrlIntegral = 0;
                 this._lastErro = erro;
-
-                // Acumula integral
                 this._ctrlIntegral += erro * dt;
-
-                // Trava a integral num limite razoável pra não explodir
                 const clampInt = this.ki > 0 ? 1 / this.ki : 1;
                 this._ctrlIntegral = Math.max(-clampInt, Math.min(clampInt, this._ctrlIntegral));
-
-                // Saída PI
                 const u = Math.max(-1, Math.min(1, this.kp * erro + this.ki * this._ctrlIntegral));
-
                 const grauEntrada = Math.max(0, u * 100);
                 const grauSaida = Math.max(0, -u * 100);
 
-                // Atua nas bombas e válvulas conectadas na ENTRADA do tanque
                 this.inputs.forEach(c => {
                     if (c instanceof ValvulaLogica) c.setAbertura(grauEntrada);
                     else if (c instanceof BombaLogica) c.setAcionamento(grauEntrada);
                 });
-
-                // Atua nas bombas e válvulas conectadas na SAÍDA do tanque
                 this.outputs.forEach(c => {
                     if (c instanceof ValvulaLogica) c.setAbertura(grauSaida);
                     else if (c instanceof BombaLogica) c.setAcionamento(grauSaida);
                 });
-
                 this.notify({ tipo: 'ctrl_update', grau: u * 100, erro: erro });
             }
-
-            resetControlador() {
-                this._ctrlIntegral = 0;
-                this._lastErro = 0;
-            }
-
+            resetControlador() { this._ctrlIntegral = 0; this._lastErro = 0; }
             dVdt(V) {
                 let qIn = 0, qOut = 0;
                 this.inputs.forEach(c => { if (typeof c.getFluxoSaida === 'function') qIn += c.getFluxoSaida(); });
@@ -745,213 +759,293 @@
                 this.lastQin = qIn;
                 return qIn - qOut;
             }
-
             atualizarFisica(dt, fluido) {
-                // Controlador age ANTES do passo de integração
                 this._rodarControlador(dt);
-
                 const k1 = this.dVdt(this.volumeAtual), k2 = this.dVdt(this.volumeAtual + 0.5 * k1 * dt), k3 = this.dVdt(this.volumeAtual + 0.5 * k2 * dt), k4 = this.dVdt(this.volumeAtual + k3 * dt);
                 this.volumeAtual += (1 / 6) * (k1 + 2 * k2 + 2 * k3 + k4) * dt;
-
                 if (isNaN(this.volumeAtual) || this.volumeAtual < 0) this.volumeAtual = 0;
                 if (this.volumeAtual > this.capacidadeMaxima) this.volumeAtual = this.capacidadeMaxima;
-
                 this.notify({ tipo: 'volume', perc: this.volumeAtual / this.capacidadeMaxima, abs: this.volumeAtual, qIn: this.lastQin });
             }
-
-            getFluxoSaida() {
-                const nv = this.capacidadeMaxima > 0 ? this.volumeAtual / this.capacidadeMaxima : 0;
-                return nv > 0 ? 10.0 * Math.sqrt(nv) : 0;
-            }
-
-            getFluxoSaidaFromTank(nivelMontante) {
-                return nivelMontante > 0 ? 10.0 * Math.sqrt(nivelMontante) : 0;
-            }
+            getFluxoSaida() { const nv = this.capacidadeMaxima > 0 ? this.volumeAtual / this.capacidadeMaxima : 0; return nv > 0 ? 10.0 * Math.sqrt(nv) : 0; }
+            getFluxoSaidaFromTank(nivelMontante) { return nivelMontante > 0 ? 10.0 * Math.sqrt(nivelMontante) : 0; }
         }
 
         // ==========================================
-        // 2. FABRICA DE EQUIPAMENTOS (SVG)
+        // 2. ARQUITETURA DE REGISTRO DE COMPONENTES E FABRICA
         // ==========================================
+        const colorPort = "#e67e22";
+        const labelStyle = `font-family="Arial" font-weight="bold" text-anchor="middle" fill="#2c3e50" paint-order="stroke" stroke="#fff" stroke-width="3"`;
+        const makePort = (id, cx, cy, inOut) => `<circle class="port-node" data-type="${inOut}" data-comp-id="${id}" cx="${cx}" cy="${cy}" r="5" fill="#fff" stroke="${colorPort}" stroke-width="2"/>`;
+
+        const REGISTRO_COMPONENTES = {
+            'source': {
+                Classe: FonteLogica,
+                prefixoTag: 'FONTE',
+                w: 40, h: 40, offX: -20, offY: -20,
+                svg: (id, tag) => `
+                    <circle cx="40" cy="40" r="25" fill="#3498db" stroke="#2980b9" stroke-width="4"/>
+                    <path d="M 25 40 L 40 40 M 35 35 L 40 40 L 35 45" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+                    <text x="40" y="80" font-size="11" ${labelStyle}>Rede H2O</text>
+                    <g> ${makePort(id, 65, 40, 'out')} </g>
+                `,
+                propriedadesAdicionais: () => ""
+            },
+            'sink': {
+                Classe: DrenoLogico,
+                prefixoTag: 'DRENO',
+                w: 40, h: 40, offX: -20, offY: -20,
+                svg: (id, tag) => `
+                    <circle cx="40" cy="40" r="25" fill="#95a5a6" stroke="#7f8c8d" stroke-width="4"/>
+                    <path d="M 35 30 L 45 30 M 40 30 L 40 45 M 35 40 L 40 45 L 45 40" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+                    <text x="40" y="80" font-size="11" ${labelStyle}>Descarte</text>
+                    <g> ${makePort(id, 15, 40, 'in')} </g>
+                `,
+                propriedadesAdicionais: () => ""
+            },
+            'pump': {
+                Classe: BombaLogica,
+                prefixoTag: 'P',
+                w: 80, h: 80, offX: 0, offY: 0,
+                svg: (id, tag) => `
+                    <circle cx="40" cy="40" r="34" fill="#fff" stroke="#2c3e50" stroke-width="6"/>
+                    <circle id="led-${id}" cx="40" cy="40" r="10" fill="#e74c3c"/>
+                    <text id="tag-${id}" x="40" y="88" font-size="12" ${labelStyle}>${tag}</text>
+                    <g> ${makePort(id, 0, 40, 'in')} ${makePort(id, 80, 40, 'out')} </g>
+                `,
+                setup: (visual, logica, id) => {
+                    visual.addEventListener('dblclick', () => logica.toggle());
+                    logica.subscribe((d) => {
+                        if (d.tipo === 'estado') visual.querySelector(`#led-${id}`).setAttribute('fill', d.isOn ? '#2ecc71' : '#e74c3c');
+                        else if (d.tipo === 'tag_update') visual.querySelector(`#tag-${id}`).textContent = logica.tag;
+                    });
+                },
+                propriedadesAdicionais: (comp) => `
+                    <div class="prop-group">
+                        <label>Potência do Motor <span id="val-acionamento" class="val-display">${comp.grauAcionamento}%</span></label>
+                        <input type="range" id="input-acionamento" min="0" max="100" value="${comp.grauAcionamento}">
+                    </div>
+                    <div class="prop-group">
+                        <label>Vazão Nominal Máx (L/s)</label>
+                        <input type="number" id="input-vazmax" value="${comp.vazaoNominal}" step="5" min="5">
+                    </div>
+                `,
+                setupProps: (comp) => {
+                    document.getElementById('input-acionamento').addEventListener('input', e => {
+                        const val = parseInt(e.target.value);
+                        document.getElementById('val-acionamento').textContent = val + '%';
+                        comp.setAcionamento(val);
+                    });
+                    document.getElementById('input-vazmax').addEventListener('change', e => comp.vazaoNominal = parseFloat(e.target.value));
+                    comp.subscribe(d => {
+                        if (d.tipo === 'estado' && document.getElementById('input-acionamento')) {
+                            document.getElementById('input-acionamento').value = d.grau;
+                            document.getElementById('val-acionamento').textContent = d.grau + '%';
+                        }
+                    });
+                }
+            },
+            'valve': {
+                Classe: ValvulaLogica,
+                prefixoTag: 'V',
+                w: 40, h: 40, offX: -20, offY: -20,
+                svg: (id, tag) => `
+                    <rect x="10" y="34" width="60" height="12" fill="#95a5a6" stroke="#2c3e50" stroke-width="2"/>
+                    <path id="corpo-${id}" d="M 20 20 L 20 60 L 60 20 L 60 60 Z" fill="#e74c3c" stroke="#2c3e50" stroke-width="3" stroke-linejoin="round"/>
+                    <rect x="36" y="5" width="8" height="35" fill="#c0392b" stroke="#2c3e50" stroke-width="2"/>
+                    <rect id="volante-${id}" x="25" y="0" width="30" height="10" fill="#e74c3c" stroke="#2c3e50" stroke-width="2" rx="3"/>
+                    <text id="tag-${id}" x="40" y="85" font-size="12" ${labelStyle}>${tag}</text>
+                    <g> ${makePort(id, 20, 40, 'in')} ${makePort(id, 60, 40, 'out')} </g>
+                `,
+                setup: (visual, logica, id) => {
+                    visual.addEventListener('dblclick', () => logica.toggle());
+                    logica.subscribe((d) => {
+                        if (d.tipo === 'estado') {
+                            const perc = d.grau / 100.0;
+                            const r = Math.round(231 + (46 - 231) * perc);
+                            const g = Math.round(76 + (204 - 76) * perc);
+                            const b = Math.round(60 + (113 - 60) * perc);
+                            const cor = `rgb(${r}, ${g}, ${b})`;
+                            visual.querySelector(`#corpo-${id}`).setAttribute('fill', cor);
+                            visual.querySelector(`#volante-${id}`).setAttribute('fill', cor);
+                        } else if (d.tipo === 'tag_update') visual.querySelector(`#tag-${id}`).textContent = logica.tag;
+                    });
+                },
+                propriedadesAdicionais: (comp) => `
+                    <div class="prop-group">
+                        <label>Abertura <span id="val-abertura" class="val-display">${comp.grauAbertura}%</span></label>
+                        <input type="range" id="input-abertura" min="0" max="100" value="${comp.grauAbertura}">
+                    </div>
+                    <div class="prop-group">
+                        <label>Coeficiente de Vazão (Cv)</label>
+                        <input type="number" id="input-cv" value="${comp.cv}" step="0.1" min="0.1" max="20">
+                    </div>
+                    <div class="prop-group">
+                        <label>Queda de Pressão — ΔP (kPa)</label>
+                        <input type="number" id="input-deltap" value="${comp.deltaP}" step="10" min="1" max="1000">
+                    </div>
+                    <div class="prop-group">
+                        <label>Vazão Atual (L/s)</label>
+                        <input type="text" id="disp-vazao-valvula" value="${comp.fluxoReal.toFixed(2)}" disabled>
+                    </div>
+                `,
+                setupProps: (comp) => {
+                    document.getElementById('input-abertura').addEventListener('input', e => {
+                        const val = parseInt(e.target.value);
+                        document.getElementById('val-abertura').textContent = val + '%';
+                        comp.setAbertura(val);
+                    });
+                    document.getElementById('input-cv').addEventListener('change', e => comp.cv = Math.max(0.1, parseFloat(e.target.value) || 1.0));
+                    document.getElementById('input-deltap').addEventListener('change', e => comp.deltaP = Math.max(1, parseFloat(e.target.value) || 100.0));
+                    comp.subscribe(d => {
+                        if (d.tipo === 'estado' && document.getElementById('input-abertura')) {
+                            document.getElementById('input-abertura').value = d.grau;
+                            document.getElementById('val-abertura').textContent = d.grau + '%';
+                        }
+                    });
+                }
+            },
+            'tank': {
+                Classe: TanqueLogico,
+                prefixoTag: 'T',
+                w: 160, h: 160, offX: 0, offY: -40,
+                svg: (id, tag) => `
+                    <defs>
+                        <linearGradient id="grad-${id}" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#3498db" stop-opacity="0.9"/>
+                            <stop offset="100%" stop-color="#2980b9" stop-opacity="0.95"/>
+                        </linearGradient>
+                        <clipPath id="clip-${id}">
+                            <path d="M 0 40 L 0 200 A 80 40 0 0 0 160 200 L 160 40 A 80 40 0 0 0 0 40 Z"/>
+                        </clipPath>
+                    </defs>
+                    <path d="M 0 40 L 0 200 A 80 40 0 0 0 160 200 L 160 40 A 80 40 0 0 0 0 40 Z" fill="#fff" stroke="none"/>
+                    <rect id="agua-${id}" x="0" y="240" width="160" height="0" fill="url(#grad-${id})" clip-path="url(#clip-${id})" />
+                    <line id="stream-${id}" x1="80" y1="40" x2="80" y2="200" stroke="#3498db" stroke-width="6" class="water-stream" opacity="0"/>
+                    <path d="M 0 40 L 0 200 A 80 40 0 0 0 160 200 L 160 40 A 80 40 0 0 0 0 40 Z" fill="none" stroke="#2c3e50" stroke-width="6"/>
+                    <g clip-path="url(#clip-${id})">
+                        <line id="sp-line-${id}" x1="0" y1="120" x2="160" y2="120" stroke="#e74c3c" stroke-width="3" stroke-dasharray="8,4" opacity="0"/>
+                    </g>
+                    <text id="sp-label-${id}" x="165" y="124" font-size="11" font-family="Arial" font-weight="bold" fill="#e74c3c" text-anchor="start" opacity="0">SP</text>
+                    <rect id="sp-badge-${id}" x="4" y="44" width="44" height="14" rx="4" fill="#e74c3c" opacity="0"/>
+                    <text id="sp-badge-txt-${id}" x="26" y="54" font-size="9" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#fff" opacity="0">● SP ON</text>
+                    <text id="cap-max-${id}" x="80" y="220" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#2c3e50">Capacidade: 1000 L</text>
+                    <text id="tag-${id}" x="80" y="100" font-size="20" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#1a252f">${tag}</text>
+                    <text id="vol-${id}" x="80" y="125" font-size="18" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#1a252f">0.0 L</text>
+                    <g> ${makePort(id, 80, 0, 'in')} ${makePort(id, 80, 240, 'out')} </g>
+                `,
+                setup: (visual, logica, id) => {
+                    const atualizarLinhaSetpoint = () => {
+                        const spFrac = logica.setpoint / 100;
+                        const spY = 240 - (spFrac * 240); 
+                        const vis = logica.setpointAtivo ? '1' : '0';
+                        visual.querySelector(`#sp-line-${id}`).setAttribute('y1', spY); 
+                        visual.querySelector(`#sp-line-${id}`).setAttribute('y2', spY);
+                        visual.querySelector(`#sp-line-${id}`).setAttribute('opacity', vis);
+                        visual.querySelector(`#sp-label-${id}`).setAttribute('y', Math.max(10, Math.min(235, spY + 4))); 
+                        visual.querySelector(`#sp-label-${id}`).setAttribute('opacity', vis);
+                        visual.querySelector(`#sp-badge-${id}`).setAttribute('opacity', vis); 
+                        visual.querySelector(`#sp-badge-txt-${id}`).setAttribute('opacity', vis);
+                    };
+
+                    logica.subscribe((d) => {
+                        if (d.tipo === 'volume') {
+                            visual.querySelector(`#agua-${id}`).setAttribute('height', d.perc * 240); 
+                            visual.querySelector(`#agua-${id}`).setAttribute('y', 240 - (d.perc * 240)); 
+                            visual.querySelector(`#vol-${id}`).textContent = d.abs.toFixed(1) + " L";
+                            visual.querySelector(`#stream-${id}`).style.opacity = d.qIn > 0.1 ? '0.7' : '0';
+                            visual.querySelector(`#cap-max-${id}`).textContent = `Capacidade: ${logica.capacidadeMaxima} L`;
+                        } else if (d.tipo === 'tag_update') {
+                            visual.querySelector(`#tag-${id}`).textContent = logica.tag;
+                        } else if (d.tipo === 'sp_update') atualizarLinhaSetpoint();
+                    });
+                },
+                propriedadesAdicionais: (comp) => `
+                    <div class="prop-group">
+                        <label>Capacidade Total (L)</label>
+                        <input type="number" id="input-cap" value="${comp.capacidadeMaxima}" step="50" min="100">
+                    </div>
+                    <div class="prop-group">
+                        <label>Volume Atual (L)</label>
+                        <input type="text" id="disp-vol" value="${comp.volumeAtual.toFixed(1)}" disabled>
+                    </div>
+                    <div class="prop-group" id="grp-sp-main" style="border-color: ${comp.setpointAtivo ? '#e74c3c' : '#eee'}; background: ${comp.setpointAtivo ? '#fdf5f4' : '#f9fbfb'};">
+                        <label style="color: #c0392b; font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">⚙ Controlador de Nível (PI)</label>
+                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+                            <input type="checkbox" id="input-sp-ativo" ${comp.setpointAtivo ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer;">
+                            <span style="font-size:13px; font-weight:bold;">Ativar controle automático</span>
+                        </div>
+                        <label>Setpoint <span id="val-sp" class="val-display" style="color:#e74c3c;">${comp.setpoint}%</span></label>
+                        <input type="range" id="input-sp" min="0" max="100" value="${comp.setpoint}" style="accent-color:#e74c3c;">
+                    </div>
+                    <div class="prop-group" id="group-ctrl-params" style="display:${comp.setpointAtivo ? 'block' : 'none'};">
+                        <label>Ganho Proporcional (Kp)</label>
+                        <input type="number" id="input-kp" value="${comp.kp}" step="5" min="1" max="500">
+                    </div>
+                    <div class="prop-group" id="group-ctrl-ki" style="display:${comp.setpointAtivo ? 'block' : 'none'};">
+                        <label>Ganho Integral (Ki)</label>
+                        <input type="number" id="input-ki" value="${comp.ki}" step="1" min="0" max="100">
+                    </div>
+                `,
+                setupProps: (comp) => {
+                    document.getElementById('input-cap').addEventListener('change', e => {
+                        comp.capacidadeMaxima = parseFloat(e.target.value) || 100;
+                        comp.notify({ tipo: 'volume', perc: comp.volumeAtual / comp.capacidadeMaxima, abs: comp.volumeAtual, qIn: comp.lastQin });
+                    });
+                    
+                    const spAtivoEl = document.getElementById('input-sp-ativo');
+                    spAtivoEl.addEventListener('change', e => {
+                        comp.setpointAtivo = e.target.checked;
+                        comp.resetControlador();
+                        document.getElementById('group-ctrl-params').style.display = comp.setpointAtivo ? 'block' : 'none';
+                        document.getElementById('group-ctrl-ki').style.display = comp.setpointAtivo ? 'block' : 'none';
+                        const grp = document.getElementById('grp-sp-main');
+                        grp.style.borderColor = comp.setpointAtivo ? '#e74c3c' : '#eee';
+                        grp.style.background = comp.setpointAtivo ? '#fdf5f4' : '#f9fbfb';
+                        comp.notify({ tipo: 'sp_update' });
+                    });
+
+                    document.getElementById('input-sp').addEventListener('input', e => {
+                        comp.setpoint = parseInt(e.target.value);
+                        comp.resetControlador();
+                        document.getElementById('val-sp').textContent = comp.setpoint + '%';
+                        comp.notify({ tipo: 'sp_update' });
+                    });
+
+                    document.getElementById('input-kp').addEventListener('change', e => { comp.kp = Math.max(1, parseFloat(e.target.value) || 50); comp.resetControlador(); });
+                    document.getElementById('input-ki').addEventListener('change', e => { comp.ki = Math.max(0, parseFloat(e.target.value) || 0); comp.resetControlador(); });
+                }
+            }
+        };
+
         function obterProximaTag(prefixo) {
-            const numerosEmUso = ENGINE.componentes
-                .map(c => c.tag)
-                .filter(tag => tag.startsWith(prefixo + '-'))
-                .map(tag => parseInt(tag.split('-')[1]));
-            
-            let i = 1;
-            while (numerosEmUso.includes(i)) i++;
+            const numeros = ENGINE.componentes.map(c => c.tag).filter(t => t.startsWith(prefixo + '-')).map(t => parseInt(t.split('-')[1]));
+            let i = 1; while (numeros.includes(i)) i++;
             return `${prefixo}-${String(i).padStart(2, '0')}`;
         }
 
         class FabricaDeEquipamentos {
             static criar(tipo, x, y, isPalette = false) {
+                const spec = REGISTRO_COMPONENTES[tipo];
+                if (!spec) return console.error("Componente não registrado:", tipo);
+
                 const id = tipo + '-' + Date.now();
                 const visual = document.createElement('div');
                 visual.className = 'placed-component';
                 visual.style.left = `${x}px`; visual.style.top = `${y}px`; visual.style.zIndex = '10';
                 visual.dataset.id = id;
+                visual.dataset.logW = spec.w; visual.dataset.logH = spec.h;
 
-                let logica = null;
-                let logW, logH, svgOffsetX, svgOffsetY;
-                let tagGerada = "";
+                let tag = isPalette ? spec.prefixoTag : obterProximaTag(spec.prefixoTag);
+                const logica = new spec.Classe(id, tag, x, y);
 
-                const colorPort = "#e67e22";
-                const labelStyle = `font-family="Arial" font-weight="bold" text-anchor="middle" fill="#2c3e50" paint-order="stroke" stroke="#fff" stroke-width="3"`;
-                const makePort = (cx, cy, inOut) => `<circle class="port-node" data-type="${inOut}" data-comp-id="${id}" cx="${cx}" cy="${cy}" r="5" fill="#fff" stroke="${colorPort}" stroke-width="2"/>`;
-
-                if (tipo === 'source') {
-                    tagGerada = 'FONTE';
-                    logW = 40; logH = 40; svgOffsetX = -20; svgOffsetY = -20;
-                    logica = new FonteLogica(id, tagGerada, x, y);
-                    visual.innerHTML = `
-                        <svg viewBox="0 0 80 80" width="80" height="80" style="left:${svgOffsetX}px; top:${svgOffsetY}px;">
-                            <circle cx="40" cy="40" r="25" fill="#3498db" stroke="#2980b9" stroke-width="4"/>
-                            <path d="M 25 40 L 40 40 M 35 35 L 40 40 L 35 45" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-                            <text x="40" y="80" font-size="11" ${labelStyle}>Rede H2O</text>
-                            <g> ${makePort(65, 40, 'out')} </g>
-                        </svg>`;
-                } else if (tipo === 'sink') {
-                    tagGerada = 'DRENO';
-                    logW = 40; logH = 40; svgOffsetX = -20; svgOffsetY = -20;
-                    logica = new DrenoLogico(id, tagGerada, x, y);
-                    visual.innerHTML = `
-                        <svg viewBox="0 0 80 80" width="80" height="80" style="left:${svgOffsetX}px; top:${svgOffsetY}px;">
-                            <circle cx="40" cy="40" r="25" fill="#95a5a6" stroke="#7f8c8d" stroke-width="4"/>
-                            <path d="M 35 30 L 45 30 M 40 30 L 40 45 M 35 40 L 40 45 L 45 40" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-                            <text x="40" y="80" font-size="11" ${labelStyle}>Descarte</text>
-                            <g> ${makePort(15, 40, 'in')} </g>
-                        </svg>`;
-                } else if (tipo === 'tank') {
-                    tagGerada = isPalette ? "T" : obterProximaTag("T");
-                    logW = 160; logH = 160; svgOffsetX = 0; svgOffsetY = -40; 
-                    logica = new TanqueLogico(id, tagGerada, x, y); 
-                    visual.innerHTML = `
-                        <svg viewBox="0 0 160 240" width="160" height="240" style="left:${svgOffsetX}px; top:${svgOffsetY}px; overflow: visible;">
-                            <defs>
-                                <linearGradient id="grad-${id}" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stop-color="#3498db" stop-opacity="0.9"/>
-                                    <stop offset="100%" stop-color="#2980b9" stop-opacity="0.95"/>
-                                </linearGradient>
-                                <clipPath id="clip-${id}">
-                                    <path d="M 0 40 L 0 200 A 80 40 0 0 0 160 200 L 160 40 A 80 40 0 0 0 0 40 Z"/>
-                                </clipPath>
-                            </defs>
-                            <path d="M 0 40 L 0 200 A 80 40 0 0 0 160 200 L 160 40 A 80 40 0 0 0 0 40 Z" fill="#fff" stroke="none"/>
-                            
-                            <rect id="agua-${id}" x="0" y="240" width="160" height="0" fill="url(#grad-${id})" clip-path="url(#clip-${id})" />
-                            <line id="stream-${id}" x1="80" y1="40" x2="80" y2="200" stroke="#3498db" stroke-width="6" class="water-stream" opacity="0"/>
-                            
-                            <path d="M 0 40 L 0 200 A 80 40 0 0 0 160 200 L 160 40 A 80 40 0 0 0 0 40 Z" fill="none" stroke="#2c3e50" stroke-width="6"/>
-                            
-                            <g clip-path="url(#clip-${id})">
-                                <line id="sp-line-${id}" x1="0" y1="120" x2="160" y2="120" stroke="#e74c3c" stroke-width="3" stroke-dasharray="8,4" opacity="0"/>
-                            </g>
-                            
-                            <text id="sp-label-${id}" x="165" y="124" font-size="11" font-family="Arial" font-weight="bold" fill="#e74c3c" text-anchor="start" opacity="0">SP</text>
-                            
-                            <rect id="sp-badge-${id}" x="4" y="44" width="44" height="14" rx="4" fill="#e74c3c" opacity="0"/>
-                            <text id="sp-badge-txt-${id}" x="26" y="54" font-size="9" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#fff" opacity="0">● SP ON</text>
-                            <text id="cap-max-${id}" x="80" y="220" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#2c3e50">Capacidade: ${logica.capacidadeMaxima} L</text>
-                            <text id="tag-${id}" x="80" y="100" font-size="20" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#1a252f">${logica.tag}</text>
-                            <text id="vol-${id}" x="80" y="125" font-size="18" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#1a252f">0.0 L</text>
-                            <g> ${makePort(80, 0, 'in')} ${makePort(80, 240, 'out')} </g>
-                        </svg>`;
-                    
-                    if(!isPalette) {
-                        const atualizarLinhaSetpoint = () => {
-                            const spFrac = logica.setpoint / 100;
-                            
-                            // Agora a escala acompanha a altura real total do tanque (240px)
-                            const spY = 240 - (spFrac * 240); 
-                            
-                            const spLine = visual.querySelector(`#sp-line-${id}`);
-                            const spLbl  = visual.querySelector(`#sp-label-${id}`);
-                            const spBadge = visual.querySelector(`#sp-badge-${id}`);
-                            const spBadgeTxt = visual.querySelector(`#sp-badge-txt-${id}`);
-                            const vis = logica.setpointAtivo ? '1' : '0';
-                            
-                            spLine.setAttribute('y1', spY); 
-                            spLine.setAttribute('y2', spY);
-                            spLine.setAttribute('opacity', vis);
-                            
-                            // Ajustamos o eixo Y da label "SP" para ela não sumir pra fora da tela quando o SP for 100% ou 0%
-                            spLbl.setAttribute('y', Math.max(10, Math.min(235, spY + 4))); 
-                            spLbl.setAttribute('opacity', vis);
-                            
-                            spBadge.setAttribute('opacity', vis); 
-                            spBadgeTxt.setAttribute('opacity', vis);
-                        };
-
-                        logica.subscribe((dados) => {
-                            if (dados.tipo === 'volume') {
-                                const rect = visual.querySelector(`#agua-${id}`);
-                                rect.setAttribute('height', dados.perc * 240); 
-                                rect.setAttribute('y', 240 - (dados.perc * 240)); 
-                                visual.querySelector(`#vol-${id}`).textContent = dados.abs.toFixed(1) + " L";
-                                visual.querySelector(`#stream-${id}`).style.opacity = dados.qIn > 0.1 ? '0.7' : '0';
-                                visual.querySelector(`#cap-max-${id}`).textContent = `Capacidade: ${logica.capacidadeMaxima} L`;
-                            } else if (dados.tipo === 'tag_update') {
-                                visual.querySelector(`#tag-${id}`).textContent = logica.tag;
-                            } else if (dados.tipo === 'sp_update') {
-                                atualizarLinhaSetpoint();
-                            }
-                        });
-                    }
-                } else if (tipo === 'pump') {
-                    tagGerada = isPalette ? "P" : obterProximaTag("P");
-                    logW = 80; logH = 80; svgOffsetX = 0; svgOffsetY = 0;
-                    logica = new BombaLogica(id, tagGerada, x, y);
-                    visual.innerHTML = `
-                        <svg viewBox="0 0 80 80" width="80" height="80" style="left:${svgOffsetX}px; top:${svgOffsetY}px;">
-                            <circle cx="40" cy="40" r="34" fill="#fff" stroke="#2c3e50" stroke-width="6"/>
-                            <circle id="led-${id}" cx="40" cy="40" r="10" fill="#e74c3c"/>
-                            <text id="tag-${id}" x="40" y="88" font-size="12" ${labelStyle}>${logica.tag}</text>
-                            <g> ${makePort(0, 40, 'in')} ${makePort(40, 0, 'out')} </g>
-                        </svg>`;
-                    if (!isPalette) {
-                        visual.addEventListener('dblclick', () => logica.toggle());
-                        logica.subscribe((dados) => {
-                            if (dados.tipo === 'estado') visual.querySelector(`#led-${id}`).setAttribute('fill', dados.isOn ? '#2ecc71' : '#e74c3c');
-                            else if (dados.tipo === 'tag_update') visual.querySelector(`#tag-${id}`).textContent = logica.tag;
-                        });
-                    }
-                } else if (tipo === 'valve') {
-                    tagGerada = isPalette ? "V" : obterProximaTag("V");
-                    logW = 40; logH = 40; svgOffsetX = -20; svgOffsetY = -20;
-                    logica = new ValvulaLogica(id, tagGerada, x, y);
-                    visual.innerHTML = `
-                        <svg viewBox="0 0 80 80" width="80" height="80" style="left:${svgOffsetX}px; top:${svgOffsetY}px;">
-                            <rect x="10" y="34" width="60" height="12" fill="#95a5a6" stroke="#2c3e50" stroke-width="2"/>
-                            <path id="corpo-${id}" d="M 20 20 L 20 60 L 60 20 L 60 60 Z" fill="#e74c3c" stroke="#2c3e50" stroke-width="3" stroke-linejoin="round"/>
-                            <rect x="36" y="5" width="8" height="35" fill="#c0392b" stroke="#2c3e50" stroke-width="2"/>
-                            <rect id="volante-${id}" x="25" y="0" width="30" height="10" fill="#e74c3c" stroke="#2c3e50" stroke-width="2" rx="3"/>
-                            <text id="tag-${id}" x="40" y="85" font-size="12" ${labelStyle}>${logica.tag}</text>
-                            <g> ${makePort(20, 40, 'in')} ${makePort(60, 40, 'out')} </g>
-                        </svg>`;
-                    if (!isPalette) {
-                        visual.addEventListener('dblclick', () => logica.toggle());
-                        logica.subscribe((dados) => {
-                            if (dados.tipo === 'estado') {
-                                const perc = dados.grau / 100.0;
-                                const r = Math.round(231 + (46 - 231) * perc);
-                                const g = Math.round(76 + (204 - 76) * perc);
-                                const b = Math.round(60 + (113 - 60) * perc);
-                                const cor = `rgb(${r}, ${g}, ${b})`;
-                                
-                                visual.querySelector(`#corpo-${id}`).setAttribute('fill', cor);
-                                visual.querySelector(`#volante-${id}`).setAttribute('fill', cor);
-                            } else if (dados.tipo === 'tag_update') {
-                                visual.querySelector(`#tag-${id}`).textContent = logica.tag;
-                            }
-                        });
-                    }
-                }
-
-                visual.style.width = `${logW}px`; visual.style.height = `${logH}px`;
-                visual.dataset.logW = logW; visual.dataset.logH = logH;
-                visual.logica = logica;
+                visual.innerHTML = `
+                    <svg viewBox="0 0 ${spec.w + 40} ${spec.h + 80}" width="${spec.w + 40}" height="${spec.h + 80}" style="left:${spec.offX}px; top:${spec.offY}px;">
+                        ${spec.svg(id, tag)}
+                    </svg>`;
 
                 if (!isPalette) {
+                    if (spec.setup) spec.setup(visual, logica, id);
                     ENGINE.add(logica);
                     visual.addEventListener('mousedown', () => {
                         ENGINE.selectComponent(logica);
@@ -959,63 +1053,44 @@
                         visual.classList.add('selected');
                     });
                 }
+                
+                visual.style.width = `${spec.w}px`; visual.style.height = `${spec.h}px`;
+                visual.logica = logica;
                 return visual;
             }
         }
 
         // ==========================================
-        // 3. UI E INTEGRAÇÃO COM CHART.JS
+        // 3. UI E INTEGRAÇÃO COM CHART.JS E PROPRIEDADES
         // ==========================================
         const propContent = document.getElementById('prop-content');
         
-        // Inicialização do Gráfico
         const ctx = document.getElementById('gaap-volume-chart').getContext('2d');
-        const volumeChart = new Chart(ctx, {
+        volumeChart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: [0], 
                 datasets: [{
-                    label: 'Selecione um Tanque',
-                    data: [0], 
-                    borderColor: '#3498db',
-                    backgroundColor: 'rgba(52, 152, 219, 0.2)',
-                    borderWidth: 2,
-                    fill: true,
-                    pointRadius: 0,           
-                    pointHoverRadius: 6,      
-                    hitRadius: 15,            
-                    tension: 0.1 
+                    label: 'Selecione um Tanque', data: [0], borderColor: '#3498db', backgroundColor: 'rgba(52, 152, 219, 0.2)', borderWidth: 2, fill: true, pointRadius: 0, pointHoverRadius: 6, hitRadius: 15, tension: 0.1 
                 }]
             },
             options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: false, 
-                interaction: { mode: 'index', intersect: false },
+                responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
                 plugins: {
                     tooltip: {
-                        backgroundColor: 'rgba(44, 62, 80, 0.9)', 
-                        titleFont: { size: 14 },
-                        bodyFont: { size: 14, weight: 'bold' },
-                        padding: 10,
-                        callbacks: {
-                            title: function(context) { return 'Tempo: ' + context[0].label + 's'; },
-                            label: function(context) { return 'Volume: ' + context.parsed.y.toFixed(1) + ' Litros'; }
-                        }
+                        backgroundColor: 'rgba(44, 62, 80, 0.9)', titleFont: { size: 14 }, bodyFont: { size: 14, weight: 'bold' }, padding: 10,
+                        callbacks: { title: ctx => 'Tempo: ' + ctx[0].label + 's', label: ctx => 'Volume: ' + ctx.parsed.y.toFixed(1) + ' Litros' }
                     }
                 },
-                scales: {
-                    x: { title: { display: true, text: 'Tempo (s)' } },
-                    y: { min: 0, max: 1000, title: { display: true, text: 'Volume (L)' } }
-                }
+                scales: { x: { title: { display: true, text: 'Tempo (s)' } }, y: { min: 0, max: 1000, title: { display: true, text: 'Volume (L)' } } }
             }
         });
 
         let chartUpdateTimer = 0;
-        let chartedTankId = null; // Guarda o ID do tanque sendo traçado no gráfico
+        let chartedTankId = null;
 
         document.getElementById('workspace').addEventListener('mousedown', (e) => {
-            if (e.target === document.getElementById('workspace') || e.target === document.getElementById('pipe-layer')) {
+            if (e.target === workspaceContainer || e.target === workspaceCanvas || e.target.id === 'pipe-layer') {
                 ENGINE.selectComponent(null);
                 document.querySelectorAll('.placed-component').forEach(el => el.classList.remove('selected'));
                 document.querySelectorAll('.pipe-line').forEach(el => el.classList.remove('selected'));
@@ -1026,7 +1101,6 @@
             if (dados.tipo === 'selecao') {
                 const comp = dados.componente;
                 
-                // --- Lógica de Reset do Gráfico Baseada na Seleção ---
                 if (comp instanceof TanqueLogico) {
                     if (chartedTankId !== comp.id) {
                         chartedTankId = comp.id;
@@ -1060,182 +1134,42 @@
                     return;
                 }
 
-                let html = `
+                const tipoMap = { [FonteLogica.name]: 'source', [DrenoLogico.name]: 'sink', [BombaLogica.name]: 'pump', [ValvulaLogica.name]: 'valve', [TanqueLogico.name]: 'tank' };
+                const spec = REGISTRO_COMPONENTES[tipoMap[comp.constructor.name]];
+
+                propContent.innerHTML = `
                     <div class="prop-group">
                         <label>Tag (Nome)</label>
                         <input type="text" id="input-tag" value="${comp.tag}">
                     </div>
+                    ${spec.propriedadesAdicionais(comp)}
                 `;
 
-                if (comp instanceof TanqueLogico) {
-                    html += `
-                        <div class="prop-group">
-                            <label>Capacidade Total (L)</label>
-                            <input type="number" id="input-cap" value="${comp.capacidadeMaxima}" step="50" min="100">
-                        </div>
-                        <div class="prop-group">
-                            <label>Volume Atual (L)</label>
-                            <input type="text" id="disp-vol" value="${comp.volumeAtual.toFixed(1)}" disabled>
-                        </div>
-                        <div class="prop-group" style="border-color: ${comp.setpointAtivo ? '#e74c3c' : '#eee'}; background: ${comp.setpointAtivo ? '#fdf5f4' : '#f9fbfb'};">
-                            <label style="color: #c0392b; font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">⚙ Controlador de Nível (PI)</label>
-                            <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
-                                <input type="checkbox" id="input-sp-ativo" ${comp.setpointAtivo ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer;">
-                                <span style="font-size:13px; font-weight:bold;">Ativar controle automático</span>
-                            </div>
-                            <label>Setpoint <span id="val-sp" class="val-display" style="color:#e74c3c;">${comp.setpoint}%</span></label>
-                            <input type="range" id="input-sp" min="0" max="100" value="${comp.setpoint}" style="accent-color:#e74c3c;">
-                        </div>
-                        <div class="prop-group" id="group-ctrl-params" style="display:${comp.setpointAtivo ? 'block' : 'none'};">
-                            <label>Ganho Proporcional (Kp)</label>
-                            <input type="number" id="input-kp" value="${comp.kp}" step="5" min="1" max="500">
-                        </div>
-                        <div class="prop-group" id="group-ctrl-ki" style="display:${comp.setpointAtivo ? 'block' : 'none'};">
-                            <label>Ganho Integral (Ki)</label>
-                            <input type="number" id="input-ki" value="${comp.ki}" step="1" min="0" max="100">
-                        </div>
-                    `;
-                } else if (comp instanceof BombaLogica) {
-                    html += `
-                        <div class="prop-group">
-                            <label>Potência do Motor <span id="val-acionamento" class="val-display">${comp.grauAcionamento}%</span></label>
-                            <input type="range" id="input-acionamento" min="0" max="100" value="${comp.grauAcionamento}">
-                        </div>
-                        <div class="prop-group">
-                            <label>Vazão Nominal Máx (L/s)</label>
-                            <input type="number" id="input-vazmax" value="${comp.vazaoNominal}" step="5" min="5">
-                        </div>
-                    `;
-                } else if (comp instanceof ValvulaLogica) {
-                    html += `
-                        <div class="prop-group">
-                            <label>Abertura <span id="val-abertura" class="val-display">${comp.grauAbertura}%</span></label>
-                            <input type="range" id="input-abertura" min="0" max="100" value="${comp.grauAbertura}">
-                        </div>
-                        <div class="prop-group">
-                            <label>Coeficiente de Vazão (Cv)</label>
-                            <input type="number" id="input-cv" value="${comp.cv}" step="0.1" min="0.1" max="20">
-                        </div>
-                        <div class="prop-group">
-                            <label>Queda de Pressão — ΔP (kPa)</label>
-                            <input type="number" id="input-deltap" value="${comp.deltaP}" step="10" min="1" max="1000">
-                        </div>
-                        <div class="prop-group">
-                            <label>Vazão Atual (L/s)</label>
-                            <input type="text" id="disp-vazao-valvula" value="${comp.fluxoReal.toFixed(2)}" disabled>
-                        </div>
-                    `;
-                }
-
-                propContent.innerHTML = html;
-
                 document.getElementById('input-tag').addEventListener('input', e => { comp.tag = e.target.value; comp.notify({ tipo: 'tag_update' }); });
-
-                if (comp instanceof TanqueLogico) {
-                    document.getElementById('input-cap').addEventListener('change', e => {
-                        comp.capacidadeMaxima = parseFloat(e.target.value) || 100;
-                        comp.notify({ tipo: 'volume', perc: comp.volumeAtual / comp.capacidadeMaxima, abs: comp.volumeAtual, qIn: comp.lastQin });
-                    });
-
-                    const spAtivoEl = document.getElementById('input-sp-ativo');
-                    const spGroupEl = document.getElementById('group-ctrl-params');
-                    const spKiEl   = document.getElementById('group-ctrl-ki');
-                    const spGroup  = document.querySelector('.prop-group:has(#input-sp-ativo)');
-
-                    spAtivoEl.addEventListener('change', e => {
-                        comp.setpointAtivo = e.target.checked;
-                        comp.resetControlador();
-                        spGroupEl.style.display = comp.setpointAtivo ? 'block' : 'none';
-                        spKiEl.style.display    = comp.setpointAtivo ? 'block' : 'none';
-                        if (spGroup) {
-                            spGroup.style.borderColor = comp.setpointAtivo ? '#e74c3c' : '#eee';
-                            spGroup.style.background  = comp.setpointAtivo ? '#fdf5f4' : '#f9fbfb';
-                        }
-                        comp.notify({ tipo: 'sp_update' });
-                    });
-
-                    document.getElementById('input-sp').addEventListener('input', e => {
-                        comp.setpoint = parseInt(e.target.value);
-                        comp.resetControlador();
-                        document.getElementById('val-sp').textContent = comp.setpoint + '%';
-                        comp.notify({ tipo: 'sp_update' });
-                    });
-
-                    document.getElementById('input-kp').addEventListener('change', e => {
-                        comp.kp = Math.max(1, parseFloat(e.target.value) || 50);
-                        e.target.value = comp.kp;
-                        comp.resetControlador();
-                    });
-
-                    document.getElementById('input-ki').addEventListener('change', e => {
-                        comp.ki = Math.max(0, parseFloat(e.target.value) || 0);
-                        e.target.value = comp.ki;
-                        comp.resetControlador();
-                    });
-                }
-                else if (comp instanceof BombaLogica) {
-                    document.getElementById('input-acionamento').addEventListener('input', e => {
-                        const val = parseInt(e.target.value);
-                        document.getElementById('val-acionamento').textContent = val + '%';
-                        comp.setAcionamento(val);
-                    });
-                    document.getElementById('input-vazmax').addEventListener('change', e => comp.vazaoNominal = parseFloat(e.target.value));
-                    comp.subscribe(d => {
-                        if (d.tipo === 'estado' && document.getElementById('input-acionamento')) {
-                            document.getElementById('input-acionamento').value = d.grau;
-                            document.getElementById('val-acionamento').textContent = d.grau + '%';
-                        }
-                    });
-                }
-                else if (comp instanceof ValvulaLogica) {
-                    document.getElementById('input-abertura').addEventListener('input', e => {
-                        const val = parseInt(e.target.value);
-                        document.getElementById('val-abertura').textContent = val + '%';
-                        comp.setAbertura(val);
-                    });
-                    document.getElementById('input-cv').addEventListener('change', e => {
-                        comp.cv = Math.max(0.1, parseFloat(e.target.value) || 1.0);
-                        e.target.value = comp.cv;
-                    });
-                    document.getElementById('input-deltap').addEventListener('change', e => {
-                        comp.deltaP = Math.max(1, parseFloat(e.target.value) || 100.0);
-                        e.target.value = comp.deltaP;
-                    });
-                    comp.subscribe(d => {
-                        if (d.tipo === 'estado' && document.getElementById('input-abertura')) {
-                            document.getElementById('input-abertura').value = d.grau;
-                            document.getElementById('val-abertura').textContent = d.grau + '%';
-                        }
-                    });
-                }
+                if (spec.setupProps) spec.setupProps(comp);
             }
             else if (dados.tipo === 'update_painel') {
                 const comp = ENGINE.selectedComponent;
                 
-                // Atualiza o display de volume na UI
-                if (comp instanceof TanqueLogico && document.getElementById('disp-vol')) {
-                    document.getElementById('disp-vol').value = comp.volumeAtual.toFixed(1);
-                }
-                // Atualiza display de vazão da válvula + slider (pode estar sendo controlado por setpoint)
+                if (comp instanceof TanqueLogico && document.getElementById('disp-vol')) document.getElementById('disp-vol').value = comp.volumeAtual.toFixed(1);
+                
                 if (comp instanceof ValvulaLogica) {
-                    const grauAtual = Math.round(comp.grauAbertura);
-                    const abEl  = document.getElementById('input-abertura');
-                    const abLbl = document.getElementById('val-abertura');
-                    const vzEl  = document.getElementById('disp-vazao-valvula');
-                    if (abEl)  abEl.value = grauAtual;
-                    if (abLbl) abLbl.textContent = grauAtual + '%';
-                    if (vzEl)  vzEl.value = comp.fluxoReal.toFixed(2);
+                    const abEl = document.getElementById('input-abertura');
+                    if (abEl) {
+                        abEl.value = Math.round(comp.grauAbertura);
+                        document.getElementById('val-abertura').textContent = Math.round(comp.grauAbertura) + '%';
+                        document.getElementById('disp-vazao-valvula').value = comp.fluxoReal.toFixed(2);
+                    }
                 }
-                // Atualiza slider da bomba (pode estar sendo controlada por setpoint)
+                
                 if (comp instanceof BombaLogica) {
-                    const grauAtual = Math.round(comp.grauAcionamento);
-                    const acEl  = document.getElementById('input-acionamento');
-                    const acLbl = document.getElementById('val-acionamento');
-                    if (acEl)  acEl.value = grauAtual;
-                    if (acLbl) acLbl.textContent = grauAtual + '%';
+                    const acEl = document.getElementById('input-acionamento');
+                    if (acEl) {
+                        acEl.value = Math.round(comp.grauAcionamento);
+                        document.getElementById('val-acionamento').textContent = Math.round(comp.grauAcionamento) + '%';
+                    }
                 }
 
-                // Atualiza o Chart.js
                 chartUpdateTimer += dados.dt;
                 if (chartUpdateTimer >= 1.0) {
                     chartUpdateTimer = 0;
@@ -1244,7 +1178,6 @@
                         if (tank) {
                             volumeChart.data.labels.push(Math.round(ENGINE.elapsedTime));
                             volumeChart.data.datasets[0].data.push(tank.volumeAtual);
-                            
                             if (volumeChart.data.labels.length > 60) {
                                 volumeChart.data.labels.shift();
                                 volumeChart.data.datasets[0].data.shift();
@@ -1267,8 +1200,11 @@
 
         function getPortCoords(portEl) {
             const rect = portEl.getBoundingClientRect();
-            const wsRect = workspace.getBoundingClientRect();
-            return { x: rect.left + (rect.width / 2) - wsRect.left, y: rect.top + (rect.height / 2) - wsRect.top };
+            const canvasRect = workspaceCanvas.getBoundingClientRect();
+            return { 
+                x: (rect.left + (rect.width / 2) - canvasRect.left) / camera.scale, 
+                y: (rect.top + (rect.height / 2) - canvasRect.top) / camera.scale 
+            };
         }
 
         function drawCurve(x1, y1, x2, y2) {
@@ -1281,14 +1217,10 @@
             const targetLogic = ENGINE.componentes.find(c => c.id === conn.targetEl.dataset.compId);
             if (!sourceLogic || !ENGINE.isRunning) return null;
             if (sourceLogic instanceof FonteLogica) return Infinity;
-            if (sourceLogic instanceof BombaLogica || sourceLogic instanceof ValvulaLogica) {
-                return sourceLogic.fluxoReal || 0;
-            }
+            if (sourceLogic instanceof BombaLogica || sourceLogic instanceof ValvulaLogica) return sourceLogic.fluxoReal || 0;
             if (sourceLogic instanceof TanqueLogico) {
                 const nv = sourceLogic.capacidadeMaxima > 0 ? sourceLogic.volumeAtual / sourceLogic.capacidadeMaxima : 0;
-                if (targetLogic && typeof targetLogic.getFluxoSaidaFromTank === 'function') {
-                    return targetLogic.getFluxoSaidaFromTank(nv > 0 ? nv : 0);
-                }
+                if (targetLogic && typeof targetLogic.getFluxoSaidaFromTank === 'function') return targetLogic.getFluxoSaidaFromTank(nv > 0 ? nv : 0);
                 return sourceLogic.getFluxoSaida();
             }
             return 0;
@@ -1300,15 +1232,13 @@
                 const p2 = getPortCoords(conn.targetEl);
                 conn.path.setAttribute('d', drawCurve(p1.x, p1.y, p2.x, p2.y));
                 if (conn.label) {
-                    const mx = (p1.x + p2.x) / 2;
-                    const my = (p1.y + p2.y) / 2 - 10;
-                    conn.label.setAttribute('x', mx);
-                    conn.label.setAttribute('y', my);
+                    conn.label.setAttribute('x', (p1.x + p2.x) / 2);
+                    conn.label.setAttribute('y', (p1.y + p2.y) / 2 - 10);
                 }
             });
         }
 
-        workspace.addEventListener('mousedown', (e) => {
+        workspaceContainer.addEventListener('mousedown', (e) => {
             if (e.target.classList.contains('port-node') && e.target.dataset.type === 'out') {
                 dragSourcePort = e.target;
                 const p1 = getPortCoords(dragSourcePort);
@@ -1321,15 +1251,17 @@
             }
         });
 
-        workspace.addEventListener('mousemove', (e) => {
+        workspaceContainer.addEventListener('mousemove', (e) => {
             if (tempPipe && dragSourcePort) {
                 const p1 = getPortCoords(dragSourcePort);
-                const wsRect = workspace.getBoundingClientRect();
-                tempPipe.setAttribute("d", drawCurve(p1.x, p1.y, e.clientX - wsRect.left, e.clientY - wsRect.top));
+                const canvasRect = workspaceCanvas.getBoundingClientRect();
+                const mouseX = (e.clientX - canvasRect.left) / camera.scale;
+                const mouseY = (e.clientY - canvasRect.top) / camera.scale;
+                tempPipe.setAttribute("d", drawCurve(p1.x, p1.y, mouseX, mouseY));
             }
         });
 
-        workspace.addEventListener('mouseup', (e) => {
+        window.addEventListener('mouseup', (e) => {
             if (tempPipe) {
                 let dropTarget = e.target;
                 if (dropTarget.classList.contains('port-node') && dropTarget.dataset.type === 'in') {
@@ -1343,7 +1275,6 @@
                         const labelEl = document.createElementNS("http://www.w3.org/2000/svg", "text");
                         labelEl.setAttribute("class", "pipe-flow-label");
                         labelEl.setAttribute("text-anchor", "middle");
-                        labelEl.textContent = '';
                         pipeLayer.appendChild(labelEl);
 
                         finalPipe.addEventListener('mousedown', function (ev) {
@@ -1374,7 +1305,7 @@
         });
 
         // ==========================================
-        // 5. DRAG AND DROP
+        // 5. DRAG AND DROP E MOVIMENTAÇÃO
         // ==========================================
         document.querySelectorAll('.palette-item').forEach(item => {
             const t = item.getAttribute('data-type');
@@ -1382,27 +1313,30 @@
             dummy.style.position = 'relative';
             dummy.style.transform = 'scale(0.4)';
             dummy.style.transformOrigin = 'center';
-
-            if (t === 'tank') { dummy.style.margin = '40px auto 50px auto'; }
-            else { dummy.style.margin = '15px auto'; }
+            if (t === 'tank') dummy.style.margin = '40px auto 50px auto';
+            else dummy.style.margin = '15px auto';
 
             item.insertBefore(dummy, item.firstChild);
-            item.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', t); });
+            item.addEventListener('dragstart', (e) => e.dataTransfer.setData('text/plain', t));
         });
 
-        workspace.addEventListener('dragover', e => e.preventDefault());
-        workspace.addEventListener('drop', e => {
+        workspaceContainer.addEventListener('dragover', e => e.preventDefault());
+        workspaceContainer.addEventListener('drop', e => {
             e.preventDefault();
             const t = e.dataTransfer.getData('text/plain');
             if (!t) return;
 
             const temp = FabricaDeEquipamentos.criar(t, 0, 0, true);
-            const rect = workspace.getBoundingClientRect();
-            const snapX = Math.round((e.clientX - rect.left - (parseInt(temp.dataset.logW) / 2)) / GRID_SIZE) * GRID_SIZE;
-            const snapY = Math.round((e.clientY - rect.top - (parseInt(temp.dataset.logH) / 2)) / GRID_SIZE) * GRID_SIZE;
+            const canvasRect = workspaceCanvas.getBoundingClientRect();
+            
+            let dropX = (e.clientX - canvasRect.left) / camera.scale - (parseInt(temp.dataset.logW) / 2);
+            let dropY = (e.clientY - canvasRect.top) / camera.scale - (parseInt(temp.dataset.logH) / 2);
+            
+            const snapX = Math.round(dropX / GRID_SIZE) * GRID_SIZE;
+            const snapY = Math.round(dropY / GRID_SIZE) * GRID_SIZE;
 
             const novoVisual = FabricaDeEquipamentos.criar(t, snapX, snapY);
-            workspace.appendChild(novoVisual);
+            workspaceCanvas.appendChild(novoVisual);
             makeDraggable(novoVisual);
         });
 
@@ -1415,8 +1349,11 @@
             });
             document.addEventListener('mousemove', e => {
                 if (!isDragging) return;
-                element.style.left = `${Math.round((initX + e.clientX - startX) / GRID_SIZE) * GRID_SIZE}px`;
-                element.style.top = `${Math.round((initY + e.clientY - startY) / GRID_SIZE) * GRID_SIZE}px`;
+                const newX = initX + (e.clientX - startX) / camera.scale;
+                const newY = initY + (e.clientY - startY) / camera.scale;
+                
+                element.style.left = `${Math.round(newX / GRID_SIZE) * GRID_SIZE}px`;
+                element.style.top = `${Math.round(newY / GRID_SIZE) * GRID_SIZE}px`;
                 updateAllPipes();
             });
             document.addEventListener('mouseup', () => {
@@ -1425,7 +1362,7 @@
         }
 
         // ==========================================
-        // 6. CONTROLES DE REPRODUÇÃO
+        // 6. CONTROLES GERAIS
         // ==========================================
         const btnRun = document.getElementById('btn-run');
         btnRun.addEventListener('click', () => {
@@ -1443,25 +1380,21 @@
         });
 
         document.getElementById('btn-clear').addEventListener('click', () => {
-            document.querySelectorAll('#workspace .placed-component').forEach(item => item.remove());
+            document.querySelectorAll('#workspace-canvas .placed-component').forEach(item => item.remove());
             ENGINE.clear();
         });
 
-        // ==========================================
-        // 7. ATALHOS DE TECLADO (DELETAR GRAFO/COMPONENTE)
-        // ==========================================
         document.addEventListener('keydown', (e) => {
             if (e.target.tagName.toLowerCase() === 'input') return;
-
             if (e.key === 'Delete' || e.key === 'Backspace') {
                 const selectedCompDiv = document.querySelector('.placed-component.selected');
                 if (selectedCompDiv) {
                     const compId = selectedCompDiv.dataset.id;
                     ENGINE.conexoes = ENGINE.conexoes.filter(conn => {
                         if (conn.sourceEl.dataset.compId === compId || conn.targetEl.dataset.compId === compId) {
-                            const sourceLogic = ENGINE.componentes.find(c => c.id === conn.sourceEl.dataset.compId);
-                            const targetLogic = ENGINE.componentes.find(c => c.id === conn.targetEl.dataset.compId);
-                            if (sourceLogic && targetLogic) sourceLogic.desconectarSaida(targetLogic);
+                            const src = ENGINE.componentes.find(c => c.id === conn.sourceEl.dataset.compId);
+                            const tgt = ENGINE.componentes.find(c => c.id === conn.targetEl.dataset.compId);
+                            if (src && tgt) src.desconectarSaida(tgt);
                             if (conn.label) conn.label.remove();
                             conn.path.remove();
                             return false;
@@ -1478,11 +1411,9 @@
                     const connIndex = ENGINE.conexoes.findIndex(c => c.path === selectedPipe);
                     if (connIndex !== -1) {
                         const conn = ENGINE.conexoes[connIndex];
-                        const sourceLogic = ENGINE.componentes.find(c => c.id === conn.sourceEl.dataset.compId);
-                        const targetLogic = ENGINE.componentes.find(c => c.id === conn.targetEl.dataset.compId);
-                        if (sourceLogic && targetLogic) {
-                            sourceLogic.desconectarSaida(targetLogic);
-                        }
+                        const src = ENGINE.componentes.find(c => c.id === conn.sourceEl.dataset.compId);
+                        const tgt = ENGINE.componentes.find(c => c.id === conn.targetEl.dataset.compId);
+                        if (src && tgt) src.desconectarSaida(tgt);
                         if (conn.label) conn.label.remove();
                         ENGINE.conexoes.splice(connIndex, 1);
                         selectedPipe.remove();
