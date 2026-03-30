@@ -106,25 +106,44 @@
             padding-bottom: 8px; color: #34495e; text-transform: uppercase; letter-spacing: 1px;
         }
 
-        /* PALETA */
+        /* PALETA (ATUALIZADA PARA IMAGENS MAIORES) */
         .palette-item {
             background: #fff;
-            border: 2px dashed #95a5a6;
+            border: 2px solid #e1e8ed;
             border-radius: 8px;
             padding: 10px;
             text-align: center;
-            font-weight: bold;
             cursor: grab;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 5px;
+            justify-content: center;
+            gap: 2px;
             transition: 0.2s;
-            position: relative;
-            overflow: hidden;
+            height: 150px; /* Altura aumentada para comportar ícones maiores */
+            box-sizing: border-box;
         }
 
-        .palette-item:hover { background: #eaf2f8; border-color: #3498db; color: #3498db; }
+        .palette-item:hover { 
+            background: #eaf2f8; 
+            border-color: #3498db; 
+        }
+        
+        .palette-item span {
+            font-size: 15px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .palette-item:hover span { color: #3498db; }
+
+        /* Classe para as imagens da paleta */
+        .palette-icon {
+            max-width: 100px; /* Largura aumentada */
+            max-height: 100px; /* Altura aumentada */
+            object-fit: contain; 
+            pointer-events: none; 
+        }
 
         /* PROPRIEDADES & INPUTS EDITÁVEIS */
         .prop-group { margin-bottom: 15px; background: #f9fbfb; padding: 10px; border-radius: 6px; border: 1px solid #eee; }
@@ -136,20 +155,27 @@
         .prop-group input:focus { outline: none; border-color: #3498db; }
         .prop-group input:disabled { background: #f2f4f4; color: #7f8c8d; font-weight: bold; border-color: #eee; }
         
+        /* CAIXAS DE INPUT PARA PORCENTAGEM COM TECLADO */
         .val-display-input {
-            width: 45px !important;
-            background: transparent !important;
-            border: 1px dashed transparent !important;
+            width: 50px !important;
+            background: #fff !important;
+            border: 1px solid #bdc3c7 !important;
+            border-radius: 4px !important;
             color: #3498db !important;
             font-weight: bold !important;
             font-size: 13px !important;
-            text-align: right !important;
-            padding: 2px !important;
+            text-align: center !important;
+            padding: 4px !important;
             margin: 0 !important;
+            cursor: text;
+            transition: 0.2s;
         }
         .val-display-input:hover, .val-display-input:focus {
-            border-color: #3498db !important; background: #f0f8ff !important; outline: none; cursor: text;
+            border-color: #3498db !important;
+            box-shadow: 0 0 0 2px rgba(52,152,219,0.2) !important;
+            outline: none;
         }
+        /* Oculta as setinhas chatas do input number nos navegadores */
         .val-display-input::-webkit-outer-spin-button, .val-display-input::-webkit-inner-spin-button {
             -webkit-appearance: none; margin: 0;
         }
@@ -195,16 +221,16 @@
         .placed-component.selected svg { filter: drop-shadow(0px 0px 10px rgba(52, 152, 219, 0.8)); }
         .placed-component svg { position: absolute; overflow: visible; pointer-events: none; }
 
-        /* PORTAS E ANIMAÇÃO DE PULSO */
+        /* PORTAS E ANIMAÇÃO DE PULSO APRIMORADA */
         .port-node { cursor: crosshair; pointer-events: all; transition: 0.2s; }
         .port-node:hover { r: 8; stroke-width: 3; fill: #f39c12; }
 
         @keyframes pulse-port {
-            0% { stroke-width: 2; fill: #fff; filter: drop-shadow(0 0 0px rgba(243,156,18,0)); }
-            100% { stroke-width: 3; fill: #fdf5e6; filter: drop-shadow(0 0 6px rgba(243,156,18,1)); stroke: #f39c12; r: 6; }
+            0% { stroke-width: 2; fill: #fff; stroke: #e67e22; filter: drop-shadow(0 0 0px rgba(243,156,18,0)); }
+            100% { stroke-width: 6; fill: #fdf5e6; stroke: #f39c12; filter: drop-shadow(0 0 5px rgba(243,156,18,1)); }
         }
         #workspace-canvas .port-node.unconnected {
-            animation: pulse-port 1s infinite alternate ease-in-out;
+            animation: pulse-port 0.8s infinite alternate ease-in-out;
         }
 
         /* CANOS E ANIMAÇÕES */
@@ -247,13 +273,33 @@
         <div class="side-panel palette-panel collapsed" id="palette">
             <div class="side-panel-content">
                 <h3 class="panel-title">Fronteiras</h3>
-                <div class="palette-item" draggable="true" data-type="source"><span>Fonte de Água (In)</span></div>
-                <div class="palette-item" draggable="true" data-type="sink"><span>Dreno (Out)</span></div>
+                
+                <div class="palette-item" draggable="true" data-type="source">
+                    <img src="assets/components/gaap_source_icon.png" alt="Fonte" class="palette-icon">
+                    <span>Entrada (In)</span>
+                </div>
+                
+                <div class="palette-item" draggable="true" data-type="sink">
+                    <img src="assets/components/gaap_sink_icon.png" alt="Dreno" class="palette-icon">
+                    <span>Saída (Out)</span>
+                </div>
 
                 <h3 class="panel-title" style="margin-top:5px;">Equipamentos</h3>
-                <div class="palette-item" draggable="true" data-type="tank"><span>Tanque de Fluido</span></div>
-                <div class="palette-item" draggable="true" data-type="pump"><span>Bomba Centrífuga</span></div>
-                <div class="palette-item" draggable="true" data-type="valve"><span>Válvula de Controle</span></div>
+                
+                <div class="palette-item" draggable="true" data-type="tank">
+                    <img src="assets/components/gaap_tank_icon.png" alt="Tanque" class="palette-icon">
+                    <span>Tanque de Fluido</span>
+                </div>
+                
+                <div class="palette-item" draggable="true" data-type="pump">
+                    <img src="assets/components/gaap_pump_icon.png" alt="Bomba" class="palette-icon">
+                    <span>Bomba Centrífuga</span>
+                </div>
+                
+                <div class="palette-item" draggable="true" data-type="valve">
+                    <img src="assets/components/gaap_valve_icon.png" alt="Válvula" class="palette-icon">
+                    <span>Válvula de Controle</span>
+                </div>
             </div>
         </div>
         <div id="toggle-left" class="panel-toggle collapsed">▶</div>
@@ -261,10 +307,7 @@
         <div class="workspace-panel" id="workspace">
             <div class="top-toolbar">
                 <button class="gaap-btn success" id="btn-run">▶ Iniciar Simulação Física</button>
-                <div>
-                    <button class="gaap-btn" id="btn-export-png" style="border-color:#3498db; color:#3498db; margin-right: 10px;">📷 Exportar PNGs</button>
-                    <button class="gaap-btn" id="btn-clear" style="border-color:#e74c3c; color:#e74c3c;">Limpar Área</button>
-                </div>
+                <button class="gaap-btn" id="btn-clear" style="border-color:#e74c3c; color:#e74c3c;">Limpar Área</button>
             </div>
 
             <div id="workspace-canvas">
@@ -635,7 +678,7 @@
         const REGISTRO_COMPONENTES = {
             'source': {
                 Classe: FonteLogica,
-                prefixoTag: 'FONTE',
+                prefixoTag: 'Entrada',
                 w: 40, h: 40, offX: -20, offY: -20,
                 svg: (id, tag) => `
                     <circle cx="40" cy="40" r="25" fill="#3498db" stroke="#2980b9" stroke-width="4"/>
@@ -650,7 +693,7 @@
             },
             'sink': {
                 Classe: DrenoLogico,
-                prefixoTag: 'DRENO',
+                prefixoTag: 'Saída',
                 w: 40, h: 40, offX: -20, offY: -20,
                 svg: (id, tag) => `
                     <circle cx="40" cy="40" r="25" fill="#95a5a6" stroke="#7f8c8d" stroke-width="4"/>
@@ -683,7 +726,9 @@
                 propriedadesAdicionais: (comp) => `
                     <div class="prop-group">
                         <label>Potência Motor 
-                            <span><input type="number" id="val-acionamento" class="val-display-input" value="${comp.grauAcionamento}" min="0" max="100">%</span>
+                            <span style="display:flex; align-items:center; gap:2px;">
+                                <input type="number" id="val-acionamento" class="val-display-input" value="${comp.grauAcionamento}"> %
+                            </span>
                         </label>
                         <input type="range" id="input-acionamento" min="0" max="100" value="${comp.grauAcionamento}">
                     </div>
@@ -696,15 +741,22 @@
                     const slider = document.getElementById('input-acionamento');
                     const numInput = document.getElementById('val-acionamento');
                     
-                    const updateVal = (val) => {
-                        let clamped = Math.max(0, Math.min(100, parseInt(val) || 0));
-                        slider.value = clamped;
+                    const updateFromSlider = (val) => {
+                        numInput.value = val;
+                        comp.setAcionamento(val);
+                    };
+
+                    const updateFromInput = (val) => {
+                        let parsed = parseInt(val);
+                        if (isNaN(parsed)) parsed = 0;
+                        let clamped = Math.max(0, Math.min(100, parsed));
                         numInput.value = clamped;
+                        slider.value = clamped;
                         comp.setAcionamento(clamped);
                     };
 
-                    slider.addEventListener('input', e => updateVal(e.target.value));
-                    numInput.addEventListener('change', e => updateVal(e.target.value));
+                    slider.addEventListener('input', e => updateFromSlider(e.target.value));
+                    numInput.addEventListener('change', e => updateFromInput(e.target.value));
                     document.getElementById('input-vazmax').addEventListener('change', e => comp.vazaoNominal = parseFloat(e.target.value));
                     
                     comp.subscribe(d => {
@@ -718,13 +770,13 @@
             'valve': {
                 Classe: ValvulaLogica,
                 prefixoTag: 'V',
-                w: 40, h: 40, offX: -20, offY: -10,
+                w: 40, h: 40, offX: -20, offY: -20,
                 svg: (id, tag) => `
                     <rect x="10" y="34" width="60" height="12" fill="#95a5a6" stroke="#2c3e50" stroke-width="2"/>
                     <path id="corpo-${id}" d="M 20 20 L 20 60 L 60 20 L 60 60 Z" fill="#e74c3c" stroke="#2c3e50" stroke-width="3" stroke-linejoin="round"/>
                     <rect x="36" y="5" width="8" height="35" fill="#c0392b" stroke="#2c3e50" stroke-width="2"/>
                     <rect id="volante-${id}" x="25" y="0" width="30" height="10" fill="#e74c3c" stroke="#2c3e50" stroke-width="2" rx="3"/>
-                    <text id="tag-${id}" x="40" y="70" font-size="12" ${labelStyle}>${tag}</text>
+                    <text id="tag-${id}" x="40" y="85" font-size="12" ${labelStyle}>${tag}</text>
                     <g> ${makePort(id, 20, 40, 'in')} ${makePort(id, 60, 40, 'out')} </g>
                 `,
                 setup: (visual, logica, id) => {
@@ -744,7 +796,9 @@
                 propriedadesAdicionais: (comp) => `
                     <div class="prop-group">
                         <label>Abertura 
-                            <span><input type="number" id="val-abertura" class="val-display-input" value="${comp.grauAbertura}" min="0" max="100">%</span>
+                            <span style="display:flex; align-items:center; gap:2px;">
+                                <input type="number" id="val-abertura" class="val-display-input" value="${comp.grauAbertura}"> %
+                            </span>
                         </label>
                         <input type="range" id="input-abertura" min="0" max="100" value="${comp.grauAbertura}">
                     </div>
@@ -765,15 +819,22 @@
                     const slider = document.getElementById('input-abertura');
                     const numInput = document.getElementById('val-abertura');
                     
-                    const updateVal = (val) => {
-                        let clamped = Math.max(0, Math.min(100, parseInt(val) || 0));
-                        slider.value = clamped;
+                    const updateFromSlider = (val) => {
+                        numInput.value = val;
+                        comp.setAbertura(val);
+                    };
+
+                    const updateFromInput = (val) => {
+                        let parsed = parseInt(val);
+                        if (isNaN(parsed)) parsed = 0;
+                        let clamped = Math.max(0, Math.min(100, parsed));
                         numInput.value = clamped;
+                        slider.value = clamped;
                         comp.setAbertura(clamped);
                     };
 
-                    slider.addEventListener('input', e => updateVal(e.target.value));
-                    numInput.addEventListener('change', e => updateVal(e.target.value));
+                    slider.addEventListener('input', e => updateFromSlider(e.target.value));
+                    numInput.addEventListener('change', e => updateFromInput(e.target.value));
 
                     document.getElementById('input-cv').addEventListener('change', e => comp.cv = Math.max(0.1, parseFloat(e.target.value) || 1.0));
                     document.getElementById('input-deltap').addEventListener('change', e => comp.deltaP = Math.max(1, parseFloat(e.target.value) || 100.0));
@@ -856,7 +917,9 @@
                             <span style="font-size:13px; font-weight:bold;">Ativar controle automático</span>
                         </div>
                         <label>Setpoint 
-                            <span><input type="number" id="val-sp" class="val-display-input" value="${comp.setpoint}" min="0" max="100">%</span>
+                            <span style="display:flex; align-items:center; gap:2px;">
+                                <input type="number" id="val-sp" class="val-display-input" value="${comp.setpoint}" min="0" max="100">%
+                            </span>
                         </label>
                         <input type="range" id="input-sp" min="0" max="100" value="${comp.setpoint}" style="accent-color:#e74c3c;">
                     </div>
@@ -890,17 +953,26 @@
                     const spSlider = document.getElementById('input-sp');
                     const spNum = document.getElementById('val-sp');
                     
-                    const updateSp = (val) => {
-                        let clamped = Math.max(0, Math.min(100, parseInt(val) || 0));
-                        spSlider.value = clamped;
+                    const updateFromSlider = (val) => {
+                        spNum.value = val;
+                        comp.setpoint = parseInt(val);
+                        comp.resetControlador();
+                        comp.notify({ tipo: 'sp_update' });
+                    };
+
+                    const updateFromInput = (val) => {
+                        let parsed = parseInt(val);
+                        if (isNaN(parsed)) parsed = 0;
+                        let clamped = Math.max(0, Math.min(100, parsed));
                         spNum.value = clamped;
+                        spSlider.value = clamped;
                         comp.setpoint = clamped;
                         comp.resetControlador();
                         comp.notify({ tipo: 'sp_update' });
                     };
 
-                    spSlider.addEventListener('input', e => updateSp(e.target.value));
-                    spNum.addEventListener('change', e => updateSp(e.target.value));
+                    spSlider.addEventListener('input', e => updateFromSlider(e.target.value));
+                    spNum.addEventListener('change', e => updateFromInput(e.target.value));
 
                     document.getElementById('input-kp').addEventListener('change', e => { comp.kp = Math.max(1, parseFloat(e.target.value) || 50); comp.resetControlador(); });
                     document.getElementById('input-ki').addEventListener('change', e => { comp.ki = Math.max(0, parseFloat(e.target.value) || 0); comp.resetControlador(); });
@@ -1210,31 +1282,18 @@
         });
 
         // ==========================================
-        // 5. DRAG AND DROP E MOVIMENTAÇÃO
+        // 5. DRAG AND DROP E MOVIMENTAÇÃO (ATUALIZADO)
         // ==========================================
+        
         document.querySelectorAll('.palette-item').forEach(item => {
             const t = item.getAttribute('data-type');
-            const spec = REGISTRO_COMPONENTES[t];
-            const dummy = FabricaDeEquipamentos.criar(t, 0, 0, true);
             
-            const wrapper = document.createElement('div');
-            wrapper.style.display = 'flex';
-            wrapper.style.justifyContent = 'center';
-            wrapper.style.alignItems = 'center';
-            wrapper.style.height = t === 'tank' ? '90px' : '60px'; 
-            wrapper.style.width = '100%';
-            
-            dummy.style.position = 'relative';
-            let scale = t === 'tank' ? 0.35 : 0.8; 
-            dummy.style.transform = `scale(${scale})`;
-            dummy.style.transformOrigin = 'center';
-            
-            wrapper.appendChild(dummy);
-            item.insertBefore(wrapper, item.firstChild);
-
             item.addEventListener('dragstart', (e) => {
                 e.dataTransfer.setData('text/plain', t);
-                e.dataTransfer.setDragImage(wrapper, spec.w / 2 * scale, spec.h / 2 * scale);
+                const icon = item.querySelector('.palette-icon');
+                if (icon) {
+                    e.dataTransfer.setDragImage(icon, 30, 30); 
+                }
             });
         });
 
@@ -1244,11 +1303,13 @@
             const t = e.dataTransfer.getData('text/plain');
             if (!t) return;
 
-            const temp = FabricaDeEquipamentos.criar(t, 0, 0, true);
+            const spec = REGISTRO_COMPONENTES[t];
+            if (!spec) return;
+
             const canvasRect = workspaceCanvas.getBoundingClientRect();
             
-            let dropX = (e.clientX - canvasRect.left) / camera.scale - (parseInt(temp.dataset.logW) / 2);
-            let dropY = (e.clientY - canvasRect.top) / camera.scale - (parseInt(temp.dataset.logH) / 2);
+            let dropX = (e.clientX - canvasRect.left) / camera.scale - (spec.w / 2);
+            let dropY = (e.clientY - canvasRect.top) / camera.scale - (spec.h / 2);
             
             const snapX = Math.round(dropX / GRID_SIZE) * GRID_SIZE;
             const snapY = Math.round(dropY / GRID_SIZE) * GRID_SIZE;
@@ -1256,6 +1317,8 @@
             const novoVisual = FabricaDeEquipamentos.criar(t, snapX, snapY);
             workspaceCanvas.appendChild(novoVisual);
             makeDraggable(novoVisual);
+            
+            // Força a atualização do estado das portas para garantir que as novas portas pisquem
             updatePortStates();
         });
 
@@ -1280,8 +1343,11 @@
             });
         }
 
+        // Executa a atualização de portas no início para garantir que portas iniciais, se houvesse, piscassem
+        updatePortStates();
+
         // ==========================================
-        // 6. CONTROLES GERAIS E EXPORTAÇÃO DE PNG
+        // 6. CONTROLES GERAIS
         // ==========================================
         const btnRun = document.getElementById('btn-run');
         btnRun.addEventListener('click', () => {
@@ -1341,59 +1407,6 @@
                     }
                 }
             }
-        });
-
-        // LÓGICA DO BOTÃO DE EXPORTAR PNGs
-        document.getElementById('btn-export-png').addEventListener('click', () => {
-            const svgNamespace = "http://www.w3.org/2000/svg";
-            
-            // Definições de margens seguras para exportação no Canvas (Evita cortes laterais)
-            const paddingConfig = {
-                'source': { w: 120, h: 120, tx: 20, ty: 10 },
-                'sink':   { w: 120, h: 120, tx: 20, ty: 10 },
-                'pump':   { w: 120, h: 120, tx: 20, ty: 10 },
-                'valve':  { w: 120, h: 120, tx: 20, ty: 20 },
-                'tank':   { w: 220, h: 280, tx: 30, ty: 20 }
-            };
-
-            Object.keys(REGISTRO_COMPONENTES).forEach(tipo => {
-                const spec = REGISTRO_COMPONENTES[tipo];
-                const pad = paddingConfig[tipo];
-                
-                const svgContent = spec.svg(tipo + '-export', spec.prefixoTag).trim();
-                
-                // Usamos o paddingConfig para dar respiro suficiente ao Canvas
-                const rawSvg = `<svg xmlns="${svgNamespace}" viewBox="0 0 ${pad.w} ${pad.h}" width="${pad.w}" height="${pad.h}">
-                    <g transform="translate(${pad.tx}, ${pad.ty})">
-                        ${svgContent}
-                    </g>
-                </svg>`;
-
-                const blob = new Blob([rawSvg], { type: "image/svg+xml;charset=utf-8" });
-                const url = URL.createObjectURL(blob);
-                
-                const img = new Image();
-                img.onload = function () {
-                    const scale = 3; // Exportar em alta resolução (Retina)
-                    const canvas = document.createElement('canvas');
-                    canvas.width = pad.w * scale;
-                    canvas.height = pad.h * scale;
-                    const ctx = canvas.getContext('2d');
-                    ctx.scale(scale, scale);
-                    ctx.drawImage(img, 0, 0);
-                    
-                    const pngData = canvas.toDataURL("image/png");
-                    
-                    const a = document.createElement("a");
-                    a.download = `gaap_${tipo}_icon.png`;
-                    a.href = pngData;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                };
-                img.src = url;
-            });
         });
     </script>
 </body>
