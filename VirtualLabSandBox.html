@@ -96,30 +96,14 @@
 
         .panel-toggle:hover { background: #ecf0f1; color: #2c3e50; }
 
-        #toggle-left {
-            left: 280px;
-            border-radius: 0 8px 8px 0;
-            border-left: none;
-            transition: left 0.3s ease;
-        }
+        #toggle-left { left: 280px; border-radius: 0 8px 8px 0; border-left: none; transition: left 0.3s ease; }
         #toggle-left.collapsed { left: 0; }
-
-        #toggle-right {
-            right: 340px;
-            border-radius: 8px 0 0 8px;
-            border-right: none;
-            transition: right 0.3s ease;
-        }
+        #toggle-right { right: 340px; border-radius: 8px 0 0 8px; border-right: none; transition: right 0.3s ease; }
         #toggle-right.collapsed { right: 0; }
 
         h3.panel-title {
-            margin-top: 0;
-            font-size: 14px;
-            border-bottom: 1px solid #ddd;
-            padding-bottom: 8px;
-            color: #34495e;
-            text-transform: uppercase;
-            letter-spacing: 1px;
+            margin-top: 0; font-size: 14px; border-bottom: 1px solid #ddd;
+            padding-bottom: 8px; color: #34495e; text-transform: uppercase; letter-spacing: 1px;
         }
 
         /* PALETA */
@@ -127,94 +111,59 @@
             background: #fff;
             border: 2px dashed #95a5a6;
             border-radius: 8px;
-            padding: 15px;
+            padding: 10px;
             text-align: center;
             font-weight: bold;
             cursor: grab;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 10px;
+            gap: 5px;
             transition: 0.2s;
             position: relative;
             overflow: hidden;
         }
 
-        .palette-item:hover {
-            background: #eaf2f8;
-            border-color: #3498db;
-            color: #3498db;
-        }
+        .palette-item:hover { background: #eaf2f8; border-color: #3498db; color: #3498db; }
 
-        /* PROPRIEDADES */
-        .prop-group {
-            margin-bottom: 15px;
-            background: #f9fbfb;
-            padding: 10px;
-            border-radius: 6px;
-            border: 1px solid #eee;
+        /* PROPRIEDADES & INPUTS EDITÁVEIS */
+        .prop-group { margin-bottom: 15px; background: #f9fbfb; padding: 10px; border-radius: 6px; border: 1px solid #eee; }
+        .prop-group label { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: bold; color: #34495e; margin-bottom: 6px; }
+        .prop-group input[type="text"], .prop-group input[type="number"], .prop-group select {
+            width: 100%; padding: 8px; border: 1px solid #bdc3c7; border-radius: 4px; box-sizing: border-box; font-family: inherit; font-size: 13px;
         }
-
-        .prop-group label {
-            display: flex;
-            justify-content: space-between;
-            font-size: 12px;
-            font-weight: bold;
-            color: #34495e;
-            margin-bottom: 6px;
-        }
-
-        .prop-group input[type="text"],
-        .prop-group input[type="number"],
-        .prop-group select {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #bdc3c7;
-            border-radius: 4px;
-            box-sizing: border-box;
-            font-family: inherit;
-            font-size: 13px;
-        }
-
         .prop-group input[type="range"] { width: 100%; cursor: pointer; }
         .prop-group input:focus { outline: none; border-color: #3498db; }
         .prop-group input:disabled { background: #f2f4f4; color: #7f8c8d; font-weight: bold; border-color: #eee; }
-        .val-display { color: #3498db; font-weight: bold; }
-
-        /* GRÁFICO (BASE) */
-        .chart-container {
-            width: 100%;
-            height: 220px;
-            background: #fff;
-            border: 1px solid #eee;
-            border-radius: 8px;
-            padding: 10px;
-            box-sizing: border-box;
-            margin-top: 10px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* GRÁFICO MAXIMIZADO (DOCK NA PARTE INFERIOR) */
-        .chart-container.maximized {
-            position: fixed;
-            top: auto;
-            bottom: 0;
-            left: 0;
-            width: 100vw;
-            height: 35vh; /* Ocupa 35% da tela inferior */
-            z-index: 9999;
-            box-shadow: 0 -10px 30px rgba(0,0,0,0.15);
-            background: #fff;
-            border-radius: 16px 16px 0 0;
-            border: none;
-            border-top: 4px solid #3498db;
-            margin: 0;
-            padding: 15px 25px;
-            display: flex;
-            flex-direction: column;
-        }
         
+        .val-display-input {
+            width: 45px !important;
+            background: transparent !important;
+            border: 1px dashed transparent !important;
+            color: #3498db !important;
+            font-weight: bold !important;
+            font-size: 13px !important;
+            text-align: right !important;
+            padding: 2px !important;
+            margin: 0 !important;
+        }
+        .val-display-input:hover, .val-display-input:focus {
+            border-color: #3498db !important; background: #f0f8ff !important; outline: none; cursor: text;
+        }
+        .val-display-input::-webkit-outer-spin-button, .val-display-input::-webkit-inner-spin-button {
+            -webkit-appearance: none; margin: 0;
+        }
+
+        /* GRÁFICO MAXIMIZADO */
+        .chart-container {
+            width: 100%; height: 220px; background: #fff; border: 1px solid #eee; border-radius: 8px;
+            padding: 10px; box-sizing: border-box; margin-top: 10px; display: flex; flex-direction: column;
+        }
+        .chart-container.maximized {
+            position: fixed; top: auto; bottom: 0; left: 0; width: 100vw; height: 35vh; z-index: 9999;
+            box-shadow: 0 -10px 30px rgba(0,0,0,0.15); background: #fff; border-radius: 16px 16px 0 0;
+            border: none; border-top: 4px solid #3498db; margin: 0; padding: 15px 25px; display: flex; flex-direction: column;
+        }
         .btn-maximize-chart {
             background: #ecf0f1; border: none; cursor: pointer; padding: 4px 8px; border-radius: 4px; font-size: 11px; float: right; font-weight: bold; color: #2c3e50;
         }
@@ -222,166 +171,63 @@
 
         /* WORKSPACE & CAMERA */
         .workspace-panel {
-            flex: 1;
-            position: relative;
-            background-color: #fdfdfd;
+            flex: 1; position: relative; background-color: #fdfdfd;
             background-image: linear-gradient(to right, #e1e8ed 1px, transparent 1px), linear-gradient(to bottom, #e1e8ed 1px, transparent 1px);
-            background-size: 40px 40px;
-            overflow: hidden;
-            min-width: 0;
+            background-size: 40px 40px; overflow: hidden; min-width: 0;
         }
-
         #workspace-canvas {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            transform-origin: 0 0;
-            will-change: transform;
+            position: absolute; width: 100%; height: 100%; transform-origin: 0 0; will-change: transform;
         }
 
         .top-toolbar {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            right: 10px;
-            z-index: 100;
-            display: flex;
-            justify-content: space-between;
-            background: rgba(255, 255, 255, 0.95);
-            padding: 10px;
-            border-radius: 8px;
-            border: 1px solid #eee;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-            pointer-events: auto;
+            position: absolute; top: 10px; left: 10px; right: 10px; z-index: 100; display: flex; justify-content: space-between;
+            background: rgba(255, 255, 255, 0.95); padding: 10px; border-radius: 8px; border: 1px solid #eee; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); pointer-events: auto;
         }
-
-        .gaap-btn {
-            padding: 8px 15px;
-            border: 1px solid #bdc3c7;
-            border-radius: 6px;
-            font-weight: bold;
-            cursor: pointer;
-            background: #fff;
-            color: #2c3e50;
-            transition: 0.2s;
-        }
-
+        .gaap-btn { padding: 8px 15px; border: 1px solid #bdc3c7; border-radius: 6px; font-weight: bold; cursor: pointer; background: #fff; color: #2c3e50; transition: 0.2s; }
         .gaap-btn:hover { background: #ecf0f1; }
         .gaap-btn.success { background: #2ecc71; color: white; border-color: #27ae60; }
         .gaap-btn.danger { background: #e74c3c; color: white; border-color: #c0392b; }
         .gaap-btn.danger:hover { background: #c0392b; }
 
         /* COMPONENTES NA TELA */
-        .placed-component {
-            position: absolute;
-            cursor: move;
-            box-sizing: border-box;
-        }
+        .placed-component { position: absolute; cursor: move; box-sizing: border-box; }
+        .placed-component.dragging { opacity: 0.8; z-index: 1000; filter: drop-shadow(0px 8px 12px rgba(0, 0, 0, 0.2)); }
+        .placed-component.selected svg { filter: drop-shadow(0px 0px 10px rgba(52, 152, 219, 0.8)); }
+        .placed-component svg { position: absolute; overflow: visible; pointer-events: none; }
 
-        .placed-component.dragging {
-            opacity: 0.8;
-            z-index: 1000;
-            filter: drop-shadow(0px 8px 12px rgba(0, 0, 0, 0.2));
-        }
+        /* PORTAS E ANIMAÇÃO DE PULSO */
+        .port-node { cursor: crosshair; pointer-events: all; transition: 0.2s; }
+        .port-node:hover { r: 8; stroke-width: 3; fill: #f39c12; }
 
-        .placed-component.selected svg {
-            filter: drop-shadow(0px 0px 10px rgba(52, 152, 219, 0.8));
+        @keyframes pulse-port {
+            0% { stroke-width: 2; fill: #fff; filter: drop-shadow(0 0 0px rgba(243,156,18,0)); }
+            100% { stroke-width: 3; fill: #fdf5e6; filter: drop-shadow(0 0 6px rgba(243,156,18,1)); stroke: #f39c12; r: 6; }
         }
-
-        .placed-component svg {
-            position: absolute;
-            overflow: visible;
-            pointer-events: none;
-        }
-
-        .port-node {
-            cursor: crosshair;
-            pointer-events: all;
-            transition: 0.2s;
-        }
-
-        .port-node:hover {
-            r: 8;
-            stroke-width: 3;
-            fill: #f39c12;
+        #workspace-canvas .port-node.unconnected {
+            animation: pulse-port 1s infinite alternate ease-in-out;
         }
 
         /* CANOS E ANIMAÇÕES */
-        #pipe-layer {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 1;
-            overflow: visible;
-        }
-
-        .pipe-line {
-            fill: none;
-            stroke: #95a5a6;
-            stroke-width: 6;
-            stroke-linecap: round;
-            pointer-events: stroke;
-            transition: stroke 0.3s;
-        }
-
+        #pipe-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; overflow: visible; }
+        .pipe-line { fill: none; stroke: #95a5a6; stroke-width: 6; stroke-linecap: round; pointer-events: stroke; transition: stroke 0.3s; }
         .pipe-line:hover { stroke: #bdc3c7; }
-
-        .pipe-line.active {
-            stroke: #3498db;
-            stroke-width: 6;
-            animation: flow 1s linear infinite;
-            stroke-dasharray: 12 12;
-        }
-
-        .pipe-line.selected {
-            stroke: #e74c3c;
-            stroke-width: 6;
-            filter: drop-shadow(0px 0px 5px rgba(231, 76, 60, 0.5));
-            cursor: pointer;
-        }
-
-        .pipe-flow-label {
-            font-family: 'Segoe UI', Arial, sans-serif;
-            font-size: 12px;
-            font-weight: bold;
-            fill: #2c3e50;
-            pointer-events: none;
-            paint-order: stroke;
-            stroke: #ffffff;
-            stroke-width: 5px;
-            stroke-linejoin: round;
-        }
-
+        .pipe-line.active { stroke: #3498db; stroke-width: 6; animation: flow 1s linear infinite; stroke-dasharray: 12 12; }
+        .pipe-line.selected { stroke: #e74c3c; stroke-width: 6; filter: drop-shadow(0px 0px 5px rgba(231, 76, 60, 0.5)); cursor: pointer; }
+        
+        .pipe-flow-label { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; font-weight: bold; fill: #2c3e50; pointer-events: none; paint-order: stroke; stroke: #ffffff; stroke-width: 5px; stroke-linejoin: round; }
         @keyframes flow { to { stroke-dashoffset: -24; } }
-
-        .water-stream {
-            animation: fall 0.4s linear infinite;
-            stroke-dasharray: 8 8;
-        }
-
+        .water-stream { animation: fall 0.4s linear infinite; stroke-dasharray: 8 8; }
         @keyframes fall { to { stroke-dashoffset: -16; } }
 
-        /* RESPONSIVIDADE MOBILE (Gavetas flutuantes) */
+        /* RESPONSIVIDADE MOBILE */
         @media (max-width: 800px) {
             .sandbox-container { position: relative; }
-            
-            .side-panel {
-                position: absolute;
-                height: 100%;
-                top: 0;
-                box-shadow: 0 0 15px rgba(0,0,0,0.2);
-            }
-
+            .side-panel { position: absolute; height: 100%; top: 0; box-shadow: 0 0 15px rgba(0,0,0,0.2); }
             .palette-panel { left: 0; z-index: 50; }
             .properties-panel { right: 0; z-index: 50; }
-            
             .side-panel { transform: translateX(0); }
             .palette-panel.collapsed { width: 0 !important; transform: translateX(-100%); border: none;}
             .properties-panel.collapsed { width: 0 !important; transform: translateX(100%); border: none;}
-
             #toggle-left { left: 280px; }
             #toggle-left.collapsed { left: 0; }
             #toggle-right { right: 340px; }
@@ -415,7 +261,10 @@
         <div class="workspace-panel" id="workspace">
             <div class="top-toolbar">
                 <button class="gaap-btn success" id="btn-run">▶ Iniciar Simulação Física</button>
-                <button class="gaap-btn" id="btn-clear" style="border-color:#e74c3c; color:#e74c3c;">Limpar Área</button>
+                <div>
+                    <button class="gaap-btn" id="btn-export-png" style="border-color:#3498db; color:#3498db; margin-right: 10px;">📷 Exportar PNGs</button>
+                    <button class="gaap-btn" id="btn-clear" style="border-color:#e74c3c; color:#e74c3c;">Limpar Área</button>
+                </div>
             </div>
 
             <div id="workspace-canvas">
@@ -490,14 +339,12 @@
             const isMax = chartWrapper.classList.toggle('maximized');
             btnMaxChart.textContent = isMax ? "✖ Fechar" : "⛶ Expandir";
             chartMaxHeader.style.display = isMax ? "flex" : "none";
-            
-            if (volumeChart) volumeChart.resize(); // Força o chart.js a preencher o novo espaço
+            if (volumeChart) volumeChart.resize(); 
         }
 
         btnMaxChart.addEventListener('click', toggleChartMaximize);
         btnCloseMaxChart.addEventListener('click', toggleChartMaximize);
         
-        // Abre a paleta inicialmente apenas se não estiver em tela pequena
         if (window.innerWidth > 800) {
             panelLeft.classList.remove('collapsed');
             toggleLeft.classList.remove('collapsed');
@@ -527,7 +374,6 @@
             let newScale = camera.scale + (direction * zoomIntensity);
             newScale = Math.max(0.4, Math.min(newScale, 3)); 
 
-            // Dá zoom focando na posição do mouse
             const rect = workspaceContainer.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
@@ -591,7 +437,15 @@
                 this.selectedComponent = null;
             }
             add(comp) { this.componentes.push(comp); }
-            clear() { this.componentes = []; this.conexoes.forEach(c => { c.path.remove(); if (c.label) c.label.remove(); }); this.conexoes = []; this.isRunning = false; this.elapsedTime = 0; this.notify({ tipo: 'selecao', componente: null }); }
+            clear() { 
+                this.componentes = []; 
+                this.conexoes.forEach(c => { c.path.remove(); if (c.label) c.label.remove(); }); 
+                this.conexoes = []; 
+                this.isRunning = false; 
+                this.elapsedTime = 0; 
+                this.notify({ tipo: 'selecao', componente: null }); 
+                updatePortStates();
+            }
             start() { this.isRunning = true; this.lastTime = performance.now(); requestAnimationFrame(this.tick.bind(this)); this.notify({ tipo: 'estado_motor', rodando: true }); }
             stop() { this.isRunning = false; this.notify({ tipo: 'estado_motor', rodando: false }); this.updatePipesVisual(); }
             
@@ -775,8 +629,8 @@
         // 2. ARQUITETURA DE REGISTRO DE COMPONENTES E FABRICA
         // ==========================================
         const colorPort = "#e67e22";
-        const labelStyle = `font-family="Arial" font-weight="bold" text-anchor="middle" fill="#2c3e50" paint-order="stroke" stroke="#fff" stroke-width="3"`;
-        const makePort = (id, cx, cy, inOut) => `<circle class="port-node" data-type="${inOut}" data-comp-id="${id}" cx="${cx}" cy="${cy}" r="5" fill="#fff" stroke="${colorPort}" stroke-width="2"/>`;
+        const labelStyle = `font-family="Segoe UI, Arial" font-weight="bold" text-anchor="middle" fill="#2c3e50" paint-order="stroke" stroke="#fff" stroke-width="3"`;
+        const makePort = (id, cx, cy, inOut) => `<circle class="port-node unconnected" data-type="${inOut}" data-comp-id="${id}" cx="${cx}" cy="${cy}" r="5" fill="#fff" stroke="${colorPort}" stroke-width="2"/>`;
 
         const REGISTRO_COMPONENTES = {
             'source': {
@@ -786,9 +640,12 @@
                 svg: (id, tag) => `
                     <circle cx="40" cy="40" r="25" fill="#3498db" stroke="#2980b9" stroke-width="4"/>
                     <path d="M 25 40 L 40 40 M 35 35 L 40 40 L 35 45" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-                    <text x="40" y="80" font-size="11" ${labelStyle}>Rede H2O</text>
+                    <text id="tag-${id}" x="40" y="80" font-size="11" ${labelStyle}>${tag}</text>
                     <g> ${makePort(id, 65, 40, 'out')} </g>
                 `,
+                setup: (visual, logica, id) => {
+                    logica.subscribe((d) => { if (d.tipo === 'tag_update') visual.querySelector(`#tag-${id}`).textContent = logica.tag; });
+                },
                 propriedadesAdicionais: () => ""
             },
             'sink': {
@@ -798,9 +655,12 @@
                 svg: (id, tag) => `
                     <circle cx="40" cy="40" r="25" fill="#95a5a6" stroke="#7f8c8d" stroke-width="4"/>
                     <path d="M 35 30 L 45 30 M 40 30 L 40 45 M 35 40 L 40 45 L 45 40" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-                    <text x="40" y="80" font-size="11" ${labelStyle}>Descarte</text>
+                    <text id="tag-${id}" x="40" y="80" font-size="11" ${labelStyle}>${tag}</text>
                     <g> ${makePort(id, 15, 40, 'in')} </g>
                 `,
+                setup: (visual, logica, id) => {
+                    logica.subscribe((d) => { if (d.tipo === 'tag_update') visual.querySelector(`#tag-${id}`).textContent = logica.tag; });
+                },
                 propriedadesAdicionais: () => ""
             },
             'pump': {
@@ -822,7 +682,9 @@
                 },
                 propriedadesAdicionais: (comp) => `
                     <div class="prop-group">
-                        <label>Potência do Motor <span id="val-acionamento" class="val-display">${comp.grauAcionamento}%</span></label>
+                        <label>Potência Motor 
+                            <span><input type="number" id="val-acionamento" class="val-display-input" value="${comp.grauAcionamento}" min="0" max="100">%</span>
+                        </label>
                         <input type="range" id="input-acionamento" min="0" max="100" value="${comp.grauAcionamento}">
                     </div>
                     <div class="prop-group">
@@ -831,16 +693,24 @@
                     </div>
                 `,
                 setupProps: (comp) => {
-                    document.getElementById('input-acionamento').addEventListener('input', e => {
-                        const val = parseInt(e.target.value);
-                        document.getElementById('val-acionamento').textContent = val + '%';
-                        comp.setAcionamento(val);
-                    });
+                    const slider = document.getElementById('input-acionamento');
+                    const numInput = document.getElementById('val-acionamento');
+                    
+                    const updateVal = (val) => {
+                        let clamped = Math.max(0, Math.min(100, parseInt(val) || 0));
+                        slider.value = clamped;
+                        numInput.value = clamped;
+                        comp.setAcionamento(clamped);
+                    };
+
+                    slider.addEventListener('input', e => updateVal(e.target.value));
+                    numInput.addEventListener('change', e => updateVal(e.target.value));
                     document.getElementById('input-vazmax').addEventListener('change', e => comp.vazaoNominal = parseFloat(e.target.value));
+                    
                     comp.subscribe(d => {
-                        if (d.tipo === 'estado' && document.getElementById('input-acionamento')) {
-                            document.getElementById('input-acionamento').value = d.grau;
-                            document.getElementById('val-acionamento').textContent = d.grau + '%';
+                        if (d.tipo === 'estado' && slider) {
+                            slider.value = d.grau;
+                            numInput.value = d.grau;
                         }
                     });
                 }
@@ -848,13 +718,13 @@
             'valve': {
                 Classe: ValvulaLogica,
                 prefixoTag: 'V',
-                w: 40, h: 40, offX: -20, offY: -20,
+                w: 40, h: 40, offX: -20, offY: -10,
                 svg: (id, tag) => `
                     <rect x="10" y="34" width="60" height="12" fill="#95a5a6" stroke="#2c3e50" stroke-width="2"/>
                     <path id="corpo-${id}" d="M 20 20 L 20 60 L 60 20 L 60 60 Z" fill="#e74c3c" stroke="#2c3e50" stroke-width="3" stroke-linejoin="round"/>
                     <rect x="36" y="5" width="8" height="35" fill="#c0392b" stroke="#2c3e50" stroke-width="2"/>
                     <rect id="volante-${id}" x="25" y="0" width="30" height="10" fill="#e74c3c" stroke="#2c3e50" stroke-width="2" rx="3"/>
-                    <text id="tag-${id}" x="40" y="85" font-size="12" ${labelStyle}>${tag}</text>
+                    <text id="tag-${id}" x="40" y="70" font-size="12" ${labelStyle}>${tag}</text>
                     <g> ${makePort(id, 20, 40, 'in')} ${makePort(id, 60, 40, 'out')} </g>
                 `,
                 setup: (visual, logica, id) => {
@@ -873,7 +743,9 @@
                 },
                 propriedadesAdicionais: (comp) => `
                     <div class="prop-group">
-                        <label>Abertura <span id="val-abertura" class="val-display">${comp.grauAbertura}%</span></label>
+                        <label>Abertura 
+                            <span><input type="number" id="val-abertura" class="val-display-input" value="${comp.grauAbertura}" min="0" max="100">%</span>
+                        </label>
                         <input type="range" id="input-abertura" min="0" max="100" value="${comp.grauAbertura}">
                     </div>
                     <div class="prop-group">
@@ -890,17 +762,25 @@
                     </div>
                 `,
                 setupProps: (comp) => {
-                    document.getElementById('input-abertura').addEventListener('input', e => {
-                        const val = parseInt(e.target.value);
-                        document.getElementById('val-abertura').textContent = val + '%';
-                        comp.setAbertura(val);
-                    });
+                    const slider = document.getElementById('input-abertura');
+                    const numInput = document.getElementById('val-abertura');
+                    
+                    const updateVal = (val) => {
+                        let clamped = Math.max(0, Math.min(100, parseInt(val) || 0));
+                        slider.value = clamped;
+                        numInput.value = clamped;
+                        comp.setAbertura(clamped);
+                    };
+
+                    slider.addEventListener('input', e => updateVal(e.target.value));
+                    numInput.addEventListener('change', e => updateVal(e.target.value));
+
                     document.getElementById('input-cv').addEventListener('change', e => comp.cv = Math.max(0.1, parseFloat(e.target.value) || 1.0));
                     document.getElementById('input-deltap').addEventListener('change', e => comp.deltaP = Math.max(1, parseFloat(e.target.value) || 100.0));
                     comp.subscribe(d => {
-                        if (d.tipo === 'estado' && document.getElementById('input-abertura')) {
-                            document.getElementById('input-abertura').value = d.grau;
-                            document.getElementById('val-abertura').textContent = d.grau + '%';
+                        if (d.tipo === 'estado' && slider) {
+                            slider.value = d.grau;
+                            numInput.value = d.grau;
                         }
                     });
                 }
@@ -921,7 +801,7 @@
                     </defs>
                     <path d="M 0 40 L 0 200 A 80 40 0 0 0 160 200 L 160 40 A 80 40 0 0 0 0 40 Z" fill="#fff" stroke="none"/>
                     <rect id="agua-${id}" x="0" y="240" width="160" height="0" fill="url(#grad-${id})" clip-path="url(#clip-${id})" />
-                    <line id="stream-${id}" x1="80" y1="40" x2="80" y2="200" stroke="#3498db" stroke-width="6" class="water-stream" opacity="0"/>
+                    <line id="stream-${id}" x1="80" y1="0" x2="80" y2="240" stroke="#3498db" stroke-width="6" class="water-stream" opacity="0"/>
                     <path d="M 0 40 L 0 200 A 80 40 0 0 0 160 200 L 160 40 A 80 40 0 0 0 0 40 Z" fill="none" stroke="#2c3e50" stroke-width="6"/>
                     <g clip-path="url(#clip-${id})">
                         <line id="sp-line-${id}" x1="0" y1="120" x2="160" y2="120" stroke="#e74c3c" stroke-width="3" stroke-dasharray="8,4" opacity="0"/>
@@ -975,7 +855,9 @@
                             <input type="checkbox" id="input-sp-ativo" ${comp.setpointAtivo ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer;">
                             <span style="font-size:13px; font-weight:bold;">Ativar controle automático</span>
                         </div>
-                        <label>Setpoint <span id="val-sp" class="val-display" style="color:#e74c3c;">${comp.setpoint}%</span></label>
+                        <label>Setpoint 
+                            <span><input type="number" id="val-sp" class="val-display-input" value="${comp.setpoint}" min="0" max="100">%</span>
+                        </label>
                         <input type="range" id="input-sp" min="0" max="100" value="${comp.setpoint}" style="accent-color:#e74c3c;">
                     </div>
                     <div class="prop-group" id="group-ctrl-params" style="display:${comp.setpointAtivo ? 'block' : 'none'};">
@@ -1005,12 +887,20 @@
                         comp.notify({ tipo: 'sp_update' });
                     });
 
-                    document.getElementById('input-sp').addEventListener('input', e => {
-                        comp.setpoint = parseInt(e.target.value);
+                    const spSlider = document.getElementById('input-sp');
+                    const spNum = document.getElementById('val-sp');
+                    
+                    const updateSp = (val) => {
+                        let clamped = Math.max(0, Math.min(100, parseInt(val) || 0));
+                        spSlider.value = clamped;
+                        spNum.value = clamped;
+                        comp.setpoint = clamped;
                         comp.resetControlador();
-                        document.getElementById('val-sp').textContent = comp.setpoint + '%';
                         comp.notify({ tipo: 'sp_update' });
-                    });
+                    };
+
+                    spSlider.addEventListener('input', e => updateSp(e.target.value));
+                    spNum.addEventListener('change', e => updateSp(e.target.value));
 
                     document.getElementById('input-kp').addEventListener('change', e => { comp.kp = Math.max(1, parseFloat(e.target.value) || 50); comp.resetControlador(); });
                     document.getElementById('input-ki').addEventListener('change', e => { comp.ki = Math.max(0, parseFloat(e.target.value) || 0); comp.resetControlador(); });
@@ -1022,6 +912,17 @@
             const numeros = ENGINE.componentes.map(c => c.tag).filter(t => t.startsWith(prefixo + '-')).map(t => parseInt(t.split('-')[1]));
             let i = 1; while (numeros.includes(i)) i++;
             return `${prefixo}-${String(i).padStart(2, '0')}`;
+        }
+
+        // Função Global para gerenciar as animações das portas
+        function updatePortStates() {
+            const allPorts = document.querySelectorAll('#workspace-canvas .port-node');
+            allPorts.forEach(port => port.classList.add('unconnected'));
+
+            ENGINE.conexoes.forEach(conn => {
+                if (conn.sourceEl) conn.sourceEl.classList.remove('unconnected');
+                if (conn.targetEl) conn.targetEl.classList.remove('unconnected');
+            });
         }
 
         class FabricaDeEquipamentos {
@@ -1040,7 +941,7 @@
                 const logica = new spec.Classe(id, tag, x, y);
 
                 visual.innerHTML = `
-                    <svg viewBox="0 0 ${spec.w + 40} ${spec.h + 80}" width="${spec.w + 40}" height="${spec.h + 80}" style="left:${spec.offX}px; top:${spec.offY}px;">
+                    <svg viewBox="0 0 ${spec.w + 40} ${spec.h + 80}" width="${spec.w + 40}" height="${spec.h + 80}" style="left:${spec.offX}px; top:${spec.offY}px; position:absolute;">
                         ${spec.svg(id, tag)}
                     </svg>`;
 
@@ -1155,18 +1056,20 @@
                 
                 if (comp instanceof ValvulaLogica) {
                     const abEl = document.getElementById('input-abertura');
-                    if (abEl) {
+                    const numInput = document.getElementById('val-abertura');
+                    if (abEl && document.activeElement !== numInput && document.activeElement !== abEl) {
                         abEl.value = Math.round(comp.grauAbertura);
-                        document.getElementById('val-abertura').textContent = Math.round(comp.grauAbertura) + '%';
-                        document.getElementById('disp-vazao-valvula').value = comp.fluxoReal.toFixed(2);
+                        if(numInput) numInput.value = Math.round(comp.grauAbertura);
                     }
+                    if (document.getElementById('disp-vazao-valvula')) document.getElementById('disp-vazao-valvula').value = comp.fluxoReal.toFixed(2);
                 }
                 
                 if (comp instanceof BombaLogica) {
                     const acEl = document.getElementById('input-acionamento');
-                    if (acEl) {
+                    const numInput = document.getElementById('val-acionamento');
+                    if (acEl && document.activeElement !== numInput && document.activeElement !== acEl) {
                         acEl.value = Math.round(comp.grauAcionamento);
-                        document.getElementById('val-acionamento').textContent = Math.round(comp.grauAcionamento) + '%';
+                        if(numInput) numInput.value = Math.round(comp.grauAcionamento);
                     }
                 }
 
@@ -1293,11 +1196,13 @@
                                 ENGINE.conexoes.splice(ci, 1);
                             }
                             finalPipe.remove();
+                            updatePortStates();
                             ev.stopPropagation();
                         });
 
                         ENGINE.conexoes.push({ sourceEl: dragSourcePort, targetEl: dropTarget, path: finalPipe, label: labelEl });
                         updateAllPipes();
+                        updatePortStates();
                     } else { tempPipe.remove(); }
                 } else { tempPipe.remove(); }
                 tempPipe = null; dragSourcePort = null;
@@ -1309,15 +1214,28 @@
         // ==========================================
         document.querySelectorAll('.palette-item').forEach(item => {
             const t = item.getAttribute('data-type');
+            const spec = REGISTRO_COMPONENTES[t];
             const dummy = FabricaDeEquipamentos.criar(t, 0, 0, true);
+            
+            const wrapper = document.createElement('div');
+            wrapper.style.display = 'flex';
+            wrapper.style.justifyContent = 'center';
+            wrapper.style.alignItems = 'center';
+            wrapper.style.height = t === 'tank' ? '90px' : '60px'; 
+            wrapper.style.width = '100%';
+            
             dummy.style.position = 'relative';
-            dummy.style.transform = 'scale(0.4)';
+            let scale = t === 'tank' ? 0.35 : 0.8; 
+            dummy.style.transform = `scale(${scale})`;
             dummy.style.transformOrigin = 'center';
-            if (t === 'tank') dummy.style.margin = '40px auto 50px auto';
-            else dummy.style.margin = '15px auto';
+            
+            wrapper.appendChild(dummy);
+            item.insertBefore(wrapper, item.firstChild);
 
-            item.insertBefore(dummy, item.firstChild);
-            item.addEventListener('dragstart', (e) => e.dataTransfer.setData('text/plain', t));
+            item.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', t);
+                e.dataTransfer.setDragImage(wrapper, spec.w / 2 * scale, spec.h / 2 * scale);
+            });
         });
 
         workspaceContainer.addEventListener('dragover', e => e.preventDefault());
@@ -1338,6 +1256,7 @@
             const novoVisual = FabricaDeEquipamentos.criar(t, snapX, snapY);
             workspaceCanvas.appendChild(novoVisual);
             makeDraggable(novoVisual);
+            updatePortStates();
         });
 
         function makeDraggable(element) {
@@ -1362,7 +1281,7 @@
         }
 
         // ==========================================
-        // 6. CONTROLES GERAIS
+        // 6. CONTROLES GERAIS E EXPORTAÇÃO DE PNG
         // ==========================================
         const btnRun = document.getElementById('btn-run');
         btnRun.addEventListener('click', () => {
@@ -1404,6 +1323,7 @@
                     ENGINE.componentes = ENGINE.componentes.filter(c => c.id !== compId);
                     selectedCompDiv.remove();
                     ENGINE.selectComponent(null);
+                    updatePortStates();
                 }
 
                 const selectedPipe = document.querySelector('.pipe-line.selected');
@@ -1417,9 +1337,63 @@
                         if (conn.label) conn.label.remove();
                         ENGINE.conexoes.splice(connIndex, 1);
                         selectedPipe.remove();
+                        updatePortStates();
                     }
                 }
             }
+        });
+
+        // LÓGICA DO BOTÃO DE EXPORTAR PNGs
+        document.getElementById('btn-export-png').addEventListener('click', () => {
+            const svgNamespace = "http://www.w3.org/2000/svg";
+            
+            // Definições de margens seguras para exportação no Canvas (Evita cortes laterais)
+            const paddingConfig = {
+                'source': { w: 120, h: 120, tx: 20, ty: 10 },
+                'sink':   { w: 120, h: 120, tx: 20, ty: 10 },
+                'pump':   { w: 120, h: 120, tx: 20, ty: 10 },
+                'valve':  { w: 120, h: 120, tx: 20, ty: 20 },
+                'tank':   { w: 220, h: 280, tx: 30, ty: 20 }
+            };
+
+            Object.keys(REGISTRO_COMPONENTES).forEach(tipo => {
+                const spec = REGISTRO_COMPONENTES[tipo];
+                const pad = paddingConfig[tipo];
+                
+                const svgContent = spec.svg(tipo + '-export', spec.prefixoTag).trim();
+                
+                // Usamos o paddingConfig para dar respiro suficiente ao Canvas
+                const rawSvg = `<svg xmlns="${svgNamespace}" viewBox="0 0 ${pad.w} ${pad.h}" width="${pad.w}" height="${pad.h}">
+                    <g transform="translate(${pad.tx}, ${pad.ty})">
+                        ${svgContent}
+                    </g>
+                </svg>`;
+
+                const blob = new Blob([rawSvg], { type: "image/svg+xml;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
+                
+                const img = new Image();
+                img.onload = function () {
+                    const scale = 3; // Exportar em alta resolução (Retina)
+                    const canvas = document.createElement('canvas');
+                    canvas.width = pad.w * scale;
+                    canvas.height = pad.h * scale;
+                    const ctx = canvas.getContext('2d');
+                    ctx.scale(scale, scale);
+                    ctx.drawImage(img, 0, 0);
+                    
+                    const pngData = canvas.toDataURL("image/png");
+                    
+                    const a = document.createElement("a");
+                    a.download = `gaap_${tipo}_icon.png`;
+                    a.href = pngData;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                };
+                img.src = url;
+            });
         });
     </script>
 </body>
