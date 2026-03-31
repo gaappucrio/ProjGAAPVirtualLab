@@ -5,15 +5,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sandbox GAAP - Fronteiras e Fluxo Visual</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #fdfdfd;
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <!-- import do Chart.js para gráficos -->
+    <style> /* ESTILIZAÇÃO GERAL */
+        body /* FONTE, CORES, LAYOUT FLEXÍVEL, GRID DE FUNDO, SELEÇÃO E OVERFLOW */
+        {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /*Fonte principal*/
+            background: #fdfdfd;    
             margin: 0;
-            padding: 20px;
+            padding: 20px;      /*Espaçamento interno para evitar que o conteúdo encoste nas bordas da janela*/
             color: #2c3e50;
-            display: flex;
+            display: flex;      /*Layout flexível para organizar o header e o container principal*/
             flex-direction: column;
             height: 100vh;
             box-sizing: border-box;
@@ -21,7 +22,8 @@
             overflow: hidden;
         }
 
-        .gaap-header {
+        .gaap-header /* CABEÇALHO COM TÍTULO E INSTRUÇÕES  */
+        {
             text-align: center;
             margin-bottom: 20px;
             border-bottom: 1px solid #eee;
@@ -29,11 +31,14 @@
             flex-shrink: 0;
         }
 
-        .gaap-header h2 { margin: 0; font-size: 26px; }
-        .gaap-header p { color: #95a5a6; font-size: 15px; margin-top: 5px; }
+        .gaap-header h2 /* TÍTULO PRINCIPAL  */
+        { margin: 0; font-size: 26px; }
+        .gaap-header p /* INSTRUÇÕES  */
+        { color: #95a5a6; font-size: 15px; margin-top: 5px; }
 
         /* CONTAINER PRINCIPAL E PAINÉIS LATERAIS */
-        .sandbox-container {
+        .sandbox-container
+        {
             display: flex;
             flex: 1;
             position: relative;
@@ -44,7 +49,8 @@
             box-shadow: 0 10px 20px rgba(0, 0, 0, 0.06);
         }
 
-        .side-panel {
+        .side-panel /* PAINÉIS LATERAIS DE PALETA E PROPRIEDADES  */
+        {
             width: 280px;
             background: #f4f7f6;
             display: flex;
@@ -54,9 +60,13 @@
             flex-shrink: 0;
         }
 
-        #properties.side-panel { width: 340px; }
+        #properties.side-panel /* PAINEL DE PROPRIEDADES  */
+        {
+            width: 340px;
+        }
 
-        .side-panel-content {
+        .side-panel-content /* CONTEÚDO INTERNO DOS PAINÉIS  */
+        {
             padding: 20px;
             width: 100%;
             display: flex;
@@ -68,14 +78,19 @@
             box-sizing: border-box;
         }
 
-        .side-panel.collapsed { width: 0 !important; }
-        .side-panel.collapsed .side-panel-content { opacity: 0; pointer-events: none; }
+        .side-panel.collapsed  /* ESTILO PARA PAINÉIS COLAPSADOS  */
+        { width: 0 !important; }
+        .side-panel.collapsed .side-panel-content /* CONTEÚDO FICARÁ INVISÍVEL E INATIVO QUANDO COLAPSADO  */
+        { opacity: 0; pointer-events: none; }
 
-        .palette-panel { border-right: 1px solid #e1e8ed; }
-        .properties-panel { border-left: 1px solid #e1e8ed; background: #fff; }
+        .palette-panel /* PAINEL DE PALETA  */
+        { border-right: 1px solid #e1e8ed; }
+        .properties-panel /* PAINEL DE PROPRIEDADES  */
+        { border-left: 1px solid #e1e8ed; background: #fff; }
 
         /* BOTÕES DE COLAPSAR */
-        .panel-toggle {
+        .panel-toggle
+        {
             position: absolute;
             top: 50%;
             transform: translateY(-50%);
@@ -94,20 +109,27 @@
             transition: 0.2s;
         }
 
-        .panel-toggle:hover { background: #ecf0f1; color: #2c3e50; }
+        .panel-toggle:hover /* HOVER PARA BOTÕES DE COLAPSAR  */
+        { background: #ecf0f1; color: #2c3e50; }
 
-        #toggle-left { left: 280px; border-radius: 0 8px 8px 0; border-left: none; transition: left 0.3s ease; }
-        #toggle-left.collapsed { left: 0; }
-        #toggle-right { right: 340px; border-radius: 8px 0 0 8px; border-right: none; transition: right 0.3s ease; }
-        #toggle-right.collapsed { right: 0; }
+        #toggle-left /* BOTÃO DE COLAPSAR ESQUERDO  */
+        { left: 280px; border-radius: 0 8px 8px 0; border-left: none; transition: left 0.3s ease; }
+        #toggle-left.collapsed /* ESTILO QUANDO O PAINEL ESQUERDO ESTIVER COLAPSADO  */
+        { left: 0; }
+        #toggle-right /* BOTÃO DE COLAPSAR DIREITO  */
+        { right: 340px; border-radius: 8px 0 0 8px; border-right: none; transition: right 0.3s ease; }
+        #toggle-right.collapsed /* ESTILO QUANDO O PAINEL DIREITO ESTIVER COLAPSADO  */
+        { right: 0; }
 
-        h3.panel-title {
+        h3.panel-title /* TÍTULOS DOS PAINÉIS  */
+        {
             margin-top: 0; font-size: 14px; border-bottom: 1px solid #ddd;
             padding-bottom: 8px; color: #34495e; text-transform: uppercase; letter-spacing: 1px;
         }
 
         /* PALETA */
-        .palette-item {
+        .palette-item /* ITENS DA PALETA  */
+        {
             background: #fff;
             border: 2px solid #e1e8ed;
             border-radius: 8px;
@@ -124,16 +146,22 @@
             box-sizing: border-box;
         }
 
-        .palette-item:hover { background: #eaf2f8; border-color: #3498db; }
+        .palette-item:hover
+        { background: #eaf2f8; border-color: #3498db; }
         
-        .palette-item span { font-size: 15px; font-weight: bold; color: #2c3e50; }
-        .palette-item:hover span { color: #3498db; }
+        .palette-item span /* NOME DO COMPONENTE NA PALETA  */
+        { font-size: 15px; font-weight: bold; color: #95a5a6; }
+        .palette-item:hover span
+        { color: #3498db; }
 
-        .palette-icon { max-width: 100px; max-height: 100px; object-fit: contain; pointer-events: none; }
+        .palette-icon /* ÍCONES DOS COMPONENTES NA PALETA  */
+        { max-width: 100px; max-height: 100px; object-fit: contain; pointer-events: none; }
 
         /* PROPRIEDADES & INPUTS EDITÁVEIS */
-        .prop-group { margin-bottom: 15px; background: #f9fbfb; padding: 10px; border-radius: 6px; border: 1px solid #eee; }
-        .prop-group label { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: bold; color: #34495e; margin-bottom: 6px; }
+        .prop-group/* GRUPOS DE PROPRIEDADES  */
+        { margin-bottom: 15px; background: #f9fbfb; padding: 10px; border-radius: 6px; border: 1px solid #eee; }
+        .prop-group label/* RÓTULOS DAS PROPRIEDADES  */
+        { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: bold; color: #34495e; margin-bottom: 6px; }
         
         /* Tooltip hint icon */
         .help-icon {
@@ -143,86 +171,128 @@
             cursor: help;
         }
         
-        .prop-group input[type="text"], .prop-group input[type="number"], .prop-group select {
+        /* Estilo para inputs e selects dentro das propriedades */
+        .prop-group input[type="text"], .prop-group input[type="number"], .prop-group select
+        {
             width: 100%; padding: 8px; border: 1px solid #bdc3c7; border-radius: 4px; box-sizing: border-box; font-family: inherit; font-size: 13px;
         }
-        .prop-group input[type="range"] { width: 100%; cursor: pointer; }
-        .prop-group input:focus { outline: none; border-color: #3498db; }
-        .prop-group input:disabled { background: #f2f4f4; color: #7f8c8d; font-weight: bold; border-color: #eee; }
+        /* Estilo específico para sliders (input[type="range"]) */
+        .prop-group input[type="range"]
+        { width: 100%; cursor: pointer; }
+        .prop-group input:focus /* FOCO EM INPUTS  */ /*Foco significa que o usuário está editando aquele campo,*/
+        { outline: none; border-color: #3498db; }  /* então destacamos com uma borda azul e removemos o outline padrão*/
+        .prop-group input:disabled /* ESTILO PARA INPUTS DESABILITADOS  */
+        { background: #f2f4f4; color: #7f8c8d; font-weight: bold; border-color: #eee; }
         
-        .val-display-input {
+        .val-display-input /* ESTILO PARA INPUTS DE DISPLAY DE VALORES (EX: VOLUME ATUAL)  */
+        {
             width: 50px !important; background: #fff !important; border: 1px solid #bdc3c7 !important; border-radius: 4px !important;
             color: #3498db !important; font-weight: bold !important; font-size: 13px !important; text-align: center !important;
             padding: 4px !important; margin: 0 !important; cursor: text; transition: 0.2s;
         }
-        .val-display-input:hover, .val-display-input:focus { border-color: #3498db !important; box-shadow: 0 0 0 2px rgba(52,152,219,0.2) !important; outline: none; }
-        .val-display-input::-webkit-outer-spin-button, .val-display-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        /* HOVER E FOCO PARA INPUTS DE DISPLAY  */          /* Hover significa que o mouse está sobre o campo*/
+        .val-display-input:hover, .val-display-input:focus  /* Hover e Foco recebem um destaque visual para indicar interatividade. */
+        { border-color: #3498db !important; box-shadow: 0 0 0 2px rgba(52,152,219,0.2) !important; outline: none; }
+        /* REMOVER SETAS DE INPUTS NUMÉRICOS  */
+        .val-display-input::-webkit-outer-spin-button, .val-display-input::-webkit-inner-spin-button
+        { -webkit-appearance: none; margin: 0; }
 
         /* GRÁFICO MAXIMIZADO */
-        .chart-container {
+        .chart-container /* CONTAINER DO GRÁFICO DE MONITORAMENTO  */
+        {
             width: 100%; height: 220px; background: #fff; border: 1px solid #eee; border-radius: 8px;
             padding: 10px; box-sizing: border-box; margin-top: 10px; display: flex; flex-direction: column;
         }
-        .chart-container.maximized {
+        .chart-container.maximized /* ESTILO PARA O GRÁFICO QUANDO MAXIMIZADO  */
+        {
             position: fixed; top: auto; bottom: 0; left: 0; width: 100vw; height: 35vh; z-index: 9999;
             box-shadow: 0 -10px 30px rgba(0,0,0,0.15); background: #fff; border-radius: 16px 16px 0 0;
             border: none; border-top: 4px solid #3498db; margin: 0; padding: 15px 25px; display: flex; flex-direction: column;
         }
-        .btn-maximize-chart {
+        .btn-maximize-chart /* BOTÃO PARA MAXIMIZAR O GRÁFICO  */
+        {
             background: #ecf0f1; border: none; cursor: pointer; padding: 4px 8px; border-radius: 4px; font-size: 11px; float: right; font-weight: bold; color: #2c3e50;
         }
-        .btn-maximize-chart:hover { background: #bdc3c7; }
+        .btn-maximize-chart:hover /* HOVER PARA O BOTÃO DE MAXIMIZAR O GRÁFICO  */
+        { background: #bdc3c7; }
 
         /* WORKSPACE & CAMERA */
-        .workspace-panel {
+        .workspace-panel /* PAINEL PRINCIPAL DE TRABALHO  */
+        {
             flex: 1; position: relative; background-color: #fdfdfd;
             background-image: linear-gradient(to right, #e1e8ed 1px, transparent 1px), linear-gradient(to bottom, #e1e8ed 1px, transparent 1px);
             background-size: 40px 40px; overflow: hidden; min-width: 0;
         }
-        #workspace-canvas {
+        #workspace-canvas /* CAMADA PRINCIPAL ONDE OS COMPONENTES SÃO COLOCADOS  */
+        {
             position: absolute; width: 100%; height: 100%; transform-origin: 0 0; will-change: transform;
         }
 
-        .top-toolbar {
+        .top-toolbar    /* BARRA DE FERRAMENTAS NO TOPO DO WORKSPACE  */
+        {
             position: absolute; top: 10px; left: 10px; right: 10px; z-index: 100; display: flex; justify-content: space-between;
             background: rgba(255, 255, 255, 0.95); padding: 10px; border-radius: 8px; border: 1px solid #eee; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); pointer-events: auto;
         }
-        .gaap-btn { padding: 8px 15px; border: 1px solid #bdc3c7; border-radius: 6px; font-weight: bold; cursor: pointer; background: #fff; color: #2c3e50; transition: 0.2s; }
-        .gaap-btn:hover { background: #ecf0f1; }
-        .gaap-btn.success { background: #2ecc71; color: white; border-color: #27ae60; }
-        .gaap-btn.danger { background: #e74c3c; color: white; border-color: #c0392b; }
-        .gaap-btn.danger:hover { background: #c0392b; }
+        .gaap-btn /* ESTILO PARA BOTÕES DE AÇÃO (INICIAR SIMULAÇÃO, LIMPAR ÁREA)  */
+        { padding: 8px 15px; border: 1px solid #bdc3c7; border-radius: 6px; font-weight: bold; cursor: pointer; background: #fff; color: #2c3e50; transition: 0.2s; }
+        .gaap-btn:hover /* HOVER PARA BOTÕES DE AÇÃO  */
+        { background: #ecf0f1; }
+        .gaap-btn.success /* ESTILO PARA BOTÃO DE INICIAR SIMULAÇÃO  */
+        { background: #2ecc71; color: white; border-color: #27ae60; }
+        .gaap-btn.danger /* ESTILO PARA BOTÃO DE LIMPAR ÁREA  */
+        { background: #e74c3c; color: white; border-color: #c0392b; }
+        .gaap-btn.danger:hover /* HOVER PARA BOTÃO DE LIMPAR ÁREA  */
+        { background: #c0392b; }
 
         /* COMPONENTES NA TELA */
-        .placed-component { position: absolute; cursor: move; box-sizing: border-box; }
-        .placed-component.dragging { opacity: 0.8; z-index: 1000; filter: drop-shadow(0px 8px 12px rgba(0, 0, 0, 0.2)); }
-        .placed-component.selected svg { filter: drop-shadow(0px 0px 10px rgba(52, 152, 219, 0.8)); }
-        .placed-component svg { position: absolute; overflow: visible; pointer-events: none; }
+        .placed-component /* ESTILO PARA COMPONENTES COLOCADOS NO WORKSPACE  */
+        { position: absolute; cursor: move; box-sizing: border-box; }
+        .placed-component.dragging /* ESTILO PARA COMPONENTE DURANTE O DRAG  */
+        { opacity: 0.8; z-index: 1000; filter: drop-shadow(0px 8px 12px rgba(0, 0, 0, 0.2)); }
+        .placed-component.selected svg /* ESTILO PARA COMPONENTE SELECIONADO  */
+        { filter: drop-shadow(0px 0px 10px rgba(52, 152, 219, 0.8)); }
+        .placed-component svg /* ESTILO PARA SVG DOS COMPONENTES  */
+        { position: absolute; overflow: visible; pointer-events: none; }
 
         /* PORTAS E ANIMAÇÃO DE PULSO APRIMORADA */
-        .port-node { cursor: crosshair; pointer-events: all; transition: 0.2s; }
-        .port-node:hover { r: 8; stroke-width: 3; fill: #f39c12; }
+        .port-node /* ESTILO PARA AS PORTAS DE CONEXÃO  */
+        { cursor: crosshair; pointer-events: all; transition: 0.2s; }
+        .port-node:hover /* ESTILO PARA PORTA QUANDO O MOUSE ESTÁ SOBRE ELA  */
+        { r: 8; stroke-width: 3; fill: #f39c12; }
 
-        @keyframes pulse-port {
+        @keyframes pulse-port /* ANIMAÇÃO DE PULSO PARA PORTAS DESCONECTADAS  */
+        {   /* A animação faz a porta pulsar suavemente, aumentando o stroke-width e a intensidade da cor, além de adicionar um leve brilho com drop-shadow. */
             0% { stroke-width: 2; fill: #fff; stroke: #e67e22; filter: drop-shadow(0 0 0px rgba(243,156,18,0)); }
             100% { stroke-width: 6; fill: #fdf5e6; stroke: #f39c12; filter: drop-shadow(0 0 5px rgba(243,156,18,1)); }
         }
-        #workspace-canvas .port-node.unconnected { animation: pulse-port 0.8s infinite alternate ease-in-out; }
+        #workspace-canvas .port-node.unconnected /* PORTAS DESCONECTADAS RECEBEM A ANIMAÇÃO DE PULSO  */
+        { animation: pulse-port 0.8s infinite alternate ease-in-out; }
 
         /* CANOS E ANIMAÇÕES */
-        #pipe-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; overflow: visible; }
-        .pipe-line { fill: none; stroke: #95a5a6; stroke-width: 6; stroke-linecap: round; pointer-events: stroke; transition: stroke 0.3s; }
-        .pipe-line:hover { stroke: #bdc3c7; }
-        .pipe-line.active { stroke: #3498db; stroke-width: 6; animation: flow 1s linear infinite; stroke-dasharray: 12 12; }
-        .pipe-line.selected { stroke: #e74c3c; stroke-width: 6; filter: drop-shadow(0px 0px 5px rgba(231, 76, 60, 0.5)); cursor: pointer; }
+        #pipe-layer /* ESTILO PARA A CAMADA DE CANOS  */
+        { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; overflow: visible; }
+        .pipe-line /* ESTILO PARA AS LINHAS DE CONEXÃO (CANOS)  */
+        { fill: none; stroke: #95a5a6; stroke-width: 6; stroke-linecap: round; pointer-events: stroke; transition: stroke 0.3s; }
+        .pipe-line:hover /* ESTILO PARA CANO QUANDO O MOUSE ESTÁ SOBRE ELE  */
+        { stroke: #bdc3c7; }
+        .pipe-line.active /* ESTILO PARA CANOS COM FLUXO ATIVO  */
+        { stroke: #3498db; stroke-width: 6; animation: flow 1s linear infinite; stroke-dasharray: 12 12; }
+        .pipe-line.selected /* ESTILO PARA CANO SELECIONADO  */
+        { stroke: #e74c3c; stroke-width: 6; filter: drop-shadow(0px 0px 5px rgba(231, 76, 60, 0.5)); cursor: pointer; }
         
-        .pipe-flow-label { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; font-weight: bold; fill: #2c3e50; pointer-events: none; paint-order: stroke; stroke: #ffffff; stroke-width: 5px; stroke-linejoin: round; }
-        @keyframes flow { to { stroke-dashoffset: -24; } }
-        .water-stream { animation: fall 0.4s linear infinite; stroke-dasharray: 8 8; }
-        @keyframes fall { to { stroke-dashoffset: -16; } }
+        .pipe-flow-label /* ESTILO PARA RÓTULOS DE FLUXO NOS CANOS  */
+        { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; font-weight: bold; fill: #2c3e50; pointer-events: none; paint-order: stroke; stroke: #ffffff; stroke-width: 5px; stroke-linejoin: round; }
+        @keyframes flow /* ANIMAÇÃO DE FLUXO PARA CANOS  */
+        { to { stroke-dashoffset: -24; } } /* A animação de fluxo cria um efeito de movimento ao longo do cano, dando a impressão de que o fluido está fluindo. */
+                                        /* O stroke-dashoffset é animado para criar esse efeito.*/
+        .water-stream /* ESTILO PARA FLUXO DE ÁGUA NOS CANOS  */
+        { animation: fall 0.4s linear infinite; stroke-dasharray: 8 8; }
+        @keyframes fall /* ANIMAÇÃO DE QUEDA PARA FLUXO DE ÁGUA  */
+        { to { stroke-dashoffset: -16; } } 
 
         /* RESPONSIVIDADE MOBILE */
-        @media (max-width: 800px) {
+        @media (max-width: 800px) /* EM TELAS MENORES, OS PAINÉIS LATERAIS FICAM SOBREPOSTOS AO WORKSPACE  */
+        {
             .sandbox-container { position: relative; }
             .side-panel { position: absolute; height: 100%; top: 0; box-shadow: 0 0 15px rgba(0,0,0,0.2); }
             .palette-panel { left: 0; z-index: 50; }
@@ -235,14 +305,15 @@
             #toggle-right { right: 340px; }
             #toggle-right.collapsed { right: 0; }
         }
-    </style>
+    </style> 
 </head>
 
 <body>
-
     <div class="gaap-header">
         <h2>Sandbox Modular GAAP - Fronteiras de Controle</h2>
-        <p>Use o <b>scroll do mouse para zoom</b> e arraste segurando <b>Espaço</b> para navegar.</p>
+        <p>Use o <b>scroll do mouse para zoom</b> e arraste segurando <b>Espaço</b> para navegar.
+        Aperte <b>DEL</b> para deletar um componente e <b>CLIQUE DUPLO</b> para editar.
+        Você pode também desconectar componentes usando <b>CLIQUE DUPLO</b> nas setas.</p>
     </div>
 
     <div class="sandbox-container">
@@ -252,29 +323,29 @@
                 
                 <div class="palette-item" draggable="true" data-type="source">
                     <img src="assets/components/gaap_source_icon.png" alt="Fonte" class="palette-icon">
-                    <span>Entrada (In)</span>
+                    <span><b></b>Entrada (In)</b></span>
                 </div>
                 
                 <div class="palette-item" draggable="true" data-type="sink">
                     <img src="assets/components/gaap_sink_icon.png" alt="Dreno" class="palette-icon">
-                    <span>Saída (Out)</span>
+                    <span><b>Saída (Out)</b></span>
                 </div>
 
                 <h3 class="panel-title" style="margin-top:5px;">Equipamentos</h3>
                 
                 <div class="palette-item" draggable="true" data-type="tank">
                     <img src="assets/components/gaap_tank_icon.png" alt="Tanque" class="palette-icon">
-                    <span>Tanque de Fluido</span>
+                    <span><b>Tanque de Fluido</b></span>
                 </div>
                 
                 <div class="palette-item" draggable="true" data-type="pump">
                     <img src="assets/components/gaap_pump_icon.png" alt="Bomba" class="palette-icon">
-                    <span>Bomba Centrífuga</span>
+                    <span><b>Bomba Centrífuga</b></span>
                 </div>
                 
                 <div class="palette-item" draggable="true" data-type="valve">
                     <img src="assets/components/gaap_valve_icon.png" alt="Válvula" class="palette-icon">
-                    <span>Válvula de Controle</span>
+                    <span><b>Válvula de Controle</b></span>
                 </div>
             </div>
         </div>
@@ -327,44 +398,48 @@
     </div>
 
     <script>
-        const GRID_SIZE = 40;
+        const GRID_SIZE = 40; /* Tamanho da grade de fundo para alinhamento dos componentes */
 
         // ==========================================
         // 0. UX DOS PAINÉIS E MAXIMIZAÇÃO DO GRÁFICO
         // ==========================================
-        const toggleLeft = document.getElementById('toggle-left');
-        const panelLeft = document.getElementById('palette');
-        toggleLeft.addEventListener('click', () => {
+        const toggleLeft = document.getElementById('toggle-left'); /* Botão para colapsar/expandir o painel esquerdo (paleta) */
+        const panelLeft = document.getElementById('palette'); /* Painel esquerdo que contém a paleta de componentes */
+        toggleLeft.addEventListener('click', () => /* Evento de clique para colapsar ou expandir o painel esquerdo */
+        {
             const isCollapsed = panelLeft.classList.toggle('collapsed');
             toggleLeft.classList.toggle('collapsed');
             toggleLeft.textContent = isCollapsed ? '▶' : '◀';
         });
 
-        const toggleRight = document.getElementById('toggle-right');
-        const panelRight = document.getElementById('properties');
-        toggleRight.addEventListener('click', () => {
+        const toggleRight = document.getElementById('toggle-right'); /* Botão para colapsar/expandir o painel direito (propriedades) */
+        const panelRight = document.getElementById('properties'); /* Painel direito que contém as propriedades dos componentes */
+        toggleRight.addEventListener('click', () => /* Evento de clique para colapsar ou expandir o painel direito */
+        {
             const isCollapsed = panelRight.classList.toggle('collapsed');
             toggleRight.classList.toggle('collapsed');
             toggleRight.textContent = isCollapsed ? '◀' : '▶';
         });
 
-        const btnMaxChart = document.getElementById('btn-max-chart');
-        const chartWrapper = document.getElementById('chart-wrapper');
-        const chartMaxHeader = document.getElementById('chart-max-header');
-        const btnCloseMaxChart = document.getElementById('btn-close-max-chart');
-        let volumeChart; 
+        const btnMaxChart = document.getElementById('btn-max-chart'); /* Botão para maximizar o gráfico */
+        const chartWrapper = document.getElementById('chart-wrapper'); /* Container que envolve o gráfico de monitoramento */
+        const chartMaxHeader = document.getElementById('chart-max-header'); /* Cabeçalho do gráfico maximizado */
+        const btnCloseMaxChart = document.getElementById('btn-close-max-chart'); /* Botão para fechar o gráfico maximizado */
+        let volumeChart;  /* Variável para armazenar a instância do gráfico de volume, permitindo redimensionamento quando maximizado */
 
-        function toggleChartMaximize() {
+        function toggleChartMaximize() /* Função para alternar entre o estado maximizado e normal do gráfico de monitoramento */
+        {
             const isMax = chartWrapper.classList.toggle('maximized');
             btnMaxChart.textContent = isMax ? "✖ Fechar" : "⛶ Expandir";
             chartMaxHeader.style.display = isMax ? "flex" : "none";
             if (volumeChart) volumeChart.resize(); 
         }
 
-        btnMaxChart.addEventListener('click', toggleChartMaximize);
-        btnCloseMaxChart.addEventListener('click', toggleChartMaximize);
+        btnMaxChart.addEventListener('click', toggleChartMaximize); /* Evento de clique para maximizar o gráfico */
+        btnCloseMaxChart.addEventListener('click', toggleChartMaximize);/* Evento de clique para fechar o gráfico maximizado */
         
-        if (window.innerWidth > 800) {
+        if (window.innerWidth > 800) /* Se a largura da janela for maior que 800px, os painéis começam expandidos por padrão */
+        {
             panelLeft.classList.remove('collapsed');
             toggleLeft.classList.remove('collapsed');
             toggleLeft.textContent = '◀';
@@ -377,8 +452,8 @@
         // ==========================================
         // 0.1 NAVEGAÇÃO ESPACIAL (ZOOM E PAN)
         // ==========================================
-        const workspaceContainer = document.getElementById('workspace');
-        const workspaceCanvas = document.getElementById('workspace-canvas');
+        const workspaceContainer = document.getElementById('workspace');/* Container principal do workspace onde os componentes são colocados e onde o usuário pode navegar com zoom e pan. */
+        const workspaceCanvas = document.getElementById('workspace-canvas');/* Canvas onde os componentes são desenhados. */
         
         const camera = { scale: 1, x: 0, y: 0, isPanning: false, startX: 0, startY: 0 };
         let spacePressed = false;
@@ -386,7 +461,8 @@
         document.addEventListener('keydown', e => { if (e.code === 'Space' && e.target.tagName !== 'INPUT') spacePressed = true; });
         document.addEventListener('keyup', e => { if (e.code === 'Space') spacePressed = false; });
 
-        workspaceContainer.addEventListener('wheel', (e) => {
+        workspaceContainer.addEventListener('wheel', (e) =>
+        {
             e.preventDefault();
             const zoomIntensity = 0.1;
             const direction = Math.sign(e.deltaY) > 0 ? -1 : 1;
@@ -403,7 +479,8 @@
             updateCameraTransform();
         });
 
-        workspaceContainer.addEventListener('mousedown', (e) => {
+        workspaceContainer.addEventListener('mousedown', (e) =>
+        {
             if (e.button === 1 || spacePressed) { 
                 e.preventDefault(); 
                 camera.isPanning = true;
@@ -413,19 +490,22 @@
             }
         });
 
-        window.addEventListener('mousemove', (e) => {
+        window.addEventListener('mousemove', (e) =>
+        {
             if (!camera.isPanning) return;
             camera.x = e.clientX - camera.startX;
             camera.y = e.clientY - camera.startY;
             updateCameraTransform();
         });
 
-        window.addEventListener('mouseup', () => {
+        window.addEventListener('mouseup', () =>
+        {
             camera.isPanning = false;
             workspaceContainer.style.cursor = 'default';
         });
 
-        function updateCameraTransform() {
+        function updateCameraTransform()
+        {
             workspaceContainer.style.backgroundPosition = `${camera.x}px ${camera.y}px`;
             workspaceContainer.style.backgroundSize = `${40 * camera.scale}px ${40 * camera.scale}px`;
             workspaceCanvas.style.transform = `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`;
@@ -435,16 +515,20 @@
         // ==========================================
         // 1. LÓGICA E FÍSICA
         // ==========================================
-        class Observable {
+        class Observable
+        {
             constructor() { this.listeners = []; }
             subscribe(fn) { this.listeners.push(fn); }
             notify(data) { this.listeners.forEach(fn => fn(data)); }
         }
 
-        class Fluido { constructor(nome, densidade) { this.nome = nome; this.densidade = densidade; } }
+        class Fluido
+        { constructor(nome, densidade) { this.nome = nome; this.densidade = densidade; } }
 
-        class SistemaSimulacao extends Observable {
-            constructor() {
+        class SistemaSimulacao extends Observable
+        {
+            constructor()
+            {
                 super();
                 this.velocidade = 1.0;
                 this.fluidoOperante = new Fluido("Água", 1000.0);
@@ -530,9 +614,11 @@
                 }
             }
         }
+        
         const ENGINE = new SistemaSimulacao();
 
-        class ComponenteFisico extends Observable {
+        class ComponenteFisico extends Observable
+        {
             constructor(id, tag, x, y) { super(); this.id = id; this.tag = tag; this.x = x; this.y = y; this.inputs = []; this.outputs = []; }
             conectarSaida(destino) { if (!this.outputs.includes(destino)) { this.outputs.push(destino); destino.inputs.push(this); } }
             desconectarSaida(destino) {
@@ -542,10 +628,14 @@
             getFluxoSaida() { return 0; }
         }
 
-        class FonteLogica extends ComponenteFisico { getFluxoSaida() { return 99999; } }
-        class DrenoLogico extends ComponenteFisico { getFluxoSaidaFromTank(nivelNormalizado) { return nivelNormalizado > 0 ? 10.0 * Math.sqrt(nivelNormalizado) : 0; } }
+        class FonteLogica extends ComponenteFisico
+        { getFluxoSaida() { return 99999; } }
 
-        class BombaLogica extends ComponenteFisico {
+        class DrenoLogico extends ComponenteFisico
+        { getFluxoSaidaFromTank(nivelNormalizado) { return nivelNormalizado > 0 ? 10.0 * Math.sqrt(nivelNormalizado) : 0; } }
+
+        class BombaLogica extends ComponenteFisico
+        {
             constructor(id, tag, x, y) { super(id, tag, x, y); this.isOn = false; this.vazaoNominal = 45.0; this.grauAcionamento = 0; this.fluxoReal = 0; }
             toggle() { this.setAcionamento(this.isOn ? 0 : 100); }
             setAcionamento(valor) {
@@ -566,7 +656,8 @@
             getFluxoSaidaFromTank(nivelNormalizado) { return this.getFluxoSaida(); }
         }
 
-        class ValvulaLogica extends ComponenteFisico {
+        class ValvulaLogica extends ComponenteFisico
+        {
             constructor(id, tag, x, y) {
                 super(id, tag, x, y);
                 this.aberta = false; this.grauAbertura = 0; this.fluxoReal = 0;
@@ -593,7 +684,8 @@
             getFluxoSaidaFromTank(nivelNormalizado) { this.fluxoReal = this._calcFluxo(nivelNormalizado); return this.fluxoReal; }
         }
 
-        class TanqueLogico extends ComponenteFisico {
+        class TanqueLogico extends ComponenteFisico
+        {
             constructor(id, tag, x, y) {
                 super(id, tag, x, y);
                 this.capacidadeMaxima = 1000.0; this.volumeAtual = 0; this.lastQin = 0;
@@ -644,13 +736,21 @@
             getFluxoSaidaFromTank(nivelMontante) { return nivelMontante > 0 ? 10.0 * Math.sqrt(nivelMontante) : 0; }
         }
 
-        // ==========================================
+        // ===================================================
         // 2. ARQUITETURA DE REGISTRO DE COMPONENTES E FABRICA
-        // ==========================================
+        // ===================================================
         const colorPort = "#e67e22";
         const labelStyle = `font-family="Segoe UI, Arial" font-weight="bold" text-anchor="middle" fill="#2c3e50" paint-order="stroke" stroke="#fff" stroke-width="3"`;
         const makePort = (id, cx, cy, inOut) => `<circle class="port-node unconnected" data-type="${inOut}" data-comp-id="${id}" cx="${cx}" cy="${cy}" r="5" fill="#fff" stroke="${colorPort}" stroke-width="2"/>`;
 
+        /* O objeto REGISTRO_COMPONENTES é um registro centralizado que define os tipos de componentes disponíveis,
+        suas representações visuais em SVG, e as lógicas de configuração e atualização associadas a cada tipo.
+        Ele serve como uma espécie de "fábrica" para criar componentes no workspace,
+        permitindo que a adição de novos tipos de componentes seja feita de forma modular e organizada.
+        Cada entrada no registro inclui a classe lógica correspondente, o prefixo para as tags,
+        as dimensões e offsets para posicionamento, a função para gerar o SVG do componente,
+        a função de setup para configurar interações e assinaturas,
+        e uma função para gerar propriedades adicionais específicas do componente. */
         const REGISTRO_COMPONENTES = {
             'source': {
                 Classe: FonteLogica,
@@ -969,14 +1069,24 @@
             }
         };
 
-        function obterProximaTag(prefixo) {
+        /* A função obterProximaTag é responsável por gerar uma nova tag única para um componente do mesmo tipo,
+        garantindo que não haja duplicatas. Ela verifica as tags existentes dos componentes no ENGINE,
+        filtra aquelas que começam com o mesmo prefixo (indicando o mesmo tipo de componente),
+        extrai os números sequenciais, e retorna a próxima tag disponível no formato "Prefixo-XX". */
+        function obterProximaTag(prefixo)
+        {
             const numeros = ENGINE.componentes.map(c => c.tag).filter(t => t.startsWith(prefixo + '-')).map(t => parseInt(t.split('-')[1]));
             let i = 1; while (numeros.includes(i)) i++;
             return `${prefixo}-${String(i).padStart(2, '0')}`;
         }
 
-        // Função Global para gerenciar as animações das portas
-        function updatePortStates() {
+        // Função Global para gerenciar as animações das portas e indicar visualmente quais estão conectadas ou não.
+        // Ela percorre todas as portas no canvas e adiciona a classe 'unconnected' para aquelas que não estão conectadas a nenhuma linha.
+        // Em seguida, ela verifica as conexões ativas no ENGINE e remove a classe 'unconnected' das portas que estão conectadas,
+        // proporcionando um feedback visual claro sobre o estado de cada porta.
+        // Essa função deve ser chamada sempre que uma nova conexão for feita ou removida para manter a interface atualizada.
+        function updatePortStates()
+        {
             const allPorts = document.querySelectorAll('#workspace-canvas .port-node');
             allPorts.forEach(port => port.classList.add('unconnected'));
 
@@ -986,7 +1096,10 @@
             });
         }
 
-        class FabricaDeEquipamentos {
+        /* A classe FabricaDeEquipamentos é uma fábrica centralizada para criar os elementos visuais dos componentes.
+        Ela utiliza as especificações definidas no REGISTRO_COMPONENTES para construir o SVG correspondente*/
+        class FabricaDeEquipamentos
+        {
             static criar(tipo, x, y, isPalette = false) {
                 const spec = REGISTRO_COMPONENTES[tipo];
                 if (!spec) return console.error("Componente não registrado:", tipo);
@@ -1022,12 +1135,19 @@
             }
         }
 
-        // ==========================================
+        // ==============================================
         // 3. UI E INTEGRAÇÃO COM CHART.JS E PROPRIEDADES
-        // ==========================================
+        // ==============================================
+        /* Esta seção é responsável por configurar a interface do usuário,
+        incluindo o painel de propriedades e o gráfico de volume.*/
+
         const propContent = document.getElementById('prop-content');
         
         const ctx = document.getElementById('gaap-volume-chart').getContext('2d');
+        /* O gráfico de volume é configurado para exibir o volume do tanque ao longo do tempo. 
+        Ele é inicialmente configurado com um único ponto e atualizado dinamicamente quando um tanque é selecionado.
+        As opções do gráfico incluem tooltips personalizados para mostrar o tempo e o volume, 
+        e escalas adequadas para representar os dados de forma clara. */
         volumeChart = new Chart(ctx, {
             type: 'line',
             data: {
@@ -1051,7 +1171,8 @@
         let chartUpdateTimer = 0;
         let chartedTankId = null;
 
-        document.getElementById('workspace').addEventListener('mousedown', (e) => {
+        document.getElementById('workspace').addEventListener('mousedown', (e) =>
+        {
             if (e.target === workspaceContainer || e.target === workspaceCanvas || e.target.id === 'pipe-layer') {
                 ENGINE.selectComponent(null);
                 document.querySelectorAll('.placed-component').forEach(el => el.classList.remove('selected'));
@@ -1059,7 +1180,10 @@
             }
         });
 
-        ENGINE.subscribe((dados) => {
+        /* O ENGINE.subscribe é utilizado para escutar eventos relacionados à seleção de componentes e atualizações do painel.
+        Quando um componente é selecionado, o painel de propriedades é atualizado para mostrar as informações relevantes*/BombaLogica
+        ENGINE.subscribe((dados) =>
+        {
             if (dados.tipo === 'selecao') {
                 const comp = dados.componente;
                 
@@ -1153,16 +1277,26 @@
             }
         });
 
+        /* O ENGINE.selectComponent(null) é chamado para garantir que nenhum componente esteja selecionado inicialmente quando a aplicação é carregada.*/
         ENGINE.selectComponent(null);
 
-        // ==========================================
+        // ==========================
         // 4. MOTOR VETORIAL DE TUBOS
-        // ==========================================
+        // ==========================
+        /* Esta seção implementa a funcionalidade de arrastar e soltar para criar conexões entre os componentes usando tubos SVG.
+        Ela inclui funções para calcular as coordenadas das portas, desenhar curvas de Bézier para os tubos
+        e atualizar as conexões dinamicamente à medida que os componentes são movidos. */
+
         const pipeLayer = document.getElementById('pipe-layer');
         let tempPipe = null;
         let dragSourcePort = null;
 
-        function getPortCoords(portEl) {
+        /* A função getPortCoords calcula as coordenadas centrais de uma porta específicaem relação ao canvas de trabalho.
+        Ela leva em consideração a posição da porta na tela e a escala atual da câmera
+        para garantir que os tubos sejam desenhados corretamente entre os componentes,
+        mesmo quando a visualização é ampliada ou reduzida. */
+        function getPortCoords(portEl)
+        {
             const rect = portEl.getBoundingClientRect();
             const canvasRect = workspaceCanvas.getBoundingClientRect();
             return { 
@@ -1171,12 +1305,20 @@
             };
         }
 
-        function drawCurve(x1, y1, x2, y2) {
+        /* A função drawCurve gera um caminho SVG para uma curva de Bézier cúbica entre dois pontos.
+        Ela calcula um ponto de controle intermediário para criar uma curva suave
+        que se afasta dos pontos de conexão, melhorando a estética visual dos tubos entre os componentes. */
+        function drawCurve(x1, y1, x2, y2)
+        {
             const dx = Math.abs(x2 - x1) * 0.5;
             return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
         }
 
-        function getConnectionFlow(conn) {
+        /* A função getConnectionFlow é responsável por determinar o fluxo atual em uma conexão específica entre dois componentes.
+        Ela analisa os componentes de origem e destino da conexão, verifica seus tipos e estados atuais para calcular o fluxo real que está passando pela conexão.
+        Isso é crucial para atualizar as etiquetas de fluxo nos tubos e fornecer feedback visual preciso sobre o estado do sistema. */
+        function getConnectionFlow(conn)
+        {
             const sourceLogic = ENGINE.componentes.find(c => c.id === conn.sourceEl.dataset.compId);
             const targetLogic = ENGINE.componentes.find(c => c.id === conn.targetEl.dataset.compId);
             if (!sourceLogic || !ENGINE.isRunning) return null;
@@ -1190,7 +1332,14 @@
             return 0;
         }
 
-        function updateAllPipes() {
+        /* A função updateAllPipes percorre todas as conexões ativas no sistema
+        e atualiza a posição e o caminho de cada tubo SVG para refletir as posições atuais dos componentes conectados.
+        Ela também atualiza as etiquetas de fluxo associadas a cada conexão, 
+        garantindo que as informações exibidas sejam precisas e correspondam ao estado atual do sistema. 
+        Esta função é chamada sempre que um componente é movido ou quando o fluxo em uma conexão muda,
+        mantendo a interface visual consistente e informativa. */
+        function updateAllPipes()
+        {
             ENGINE.conexoes.forEach(conn => {
                 const p1 = getPortCoords(conn.sourceEl);
                 const p2 = getPortCoords(conn.targetEl);
@@ -1202,7 +1351,8 @@
             });
         }
 
-        workspaceContainer.addEventListener('mousedown', (e) => {
+        workspaceContainer.addEventListener('mousedown', (e) =>
+        {
             if (e.target.classList.contains('port-node') && e.target.dataset.type === 'out') {
                 dragSourcePort = e.target;
                 const p1 = getPortCoords(dragSourcePort);
@@ -1215,7 +1365,8 @@
             }
         });
 
-        workspaceContainer.addEventListener('mousemove', (e) => {
+        workspaceContainer.addEventListener('mousemove', (e) =>
+        {
             if (tempPipe && dragSourcePort) {
                 const p1 = getPortCoords(dragSourcePort);
                 const canvasRect = workspaceCanvas.getBoundingClientRect();
@@ -1225,7 +1376,8 @@
             }
         });
 
-        window.addEventListener('mouseup', (e) => {
+        window.addEventListener('mouseup', (e) =>
+        {
             if (tempPipe) {
                 let dropTarget = e.target;
                 if (dropTarget.classList.contains('port-node') && dropTarget.dataset.type === 'in') {
@@ -1270,11 +1422,17 @@
             }
         });
 
-        // ==========================================
+        // ============================================
         // 5. DRAG AND DROP E MOVIMENTAÇÃO (ATUALIZADO)
-        // ==========================================
-        
-        document.querySelectorAll('.palette-item').forEach(item => {
+        // ============================================
+        /* Esta seção implementa a funcionalidade de arrastar e soltar para adicionar novos componentes ao workspace,
+        bem como a capacidade de mover os componentes já colocados. Ela inclui a configuração dos eventos de drag and drop para os itens da paleta,
+        a lógica para calcular as posições de drop com base na escala da câmera e o grid snapping para facilitar o alinhamento dos componentes. 
+        Além disso, a função makeDraggable é responsável por tornar os componentes movíveis dentro do workspace, 
+        permitindo que os usuários reorganizem seus layouts conforme necessário. */
+
+        document.querySelectorAll('.palette-item').forEach(item =>
+        {
             const t = item.getAttribute('data-type');
             
             item.addEventListener('dragstart', (e) => {
@@ -1287,7 +1445,8 @@
         });
 
         workspaceContainer.addEventListener('dragover', e => e.preventDefault());
-        workspaceContainer.addEventListener('drop', e => {
+        workspaceContainer.addEventListener('drop', e =>
+        {
             e.preventDefault();
             const t = e.dataTransfer.getData('text/plain');
             if (!t) return;
@@ -1310,7 +1469,13 @@
             updatePortStates();
         });
 
-        function makeDraggable(element) {
+        /* A função makeDraggable é responsável por adicionar a funcionalidade de arrastar e soltar a um elemento específico.
+        Ela gerencia o estado de arrasto, calcula as novas posições com base no movimento do mouse
+        e aplica o grid snapping para garantir que os componentes se alinhem corretamente no workspace.
+        Além disso, quando o arrasto é concluído, a função atualiza as coordenadas lógicas do componente para refletir sua nova posição,
+        garantindo que a simulação funcione corretamente com os componentes movidos. */
+        function makeDraggable(element)
+        {
             let isDragging = false, startX, startY, initX, initY;
             element.addEventListener('mousedown', e => {
                 if (e.target.classList.contains('port-node')) return;
@@ -1331,13 +1496,21 @@
             });
         }
 
+        /* Chamada para atualizar o estado das portas*/
         updatePortStates();
 
         // ==========================================
         // 6. CONTROLES GERAIS
         // ==========================================
+        /* Esta seção implementa os controles gerais para iniciar, pausar e limpar a simulação.
+        O botão de iniciar/pausar alterna o estado do motor de simulação e atualiza seu texto e estilo para refletir a ação atual.
+        O botão de limpar remove todos os componentes do workspace e reseta o estado do motor.
+        Além disso, um listener de teclado é adicionado para permitir a exclusão rápida de componentes selecionados usando as teclas Delete ou Backspace,
+        melhorando a usabilidade da interface. */
+        
         const btnRun = document.getElementById('btn-run');
-        btnRun.addEventListener('click', () => {
+        btnRun.addEventListener('click', () =>
+        {
             if (ENGINE.isRunning) {
                 ENGINE.stop();
                 btnRun.innerHTML = "▶ Iniciar Simulação Física";
@@ -1351,12 +1524,14 @@
             }
         });
 
-        document.getElementById('btn-clear').addEventListener('click', () => {
+        document.getElementById('btn-clear').addEventListener('click', () =>
+        {
             document.querySelectorAll('#workspace-canvas .placed-component').forEach(item => item.remove());
             ENGINE.clear();
         });
 
-        document.addEventListener('keydown', (e) => {
+        document.addEventListener('keydown', (e) =>
+        {
             if (e.target.tagName.toLowerCase() === 'input') return;
             if (e.key === 'Delete' || e.key === 'Backspace') {
                 const selectedCompDiv = document.querySelector('.placed-component.selected');
