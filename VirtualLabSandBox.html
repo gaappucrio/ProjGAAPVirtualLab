@@ -512,9 +512,16 @@
         }
 
 
-        // ==========================================
+        // ==================
         // 1. LÓGICA E FÍSICA
-        // ==========================================
+        // ==================
+        /* O código a seguir define as classes e a lógica para a simulação física dos componentes,
+        incluindo tanques, bombas, válvulas, fontes e drenos.
+        Ele também implementa o padrão Observer para permitir que os componentes notifiquem mudanças de estado
+        e atualizações para a interface do usuário. */
+        
+        /* A classe Observable é uma implementação simples do padrão de design Observer,
+        permitindo que os componentes do sistema de simulação notifiquem os ouvintes sobre mudanças de estado ou eventos. */
         class Observable
         {
             constructor() { this.listeners = []; }
@@ -522,9 +529,15 @@
             notify(data) { this.listeners.forEach(fn => fn(data)); }
         }
 
+        /* A classe Fluido representa um fluido com um nome e uma densidade,
+        que pode ser usado para simular o comportamento de líquidos no sistema. */
         class Fluido
         { constructor(nome, densidade) { this.nome = nome; this.densidade = densidade; } }
 
+        /* A classe SistemaSimulacao é o núcleo da simulação, gerenciando os componentes,
+        conexões e a lógica de atualização do sistema.
+        Ela é responsável por iniciar e parar a simulação, atualizar o estado dos componentes a cada tick,
+        e notificar a interface do usuário sobre mudanças de estado e atualizações. */
         class SistemaSimulacao extends Observable
         {
             constructor()
@@ -615,8 +628,13 @@
             }
         }
         
+        /* Instância global do sistema de simulação, que será usada para gerenciar os componentes e a lógica da simulação. */
         const ENGINE = new SistemaSimulacao();
 
+        /* A classe ComponenteFisico é a classe base para todos os componentes físicos do sistema,
+        como tanques, bombas, válvulas, fontes e drenos.
+        Ela estende a classe Observable para permitir que os componentes notifiquem mudanças de estado
+        e atualizações para a interface do usuário. */
         class ComponenteFisico extends Observable
         {
             constructor(id, tag, x, y) { super(); this.id = id; this.tag = tag; this.x = x; this.y = y; this.inputs = []; this.outputs = []; }
@@ -628,12 +646,19 @@
             getFluxoSaida() { return 0; }
         }
 
+        /* As classes FonteLogica, DrenoLogico, BombaLogica, ValvulaLogica e TanqueLogico estendem ComponenteFisico
+        e implementam a lógica específica para cada tipo de componente,
+        incluindo como calcular o fluxo de saída com base no estado atual do componente e suas conexões. */
         class FonteLogica extends ComponenteFisico
         { getFluxoSaida() { return 99999; } }
 
+        /* O DrenoLogico simula um dreno onde o fluxo de saída depende do nível do fluido,
+        seguindo uma relação de raiz quadrada para representar a perda de carga. */
         class DrenoLogico extends ComponenteFisico
         { getFluxoSaidaFromTank(nivelNormalizado) { return nivelNormalizado > 0 ? 10.0 * Math.sqrt(nivelNormalizado) : 0; } }
 
+        /* A BombaLogica simula uma bomba centrífuga onde o fluxo de saída depende do grau de acionamento
+        e da disponibilidade de fluido na entrada. */
         class BombaLogica extends ComponenteFisico
         {
             constructor(id, tag, x, y) { super(id, tag, x, y); this.isOn = false; this.vazaoNominal = 45.0; this.grauAcionamento = 0; this.fluxoReal = 0; }
@@ -656,6 +681,8 @@
             getFluxoSaidaFromTank(nivelNormalizado) { return this.getFluxoSaida(); }
         }
 
+        /* A ValvulaLogica simula uma válvula de controle onde o fluxo de saída depende do grau de abertura
+        e da pressão disponível, seguindo uma relação de raiz quadrada para representar a perda de carga. */
         class ValvulaLogica extends ComponenteFisico
         {
             constructor(id, tag, x, y) {
@@ -684,6 +711,10 @@
             getFluxoSaidaFromTank(nivelNormalizado) { this.fluxoReal = this._calcFluxo(nivelNormalizado); return this.fluxoReal; }
         }
 
+        /* A classe TanqueLogico simula um tanque de fluido onde o volume atual é atualizado com base no fluxo de entrada e saída,
+        e pode ter um controlador PID simples para manter um setpoint de nível.
+        O tanque calcula o fluxo de saída com base no nível do fluido, seguindo uma relação de raiz quadrada 
+        para representar a perda de carga. */
         class TanqueLogico extends ComponenteFisico
         {
             constructor(id, tag, x, y) {
@@ -739,8 +770,20 @@
         // ===================================================
         // 2. ARQUITETURA DE REGISTRO DE COMPONENTES E FABRICA
         // ===================================================
+        /* O código a seguir define a arquitetura para o registro de componentes e a fábrica de criação de componentes,
+        permitindo que novos tipos de componentes sejam adicionados de forma modular e organizada.*/
+
+        /* A constante colorPort define a cor dos portos de conexão dos componentes,
+        garantindo uma identidade visual consistente para os pontos de entrada e saída. */
         const colorPort = "#e67e22";
+
+        /* A constante labelStyle define o estilo SVG para os rótulos dos componentes,
+        utilizando uma fonte legível e um efeito de contorno para garantir boa visibilidade sobre os componentes. */
         const labelStyle = `font-family="Segoe UI, Arial" font-weight="bold" text-anchor="middle" fill="#2c3e50" paint-order="stroke" stroke="#fff" stroke-width="3"`;
+        
+        /* A função makePort é uma função auxiliar que gera o SVG para um porto de conexão (entrada ou saída) de um componente,
+        recebendo o ID do componente, as coordenadas do porto e o tipo (entrada ou saída)
+        para configurar os atributos de dados corretamente. */
         const makePort = (id, cx, cy, inOut) => `<circle class="port-node unconnected" data-type="${inOut}" data-comp-id="${id}" cx="${cx}" cy="${cy}" r="5" fill="#fff" stroke="${colorPort}" stroke-width="2"/>`;
 
         /* O objeto REGISTRO_COMPONENTES é um registro centralizado que define os tipos de componentes disponíveis,
@@ -1507,7 +1550,7 @@
         O botão de limpar remove todos os componentes do workspace e reseta o estado do motor.
         Além disso, um listener de teclado é adicionado para permitir a exclusão rápida de componentes selecionados usando as teclas Delete ou Backspace,
         melhorando a usabilidade da interface. */
-        
+
         const btnRun = document.getElementById('btn-run');
         btnRun.addEventListener('click', () =>
         {
