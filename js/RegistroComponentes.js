@@ -3,13 +3,16 @@
 // Ficheiro: js/RegistroComponentes.js
 // ===============================================
 
+import { FonteLogica, DrenoLogico, BombaLogica, ValvulaLogica, TanqueLogico } from './MotorFisico.js'
+import { colorPort, labelStyle } from './Config.js'
+
 /* A constante colorPort define a cor dos portos de conexão dos componentes,
 garantindo uma identidade visual consistente para os pontos de entrada e saída. */
-const colorPort = "#e67e22";
+// const colorPort = "#e67e22";  // REMOVIDO - importado de Config.js
 
 /* A constante labelStyle define o estilo SVG para os rótulos dos componentes,
 utilizando uma fonte legível e um efeito de contorno para garantir boa visibilidade sobre os componentes. */
-const labelStyle = `font-family="Segoe UI, Arial" font-weight="bold" text-anchor="middle" fill="#2c3e50" paint-order="stroke" stroke="#fff" stroke-width="3"`;
+// const labelStyle = `font-family="Segoe UI, Arial" font-weight="bold" text-anchor="middle" fill="#2c3e50" paint-order="stroke" stroke="#fff" stroke-width="3"`;  // REMOVIDO - importado de Config.js
 
 /* A função makePort é uma função auxiliar que gera o SVG para um porto de conexão (entrada ou saída) de um componente,
 recebendo o ID do componente, as coordenadas do porto e o tipo (entrada ou saída)
@@ -24,7 +27,7 @@ Cada entrada no registro inclui a classe lógica correspondente, o prefixo para 
 as dimensões e offsets para posicionamento, a função para gerar o SVG do componente,
 a função de setup para configurar interações e assinaturas,
 e uma função para gerar propriedades adicionais específicas do componente. */
-const REGISTRO_COMPONENTES = {
+export const REGISTRO_COMPONENTES = {
     'source': {
         Classe: FonteLogica,
         prefixoTag: 'Entrada',

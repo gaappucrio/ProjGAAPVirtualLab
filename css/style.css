@@ -984,6 +984,14 @@
       /* Define o estilo da junção das linhas para os rótulos de fluxo nos canos, garantindo que eles sejam legíveis e proporcionem um visual moderno e profissional para os rótulos de fluxo, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os canos no workspace */
   }
 
+  marker path
+
+  /* ESTILO PARA OS MARKERS (SETAS) NOS CANOS - TRANSIÇÃO SUAVE */
+      {
+      transition: fill 0.5s ease;
+      /* Adiciona uma transição suave para a mudança de cor do marker (seta), proporcionando um visual mais dinâmico e agradável quando os usuários interagem com os canos */
+  }
+
   @keyframes flow
 
   /* ANIMAÇÃO DE FLUXO PARA CANOS  */

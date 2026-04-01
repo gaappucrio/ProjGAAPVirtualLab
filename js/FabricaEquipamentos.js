@@ -3,11 +3,14 @@
 // Ficheiro: js/FabricaEquipamentos.js
 // ===========================================
 
+import { ENGINE } from './MotorFisico.js'
+import { REGISTRO_COMPONENTES } from './RegistroComponentes.js'
+
 /* A função obterProximaTag é responsável por gerar uma nova tag única para um componente do mesmo tipo,
 garantindo que não haja duplicatas. Ela verifica as tags existentes dos componentes no ENGINE,
 filtra aquelas que começam com o mesmo prefixo (indicando o mesmo tipo de componente),
 extrai os números sequenciais, e retorna a próxima tag disponível no formato "Prefixo-XX". */
-function obterProximaTag(prefixo) {
+export function obterProximaTag(prefixo) {
     const numeros = ENGINE.componentes.map(c => c.tag).filter(t => t.startsWith(prefixo + '-')).map(t => parseInt(t.split('-')[1]));
     let i = 1; while (numeros.includes(i)) i++;
     return `${prefixo}-${String(i).padStart(2, '0')}`;
@@ -18,7 +21,7 @@ function obterProximaTag(prefixo) {
 // Em seguida, ela verifica as conexões ativas no ENGINE e remove a classe 'unconnected' das portas que estão conectadas,
 // proporcionando um feedback visual claro sobre o estado de cada porta.
 // Essa função deve ser chamada sempre que uma nova conexão for feita ou removida para manter a interface atualizada.
-function updatePortStates() {
+export function updatePortStates() {
     const allPorts = document.querySelectorAll('#workspace-canvas .port-node');
     allPorts.forEach(port => port.classList.add('unconnected'));
 
@@ -30,7 +33,7 @@ function updatePortStates() {
 
 /* A classe FabricaDeEquipamentos é uma fábrica centralizada para criar os elementos visuais dos componentes.
 Ela utiliza as especificações definidas no REGISTRO_COMPONENTES para construir o SVG correspondente*/
-class FabricaDeEquipamentos {
+export class FabricaDeEquipamentos {
     /* O método criar é responsável por criar o elemento visual de um componente com base no tipo,
     posição e se é para a paleta.
     Ele consulta o REGISTRO_COMPONENTES para obter as especificações do componente,

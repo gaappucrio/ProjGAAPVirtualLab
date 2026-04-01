@@ -3,9 +3,21 @@
 // Ficheiro: js/MotorFisico.js
 // ==================================
 
+/* Callbacks para resolver dependências circulares */
+let portStateUpdater = null;
+let connectionFlowGetter = null;
+
+export function setPortStateUpdater(fn) {
+    portStateUpdater = fn;
+}
+
+export function setConnectionFlowGetter(fn) {
+    connectionFlowGetter = fn;
+}
+
 /* A classe Observable é uma implementação simples do padrão de design Observer,
 permitindo que os componentes do sistema de simulação notifiquem os ouvintes sobre mudanças de estado ou eventos. */
-class Observable {
+export class Observable {
     /* O construtor inicializa uma lista de ouvintes vazia, que serão notificados quando um evento ocorrer. */
     constructor() { this.listeners = []; }
 
@@ -20,7 +32,7 @@ class Observable {
 
 /* A classe Fluido representa um fluido com um nome e uma densidade,
 que pode ser usado para simular o comportamento de líquidos no sistema. */
-class Fluido {   /* O construtor da classe Fluido recebe um nome e uma densidade, que são armazenados como propriedades do objeto. */
+export class Fluido {   /* O construtor da classe Fluido recebe um nome e uma densidade, que são armazenados como propriedades do objeto. */
     constructor(nome, densidade) { this.nome = nome; this.densidade = densidade; }
 }
 
@@ -28,7 +40,7 @@ class Fluido {   /* O construtor da classe Fluido recebe um nome e uma densidade
 conexões e a lógica de atualização do sistema.
 Ela é responsável por iniciar e parar a simulação, atualizar o estado dos componentes a cada tick,
 e notificar a interface do usuário sobre mudanças de estado e atualizações. */
-class SistemaSimulacao extends Observable {
+export class SistemaSimulacao extends Observable {
     /* O construtor da classe SistemaSimulacao inicializa as propriedades do sistema, incluindo a velocidade da simulação,
     o fluido operante, as listas de componentes e conexões, e o estado de execução da simulação.
     Ele também define variáveis para controle de tempo e seleção de componentes. */
@@ -58,7 +70,7 @@ class SistemaSimulacao extends Observable {
         this.isRunning = false;
         this.elapsedTime = 0;
         this.notify({ tipo: 'selecao', componente: null });
-        updatePortStates();
+        if (portStateUpdater) portStateUpdater();
     }
 
     /* O método start inicia a simulação, definindo o estado de execução como verdadeiro,
@@ -116,7 +128,7 @@ class SistemaSimulacao extends Observable {
             }
 
             if (conn.label) {
-                const flowVal = getConnectionFlow(conn);
+                const flowVal = connectionFlowGetter ? connectionFlowGetter(conn) : 0;
                 if (flowVal === null || flowVal === undefined) {
                     conn.label.textContent = '';
                 } else if (flowVal === Infinity) {
@@ -143,21 +155,34 @@ class SistemaSimulacao extends Observable {
 }
 
 /* Instância global do sistema de simulação, que será usada para gerenciar os componentes e a lógica da simulação. */
-const ENGINE = new SistemaSimulacao();
+export const ENGINE = new SistemaSimulacao();
 
 /* A classe ComponenteFisico é a classe base para todos os componentes físicos do sistema,
 como tanques, bombas, válvulas, fontes e drenos.
 Ela estende a classe Observable para permitir que os componentes notifiquem mudanças de estado
 e atualizações para a interface do usuário.*/
-class ComponenteFisico extends Observable {
+export class ComponenteFisico extends Observable {
     /* O construtor da classe ComponenteFisico recebe um identificador único, uma tag para exibição, e as coordenadas x e y para posicionamento no workspace.
     Ele inicializa as listas de entradas e saídas, que serão usadas para gerenciar as conexões com outros componentes. */
-    constructor(id, tag, x, y) { super(); this.id = id; this.tag = tag; this.x = x; this.y = y; this.inputs = []; this.outputs = []; }
+    constructor(id, tag, x, y) {
+        super();
+        this.id = id;
+        this.tag = tag;
+        this.x = x;
+        this.y = y;
+        this.inputs = [];
+        this.outputs = [];
+    }
     /* O método conectarSaida é usado para conectar a saída deste componente a outro componente de destino.
     Ele verifica se a conexão já existe para evitar duplicatas
     e se não existir, adiciona o componente de destino à lista de saídas deste componente
     e adiciona este componente à lista de entradas do componente de destino. */
-    conectarSaida(destino) { if (!this.outputs.includes(destino)) { this.outputs.push(destino); destino.inputs.push(this); } }
+    conectarSaida(destino) { 
+        if (!this.outputs.includes(destino)) { 
+            this.outputs.push(destino); 
+            destino.inputs.push(this); 
+        } 
+    }
     /* O método desconectarSaida é usado para desconectar a saída deste componente de um componente de destino.
     Ele remove o componente de destino da lista de saídas deste componente
     e remove este componente da lista de entradas do componente de destino. */
@@ -177,26 +202,34 @@ class ComponenteFisico extends Observable {
 e implementam a lógica específica para cada tipo de componente,
 incluindo como calcular o fluxo de saída com base no estado atual do componente e suas conexões. */
 
-class FonteLogica extends ComponenteFisico {   /* A classe FonteLogica simula uma fonte de fluido onde o fluxo de saída é constante e infinito,
+export class FonteLogica extends ComponenteFisico {   /* A classe FonteLogica simula uma fonte de fluido onde o fluxo de saída é constante e infinito,
             representando uma entrada ilimitada de fluido no sistema. */
     getFluxoSaida() { return 99999; }
 }
 
 /* O DrenoLogico simula um dreno onde o fluxo de saída depende do nível do fluido,
 seguindo uma relação de raiz quadrada para representar a perda de carga. */
-class DrenoLogico extends ComponenteFisico {   /* O método getFluxoSaida do DrenoLogico calcula o fluxo de saída com base no nível normalizado do fluido,
+export class DrenoLogico extends ComponenteFisico {   /* O método getFluxoSaida do DrenoLogico calcula o fluxo de saída com base no nível normalizado do fluido,
             usando uma relação de raiz quadrada para representar a perda de carga,
             onde o fluxo é proporcional à raiz quadrada do nível do fluido,
             multiplicado por um fator de 10 para ajustar a escala do fluxo. */
-    getFluxoSaidaFromTank(nivelNormalizado) { return nivelNormalizado > 0 ? 10.0 * Math.sqrt(nivelNormalizado) : 0; }
+    getFluxoSaidaFromTank(nivelNormalizado) { 
+        return nivelNormalizado > 0 ? 10.0 * Math.sqrt(nivelNormalizado) : 0; 
+    }
 }
 
 /* A BombaLogica simula uma bomba centrífuga onde o fluxo de saída depende do grau de acionamento
 e da disponibilidade de fluido na entrada. */
-class BombaLogica extends ComponenteFisico {
+export class BombaLogica extends ComponenteFisico {
     /* O construtor da classe BombaLogica inicializa o estado da bomba como desligada, define a vazão nominal da bomba,
     e inicializa o grau de acionamento e o fluxo real como 0. */
-    constructor(id, tag, x, y) { super(id, tag, x, y); this.isOn = false; this.vazaoNominal = 45.0; this.grauAcionamento = 0; this.fluxoReal = 0; }
+    constructor(id, tag, x, y) { 
+        super(id, tag, x, y); 
+        this.isOn = false; 
+        this.vazaoNominal = 45.0; 
+        this.grauAcionamento = 0; 
+        this.fluxoReal = 0; 
+    }
 
     /* O método toggle alterna o estado da bomba entre ligada e desligada,
     ajustando o grau de acionamento para 100% quando ligada e 0% quando desligada. */
@@ -239,7 +272,7 @@ class BombaLogica extends ComponenteFisico {
 
 /* A ValvulaLogica simula uma válvula de controle onde o fluxo de saída depende do grau de abertura
 e da pressão disponível, seguindo uma relação de raiz quadrada para representar a perda de carga. */
-class ValvulaLogica extends ComponenteFisico {
+export class ValvulaLogica extends ComponenteFisico {
     /* O construtor da classe ValvulaLogica inicializa o estado da válvula como fechada,
     define o grau de abertura e o fluxo real como 0,
     e define o coeficiente de vazão da válvula (cv) e a perda de carga (deltaP)
@@ -294,9 +327,9 @@ class ValvulaLogica extends ComponenteFisico {
 
 /* A classe TanqueLogico simula um tanque de fluido onde o volume atual é atualizado com base no fluxo de entrada e saída,
 e pode ter um controlador PID simples para manter um setpoint de nível.
-O tanque calcula o fluxo de saída com base no nível do fluido, seguindo uma relação de raiz quadrada 
+O tanque calcula o fluxo de saída com base no nível do fluido, seguindo uma relação de raiz quadrada
 para representar a perda de carga. */
-class TanqueLogico extends ComponenteFisico {
+export class TanqueLogico extends ComponenteFisico {
     /* O construtor da classe TanqueLogico inicializa a capacidade máxima do tanque, o volume atual,
     o último fluxo de entrada, e as variáveis para o controlador PID, incluindo o estado do setpoint,
     o valor do setpoint, os ganhos proporcional e integral, e as variáveis para o controle integral e o último erro. */
