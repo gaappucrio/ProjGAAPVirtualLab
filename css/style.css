@@ -1,188 +1,1130 @@
-/* ==========================================
-   ESTILO GLOBAL E IDENTIDADE GAAP
-========================================== */
-body { 
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-    background: #fdfdfd; 
-    margin: 0; 
-    padding: 20px; 
-    color: #2c3e50; 
-    display: flex; 
-    flex-direction: column; 
-    height: 100vh; 
-    box-sizing: border-box; 
-    user-select: none; /* Evita que o texto seja selecionado acidentalmente ao arrastar peças */
-}
+  /* ============================
+   VIEW: Estilos Globais e Layout
+   Ficheiro: css/style.css
+   ============================== */
 
-.gaap-header { 
-    text-align: center; 
-    margin-bottom: 20px; 
-    border-bottom: 1px solid #eee; 
-    padding-bottom: 15px; 
-}
+  body
 
-.gaap-header h2 { 
-    margin: 0; 
-    font-size: 26px; 
-}
+  /* FONTE, CORES, LAYOUT FLEXÍVEL, GRID DE FUNDO, SELEÇÃO E OVERFLOW */
+      {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      /*Fonte principal*/
+      background: #fdfdfd;
+      /*Cor de fundo clara para um visual limpo e moderno*/
+      margin: 0;
+      /*Remover margens padrão do navegador para que o layout ocupe toda a tela*/
+      padding: 20px;
+      /*Espaçamento interno para evitar que o conteúdo encoste nas bordas da janela*/
+      color: #2c3e50;
+      /*Cor do texto principal para boa legibilidade*/
+      display: flex;
+      /*Layout flexível para organizar o header e o container principal*/
+      flex-direction: column;
+      /*Organizar os elementos em coluna, com o header no topo e o container abaixo*/
+      height: 100vh;
+      /*Garantir que o layout ocupe toda a altura da janela para um visual mais imersivo*/
+      box-sizing: border-box;
+      /*Incluir padding e border no cálculo total de largura e altura dos elementos para evitar estouros de layout*/
+      user-select: none;
+      /* Evitar seleção de texto acidental durante a interação com os componentes da sandbox */
+      overflow: hidden;
+      /* Evitar barras de rolagem indesejadas, garantindo que o layout se mantenha limpo e organizado mesmo em telas menores */
+  }
 
-.gaap-header p { 
-    color: #95a5a6; 
-    font-size: 15px; 
-    margin-top: 5px;
-}
+  .gaap-header
 
-/* ==========================================
-   LAYOUT PRINCIPAL (PALETA + WORKSPACE)
-========================================== */
-.sandbox-container { 
-    display: flex; 
-    flex: 1; 
-    gap: 20px; 
-    border: 1px solid #e1e8ed; 
-    border-radius: 12px; 
-    overflow: hidden; 
-    background: #fff; 
-    box-shadow: 0 10px 20px rgba(0,0,0,0.06); 
-}
+  /* CABEÇALHO COM TÍTULO E INSTRUÇÕES  */
+      {
+      text-align: center;
+      /* Centralizar o texto do cabeçalho para um visual mais equilibrado e profissional */
+      margin-bottom: 20px;
+      /* Espaçamento abaixo do cabeçalho para separar visualmente do conteúdo principal */
+      border-bottom: 1px solid #eee;
+      /* Linha sutil para separar o cabeçalho do restante do conteúdo, adicionando um toque de elegância ao design */
+      padding-bottom: 15px;
+      /* Espaçamento interno abaixo do texto do cabeçalho para evitar que a linha de separação fique muito próxima, melhorando a estética geral */
+      flex-shrink: 0;
+      /* Impedir que o cabeçalho encolha quando a janela for redimensionada, garantindo que ele mantenha seu tamanho e proporção adequados em diferentes tamanhos de tela */
+  }
 
-/* Paleta Lateral */
-.palette-panel { 
-    width: 250px; 
-    background: #f4f7f6; 
-    border-right: 1px solid #e1e8ed; 
-    padding: 20px; 
-    display: flex; 
-    flex-direction: column; 
-    gap: 15px; 
-    overflow-y: auto;
-}
+  .gaap-header h2
 
-.palette-panel h3 {
-    margin-top: 0; 
-    font-size: 16px; 
-    border-bottom: 1px solid #ddd; 
-    padding-bottom: 5px;
-    color: #34495e;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
+  /* TÍTULO PRINCIPAL  */
+      {
+      margin: 0;
+      /* Remover margens para que o título fique alinhado com as instruções abaixo, criando um visual mais coeso e organizado */
+      font-size: 26px;
+      /* Tamanho de fonte maior para destacar o título principal, tornando-o facilmente legível e atraente para os usuários */
+  }
 
-/* Itens da Paleta */
-.palette-item { 
-    background: #fff; 
-    border: 2px dashed #95a5a6; 
-    border-radius: 8px; 
-    padding: 15px; 
-    text-align: center; 
-    font-weight: bold; 
-    cursor: grab; 
-    display: flex; 
-    flex-direction: column; 
-    align-items: center; 
-    gap: 10px; 
-    transition: 0.2s; 
-    position: relative; 
-    overflow: hidden;
-}
+  .gaap-header p
 
-.palette-item:hover { 
-    background: #eaf2f8; 
-    border-color: #3498db; 
-    color: #3498db; 
-}
+  /* INSTRUÇÕES  */
+      {
+      color: #95a5a6;
+      /* Cor cinza suave para as instruções, garantindo que elas sejam legíveis sem competir visualmente com o título principal */
+      font-size: 15px;
+      /* Tamanho de fonte adequado para as instruções, tornando-as fáceis de ler sem sobrecarregar o usuário com um texto muito grande */
+      margin-top: 5px;
+      /* Espaçamento acima das instruções para separar visualmente do título, melhorando a legibilidade e a estética geral do cabeçalho */
+  }
 
-.palette-item:active {
-    cursor: grabbing;
-}
+  /* CONTAINER PRINCIPAL E PAINÉIS LATERAIS */
+  .sandbox-container {
+      display: flex;
+      /* Layout flexível para organizar os painéis laterais e o workspace principal em uma linha, permitindo que eles se ajustem dinamicamente ao tamanho da janela */
+      flex: 1;
+      /* Permitir que o container principal ocupe todo o espaço disponível abaixo do cabeçalho, garantindo que o layout seja responsivo e se adapte a diferentes tamanhos de tela */
+      position: relative;
+      /* Permitir posicionamento absoluto dos painéis laterais e do workspace dentro do container, facilitando a implementação de funcionalidades como colapsar/expandir os painéis e maximizar o gráfico de monitoramento */
+      border: 1px solid #e1e8ed;
+      /* Borda sutil para definir os limites do container principal, adicionando um toque de elegância ao design e ajudando a separar visualmente o conteúdo do restante da página */
+      border-radius: 12px;
+      /* Bordas arredondadas para um visual mais moderno e amigável, suavizando a aparência do container principal e tornando-o mais atraente para os usuários */
+      overflow: hidden;
+      /* Garantir que o conteúdo dentro do container principal não ultrapasse seus limites, mantendo o layout organizado e evitando barras de rolagem indesejadas */
+      background: #fff;
+      /* Fundo branco para o container principal, criando um contraste limpo e profissional com o cabeçalho e os painéis laterais, além de melhorar a legibilidade do conteúdo dentro do workspace */
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.06);
+      /* Sombra suave para dar profundidade ao container principal, tornando-o visualmente mais interessante e destacando-o do plano de fundo da página */
+  }
 
-/* ==========================================
-   ÁREA DE TRABALHO (WORKSPACE E GRID)
-========================================== */
-.workspace-panel { 
-    flex: 1; 
-    position: relative; 
-    background-color: #fdfdfd; 
-    /* O fundo quadriculado paramétrico (40x40) */
-    background-image: 
-        linear-gradient(to right, #e1e8ed 1px, transparent 1px), 
-        linear-gradient(to bottom, #e1e8ed 1px, transparent 1px); 
-    background-size: 40px 40px; 
-    overflow: hidden; 
-}
+  .side-panel
 
-/* Barra de Ferramentas Superior */
-.top-toolbar { 
-    position: absolute; 
-    top: 10px; 
-    left: 10px; 
-    right: 10px; 
-    z-index: 100; 
-    display: flex; 
-    justify-content: space-between; 
-    background: rgba(255,255,255,0.95); 
-    padding: 10px; 
-    border-radius: 8px; 
-    border: 1px solid #eee; 
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
-}
+  /* PAINÉIS LATERAIS DE PALETA E PROPRIEDADES  */
+      {
+      width: 280px;
+      /* Largura padrão para os painéis laterais, proporcionando espaço suficiente para exibir a paleta de componentes e as propriedades dos componentes selecionados sem ocupar muito espaço do workspace principal */
+      background: #f4f7f6;
+      /* Cor de fundo suave para os painéis laterais, criando um contraste sutil com o workspace principal e ajudando a destacar o conteúdo dentro dos painéis, além de contribuir para um visual mais limpo e moderno */
+      display: flex;
+      /* Layout flexível para organizar o conteúdo interno dos painéis laterais, permitindo que os elementos sejam dispostos de forma vertical e se ajustem dinamicamente ao tamanho do painel */
+      flex-direction: column;
+      /* Organizar os elementos dentro dos painéis laterais em uma coluna, facilitando a leitura e a navegação pelo conteúdo, além de criar um visual mais estruturado e profissional */
+      z-index: 10;
+      /* Garantir que os painéis laterais fiquem acima do workspace principal, permitindo que eles sejam facilmente acessíveis e visíveis para os usuários, mesmo quando o workspace estiver cheio de componentes e conexões */
+      transition: transform 0.3s ease, width 0.3s ease;
+      /* Transição suave para animações de colapsar/expandir os painéis laterais */
+      flex-shrink: 0;
+      /* Impedir que os painéis laterais encolham quando a janela for redimensionada, garantindo que eles mantenham sua largura e proporção adequados em diferentes tamanhos de tela, especialmente em telas maiores onde o workspace principal pode se expandir significativamente */
+  }
 
-.gaap-btn { 
-    padding: 8px 15px; 
-    border: 1px solid #bdc3c7; 
-    border-radius: 6px; 
-    font-weight: bold; 
-    cursor: pointer; 
-    background: #fff; 
-    color: #2c3e50; 
-    transition: 0.2s;
-}
+  #properties.side-panel
 
-.gaap-btn:hover { 
-    background: #ecf0f1; 
-}
+  /* PAINEL DE PROPRIEDADES  */
+      {
+      width: 340px;
+      /* Largura um pouco maior para o painel de propriedades, proporcionando espaço suficiente para exibir as informações detalhadas dos componentes selecionados, incluindo inputs editáveis, gráficos de monitoramento e outras funcionalidades relacionadas às propriedades dos componentes, sem comprometer a usabilidade do workspace principal */
+  }
 
-.gaap-btn.active { 
-    background: #3498db; 
-    color: white; 
-    border-color: #2980b9; 
-}
+  .side-panel-content
 
-/* ==========================================
-   COMPONENTES INSTANCIADOS NA TELA
-========================================== */
-.placed-component { 
-    position: absolute; 
-    cursor: move; 
-    box-sizing: border-box;
-    /* Para debug da caixa lógica, descomente abaixo: */
-    /* border: 1px dashed rgba(0,0,255,0.3); background: rgba(0,0,255,0.05); */
-}
+  /* CONTEÚDO INTERNO DOS PAINÉIS  */
+      {
+      padding: 20px;
+      /* Espaçamento interno para garantir que o conteúdo dentro dos painéis laterais não fique encostado nas bordas, melhorando a legibilidade e a estética geral do design, além de criar um ambiente mais confortável para os usuários interagirem com a paleta de componentes e as propriedades dos componentes selecionados */
+      width: 100%;
+      /* Garantir que o conteúdo interno dos painéis laterais ocupe toda a largura disponível, permitindo que os elementos sejam exibidos de forma clara e organizada, além de facilitar a implementação de funcionalidades como rolagem interna quando o conteúdo exceder a altura do painel */
+      display: flex;
+      /* Layout flexível para organizar os elementos dentro dos painéis laterais, permitindo que eles sejam dispostos de forma vertical e se ajustem dinamicamente ao tamanho do painel, além de facilitar a implementação de funcionalidades como rolagem interna quando o conteúdo exceder a altura do painel */
+      flex-direction: column;
+      /* Organizar os elementos dentro dos painéis laterais em uma coluna, facilitando a leitura e a navegação pelo conteúdo, além de criar um visual mais estruturado e profissional */
+      gap: 15px;
+      /* Espaçamento entre os elementos dentro dos painéis laterais para melhorar a legibilidade e a estética geral do design, além de criar um ambiente mais organizado e agradável para os usuários interagirem com a paleta de componentes e as propriedades dos componentes selecionados */
+      overflow-y: auto;
+      /* Permitir rolagem vertical quando o conteúdo interno dos painéis laterais exceder a altura do painel, garantindo que os usuários possam acessar todas as informações e funcionalidades disponíveis, mesmo em telas menores ou quando muitos componentes estiverem selecionados com muitas propriedades para exibir */
+      opacity: 1;
+      /* Opacidade total para o conteúdo interno dos painéis laterais, garantindo que ele seja completamente visível e legível para os usuários, além de permitir que as transições de colapsar/expandir sejam suaves e visualmente agradáveis, especialmente quando combinadas com a transição de largura do painel lateral */
+      transition: opacity 0.2s;
+      /* Transição suave para a opacidade do conteúdo interno dos painéis laterais, permitindo que ele desapareça gradualmente quando os painéis forem colapsados, criando um efeito visual mais elegante e profissional, além de melhorar a experiência do usuário ao interagir com os painéis laterais */
+      box-sizing: border-box;
+      /* Incluir padding no cálculo total de largura e altura do conteúdo interno dos painéis laterais para evitar estouros de layout e garantir que o conteúdo seja exibido corretamente dentro dos limites do painel, especialmente quando combinado com a transição de largura do painel lateral durante as animações de colapsar/expandir */
+  }
 
-/* Efeito de sombra ao arrastar a peça pelo Grid */
-.placed-component.dragging { 
-    opacity: 0.8; 
-    z-index: 1000; 
-    filter: drop-shadow(0px 8px 12px rgba(0,0,0,0.2)); 
-}
+  .side-panel.collapsed
 
-/* O SVG (Desenho) fica solto para poder vazar da caixa lógica */
-.placed-component svg {
-    position: absolute;
-    overflow: visible;
-    pointer-events: none; /* Garante que o mouse interaja com a div inteira, não só com as linhas do desenho */
-}
+  /* ESTILO PARA PAINÉIS COLAPSADOS  */
+      {
+      width: 0 !important;
+      /* Definir a largura para 0 quando o painel estiver colapsado, ocultando completamente o painel lateral e liberando espaço para o workspace principal, além de criar um efeito visual mais limpo e organizado quando os painéis laterais não estiverem em uso, especialmente em telas menores onde o espaço é mais limitado */
+  }
 
-/* ==========================================
-   ANIMAÇÕES (PONTOS DE CONEXÃO)
-========================================== */
-@keyframes pulse-port {
-    0% { r: 5; stroke-width: 2; }
-    50% { r: 6; stroke-width: 4; }
-    100% { r: 5; stroke-width: 2; }
-}
+  .side-panel.collapsed .side-panel-content
 
-.port-node {
-    animation: pulse-port 2s infinite ease-in-out;
-    cursor: pointer;
-}
+  /* CONTEÚDO FICARÁ INVISÍVEL E INATIVO QUANDO COLAPSADO  */
+      {
+      opacity: 0;
+      /* Tornar o conteúdo interno dos painéis laterais completamente transparente quando os painéis estiverem colapsados, garantindo que ele não seja visível para os usuários e criando um efeito visual mais limpo e organizado, além de melhorar a experiência do usuário ao interagir com os painéis laterais, especialmente durante as animações de colapsar/expandir */
+      pointer-events: none;
+      /* Desativar eventos de mouse no conteúdo interno dos painéis laterais quando eles estiverem colapsados, garantindo que os usuários não possam interagir acidentalmente com elementos invisíveis e melhorando a experiência do usuário ao interagir com os painéis laterais, especialmente durante as animações de colapsar/expandir */
+  }
+
+  .palette-panel
+
+  /* PAINEL DE PALETA  */
+      {
+      border-right: 1px solid #e1e8ed;
+      /* Borda sutil para separar visualmente o painel de paleta do workspace principal, adicionando um toque de elegância ao design e ajudando a destacar o conteúdo da paleta de componentes, além de criar uma divisão clara entre as áreas de trabalho e de seleção de componentes */
+  }
+
+  .properties-panel
+
+  /* PAINEL DE PROPRIEDADES  */
+      {
+      border-left: 1px solid #e1e8ed;
+      /* Borda sutil para separar visualmente o painel de propriedades do workspace principal, adicionando um toque de elegância ao design e ajudando a destacar o conteúdo das propriedades dos componentes selecionados, além de criar uma divisão clara entre as áreas de trabalho e de edição de propriedades */
+      background: #fff;
+      /* Fundo branco para o painel de propriedades, criando um contraste limpo e profissional com o painel de paleta e o workspace principal, além de melhorar a legibilidade das informações detalhadas dos componentes selecionados, incluindo inputs editáveis, gráficos de monitoramento e outras funcionalidades relacionadas às propriedades dos componentes */
+  }
+
+  /* BOTÕES DE COLAPSAR */
+  .panel-toggle {
+      position: absolute;
+      /* Permitir posicionamento absoluto dos botões de colapsar para que eles possam ser colocados sobre os painéis laterais, facilitando a implementação de funcionalidades de colapsar/expandir os painéis e garantindo que os botões estejam sempre acessíveis para os usuários, mesmo quando os painéis estiverem cheios de conteúdo */
+      top: 50%;
+      /* Posicionar os botões de colapsar verticalmente no meio dos painéis laterais, garantindo que eles sejam facilmente visíveis e acessíveis para os usuários, além de criar um visual mais equilibrado e profissional para os botões de colapsar */
+      transform: translateY(-50%);
+      /* Ajustar a posição vertical dos botões de colapsar para que eles fiquem exatamente no meio dos painéis laterais, garantindo que eles sejam facilmente visíveis e acessíveis para os usuários, além de criar um visual mais equilibrado e profissional para os botões de colapsar */
+      width: 24px;
+      /* Largura dos botões de colapsar, proporcionando espaço suficiente para exibir os ícones de seta e garantir que eles sejam facilmente clicáveis para os usuários, além de criar um visual mais consistente e profissional para os botões de colapsar */
+      height: 40px;
+      /* Altura dos botões de colapsar, proporcionando espaço suficiente para exibir os ícones de seta e garantir que eles sejam facilmente clicáveis para os usuários, além de criar um visual mais consistente e profissional para os botões de colapsar */
+      background: #fff;
+      /* Fundo branco para os botões de colapsar, criando um contraste limpo e profissional com os painéis laterais e o workspace principal, além de melhorar a visibilidade dos botões de colapsar para os usuários, especialmente quando combinados com as bordas e sombras sutis para destacar os botões */
+      border: 1px solid #bdc3c7;
+      /* Borda sutil para os botões de colapsar, adicionando um toque de elegância ao design e ajudando a destacar os botões de colapsar para os usuários, além de criar um visual mais consistente e profissional para os botões de colapsar, especialmente quando combinados com o fundo branco e as sombras sutis para melhorar a visibilidade dos botões */
+      display: flex;
+      /* Layout flexível para organizar o conteúdo interno dos botões de colapsar, permitindo que os ícones de seta sejam centralizados tanto vertical quanto horizontalmente, garantindo que os botões sejam visualmente equilibrados e fáceis de identificar para os usuários, além de criar um visual mais profissional para os botões de colapsar */
+      align-items: center;
+      /* Alinhar os itens dentro dos botões de colapsar verticalmente ao centro, garantindo que os ícones de seta sejam centralizados e visualmente equilibrados para os usuários, além de criar um visual mais profissional para os botões de colapsar */
+      justify-content: center;
+      /* Justificar o conteúdo dentro dos botões de colapsar horizontalmente ao centro, garantindo que os ícones de seta sejam centralizados e visualmente equilibrados para os usuários, além de criar um visual mais profissional para os botões de colapsar */
+      cursor: pointer;
+      /* Cursor de ponteiro para indicar que os botões de colapsar são interativos e podem ser clicados pelos usuários, melhorando a experiência do usuário ao interagir com os painéis laterais e incentivando a exploração das funcionalidades de colapsar/expandir os painéis */
+      z-index: 60;
+      /* Garantir que os botões de colapsar fiquem acima dos painéis laterais e do workspace principal, permitindo que eles sejam facilmente acessíveis e visíveis para os usuários, mesmo quando os painéis estiverem cheios de conteúdo ou quando o workspace estiver ocupado com muitos componentes e conexões, além de criar um visual mais organizado e profissional para os botões de colapsar */
+      color: #7f8c8d;
+      /* Cor do texto para os ícones de seta nos botões de colapsar, proporcionando um contraste suave com o fundo branco dos botões e garantindo que os ícones sejam facilmente visíveis para os usuários, além de criar um visual mais consistente e profissional para os botões de colapsar, especialmente quando combinados com as bordas e sombras sutis para destacar os botões */
+      font-size: 12px;
+      /* Tamanho da fonte para os ícones de seta nos botões de colapsar, garantindo que eles sejam facilmente legíveis e identificáveis para os usuários, além de criar um visual mais consistente e profissional para os botões de colapsar, especialmente quando combinados com o fundo branco e as bordas sutis para melhorar a visibilidade dos botões */
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      /* Sombra suave para os botões de colapsar, adicionando profundidade e destacando os botões para os usuários, além de criar um visual mais profissional para os botões de colapsar, especialmente quando combinados com o fundo branco e as bordas sutis para melhorar a visibilidade dos botões */
+      transition: 0.5s;
+      /* Transição suave para os botões de colapsar, permitindo que eles respondam visualmente quando os usuários interagirem com eles, como ao passar o mouse ou clicar, melhorando a experiência do usuário e tornando a interface mais dinâmica e agradável de usar */
+  }
+
+  .panel-toggle:hover
+
+  /* HOVER PARA BOTÕES DE COLAPSAR  */
+      {
+      background: #ecf0f1;
+      /* Fundo mais claro para os botões de colapsar quando o mouse estiver sobre eles, proporcionando um feedback visual para os usuários e incentivando a interação com os botões, além de criar um visual mais dinâmico e agradável para a interface */
+      color: #2c3e50;
+      /* Cor do texto mais escura para os ícones de seta nos botões de colapsar quando o mouse estiver sobre eles, melhorando a visibilidade dos ícones e proporcionando um feedback visual para os usuários, além de criar um visual mais dinâmico e agradável para a interface, especialmente quando combinado com o fundo mais claro para destacar os botões de colapsar durante a interação do usuário */
+  }
+
+  #toggle-left
+
+  /* BOTÃO DE COLAPSAR ESQUERDO  */
+      {
+      left: 280px;
+      /* Posicionar o botão de colapsar do painel esquerdo na borda direita do painel, garantindo que ele esteja facilmente acessível para os usuários e criando um visual mais organizado e profissional para a interface, além de facilitar a implementação de funcionalidades de colapsar/expandir os painéis laterais */
+      border-radius: 0 8px 8px 0;
+      /* Bordas arredondadas para o botão de colapsar do painel esquerdo, criando um visual mais moderno e amigável, além de destacar o botão e torná-lo mais atraente para os usuários, especialmente quando combinado com o fundo branco e as bordas sutis para melhorar a visibilidade do botão */
+      border-left: none;
+      /* Remover a borda esquerda do botão de colapsar do painel esquerdo para criar um visual mais limpo e integrado com o painel, além de destacar o botão e torná-lo mais atraente para os usuários, especialmente quando combinado com o fundo branco e as bordas sutis para melhorar a visibilidade do botão */
+      transition: left 0.5s ease;
+      /* Transição suave para a posição do botão de colapsar do painel esquerdo, permitindo que ele se mova suavemente quando os usuários interagirem com ele para colapsar ou expandir o painel, melhorando a experiência do usuário e tornando a interface mais dinâmica e agradável de usar, especialmente quando combinado com a transição de largura do painel lateral durante as animações de colapsar/expandir */
+  }
+
+  #toggle-left.collapsed
+
+  /* ESTILO QUANDO O PAINEL ESQUERDO ESTIVER COLAPSADO  */
+      {
+      left: 0;
+      /* Posicionar o botão de colapsar do painel esquerdo na borda esquerda da janela quando o painel estiver colapsado, garantindo que ele esteja facilmente acessível para os usuários e criando um visual mais organizado e profissional para a interface, além de facilitar a implementação de funcionalidades de colapsar/expandir os painéis laterais, especialmente em telas menores onde o espaço é mais limitado */
+  }
+
+  #toggle-right
+
+  /* BOTÃO DE COLAPSAR DIREITO  */
+      {
+      right: 340px;
+      /* Posicionar o botão de colapsar do painel direito na borda esquerda do painel, garantindo que ele esteja facilmente acessível para os usuários e criando um visual mais organizado e profissional para a interface, além de facilitar a implementação de funcionalidades de colapsar/expandir os painéis laterais */
+      border-radius: 8px 0 0 8px;
+      /* Bordas arredondadas para o botão de colapsar do painel direito, criando um visual mais moderno e amigável, além de destacar o botão e torná-lo mais atraente para os usuários, especialmente quando combinado com o fundo branco e as bordas sutis para melhorar a visibilidade do botão */
+      border-right: none;
+      /* Remover a borda direita do botão de colapsar do painel direito para criar um visual mais limpo e integrado com o painel, além de destacar o botão e torná-lo mais atraente para os usuários, especialmente quando combinado com o fundo branco e as bordas sutis para melhorar a visibilidade do botão */
+      transition: right 0.5s ease;
+      /* Transição suave para a posição do botão de colapsar do painel direito, permitindo que ele se mova suavemente quando os usuários interagirem com ele para colapsar ou expandir o painel, melhorando a experiência do usuário e tornando a interface mais dinâmica e agradável de usar, especialmente quando combinado com a transição de largura do painel lateral durante as animações de colapsar/expandir */
+  }
+
+  #toggle-right.collapsed
+
+  /* ESTILO QUANDO O PAINEL DIREITO ESTIVER COLAPSADO  */
+      {
+      right: 0;
+      /* Posicionar o botão de colapsar do painel direito na borda direita da janela quando o painel estiver colapsado, garantindo que ele esteja facilmente acessível para os usuários e criando um visual mais organizado e profissional para a interface, além de facilitar a implementação de funcionalidades de colapsar/expandir os painéis laterais, especialmente em telas menores onde o espaço é mais limitado */
+  }
+
+  h3.panel-title
+
+  /* TÍTULOS DOS PAINÉIS  */
+      {
+      margin-top: 0;
+      /* Remover margem superior para que o título fique alinhado com o topo do painel, criando um visual mais coeso e organizado */
+      font-size: 14px;
+      /* Definir o tamanho da fonte para o título do painel, criando um visual mais legível e profissional */
+      border-bottom: 1px solid #ddd;
+      /* Adicionar uma borda inferior ao título do painel, criando um visual mais definido e organizado */
+      padding-bottom: 8px;
+      /* Adicionar preenchimento inferior ao título do painel, criando um visual mais confortável e profissional */
+      color: #34495e;
+      /* Definir a cor da fonte para o título do painel, criando um visual mais harmonioso e profissional */
+      text-transform: uppercase;
+      /* Transformar o texto do título do painel em maiúsculas, criando um visual mais moderno e profissional */
+      letter-spacing: 1px;
+      /* Definir o espaçamento entre as letras do título do painel, criando um visual mais legível e profissional */
+  }
+
+  /* PALETA */
+  .palette-item
+
+  /* ITENS DA PALETA  */
+      {
+      background: #fff;
+      /* Fundo branco para os itens da paleta, criando um contraste limpo e profissional com o painel de paleta e o workspace principal, além de melhorar a legibilidade e a identificação dos componentes para os usuários, especialmente quando combinados com as bordas sutis e as sombras para destacar os itens da paleta */
+      border: 2px solid #e1e8ed;
+      /* Borda sutil para os itens da paleta, adicionando um toque de elegância ao design e ajudando a destacar os itens da paleta para os usuários, além de criar um visual mais consistente e profissional para os itens da paleta, especialmente quando combinados com o fundo branco e as sombras sutis para melhorar a visibilidade dos itens */
+      border-radius: 8px;
+      /* Bordas arredondadas para os itens da paleta, criando um visual mais moderno e amigável, além de destacar os itens e torná-los mais atraentes para os usuários, especialmente quando combinados com o fundo branco e as bordas sutis para melhorar a visibilidade dos itens da paleta */
+      padding: 10px;
+      /* Preenchimento interno para os itens da paleta, garantindo que o conteúdo dentro dos itens tenha espaço suficiente para respirar, melhorando a legibilidade e a estética geral do design, além de criar um ambiente mais confortável para os usuários interagirem com os itens da paleta */
+      text-align: center;
+      /* Centralizar o texto dentro dos itens da paleta para um visual mais equilibrado e profissional, além de facilitar a leitura e a identificação dos componentes para os usuários, especialmente quando combinados com os ícones dos componentes para criar um visual mais consistente e atraente para os itens da paleta */
+      cursor: grab;
+      /* Cursor de mão para indicar que os itens da paleta são interativos e podem ser arrastados pelos usuários, melhorando a experiência do usuário ao interagir com a paleta de componentes e incentivando a exploração das funcionalidades de arrastar e soltar os itens da paleta para o workspace principal, além de criar um visual mais dinâmico e agradável para os itens da paleta */
+      display: flex;
+      /* Layout flexível para organizar o conteúdo dentro dos itens da paleta, permitindo que os ícones dos componentes e os nomes dos componentes sejam dispostos de forma vertical e se ajustem dinamicamente ao tamanho do item da paleta, além de criar um visual mais consistente e profissional para os itens da paleta, especialmente quando combinados com o alinhamento centralizado para destacar o conteúdo dos itens da paleta */
+      flex-direction: column;
+      /* Organizar o conteúdo dentro dos itens da paleta em uma coluna, facilitando a leitura e a identificação dos componentes para os usuários, além de criar um visual mais consistente e profissional para os itens da paleta, especialmente quando combinados com o layout flexível e o alinhamento centralizado para destacar o conteúdo dos itens da paleta */
+      align-items: center;
+      /* Alinhar os itens dentro dos itens da paleta verticalmente ao centro, garantindo que os ícones dos componentes e os nomes dos componentes sejam centralizados e visualmente equilibrados para os usuários, além de criar um visual mais consistente e profissional para os itens da paleta, especialmente quando combinados com o layout flexível e o alinhamento centralizado para destacar o conteúdo dos itens da paleta */
+      justify-content: center;
+      /* Justificar o conteúdo dentro dos itens da paleta horizontalmente ao centro, garantindo que os ícones dos componentes e os nomes dos componentes sejam centralizados e visualmente equilibrados para os usuários, além de criar um visual mais consistente e profissional para os itens da paleta, especialmente quando combinados com o layout flexível e o alinhamento centralizado para destacar o conteúdo dos itens da paleta */
+      gap: 2px;
+      /* Espaçamento entre os ícones dos componentes e os nomes dos componentes dentro dos itens da paleta para melhorar a legibilidade e a estética geral do design, além de criar um visual mais organizado e agradável para os usuários interagirem com os itens da paleta, especialmente quando combinados com o layout flexível e o alinhamento centralizado para destacar o conteúdo dos itens da paleta */
+      transition: 0.2s;
+      /* Transição suave para os itens da paleta, permitindo que eles respondam visualmente quando os usuários interagirem com eles, como ao passar o mouse ou clicar, melhorando a experiência do usuário e tornando a interface mais dinâmica e agradável de usar, especialmente quando combinado com as bordas e sombras sutis para destacar os itens da paleta */
+      height: 150px;
+      /* Altura fixa para os itens da paleta, garantindo que eles tenham um tamanho consistente e visualmente equilibrado, além de criar um layout mais organizado e profissional para os itens da paleta, especialmente quando combinados com o layout flexível e o alinhamento centralizado para destacar o conteúdo dos itens da paleta */
+      box-sizing: border-box;
+      /* Incluir padding e border no cálculo total de largura e altura dos itens da paleta para evitar estouros de layout e garantir que os itens sejam exibidos corretamente dentro dos limites do painel de paleta, especialmente quando combinado com a transição de borda e fundo durante as animações de hover para criar um efeito visual mais elegante e profissional para os itens da paleta */
+  }
+
+  .palette-item:hover
+
+  /* HOVER PARA ITENS DA PALETA  */
+      {
+      background: #eaf2f8;
+      /* Fundo mais claro para os itens da paleta quando o mouse estiver sobre eles, proporcionando um feedback visual para os usuários e incentivando a interação com os itens da paleta, além de criar um visual mais dinâmico e agradável para a interface */
+      border-color: #3498db;
+      /* Borda azul para os itens da paleta quando o mouse estiver sobre eles, destacando os itens e proporcionando um feedback visual para os usuários, além de criar um visual mais dinâmico e agradável para a interface, especialmente quando combinado com o fundo mais claro para destacar os itens da paleta durante a interação do usuário */
+  }
+
+  .palette-item span
+
+  /* NOME DO COMPONENTE NA PALETA  */
+      {
+      font-size: 15px;
+      /* Tamanho de fonte para o nome do componente na paleta, garantindo que ele seja facilmente legível e identificável para os usuários, além de criar um visual mais consistente e profissional para os itens da paleta, especialmente quando combinado com o layout flexível e o alinhamento centralizado para destacar o nome do componente */
+      font-weight: bold;
+      /* Negrito para o nome do componente na paleta, destacando-o e tornando-o mais atraente para os usuários, além de criar um visual mais consistente e profissional para os itens da paleta, especialmente quando combinado com o tamanho de fonte adequado para melhorar a legibilidade do nome do componente */
+      color: #95a5a6;
+      /* Cor cinza suave para o nome do componente na paleta, proporcionando um contraste sutil com o fundo branco dos itens da paleta e garantindo que o nome seja legível para os usuários, além de criar um visual mais consistente e profissional para os itens da paleta, especialmente quando combinado com o layout flexível e o alinhamento centralizado para destacar o nome do componente */
+  }
+
+  .palette-item:hover span
+
+  /* HOVER PARA O NOME DO COMPONENTE NA PALETA  */
+      {
+      color: #3498db;
+      /* Cor azul para o nome do componente na paleta quando o mouse estiver sobre eles, destacando-o e proporcionando um feedback visual para os usuários, além de criar um visual mais dinâmico e agradável para a interface, especialmente quando combinado com o fundo mais claro para destacar os itens da paleta durante a interação do usuário */
+  }
+
+  .palette-icon
+
+  /* ÍCONES DOS COMPONENTES NA PALETA  */
+      {
+      max-width: 100px;
+      /* Limitar a largura máxima dos ícones dos componentes na paleta para garantir que eles se encaixem adequadamente dentro dos itens da paleta, mantendo um layout organizado e visualmente equilibrado, além de melhorar a legibilidade e a identificação dos componentes para os usuários, especialmente quando combinados com o nome do componente abaixo do ícone para criar um visual mais consistente e profissional para os itens da paleta */
+      max-height: 100px;
+      /* Limitar a altura máxima dos ícones dos componentes na paleta para garantir que eles se encaixem adequadamente dentro dos itens da paleta, mantendo um layout organizado e visualmente equilibrado, além de melhorar a legibilidade e a identificação dos componentes para os usuários, especialmente quando combinados com o nome do componente abaixo do ícone para criar um visual mais consistente e profissional para os itens da paleta */
+      object-fit: contain;
+      /* Garantir que os ícones dos componentes na paleta sejam redimensionados proporcionalmente para se encaixarem dentro dos limites definidos pela largura e altura máximas, mantendo a integridade visual dos ícones e melhorando a legibilidade e a identificação dos componentes para os usuários, especialmente quando combinados com o nome do componente abaixo do ícone para criar um visual mais consistente e profissional para os itens da paleta */
+      pointer-events: none;
+      /* Desativar eventos de mouse nos ícones dos componentes na paleta para garantir que os usuários possam clicar e arrastar os itens da paleta sem interferência dos ícones, melhorando a experiência do usuário ao interagir com a paleta de componentes e garantindo que o foco esteja na funcionalidade de arrastar e soltar os itens da paleta para o workspace principal, além de criar um visual mais limpo e organizado para os itens da paleta, especialmente quando combinados com o layout flexível e o alinhamento centralizado para destacar os ícones dos componentes */
+  }
+
+  /* PROPRIEDADES & INPUTS EDITÁVEIS */
+  .prop-group
+
+  /* GRUPOS DE PROPRIEDADES  */
+      {
+      margin-bottom: 15px;
+      /* Espaçamento inferior entre os grupos de propriedades para melhorar a legibilidade e a estética geral do design, além de criar um ambiente mais organizado e agradável para os usuários interagirem com as propriedades dos componentes selecionados, especialmente quando combinados com os títulos dos grupos de propriedades para destacar cada seção de propriedades */
+      background: #f9fbfb;
+      /* Fundo suave para os grupos de propriedades, criando um contraste sutil com o fundo branco do painel de propriedades e ajudando a destacar cada grupo de propriedades para os usuários, além de criar um visual mais organizado e profissional para as propriedades dos componentes selecionados, especialmente quando combinados com os títulos dos grupos de propriedades para destacar cada seção de propriedades */
+      padding: 10px;
+      /* Espaçamento interno para os grupos de propriedades, melhorando a legibilidade e a estética geral do design, além de criar um ambiente mais organizado e agradável para os usuários interagirem com as propriedades dos componentes selecionados */
+      border-radius: 6px;
+      /* Cantos arredondados para os grupos de propriedades, melhorando a estética geral do design e criando um visual mais moderno e profissional para as propriedades dos componentes selecionados */
+      border: 1px solid #eee;
+      /* Borda sutil para os grupos de propriedades, criando um contraste sutil com o fundo branco do painel de propriedades e ajudando a destacar cada grupo de propriedades para os usuários, além de criar um visual mais organizado e profissional para as propriedades dos componentes selecionados */
+  }
+
+  .prop-group label
+
+  /* RÓTULOS DAS PROPRIEDADES  */
+      {
+      display: flex;
+      /* Layout flexível para organizar o conteúdo dentro dos rótulos das propriedades, permitindo que os textos dos rótulos e os ícones de ajuda sejam dispostos de forma horizontal e se ajustem dinamicamente ao tamanho do rótulo, além de criar um visual mais consistente e profissional para os rótulos das propriedades, especialmente quando combinados com a formatação de texto adequada para destacar os rótulos */
+      justify-content: space-between;
+      /* Justificar o conteúdo dentro dos rótulos das propriedades para que os textos dos rótulos fiquem alinhados à esquerda e os ícones de ajuda fiquem alinhados à direita, criando um visual mais organizado e profissional para os rótulos das propriedades, além de facilitar a leitura e a identificação dos rótulos para os usuários, especialmente quando combinados com o layout flexível para destacar os rótulos das propriedades */
+      align-items: center;
+      /* Alinhar os itens dentro dos rótulos das propriedades verticalmente ao centro, garantindo que os textos dos rótulos e os ícones de ajuda fiquem visualmente equilibrados para os usuários, além de criar um visual mais consistente e profissional para os rótulos das propriedades, especialmente quando combinados com o layout flexível para destacar os rótulos das propriedades */
+      font-size: 12px;
+      /* Tamanho da fonte para os rótulos das propriedades, garantindo que eles sejam facilmente legíveis e identificáveis para os usuários, além de criar um visual mais consistente e profissional para as propriedades dos componentes selecionados, especialmente quando combinados com a formatação de texto adequada para destacar os rótulos */
+      font-weight: bold;
+      /* Negrito para os rótulos das propriedades, destacando-os e tornando-os mais atraentes para os usuários, além de criar um visual mais consistente e profissional para as propriedades dos componentes selecionados, especialmente quando combinados com o tamanho de fonte adequado para melhorar a legibilidade dos rótulos */
+      color: #34495e;
+      /* Cor dos rótulos das propriedades, criando um contraste suave com o fundo suave dos grupos de propriedades e garantindo que os rótulos sejam legíveis para os usuários, além de criar um visual mais consistente e profissional para as propriedades dos componentes selecionados, especialmente quando combinados com a formatação de texto adequada para destacar os rótulos */
+      margin-bottom: 6px;
+      /* Espaçamento inferior para os rótulos das propriedades, melhorando a legibilidade e a estética geral do design, além de criar um ambiente mais organizado e agradável para os usuários interagirem com as propriedades dos componentes selecionados, especialmente quando combinados com os inputs editáveis para criar uma hierarquia visual clara entre os rótulos e os campos de entrada das propriedades */
+  }
+
+  /* Tooltip hint icon */
+  .help-icon {
+      display: inline-flex;
+      /* Layout flexível para organizar o conteúdo dentro dos ícones de ajuda, permitindo que o texto do ícone seja centralizado tanto vertical quanto horizontalmente, garantindo que os ícones sejam visualmente equilibrados e fáceis de identificar para os usuários, além de criar um visual mais profissional para os ícones de ajuda */
+      justify-content: center;
+      /* Justificar o conteúdo dentro dos ícones de ajuda horizontalmente ao centro, garantindo que o texto do ícone seja centralizado e visualmente equilibrado para os usuários, além de criar um visual mais profissional para os ícones de ajuda */
+      align-items: center;
+      /* Alinhar o conteúdo dentro dos ícones de ajuda verticalmente ao centro, garantindo que o texto do ícone seja centralizado e visualmente equilibrado para os usuários, além de criar um visual mais profissional para os ícones de ajuda */
+      width: 14px;
+      /* Largura dos ícones de ajuda, proporcionando espaço suficiente para exibir um ponto de interrogação ou outro símbolo de ajuda, garantindo que os ícones sejam facilmente identificáveis e clicáveis para os usuários, além de criar um visual mais consistente e profissional para os ícones de ajuda, especialmente quando combinados com a formatação de texto adequada para destacar os ícones */
+      height: 14px;
+      /* Altura dos ícones de ajuda, proporcionando espaço suficiente para exibir um ponto de interrogação ou outro símbolo de ajuda, garantindo que os ícones sejam facilmente identificáveis e clicáveis para os usuários, além de criar um visual mais consistente e profissional para os ícones de ajuda, especialmente quando combinados com a formatação de texto adequada para destacar os ícones */
+      border-radius: 50%;
+      /* Borda arredondada para os ícones de ajuda, criando um visual mais amigável e atraente, além de destacar os ícones e torná-los mais identificáveis para os usuários, especialmente quando combinados com o fundo colorido para melhorar a visibilidade dos ícones de ajuda */
+      background: #bdc3c7;
+      /* Fundo cinza para os ícones de ajuda, criando um contraste suave com o fundo suave dos grupos de propriedades e garantindo que os ícones sejam legíveis para os usuários, além de criar um visual mais consistente e profissional para os ícones de ajuda, especialmente quando combinados com a formatação de texto adequada para destacar os ícones */
+      color: #fff;
+      /* Cor do texto para os ícones de ajuda, proporcionando um contraste forte com o fundo cinza dos ícones e garantindo que os símbolos de ajuda sejam facilmente legíveis para os usuários, além de criar um visual mais consistente e profissional para os ícones de ajuda, especialmente quando combinados com a formatação de texto adequada para destacar os ícones */
+      font-size: 10px;
+      /* Tamanho da fonte para os símbolos de ajuda nos ícones de ajuda, garantindo que eles sejam facilmente legíveis e identificáveis para os usuários, além de criar um visual mais consistente e profissional para os ícones de ajuda, especialmente quando combinados com o fundo colorido para melhorar a visibilidade dos ícones de ajuda */
+      font-weight: bold;
+      /* Negrito para os símbolos de ajuda nos ícones de ajuda, destacando-os e tornando-os mais atraentes para os usuários, além de criar um visual mais consistente e profissional para os ícones de ajuda, especialmente quando combinados com o tamanho de fonte adequado para melhorar a legibilidade dos símbolos */
+      margin-left: 5px;
+      /* Espaçamento à esquerda para os ícones de ajuda, garantindo que eles tenham um espaço adequado em relação ao texto dos rótulos das propriedades, melhorando a legibilidade e a estética geral do design, além de criar um ambiente mais organizado e agradável para os usuários interagirem com as propriedades dos componentes selecionados, especialmente quando combinados com os rótulos das propriedades para criar uma hierarquia visual clara entre os rótulos e os ícones de ajuda */
+      cursor: help;
+      /* Cursor de ajuda para indicar que os ícones de ajuda são interativos e podem ser clicados pelos usuários para obter mais informações ou dicas sobre as propriedades, melhorando a experiência do usuário ao interagir com as propriedades dos componentes selecionados e incentivando a exploração das funcionalidades de ajuda, além de criar um visual mais dinâmico e agradável para os ícones de ajuda, especialmente quando combinados com o fundo colorido para melhorar a visibilidade dos ícones de ajuda */
+  }
+
+  /* Estilo para inputs e selects dentro das propriedades */
+  .prop-group input[type="text"],
+  /* Estilo para inputs de texto dentro dos grupos de propriedades, garantindo que eles sejam facilmente legíveis e editáveis para os usuários, além de criar um visual mais consistente e profissional para os campos de entrada das propriedades dos componentes selecionados, especialmente quando combinados com o layout flexível e o alinhamento centralizado para destacar os campos de entrada das propriedades */
+  .prop-group input[type="number"],
+  /* Estilo para inputs numéricos dentro dos grupos de propriedades, garantindo que eles sejam facilmente legíveis e editáveis para os usuários, além de criar um visual mais consistente e profissional para os campos de entrada das propriedades dos componentes selecionados, especialmente quando combinados com o layout flexível e o alinhamento centralizado para destacar os campos de entrada das propriedades */
+  .prop-group select
+
+  /* Estilo para selects dentro dos grupos de propriedades, garantindo que eles sejam facilmente legíveis e editáveis para os usuários, além de criar um visual mais consistente e profissional para os campos de seleção das propriedades dos componentes selecionados, especialmente quando combinados com o layout flexível e o alinhamento centralizado para destacar os campos de seleção das propriedades */
+      {
+      width: 100%;
+      /* Largura total para os inputs e selects dentro dos grupos de propriedades, garantindo que eles se encaixem adequadamente dentro dos limites dos grupos de propriedades e proporcionando um layout mais organizado e profissional para os campos de entrada das propriedades dos componentes selecionados, especialmente quando combinados com o layout flexível e o alinhamento centralizado para destacar os campos de entrada das propriedades */
+      padding: 8px;
+      /* Preenchimento interno para os inputs e selects dentro dos grupos de propriedades, garantindo que o conteúdo dentro dos campos de entrada tenha espaço suficiente para respirar, melhorando a legibilidade e a estética geral do design, além de criar um ambiente mais confortável para os usuários interagirem com os campos de entrada das propriedades dos componentes selecionados */
+      border: 1px solid #bdc3c7;
+      /* Borda cinza para os inputs e selects dentro dos grupos de propriedades, garantindo que eles sejam facilmente identificáveis e clicáveis para os usuários, além de criar um visual mais consistente e profissional para os campos de entrada das propriedades dos componentes selecionados */
+      border-radius: 4px;
+      /* Borda arredondada para os inputs e selects dentro dos grupos de propriedades, criando um visual mais amigável e atraente, além de destacar os campos e torná-los mais identificáveis para os usuários, especialmente quando combinados com o fundo colorido para melhorar a visibilidade dos campos de entrada das propriedades */
+      box-sizing: border-box;
+      /* Inclui o preenchimento e a borda no cálculo da largura total dos inputs e selects dentro dos grupos de propriedades, garantindo que eles sejam exibidos corretamente dentro dos limites dos grupos de propriedades e proporcionando um layout mais organizado e profissional para os campos de entrada das propriedades dos componentes selecionados */
+      font-family: inherit;
+      /* Herda a família da fonte do elemento pai para os inputs e selects dentro dos grupos de propriedades, garantindo uma consistência visual com o restante do design e proporcionando uma melhor legibilidade para os usuários */
+      font-size: 13px;
+      /* Tamanho da fonte para os inputs e selects dentro dos grupos de propriedades, garantindo que eles sejam facilmente legíveis e editáveis para os usuários, além de criar um visual mais consistente e profissional para os campos de entrada das propriedades dos componentes selecionados */
+  }
+
+  /* Estilo específico para sliders (input[type="range"]) */
+  .prop-group input[type="range"] {
+      width: 100%;
+      /* Largura total para os sliders dentro dos grupos de propriedades, garantindo que eles se encaixem adequadamente dentro dos limites dos grupos de propriedades e proporcionando um layout mais organizado e profissional para os campos de entrada das propriedades dos componentes selecionados, especialmente quando combinados com o layout flexível e o alinhamento centralizado para destacar os campos de entrada das propriedades */
+      cursor: pointer;
+      /* Cursor de ponteiro para indicar que os sliders são interativos e podem ser arrastados pelos usuários, melhorando a experiência do usuário ao interagir com os campos de entrada das propriedades dos componentes selecionados e incentivando a exploração das funcionalidades de ajuste dos sliders, além de criar um visual mais dinâmico e agradável para os sliders, especialmente quando combinados com o layout flexível e o alinhamento centralizado para destacar os campos de entrada das propriedades */
+  }
+
+  .prop-group input:focus
+
+  /* FOCO EM INPUTS  */
+  /*Foco significa que o usuário está editando aquele campo,*/
+      {
+      outline: none;
+      /* Remove a borda de foco padrão para os inputs dentro dos grupos de propriedades, criando um visual mais limpo e profissional para os campos de entrada das propriedades dos componentes selecionados, além de permitir que o destaque visual seja controlado por meio de outras propriedades CSS, como a borda ou a sombra, para criar um efeito de foco mais personalizado e atraente para os usuários */
+      border-color: #3498db;
+      /* Borda azul para os inputs dentro dos grupos de propriedades quando estão em foco, destacando-os e proporcionando um feedback visual para os usuários, além de criar um visual mais dinâmico e agradável para os campos de entrada das propriedades dos componentes selecionados, especialmente quando combinado com a remoção da borda de foco padrão para criar um efeito de foco mais personalizado e atraente para os usuários */
+  }
+
+  .prop-group input:disabled
+
+  /* ESTILO PARA INPUTS DESABILITADOS  */
+      {
+      background: #f2f4f4;
+      /* Fundo cinza claro para inputs desabilitados dentro dos grupos de propriedades, criando um contraste suave com os inputs habilitados e indicando visualmente que os campos estão desativados para os usuários, além de criar um visual mais consistente e profissional para os campos de entrada das propriedades dos componentes selecionados, especialmente quando combinados com a cor do texto mais clara para melhorar a legibilidade dos campos desabilitados */
+      color: #7f8c8d;
+      /* Cor do texto para inputs desabilitados dentro dos grupos de propriedades, proporcionando um contraste suave com o fundo cinza claro dos campos desabilitados e garantindo que o texto seja legível para os usuários, além de criar um visual mais consistente e profissional para os campos de entrada das propriedades dos componentes selecionados, especialmente quando combinados com o fundo cinza claro para melhorar a legibilidade dos campos desabilitados */
+      font-weight: bold;
+      /* Estilo de fonte em negrito para inputs desabilitados dentro dos grupos de propriedades, destacando-os e proporcionando um feedback visual para os usuários, além de criar um visual mais dinâmico e agradável para os campos de entrada das propriedades dos componentes selecionados */
+      border-color: #eee;
+      /* Cor da borda para inputs desabilitados dentro dos grupos de propriedades, criando um contraste suave com o fundo cinza claro dos campos desabilitados e garantindo que a borda seja visível para os usuários, além de criar um visual mais consistente e profissional para os campos de entrada das propriedades dos componentes selecionados */
+  }
+
+  .val-display-input
+
+  /* ESTILO PARA INPUTS DE DISPLAY DE VALORES (EX: VOLUME ATUAL)  */
+      {
+      width: 50px !important;
+      /* Largura fixa para inputs de display de valores, garantindo que eles tenham um tamanho consistente e visualmente equilibrado, além de criar um layout mais organizado e profissional para os campos de entrada das propriedades dos componentes selecionados, especialmente quando combinados com o layout flexível e o alinhamento centralizado para destacar os campos de entrada das propriedades */
+      background: #fff !important;
+      /* Fundo branco para inputs de display de valores, criando um contraste limpo e profissional com o painel de propriedades e o workspace principal, além de melhorar a legibilidade e a identificação dos campos de entrada para os usuários, especialmente quando combinados com as bordas sutis e as sombras para destacar os campos de entrada das propriedades */
+      border: 1px solid #bdc3c7 !important;
+      /* Borda cinza para inputs de display de valores, garantindo que eles sejam facilmente identificáveis e clicáveis para os usuários, além de criar um visual mais consistente e profissional para os campos de entrada das propriedades dos componentes selecionados, especialmente quando combinados com o fundo branco e as sombras sutis para melhorar a visibilidade dos campos de entrada das propriedades */
+      border-radius: 4px !important;
+      /* Borda arredondada para inputs de display de valores, criando um visual mais amigável e atraente, além de destacar os campos e torná-los mais identificáveis para os usuários, especialmente quando combinados com o fundo branco e as bordas sutis para melhorar a visibilidade dos campos de entrada das propriedades */
+      color: #3498db !important;
+      /* Cor azul para inputs de display de valores, criando um contraste forte com o fundo branco dos campos e garantindo que o texto seja facilmente legível para os usuários, além de criar um visual mais consistente e profissional para os campos de entrada das propriedades dos componentes selecionados, especialmente quando combinados com o layout flexível e o alinhamento centralizado para destacar os campos de entrada das propriedades */
+      font-weight: bold !important;
+      /* Negrito para inputs de display de valores, destacando-os e tornando-os mais atraentes para os usuários, além de criar um visual mais consistente e profissional para os campos de entrada das propriedades dos componentes selecionados, especialmente quando combinados com a cor azul para melhorar a legibilidade dos campos de entrada das propriedades */
+      font-size: 13px !important;
+      /* Tamanho da fonte para inputs de display de valores, garantindo que eles sejam facilmente legíveis e editáveis para os usuários, além de criar um visual mais consistente e profissional para os campos de entrada das propriedades dos componentes selecionados, especialmente quando combinados com a cor azul para melhorar a legibilidade dos campos de entrada das propriedades */
+      text-align: center !important;
+      /* Alinhamento centralizado para inputs de display de valores, garantindo que o texto dentro dos campos de entrada seja visualmente equilibrado e fácil de ler para os usuários, além de criar um visual mais consistente e profissional para os campos de entrada das propriedades dos componentes selecionados, especialmente quando combinados com a cor azul para melhorar a legibilidade dos campos de entrada das propriedades */
+      padding: 4px !important;
+      /* Preenchimento interno para inputs de display de valores, garantindo que o conteúdo dentro dos campos de entrada tenha espaço suficiente para respirar, melhorando a legibilidade e a estética geral do design, além de criar um ambiente mais confortável para os usuários interagirem com os campos de entrada das propriedades dos componentes selecionados, especialmente quando combinados com a cor azul para melhorar a legibilidade dos campos de entrada das propriedades */
+      margin: 0 !important;
+      /* Remover margens para inputs de display de valores, garantindo que eles se encaixem adequadamente dentro dos limites dos grupos de propriedades e proporcionando um layout mais organizado e profissional para os campos de entrada das propriedades dos componentes selecionados, especialmente quando combinados com o layout flexível e o alinhamento centralizado para destacar os campos de entrada das propriedades */
+      cursor: text;
+      /* Cursor de texto para inputs de display de valores, indicando que eles são editáveis e podem ser clicados pelos usuários para inserir ou modificar os valores, melhorando a experiência do usuário ao interagir com os campos de entrada das propriedades dos componentes selecionados e incentivando a exploração das funcionalidades de edição dos campos de entrada das propriedades, além de criar um visual mais dinâmico e agradável para os campos de entrada das propriedades, especialmente quando combinados com o layout flexível e o alinhamento centralizado para destacar os campos de entrada das propriedades */
+      transition: 0.5s;
+      /* Transição suave para inputs de display de valores, permitindo que eles respondam visualmente quando os usuários interagirem com eles, como ao passar o mouse ou clicar, melhorando a experiência do usuário e tornando a interface mais dinâmica e agradável de usar, especialmente quando combinado com as bordas e sombras sutis para destacar os campos de entrada das propriedades */
+  }
+
+  /* HOVER E FOCO PARA INPUTS DE DISPLAY  */
+  /* Hover significa que o mouse está sobre o campo*/
+  .val-display-input:hover,
+  .val-display-input:focus
+
+  /* Hover e Foco recebem um destaque visual para indicar interatividade. */
+      {
+      border-color: #3498db !important;
+      /* Borda azul para inputs de display de valores quando o mouse estiver sobre eles ou quando estiverem em foco, destacando-os e proporcionando um feedback visual para os usuários, além de criar um visual mais dinâmico e agradável para os campos de entrada das propriedades dos componentes selecionados, especialmente quando combinado com a transição suave para criar um efeito de destaque mais elegante e profissional para os campos de entrada das propriedades */
+      box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2) !important;
+      /* Sombra azul suave para inputs de display de valores quando o mouse estiver sobre eles ou quando estiverem em foco, criando um efeito de destaque visual que chama a atenção dos usuários para os campos de entrada das propriedades dos componentes selecionados, além de criar um visual mais dinâmico e agradável para os campos de entrada das propriedades, especialmente quando combinado com a borda azul para melhorar a visibilidade dos campos de entrada das propriedades */
+      outline: none;
+      /* Remove a borda de foco padrão para inputs de display de valores quando o mouse estiver sobre eles ou quando estiverem em foco, criando um visual mais limpo e profissional para os campos de entrada das propriedades dos componentes selecionados, além de permitir que o destaque visual seja controlado por meio de outras propriedades CSS, como a borda e a sombra, para criar um efeito de foco mais personalizado e atraente para os usuários */
+  }
+
+  /* REMOVER SETAS DE INPUTS NUMÉRICOS  */
+  .val-display-input::-webkit-outer-spin-button,
+  /* Remove as setas de incremento/decremento para inputs numéricos em navegadores baseados em WebKit, criando um visual mais limpo e profissional para os campos de entrada das propriedades dos componentes selecionados, além de melhorar a experiência do usuário ao interagir com os campos de entrada das propriedades, especialmente quando combinados com o layout flexível e o alinhamento centralizado para destacar os campos de entrada das propriedades */
+  .val-display-input::-webkit-inner-spin-button
+
+  /* Remove as setas de incremento/decremento para inputs numéricos em navegadores baseados em WebKit, criando um visual mais limpo e profissional para os campos de entrada das propriedades dos componentes selecionados, além de melhorar a experiência do usuário ao interagir com os campos de entrada das propriedades, especialmente quando combinados com o layout flexível e o alinhamento centralizado para destacar os campos de entrada das propriedades */
+      {
+      -webkit-appearance: none;
+      /* Remove as setas de incremento/decremento para inputs numéricos em navegadores baseados em WebKit, criando um visual mais limpo e profissional para os campos de entrada das propriedades dos componentes selecionados, além de melhorar a experiência do usuário ao interagir com os campos de entrada das propriedades, especialmente quando combinados com o layout flexível e o alinhamento centralizado para destacar os campos de entrada das propriedades */
+      margin: 0;
+      /* Remove a margem para inputs numéricos, garantindo que eles se encaixem adequadamente dentro dos limites dos grupos de propriedades e proporcionando um layout mais organizado e profissional para os campos de entrada das propriedades dos componentes selecionados, especialmente quando combinados com o layout flexível e o alinhamento centralizado para destacar os campos de entrada das propriedades */
+  }
+
+  /* GRÁFICO MAXIMIZADO */
+  .chart-container
+
+  /* CONTAINER DO GRÁFICO DE MONITORAMENTO  */
+      {
+      width: 100%;
+      /* Largura total para o container do gráfico de monitoramento, garantindo que ele se encaixe adequadamente dentro dos limites do painel de propriedades e proporcionando um layout mais organizado e profissional para o gráfico de monitoramento, especialmente quando combinado com a altura fixa para criar um espaço dedicado para o gráfico dentro do painel de propriedades */
+      height: 220px;
+      /* Altura fixa para o container do gráfico de monitoramento, criando um espaço dedicado para o gráfico dentro do painel de propriedades e garantindo que ele seja exibido de forma clara e legível para os usuários, além de criar um visual mais organizado e profissional para o gráfico de monitoramento, especialmente quando combinado com a largura total para se encaixar adequadamente dentro dos limites do painel de propriedades */
+      background: #fff;
+      /* Fundo branco para o container do gráfico de monitoramento, criando um contraste limpo e profissional com o painel de propriedades e o workspace principal, além de melhorar a legibilidade e a identificação do gráfico para os usuários, especialmente quando combinados com as bordas sutis e as sombras para destacar o gráfico de monitoramento */
+      border: 1px solid #eee;
+      /* Borda sutil para o container do gráfico de monitoramento, criando um contraste suave com o fundo branco do gráfico e ajudando a destacar o gráfico para os usuários, além de criar um visual mais organizado e profissional para o gráfico de monitoramento, especialmente quando combinado com o fundo branco para melhorar a visibilidade do gráfico */
+      border-radius: 8px;
+      /* Borda arredondada para o container do gráfico de monitoramento, criando um visual mais amigável e atraente, além de destacar o gráfico e torná-lo mais identificável para os usuários, especialmente quando combinado com o fundo branco e as bordas sutis para melhorar a visibilidade do gráfico de monitoramento */
+      padding: 10px;
+      /* Preenchimento interno para o container do gráfico de monitoramento, garantindo que o conteúdo dentro do gráfico tenha espaço suficiente para respirar, melhorando a legibilidade e a estética geral do design, além de criar um ambiente mais confortável para os usuários interagirem com o gráfico de monitoramento, especialmente quando combinado com o fundo branco e as bordas sutis para melhorar a visibilidade do gráfico de monitoramento */
+      box-sizing: border-box;
+      /* Inclui o preenchimento e a borda no cálculo da largura total para o container do gráfico de monitoramento, garantindo que ele seja exibido corretamente dentro dos limites do painel de propriedades e proporcionando um layout mais organizado e profissional para o gráfico de monitoramento, especialmente quando combinado com a largura total e a altura fixa para criar um espaço dedicado para o gráfico dentro do painel de propriedades */
+      margin-top: 10px;
+      /* Espaçamento superior para o container do gráfico de monitoramento, garantindo que ele tenha um espaço adequado em relação aos outros elementos dentro do painel de propriedades e proporcionando um layout mais organizado e profissional para o gráfico de monitoramento, especialmente quando combinado com o preenchimento interno para criar um ambiente mais confortável para os usuários interagirem com o gráfico de monitoramento */
+      display: flex;
+      /* Layout flexível para o container do gráfico de monitoramento, permitindo que o conteúdo dentro do gráfico seja organizado de forma flexível e se ajuste dinamicamente ao tamanho do container, além de criar um visual mais consistente e profissional para o gráfico de monitoramento, especialmente quando combinado com a largura total e a altura fixa para criar um espaço dedicado para o gráfico dentro do painel de propriedades */
+      flex-direction: column;
+      /* Direção de layout em coluna para o container do gráfico de monitoramento, organizando o conteúdo dentro do gráfico de forma vertical e permitindo que os elementos do gráfico sejam dispostos de forma clara e legível para os usuários, além de criar um visual mais consistente e profissional para o gráfico de monitoramento, especialmente quando combinado com a largura total e a altura fixa para criar um espaço dedicado para o gráfico dentro do painel de propriedades */
+  }
+
+  .chart-container.maximized
+
+  /* ESTILO PARA O GRÁFICO QUANDO MAXIMIZADO  */
+      {
+      position: fixed;
+      /* Torna o gráfico de monitoramento fixo na tela, permitindo que ele se sobreponha ao workspace principal e ao painel de propriedades, criando um efeito de maximização para destacar o gráfico e proporcionar uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para o gráfico de monitoramento, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para o gráfico maximizado */
+      top: auto;
+      /* Define a posição superior como automática para permitir que o gráfico se posicione na parte inferior da tela quando maximizado, criando um layout mais organizado e profissional para o gráfico de monitoramento maximizado, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para o gráfico de monitoramento */
+      bottom: 0;
+      /* Posiciona o gráfico de monitoramento na parte inferior da tela quando maximizado, criando um layout mais organizado e profissional para o gráfico de monitoramento maximizado, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para o gráfico de monitoramento */
+      left: 0;
+      /* Posiciona o gráfico de monitoramento no lado esquerdo da tela quando maximizado, garantindo que ele se encaixe adequadamente dentro dos limites da tela e proporcionando um layout mais organizado e profissional para o gráfico de monitoramento maximizado, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para o gráfico de monitoramento */
+      width: 100vw;
+      /* Largura total da viewport para o gráfico de monitoramento quando maximizado, garantindo que ele se encaixe adequadamente dentro dos limites da tela e proporcionando um layout mais organizado e profissional para o gráfico de monitoramento maximizado, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para o gráfico de monitoramento */
+      height: 35vh;
+      /* Altura de 35% da viewport para o gráfico de monitoramento quando maximizado, criando um espaço dedicado para o gráfico dentro da tela e garantindo que ele seja exibido de forma clara e legível para os usuários, além de criar um visual mais organizado e profissional para o gráfico de monitoramento maximizado, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para o gráfico de monitoramento */
+      z-index: 9999;
+      /* Z-index alto para o gráfico de monitoramento quando maximizado, garantindo que ele se sobreponha a todos os outros elementos na tela, incluindo o workspace principal e o painel de propriedades, criando um efeito de maximização para destacar o gráfico e proporcionar uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para o gráfico de monitoramento, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para o gráfico maximizado */
+      box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.15);
+      /* Sombra para o gráfico de monitoramento quando maximizado, criando um efeito de destaque visual que chama a atenção dos usuários para o gráfico e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para o gráfico de monitoramento, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para o gráfico maximizado */
+      background: #fff;
+      /* Fundo branco para o gráfico de monitoramento quando maximizado, criando um contraste limpo e profissional com o workspace principal e o painel de propriedades, além de melhorar a legibilidade e a identificação do gráfico para os usuários, especialmente quando combinados com as bordas sutis e as sombras para destacar o gráfico de monitoramento maximizado */
+      border-radius: 16px 16px 0 0;
+      /* Borda arredondada para o gráfico de monitoramento quando maximizado, criando um visual mais amigável e atraente, além de destacar o gráfico e torná-lo mais identificável para os usuários, especialmente quando combinado com o fundo branco e as bordas sutis para melhorar a visibilidade do gráfico de monitoramento maximizado */
+      border: none;
+      /* Remove a borda para o gráfico de monitoramento quando maximizado, criando um visual mais limpo e profissional para o gráfico maximizado, além de permitir que o destaque visual seja controlado por meio de outras propriedades CSS, como a sombra e as bordas arredondadas, para criar um efeito de destaque mais elegante e profissional para o gráfico de monitoramento maximizado */
+      border-top: 4px solid #3498db;
+      /* Borda superior azul para o gráfico de monitoramento quando maximizado, criando um destaque visual que chama a atenção dos usuários para o gráfico e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para o gráfico de monitoramento, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para o gráfico maximizado */
+      margin: 0;
+      /* Remove a margem para o gráfico de monitoramento quando maximizado, garantindo que ele se encaixe adequadamente dentro dos limites da tela e proporcionando um layout mais organizado e profissional para o gráfico de monitoramento maximizado, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para o gráfico de monitoramento */
+      padding: 15px 25px;
+      /* Preenchimento interno para o gráfico de monitoramento quando maximizado, garantindo que o conteúdo dentro do gráfico tenha espaço suficiente para respirar, melhorando a legibilidade e a estética geral do design, além de criar um ambiente mais confortável para os usuários interagirem com o gráfico de monitoramento maximizado, especialmente quando combinado com o fundo branco e as bordas sutis para melhorar a visibilidade do gráfico de monitoramento maximizado */
+      display: flex;
+      /* Layout flexível para o gráfico de monitoramento quando maximizado, permitindo que o conteúdo dentro do gráfico seja organizado de forma flexível e se ajuste dinamicamente ao tamanho do gráfico maximizado, além de criar um visual mais consistente e profissional para o gráfico de monitoramento maximizado, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para o gráfico maximizado */
+      flex-direction: column;
+      /* Direção de layout em coluna para o gráfico de monitoramento quando maximizado, organizando o conteúdo dentro do gráfico de forma vertical e permitindo que os elementos do gráfico sejam dispostos de forma clara e legível para os usuários, além de criar um visual mais consistente e profissional para o gráfico de monitoramento maximizado, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para o gráfico maximizado */
+  }
+
+  .btn-maximize-chart
+
+  /* BOTÃO PARA MAXIMIZAR O GRÁFICO  */
+      {
+      background: #ecf0f1;
+      /* Fundo cinza claro para o botão de maximizar o gráfico, criando um contraste suave com o fundo branco do gráfico e garantindo que o botão seja facilmente identificável para os usuários, além de criar um visual mais consistente e profissional para o gráfico de monitoramento, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para o gráfico maximizado */
+      border: none;
+      /* Remove a borda para o botão de maximizar o gráfico, criando um visual mais limpo e profissional para o botão maximizado, além de permitir que o destaque visual seja controlado por meio de outras propriedades CSS, como a sombra e as bordas arredondadas, para criar um efeito de destaque mais elegante e profissional para o botão de maximizar o gráfico */
+      cursor: pointer;
+      /* Define o cursor como ponteiro ao passar sobre o botão de maximizar o gráfico, indicando que ele é clicável e proporcionando uma melhor experiência do usuário */
+      padding: 4px 8px;
+      /* Preenchimento interno para o botão de maximizar o gráfico, garantindo que ele tenha espaço suficiente para respirar e melhorando a legibilidade e a estética geral do design */
+      border-radius: 4px;
+      /* Borda arredondada para o botão de maximizar o gráfico, criando um visual mais amigável e atraente, além de destacar o botão e torná-lo mais identificável para os usuários */
+      font-size: 11px;
+      /* Tamanho da fonte para o botão de maximizar o gráfico, garantindo que ele seja legível e proporcional ao design geral do layout */
+      float: right;
+      /* Posiciona o botão de maximizar o gráfico à direita do gráfico de monitoramento */
+      font-weight: bold;
+      /* Negrito para o botão de maximizar o gráfico, criando um destaque visual que chama a atenção dos usuários para o botão e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para o gráfico de monitoramento, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para o gráfico maximizado */
+      color: #2c3e50;
+      /* Cor do texto para o botão de maximizar o gráfico, garantindo que ele seja legível e proporcional ao design geral do layout */
+  }
+
+  .btn-maximize-chart:hover
+
+  /* HOVER PARA O BOTÃO DE MAXIMIZAR O GRÁFICO  */
+      {
+      background: #bdc3c7;
+      /* Fundo cinza médio para o botão de maximizar o gráfico quando o mouse está sobre ele, criando um efeito de destaque que melhora a experiência do usuário e proporciona uma interação mais intuitiva com o botão */
+  }
+
+  /* WORKSPACE & CAMERA */
+  .workspace-panel
+
+  /* PAINEL PRINCIPAL DE TRABALHO  */
+      {
+      flex: 1;
+      /* Permite que o painel de workspace cresça para ocupar o espaço disponível, garantindo que ele seja a área principal de foco para os usuários e proporcionando um layout mais organizado e profissional para o workspace, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para o workspace */
+      position: relative;
+      /* Posiciona o painel de workspace em relação ao seu elemento pai */
+      background-color: #fdfdfd;
+      /* Cor de fundo para o painel de workspace */
+      background-image: linear-gradient(to right, #e1e8ed 1px, transparent 1px),
+          /* Imagem de gradiente para o fundo do painel de workspace */
+          linear-gradient(to bottom, #e1e8ed 1px, transparent 1px);
+      /* Imagem de gradiente para o fundo do painel de workspace */
+      background-size: 40px 40px;
+      overflow: hidden;
+      min-width: 0;
+      /* Propriedades para o fundo do painel de workspace */
+  }
+
+  #workspace-canvas
+
+  /* CAMADA PRINCIPAL ONDE OS COMPONENTES SÃO COLOCADOS  */
+      {
+      position: absolute;
+      /* Posiciona a camada do workspace de forma absoluta dentro do painel de workspace, permitindo que ela se sobreponha a outros elementos e proporcionando um layout mais organizado e profissional para o workspace, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para o workspace */
+      width: 100%;
+      /* Define a largura da camada do workspace como 100% do seu contêiner pai */
+      height: 100%;
+      /* Define a altura da camada do workspace como 100% do seu contêiner pai */
+      transform-origin: 0 0;
+      /* Define o ponto de origem para transformações */
+      will-change: transform;
+      /* Indica que a propriedade de transformação será alterada, otimizando o desempenho */
+  }
+
+  .top-toolbar
+
+  /* BARRA DE FERRAMENTAS NO TOPO DO WORKSPACE  */
+      {
+      position: absolute;
+      /* Posiciona a barra de ferramentas de forma absoluta dentro do painel de workspace, permitindo que ela se sobreponha a outros elementos e proporcionando um layout mais organizado e profissional para o workspace, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para o workspace */
+      top: 10px;
+      /* Posiciona a barra de ferramentas 10px abaixo do topo do painel de workspace */
+      left: 10px;
+      /* Posiciona a barra de ferramentas 10px à esquerda do painel de workspace */
+      right: 10px;
+      /* Posiciona a barra de ferramentas 10px à direita do painel de workspace */
+      z-index: 100;
+      /* Define o índice z da barra de ferramentas, garantindo que ela seja exibida acima dos outros elementos */
+      display: flex;
+      /* Exibe os elementos filhos da barra de ferramentas em uma linha horizontal */
+      justify-content: space-between;
+      /* Distribui os elementos filhos da barra de ferramentas com espaço igual entre eles */
+      background: rgba(255, 255, 255, 0.95);
+      /* Fundo branco semi-transparente para a barra de ferramentas, criando um contraste suave com o fundo do workspace e garantindo que os botões sejam facilmente identificáveis para os usuários, além de criar um visual mais consistente e profissional para a barra de ferramentas, especialmente quando combinado com as bordas sutis e as sombras para destacar a barra de ferramentas */
+      padding: 10px;
+      /* Adiciona preenchimento interno à barra de ferramentas */
+      border-radius: 8px;
+      /* Arredonda os cantos da barra de ferramentas */
+      border: 1px solid #eee;
+      /* Adiciona uma borda sutil à barra de ferramentas */
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      /* Adiciona uma sombra suave à barra de ferramentas */
+      pointer-events: auto;
+      /* Permite que a barra de ferramentas receba eventos do mouse */
+  }
+
+  .gaap-btn
+
+  /* ESTILO PARA BOTÕES DE AÇÃO (INICIAR SIMULAÇÃO, LIMPAR ÁREA)  */
+      {
+      padding: 8px 15px;
+      /* Preenchimento interno para os botões de ação, garantindo que eles tenham espaço suficiente para respirar e melhorando a legibilidade e a estética geral do design, além de criar um ambiente mais confortável para os usuários interagirem com os botões de ação, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os botões de ação */
+      border: 1px solid #bdc3c7;
+      /* Borda sutil para os botões de ação, criando um contraste suave com o fundo do workspace e garantindo que os botões sejam facilmente identificáveis para os usuários */
+      border-radius: 6px;
+      /* Arredonda os cantos dos botões de ação */
+      font-weight: bold;
+      /* Deixa o texto dos botões de ação em negrito */
+      cursor: pointer;
+      /* Muda o cursor para uma mão quando o mouse está sobre os botões de ação */
+      background: #fff;
+      /* Fundo branco para os botões de ação */
+      color: #2c3e50;
+      /* Cor do texto dos botões de ação */
+      transition: 0.5s;
+      /* Transição suave para os botões de ação, permitindo que eles respondam visualmente quando os usuários interagirem com eles, como ao passar o mouse ou clicar, melhorando a experiência do usuário e tornando a interface mais dinâmica e agradável de usar, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os botões de ação */
+  }
+
+  .gaap-btn:hover
+
+  /* HOVER PARA BOTÕES DE AÇÃO  */
+      {
+      background: #ecf0f1;
+      /* Fundo cinza claro para os botões de ação quando o mouse está sobre eles, criando um efeito de destaque que melhora a experiência do usuário e proporciona uma interação mais intuitiva com os botões de ação */
+  }
+
+  .gaap-btn.success
+
+  /* ESTILO PARA BOTÃO DE INICIAR SIMULAÇÃO  */
+      {
+      background: #2ecc71;
+      /* Fundo verde para o botão de iniciar simulação, criando um contraste forte com o fundo do workspace e garantindo que o botão seja facilmente identificável para os usuários, além de criar um visual mais consistente e profissional para o botão de iniciar simulação, especialmente quando combinado com as bordas sutis e as sombras para destacar o botão de iniciar simulação */
+      color: white;
+      /* Cor do texto do botão de iniciar simulação */
+      border-color: #27ae60;
+      /* Cor da borda do botão de iniciar simulação */
+  }
+
+  .gaap-btn.danger
+
+  /* ESTILO PARA BOTÃO DE LIMPAR ÁREA  */
+      {
+      background: #e74c3c;
+      /* Fundo vermelho para o botão de limpar área, criando um contraste forte com o fundo do workspace e garantindo que o botão seja facilmente identificável para os usuários, além de criar um visual mais consistente e profissional para o botão de limpar área, especialmente quando combinado com as bordas sutis e as sombras para destacar o botão de limpar área */
+      color: white;
+      /* Cor do texto do botão de limpar área */
+      border-color: #c0392b;
+      /* Cor da borda do botão de limpar área, criando um contraste forte com o fundo vermelho do botão e garantindo que a borda seja visível para os usuários, além de criar um visual mais consistente e profissional para o botão de limpar área, especialmente quando combinado com o fundo vermelho para destacar o botão de limpar área */
+  }
+
+  .gaap-btn.danger:hover
+
+  /* HOVER PARA BOTÃO DE LIMPAR ÁREA  */
+      {
+      background: #c0392b;
+      /* Fundo cinza para o botão de limpar área quando o mouse está sobre ele, criando um efeito de destaque que melhora a experiência do usuário e proporciona uma interação mais intuitiva com o botão de limpar área */
+  }
+
+  /* COMPONENTES NA TELA */
+  .placed-component
+
+  /* ESTILO PARA COMPONENTES COLOCADOS NO WORKSPACE  */
+      {
+      position: absolute;
+      /* Posiciona os componentes de forma absoluta dentro do workspace, permitindo que eles sejam movidos livremente e proporcionando um layout mais organizado e profissional para os componentes no workspace, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para os componentes no workspace */
+      cursor: move;
+      /* Define o cursor como uma mão quando o mouse está sobre o componente, indicando que ele é movível */
+      box-sizing: border-box;
+      /* Inclui a borda e o preenchimento no cálculo do tamanho do componente */
+  }
+
+  .placed-component.dragging
+
+  /* ESTILO PARA COMPONENTE DURANTE O DRAG  */
+      {
+      opacity: 0.8;
+      /* Define a opacidade do componente durante o arrasto, criando um efeito visual que melhora a experiência do usuário */
+      z-index: 1000;
+      /* Define o índice z do componente durante o arrasto, garantindo que ele seja exibido acima dos outros componentes */
+      filter: drop-shadow(0px 8px 12px rgba(0, 0, 0, 0.2));
+      /* Adiciona uma sombra ao componente durante o arrasto, criando um efeito de profundidade */
+  }
+
+  .placed-component.selected svg
+
+  /* ESTILO PARA COMPONENTE SELECIONADO  */
+      {
+      filter: drop-shadow(0px 0px 10px rgba(52, 152, 219, 0.8));
+      /* Adiciona uma sombra azul ao componente selecionado, criando um destaque visual que chama a atenção dos usuários para o componente selecionado e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para os componentes no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os componentes no workspace */
+
+  }
+
+  .placed-component svg
+
+  /* ESTILO PARA SVG DOS COMPONENTES  */
+      {
+      position: absolute;
+      /* Posiciona o SVG de forma absoluta dentro do componente, permitindo que ele se sobreponha a outros elementos do componente e proporcionando um layout mais organizado e profissional para os componentes no workspace, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para os componentes no workspace */
+      overflow: visible;
+      /* Permite que o conteúdo do SVG seja exibido mesmo que ultrapasse os limites do SVG, garantindo que os elementos gráficos dos componentes sejam exibidos corretamente e proporcionando um layout mais organizado e profissional para os componentes no workspace, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para os componentes no workspace */
+      pointer-events: none;
+      /* Permite que os eventos do mouse passem através do SVG, garantindo que os usuários possam interagir com os componentes no workspace sem serem bloqueados pelo SVG, além de criar um visual mais limpo e profissional para os componentes no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os componentes no workspace */
+  }
+
+  /* PORTAS E ANIMAÇÃO DE PULSO APRIMORADA */
+  .port-node
+
+  /* ESTILO PARA AS PORTAS DE CONEXÃO  */
+      {
+      cursor: crosshair;
+      /* Define o cursor como uma cruz quando o mouse está sobre as portas de conexão, indicando que elas são pontos de interação para conectar os componentes, melhorando a experiência do usuário ao interagir com as portas de conexão e proporcionando um visual mais dinâmico e agradável para os componentes no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os componentes no workspace */
+      pointer-events: all;
+      /* Permite que os eventos do mouse sejam registrados sobre a porta, garantindo que os usuários possam interagir com as portas de conexão e proporcionando uma experiência de usuário mais responsiva e intuitiva para os componentes no workspace */
+      transition: 0.5s;
+      /* Adiciona uma transição suave para as propriedades da porta, criando um efeito de animação que melhora a experiência do usuário ao interagir com as portas de conexão e proporcionando um visual mais dinâmico e agradável para os componentes no workspace */
+  }
+
+  .port-node:hover
+
+  /* ESTILO PARA PORTA QUANDO O MOUSE ESTÁ SOBRE ELA  */
+      {
+      r: 8;
+      /* Aumenta o raio da porta quando o mouse está sobre ela, criando um efeito de destaque visual que chama a atenção dos usuários para as portas de conexão e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para os componentes no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os componentes no workspace */
+      stroke-width: 3;
+      /* Aumenta a largura do contorno da porta quando o mouse está sobre ela, criando um efeito de destaque visual que chama a atenção dos usuários para as portas de conexão e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para os componentes no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os componentes no workspace */
+      fill: #f39c12;
+      /* Define a cor de preenchimento da porta quando o mouse está sobre ela, criando um efeito de destaque visual que chama a atenção dos usuários para as portas de conexão e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para os componentes no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os componentes no workspace */
+  }
+
+  @keyframes pulse-port
+
+  /* ANIMAÇÃO DE PULSO PARA PORTAS DESCONECTADAS  */
+      {
+
+      /* A animação faz a porta pulsar suavemente, aumentando o stroke-width e a intensidade da cor, além de adicionar um leve brilho com drop-shadow. */
+      0% {
+          stroke-width: 2;
+          /* Define a largura do contorno da porta no início da animação, criando um efeito de pulso que chama a atenção dos usuários para as portas de conexão desconectadas e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para os componentes no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os componentes no workspace */
+          fill: #fff;
+          /* Define a cor de preenchimento da porta no início da animação, criando um efeito de pulso que chama a atenção dos usuários para as portas de conexão desconectadas e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para os componentes no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os componentes no workspace */
+          stroke: #e67e22;
+          /* Define a cor do contorno da porta no início da animação, criando um efeito de pulso que chama a atenção dos usuários para as portas de conexão desconectadas e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para os componentes no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os componentes no workspace */
+          filter: drop-shadow(0 0 0px rgba(243, 156, 18, 0));
+          /* Define um filtro de drop-shadow no início da animação, criando um efeito de pulso que chama a atenção dos usuários para as portas de conexão desconectadas e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para os componentes no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os componentes no workspace */
+      }
+
+      100% {
+          stroke-width: 6;
+          /* Define a largura do contorno da porta no final da animação, criando um efeito de pulso que chama a atenção dos usuários para as portas de conexão desconectadas e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para os componentes no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os componentes no workspace */
+          fill: #fdf5e6;
+          /* Define a cor de preenchimento da porta no final da animação, criando um efeito de pulso que chama a atenção dos usuários para as portas de conexão desconectadas e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para os componentes no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os componentes no workspace */
+          stroke: #f39c12;
+          /* Define a cor do contorno da porta no final da animação, criando um efeito de pulso que chama a atenção dos usuários para as portas de conexão desconectadas e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para os componentes no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os componentes no workspace */
+          filter: drop-shadow(0 0 5px rgba(243, 156, 18, 1));
+          /* Define um filtro de drop-shadow no final da animação, criando um efeito de pulso que chama a atenção dos usuários para as portas de conexão desconectadas e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para os componentes no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os componentes no workspace */
+      }
+  }
+
+  #workspace-canvas .port-node.unconnected
+
+  /* PORTAS DESCONECTADAS RECEBEM A ANIMAÇÃO DE PULSO  */
+      {
+      animation: pulse-port 0.8s infinite alternate ease-in-out;
+      /* Aplica a animação de pulso às portas desconectadas, criando um efeito visual que chama a atenção dos usuários para as portas de conexão que não estão conectadas e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para os componentes no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os componentes no workspace */
+  }
+
+  /* CANOS E ANIMAÇÕES */
+  #pipe-layer
+
+  /* ESTILO PARA A CAMADA DE CANOS  */
+      {
+      position: absolute;
+      /* Posiciona a camada de canos de forma absoluta dentro do painel de workspace, permitindo que ela se sobreponha a outros elementos e proporcionando um layout mais organizado e profissional para os canos no workspace, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para os canos no workspace */
+      top: 0;
+      /* Posiciona a camada de canos no topo do painel de workspace */
+      left: 0;
+      /* Posiciona a camada de canos no canto esquerdo do painel de workspace */
+      width: 100%;
+      /* Define a largura da camada de canos como 100% do painel de workspace */
+      height: 100%;
+      /* Define a altura da camada de canos como 100% do painel de workspace */
+      pointer-events: none;
+      /* Desativa os eventos do mouse para a camada de canos */
+      z-index: 1;
+      /* Define o índice z da camada de canos como 1, posicionando-a acima dos outros elementos */
+      overflow: visible;
+      /* Permite que os canos sejam exibidos mesmo que ultrapassem os limites da camada, garantindo que as conexões entre os componentes sejam exibidas corretamente e proporcionando um layout mais organizado e profissional para os canos no workspace, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para os canos no workspace */
+  }
+
+  .pipe-line
+
+  /* ESTILO PARA AS LINHAS DE CONEXÃO (CANOS)  */
+      {
+      fill: none;
+      /* Remove o preenchimento para as linhas de conexão, garantindo que elas sejam exibidas como linhas finas e limpas, melhorando a legibilidade e a estética geral do design, além de criar um visual mais organizado e profissional para os canos no workspace, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para os canos no workspace */
+      stroke: #95a5a6;
+      /* Define a cor do traçado dos canos */
+      stroke-width: 6;
+      /* Define a largura do traçado dos canos */
+      stroke-linecap: round;
+      /* Define o estilo da ponta das linhas de conexão */
+      pointer-events: stroke;
+      /* Permite que os eventos do mouse sejam detectados apenas no traçado dos canos */
+      transition: stroke 0.5s;
+      /* Adiciona uma transição suave para a cor do traçado dos canos, criando um efeito de destaque visual quando os usuários interagem com os canos, melhorando a experiência do usuário e proporcionando um visual mais dinâmico e agradável para os canos no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os canos no workspace */
+  }
+
+  .pipe-line:hover
+
+  /* ESTILO PARA CANO QUANDO O MOUSE ESTÁ SOBRE ELE  */
+      {
+      stroke: #bdc3c7;
+      /* Define a cor do traçado dos canos quando o mouse está sobre eles, criando um efeito de destaque visual que chama a atenção dos usuários para os canos e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para os canos no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os canos no workspace */
+  }
+
+  .pipe-line.active
+
+  /* ESTILO PARA CANOS COM FLUXO ATIVO  */
+      {
+      stroke: #3498db;
+      /* Define a cor do traçado dos canos com fluxo ativo, criando um destaque visual que chama a atenção dos usuários para os canos que estão ativos e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para os canos no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os canos no workspace */
+      stroke-width: 6;
+      /* Define a largura do traçado dos canos com fluxo ativo */
+      animation: flow 1s linear infinite;
+      /* Adiciona uma animação de fluxo aos canos com fluxo ativo */
+      stroke-dasharray: 12 12;
+      /* Define o padrão de traçado dos canos com fluxo ativo */
+  }
+
+  .pipe-line.selected
+
+  /* ESTILO PARA CANO SELECIONADO  */
+      {
+      stroke: #e74c3c;
+      /* Define a cor do traçado dos canos selecionados, criando um destaque visual que chama a atenção dos usuários para os canos selecionados e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para os canos no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os canos no workspace */
+      stroke-width: 6;
+      /* Define a largura do traçado dos canos selecionados */
+      filter: drop-shadow(0px 0px 5px rgba(231, 76, 60, 0.5));
+      /* Adiciona uma sombra ao cano selecionado */
+      cursor: pointer;
+      /* Define o cursor do mouse para indicar que o cano é clicável */
+  }
+
+  .pipe-flow-label
+
+  /* ESTILO PARA RÓTULOS DE FLUXO NOS CANOS  */
+      {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      /* Define a família de fontes para os rótulos de fluxo nos canos, garantindo que eles sejam legíveis e proporcionem um visual moderno e profissional para os rótulos de fluxo, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os canos no workspace */
+      font-size: 12px;
+      /* Define o tamanho da fonte para os rótulos de fluxo nos canos, garantindo que eles sejam legíveis e proporcionem um visual moderno e profissional para os rótulos de fluxo, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os canos no workspace */
+      font-weight: bold;
+      /* Define o peso da fonte para os rótulos de fluxo nos canos, garantindo que eles sejam legíveis e proporcionem um visual moderno e profissional para os rótulos de fluxo, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os canos no workspace */
+      fill: #2c3e50;
+      /* Define a cor do preenchimento para os rótulos de fluxo nos canos, garantindo que eles sejam legíveis e proporcionem um visual moderno e profissional para os rótulos de fluxo, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os canos no workspace */
+      pointer-events: none;
+      /* Define que os rótulos de fluxo nos canos não respondem a eventos do mouse, garantindo que eles não interfiram na interação com os canos */
+      paint-order: stroke;
+      /* Define a ordem de pintura para os rótulos de fluxo nos canos, garantindo que o traçado seja pintado antes do preenchimento, criando um visual mais dinâmico e agradável para os rótulos de fluxo, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os canos no workspace */
+      stroke: #ffffff;
+      /* Define a cor do traçado para os rótulos de fluxo nos canos, garantindo que eles sejam legíveis e proporcionem um visual moderno e profissional para os rótulos de fluxo, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os canos no workspace */
+      stroke-width: 5px;
+      /* Define a largura do traçado para os rótulos de fluxo nos canos, garantindo que eles sejam legíveis e proporcionem um visual moderno e profissional para os rótulos de fluxo, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os canos no workspace */
+      stroke-linejoin: round;
+      /* Define o estilo da junção das linhas para os rótulos de fluxo nos canos, garantindo que eles sejam legíveis e proporcionem um visual moderno e profissional para os rótulos de fluxo, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os canos no workspace */
+  }
+
+  @keyframes flow
+
+  /* ANIMAÇÃO DE FLUXO PARA CANOS  */
+      {
+      to {
+          stroke-dashoffset: -24;
+      }
+  }
+
+  /* A animação de fluxo cria um efeito de movimento ao longo do cano, dando a impressão de que o fluido está fluindo. */
+  /* O stroke-dashoffset é animado para criar esse efeito.*/
+  .water-stream
+
+  /* ESTILO PARA FLUXO DE ÁGUA NOS CANOS  */
+      {
+      animation: fall 0.4s linear infinite;
+      /* Adiciona uma animação de queda para o fluxo de água nos canos, criando um efeito visual que simula o movimento da água fluindo pelos canos, melhorando a experiência do usuário e proporcionando um visual mais dinâmico e agradável para os canos no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os canos no workspace */
+      stroke-dasharray: 8 8;
+      /* Define o padrão de traçado para o fluxo de água nos canos, criando um efeito visual que simula o movimento da água fluindo pelos canos, melhorando a experiência do usuário e proporcionando um visual mais dinâmico e agradável para os canos no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os canos no workspace */
+  }
+
+  @keyframes fall
+
+  /* ANIMAÇÃO DE QUEDA PARA FLUXO DE ÁGUA  */
+      {
+      to
+
+      /* to significa que a animação irá do estado inicial (definido no CSS) até o estado final (definido dentro do bloco to). No caso, a animação fará com que o stroke-dashoffset seja animado para criar um efeito de queda para o fluxo de água nos canos, dando a impressão de que a água está fluindo para baixo. */
+          {
+          stroke-dashoffset: -16;
+          /* Define o valor final do stroke-dashoffset para a animação de queda, criando um efeito visual que simula o movimento da água fluindo para baixo pelos canos, melhorando a experiência do usuário e proporcionando um visual mais dinâmico e agradável para os canos no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os canos no workspace */
+      }
+  }
+
+  /* RESPONSIVIDADE MOBILE */
+  @media (max-width: 800px)
+  /* EM TELAS MENORES, OS PAINÉIS LATERAIS FICAM SOBREPOSTOS AO WORKSPACE  */
+      {
+      .sandbox-container
+
+      /* ESTILO PARA O CONTÊINER PRINCIPAL QUE ABRIGA OS PAINÉIS E O WORKSPACE, AJUSTADO PARA RESPONSIVIDADE EM TELAS MENORES  */
+          {
+          position: relative;
+          /* Posiciona o contêiner principal de forma relativa, permitindo que os painéis laterais sejam posicionados de forma absoluta dentro dele e proporcionando um layout mais organizado e profissional para os painéis laterais em telas menores, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para os painéis laterais em telas menores */
+      }
+
+      .side-panel
+
+      /* ESTILO PARA OS PAINÉIS LATERAIS, AJUSTADO PARA RESPONSIVIDADE EM TELAS MENORES  */
+          {
+          position: absolute;
+          /* Posiciona os painéis laterais de forma absoluta dentro do contêiner principal, permitindo que eles se sobreponham ao workspace e proporcionando um layout mais organizado e profissional para os painéis laterais em telas menores, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para os painéis laterais em telas menores */
+          height: 100%;
+          /* Define a altura dos painéis laterais como 100% da altura do contêiner principal */
+          top: 0;
+          /* Define a posição vertical dos painéis laterais como 0, alinhando-os ao topo do contêiner principal */
+          box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+          /* Adiciona uma sombra ao redor dos painéis laterais para criar um efeito de profundidade */
+      }
+
+      .palette-panel
+
+      /* ESTILO PARA O PAINEL DE PALETA, AJUSTADO PARA RESPONSIVIDADE EM TELAS MENORES  */
+          {
+          left: 0;
+          /* Define a posição horizontal do painel de paleta como 0, alinhando-o ao lado esquerdo do contêiner principal */
+          z-index: 50;
+          /* Define o índice z do painel de paleta como 50, garantindo que ele seja exibido acima do workspace e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para o painel de paleta em telas menores, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para o painel de paleta em telas menores */
+      }
+
+      .properties-panel
+
+      /* ESTILO PARA O PAINEL DE PROPRIEDADES, AJUSTADO PARA RESPONSIVIDADE EM TELAS MENORES  */
+          {
+          right: 0;
+          /* Define a posição horizontal do painel de propriedades como 0, alinhando-o ao lado direito do contêiner principal */
+          z-index: 50;
+          /* Define o índice z do painel de propriedades como 50, garantindo que ele seja exibido acima do workspace e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para o painel de propriedades em telas menores, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para o painel de propriedades em telas menores */
+      }
+
+      .side-panel
+
+      /* ESTILO PARA OS PAINÉIS LATERAIS QUANDO ESTÃO EXPANDIDOS, AJUSTADO PARA RESPONSIVIDADE EM TELAS MENORES  */
+          {
+          transform: translateX(0);
+          /* Garante que os painéis laterais estejam totalmente visíveis quando estão expandidos, proporcionando uma experiência de visualização mais imersiva para os usuários e criando um visual mais dinâmico e agradável para os painéis laterais em telas menores, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os painéis laterais em telas menores */
+      }
+
+      .palette-panel.collapsed
+
+      /* ESTILO PARA O PAINEL DE PALETA QUANDO ESTÁ COLAPSADO, AJUSTADO PARA RESPONSIVIDADE EM TELAS MENORES  */
+          {
+          width: 0 !important;
+          /* Define a largura do painel de paleta como 0 quando está colapsado, ocultando-o da visualização */
+          transform: translateX(-100%);
+          /* Move o painel de paleta para fora da tela quando está colapsado */
+          border: none;
+          /* Remove a borda do painel de paleta quando está colapsado */
+      }
+
+      .properties-panel.collapsed
+
+      /* ESTILO PARA O PAINEL DE PROPRIEDADES QUANDO ESTÁ COLAPSADO, AJUSTADO PARA RESPONSIVIDADE EM TELAS MENORES  */
+          {
+          width: 0 !important;
+          /* Define a largura do painel de propriedades como 0 quando está colapsado, ocultando-o da visualização */
+          transform: translateX(100%);
+          /* Move o painel de propriedades para fora da tela quando está colapsado */
+          border: none;
+          /* Remove a borda do painel de propriedades quando está colapsado */
+      }
+
+      #toggle-left
+
+      /* ESTILO PARA O BOTÃO DE TOGGLE DO PAINEL DE PALETA, AJUSTADO PARA RESPONSIVIDADE EM TELAS MENORES  */
+          {
+          left: 280px;
+          /* Define a posição horizontal do botão de toggle do painel de paleta como 280px, alinhando-o ao lado esquerdo do contêiner principal */
+      }
+
+      #toggle-left.collapsed
+
+      /* ESTILO PARA O BOTÃO DE TOGGLE DO PAINEL DE PALETA QUANDO ESTÁ COLAPSADO, AJUSTADO PARA RESPONSIVIDADE EM TELAS MENORES  */
+          {
+          left: 0;
+          /* Define a posição horizontal do botão de toggle do painel de paleta como 0 quando está colapsado, alinhando-o ao lado esquerdo do contêiner principal */
+      }
+
+      #toggle-right
+
+      /* ESTILO PARA O BOTÃO DE TOGGLE DO PAINEL DE PROPRIEDADES, AJUSTADO PARA RESPONSIVIDADE EM TELAS MENORES  */
+          {
+          right: 340px;
+          /* Define a posição horizontal do botão de toggle do painel de propriedades como 340px, alinhando-o ao lado direito do contêiner principal */
+      }
+
+      #toggle-right.collapsed
+
+      /* ESTILO PARA O BOTÃO DE TOGGLE DO PAINEL DE PROPRIEDADES QUANDO ESTÁ COLAPSADO, AJUSTADO PARA RESPONSIVIDADE EM TELAS MENORES  */
+          {
+          right: 0;
+          /* Define a posição horizontal do botão de toggle do painel de propriedades como 0 quando está colapsado, alinhando-o ao lado direito do contêiner principal */
+      }
+  }

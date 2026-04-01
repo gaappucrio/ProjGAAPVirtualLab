@@ -1,35 +1,149 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
+<!-- Declaração do tipo de documento HTML5 para garantir que o navegador interprete o conteúdo corretamente e aplique as regras de renderização adequadas, além de melhorar a compatibilidade e a performance da página em diferentes navegadores e dispositivos -->
+<html lang="pt-BR"> <!-- Declaração do tipo de documento HTML5 e definição do idioma para português do Brasil -->
+
+<head> <!-- INÍCIO DO HEAD COM CONFIGURAÇÕES DE META, TÍTULO, IMPORTAÇÃO DE SCRIPTS E ESTILIZAÇÃO GERAL -->
+    <meta charset="UTF-8"> <!-- CONFIGURAÇÃO DE CODIFICAÇÃO PARA SUPORTE A CARACTERES ESPECIAIS EM PORTUGUÊS -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sandbox GAAP - Modular</title>
-    <link rel="stylesheet" href="css/style.css">
+    <!-- CONFIGURAÇÃO DE VIEWPORT PARA GARANTIR QUE O LAYOUT SEJA RESPONSIVO E SE ADAPTE A DIFERENTES TAMANHOS DE TELA, ESPECIALMENTE EM DISPOSITIVOS MÓVEIS -->
+    <title>Sandbox GAAP - Fronteiras e Fluxo Visual</title> <!-- TÍTULO DA PÁGINA, EXIBIDO NA ABA DO NAVEGADOR -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <!-- import do Chart.js para gráficos -->
+    <link rel="stylesheet" href="css\style.css">
+    <!-- Importação do arquivo de estilos CSS para a aparência da página -->
 </head>
+
 <body>
-    <div class="gaap-header">
-        <h2>Sandbox Modular GAAP</h2>
-        <p>Estrutura profissional com Design Patterns e múltiplos arquivos.</p>
+
+    <div class="gaap-header"> <!-- CABEÇALHO COM TÍTULO E INSTRUÇÕES -->
+        <h2>Sandbox Modular GAAP - Fronteiras de Controle</h2>
+        <p>Use o <b>scroll do mouse para zoom</b> e arraste segurando <b>Espaço</b> para navegar.
+            Aperte <b>DEL</b> para deletar um componente e <b>CLIQUE DUPLO</b> para editar.
+            Você pode também desconectar componentes usando <b>CLIQUE DUPLO</b> nas setas.</p>
     </div>
 
-    <div class="sandbox-container">
-        <div class="palette-panel" id="palette">
-            <h3>Equipamentos</h3>
-            <div class="palette-item" draggable="true" data-type="tank"><span>Tanque T-01</span></div>
-            <div class="palette-item" draggable="true" data-type="pump"><span>Bomba P-01</span></div>
-            <div class="palette-item" draggable="true" data-type="valve"><span>Válvula V-01</span></div>
+    <div class="sandbox-container"> <!-- CONTAINER PRINCIPAL QUE ABRIGA OS PAINÉIS E O WORKSPACE -->
+        <div class="side-panel palette-panel collapsed" id="palette">
+            <!-- PAINEL LATERAL DE PALETA DE COMPONENTES, COMEÇA COLAPSADO -->
+            <div class="side-panel-content"> <!-- CONTEÚDO INTERNO DO PAINEL DE PALETA -->
+                <h3 class="panel-title">Fronteiras</h3> <!-- TÍTULO DA SEÇÃO DE FRONTEIRAS DE CONTROLE NA PALETA -->
+
+                <div class="palette-item" draggable="true" data-type="source">
+                    <!-- ITEM DE PALETA PARA FONTE DE FLUIDO, COM ÍCONE E NOME -->
+                    <img src="assets/components/gaap_source_icon.png" alt="Fonte" class="palette-icon">
+                    <!-- ÍCONE PARA FONTE DE FLUIDO -->
+                    <span><b></b>Entrada (In)</b></span> <!-- NOME DO COMPONENTE FONTE DE FLUIDO NA PALETA -->
+                </div>
+
+                <div class="palette-item" draggable="true" data-type="sink">
+                    <!-- ITEM DE PALETA PARA DRENO DE FLUIDO, COM ÍCONE E NOME -->
+                    <img src="assets/components/gaap_sink_icon.png" alt="Dreno" class="palette-icon">
+                    <!-- ÍCONE PARA DRENO DE FLUIDO -->
+                    <span><b>Saída (Out)</b></span> <!-- NOME DO COMPONENTE DRENO DE FLUIDO NA PALETA -->
+                </div>
+
+                <h3 class="panel-title" style="margin-top:5px;">Equipamentos</h3>
+                <!-- TÍTULO DA SEÇÃO DE EQUIPAMENTOS NA PALETA -->
+
+                <div class="palette-item" draggable="true" data-type="tank">
+                    <!-- ITEM DE PALETA PARA TANQUE DE FLUIDO, COM ÍCONE E NOME -->
+                    <img src="assets/components/gaap_tank_icon.png" alt="Tanque" class="palette-icon">
+                    <!-- ÍCONE PARA TANQUE DE FLUIDO -->
+                    <span><b>Tanque de Fluido</b></span> <!-- NOME DO COMPONENTE TANQUE DE FLUIDO NA PALETA -->
+                </div>
+
+                <div class="palette-item" draggable="true" data-type="pump">
+                    <!-- ITEM DE PALETA PARA BOMBA CENTRÍFUGA, COM ÍCONE E NOME -->
+                    <img src="assets/components/gaap_pump_icon.png" alt="Bomba" class="palette-icon">
+                    <!-- ÍCONE PARA BOMBA CENTRÍFUGA -->
+                    <span><b>Bomba Centrífuga</b></span> <!-- NOME DO COMPONENTE BOMBA CENTRÍFUGA NA PALETA -->
+                </div>
+
+                <div class="palette-item" draggable="true" data-type="valve">
+                    <!-- ITEM DE PALETA PARA VÁLVULA DE CONTROLE, COM ÍCONE E NOME -->
+                    <img src="assets/components/gaap_valve_icon.png" alt="Válvula" class="palette-icon">
+                    <!-- ÍCONE PARA VÁLVULA DE CONTROLE -->
+                    <span><b>Válvula de Controle</b></span> <!-- NOME DO COMPONENTE VÁLVULA DE CONTROLE NA PALETA -->
+                </div>
+            </div>
         </div>
+        <div id="toggle-left" class="panel-toggle collapsed">▶</div>
+        <!-- BOTÃO PARA COLAPSAR/EXPANDIR O PAINEL DE PALETA -->
 
         <div class="workspace-panel" id="workspace">
-            <div class="top-toolbar">
-                <button class="gaap-btn active" id="btn-run">Rodar Física (Teste)</button>
-                <button class="gaap-btn" id="btn-clear" style="border-color:#e74c3c; color:#e74c3c;">Limpar Tudo</button>
+            <!-- PAINEL PRINCIPAL DE TRABALHO ONDE OS COMPONENTES SÃO COLOCADOS -->
+            <div class="top-toolbar"> <!-- BARRA DE FERRAMENTAS NO TOPO DO WORKSPACE COM BOTÕES DE AÇÃO -->
+                <button class="gaap-btn success" id="btn-run">▶ Iniciar Simulação Física</button>
+                <!-- BOTÃO PARA INICIAR A SIMULAÇÃO FÍSICA -->
+                <button class="gaap-btn" id="btn-clear" style="border-color:#e74c3c; color:#e74c3c;">Limpar
+                    Área</button> <!-- BOTÃO PARA LIMPAR O WORKSPACE, REMOVENDO TODOS OS COMPONENTES E CONEXÕES -->
+            </div>
+
+            <div id="workspace-canvas"> <!-- CANVAS PRINCIPAL ONDE OS COMPONENTES SÃO DESENHADOS E INTERAGIDOS -->
+                <svg id="pipe-layer">
+                    <!-- CAMADA DE SVG PARA DESENHAR AS LINHAS DE CONEXÃO (CANOS) ENTRE OS COMPONENTES -->
+                    <defs>
+                        <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6"
+                            orient="auto-start-reverse">
+                            <!-- DEFINIÇÃO DE UM MARCADOR DE SETA PARA AS LINHAS DE CONEXÃO (CANOS) -->
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="#95a5a6" />
+                            <!-- O marcador é um triângulo simples que aponta para a direção do fluxo, preenchido com uma cor cinza. -->
+                        </marker>
+                        <marker id="arrow-active" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6"
+                            orient="auto-start-reverse">
+                            <!-- DEFINIÇÃO DE UM MARCADOR DE SETA PARA CANOS COM FLUXO ATIVO -->
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="#3498db" />
+                            <!-- Versão do marcador para canos com fluxo ativo, preenchido com uma cor azul para indicar atividade. -->
+                        </marker>
+                    </defs>
+                </svg>
+            </div>
+        </div>
+
+        <div id="toggle-right" class="panel-toggle collapsed">◀</div>
+        <!-- BOTÃO PARA COLAPSAR/EXPANDIR O PAINEL DE PROPRIEDADES -->
+        <div class="side-panel properties-panel collapsed" id="properties">
+            <!-- PAINEL LATERAL DE PROPRIEDADES, COMEÇA COLAPSADO -->
+            <div class="side-panel-content"> <!-- CONTEÚDO INTERNO DO PAINEL DE PROPRIEDADES -->
+                <h3 class="panel-title">Propriedades</h3> <!-- TÍTULO DA SEÇÃO DE PROPRIEDADES -->
+                <div id="prop-content">
+                    <!-- CONTAINER ONDE AS PROPRIEDADES DOS COMPONENTES SELECIONADOS SERÃO EXIBIDAS -->
+                    <p style="font-size: 12px; color:#95a5a6; text-align:center;">Para ver as propriedades de um
+                        componente, clique nele.</p>
+                    <!-- INSTRUÇÃO PARA O USUÁRIO SOBRE COMO VER AS PROPRIEDADES DOS COMPONENTES -->
+                </div>
+
+                <h3 class="panel-title" style="margin-top: 10px;"> <!-- TÍTULO DA SEÇÃO DE MONITORAMENTO -->
+                    Monitoramento
+                    <button id="btn-max-chart" class="btn-maximize-chart">⛶ Expandir</button>
+                    <!-- BOTÃO PARA MAXIMIZAR O GRÁFICO DE MONITORAMENTO, PERMITINDO AO USUÁRIO VER DETALHES DO FLUXO E VOLUME EM UM FORMATO MAIOR E MAIS VISÍVEL -->
+                </h3>
+
+                <div class="chart-container" id="chart-wrapper">
+                    <!-- CONTAINER DO GRÁFICO DE MONITORAMENTO, QUE PODE SER MAXIMIZADO PARA UMA VISUALIZAÇÃO MAIS DETALHADA -->
+                    <div id="chart-max-header"
+                        style="display: none; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+                        <!-- CABEÇALHO DO GRÁFICO QUANDO MAXIMIZADO, COM TÍTULO E BOTÃO PARA FECHAR O GRÁFICO MAXIMIZADO -->
+                        <h3 style="margin: 0; color: #2c3e50; font-size: 16px;">Monitoramento Detalhado</h3>
+                        <!-- TÍTULO DO GRÁFICO QUANDO MAXIMIZADO -->
+                        <button id="btn-close-max-chart" class="gaap-btn danger"
+                            style="padding: 5px 15px; font-size: 12px; margin: 0;">✖ Fechar Gráfico</button>
+                        <!-- BOTÃO PARA FECHAR O GRÁFICO QUANDO ESTIVER MAXIMIZADO, RETORNANDO À VISUALIZAÇÃO NORMAL -->
+                    </div>
+                    <div style="flex: 1; position: relative; min-height: 0; height: 100%;">
+                        <!-- CONTAINER FLEXÍVEL PARA O GRÁFICO, GARANTINDO QUE ELE OCUPA TODO O ESPAÇO DISPONÍVEL DENTRO DO CONTAINER DO GRÁFICO -->
+                        <canvas id="gaap-volume-chart"></canvas>
+                        <!-- ELEMENTO CANVAS ONDE O GRÁFICO DE VOLUME SERÁ RENDERIZADO USANDO O CHART.JS, PERMITINDO AO USUÁRIO VISUALIZAR O VOLUME DE FLUIDO NOS COMPONENTES EM TEMPO REAL DURANTE A SIMULAÇÃO. -->
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
     <script src="js/MotorFisico.js"></script>
+    <script src="js/RegistroComponentes.js"></script>
     <script src="js/FabricaEquipamentos.js"></script>
     <script src="js/App.js"></script>
+
 </body>
+
 </html>
