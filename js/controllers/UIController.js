@@ -5,7 +5,6 @@
 
 import { ENGINE, TanqueLogico, BombaLogica, ValvulaLogica, FonteLogica, DrenoLogico } from '../MotorFisico.js'
 import { REGISTRO_COMPONENTES } from '../RegistroComponentes.js'
-import { updateAllPipes } from './PipeController.js'
 import { getConnectionFlow } from './PipeController.js'
 
 let volumeChart;
@@ -131,14 +130,14 @@ function setupSubscriptions() {
     // Subscrição do ENGINE
     ENGINE.subscribe((dados) => {
         if (dados.tipo === 'selecao') {
-            const comp = dados.componente;
+            const component_data = dados.componente;
 
-            if (comp instanceof TanqueLogico) {
-                if (chartedTankId !== comp.id) {
-                    chartedTankId = comp.id;
+            if (component_data instanceof TanqueLogico) {
+                if (chartedTankId !== component_data.id) {
+                    chartedTankId = component_data.id;
                     volumeChart.data.labels = [Math.round(ENGINE.elapsedTime)];
-                    volumeChart.data.datasets[0].data = [comp.volumeAtual];
-                    volumeChart.data.datasets[0].label = `Volume: ${comp.tag}`;
+                    volumeChart.data.datasets[0].data = [component_data.volumeAtual];
+                    volumeChart.data.datasets[0].label = `Volume: ${component_data.tag}`;
                     volumeChart.update();
                 }
             } else {
@@ -149,7 +148,7 @@ function setupSubscriptions() {
                 volumeChart.update();
             }
 
-            if (!comp) {
+            if (!component_data) {
                 propContent.innerHTML = `
                     <div class="prop-group">
                         <label>Velocidade da Simulação</label>
@@ -167,49 +166,49 @@ function setupSubscriptions() {
             }
 
             let tipoChave = 'source';
-            if (comp instanceof DrenoLogico) tipoChave = 'sink';
-            else if (comp instanceof BombaLogica) tipoChave = 'pump';
-            else if (comp instanceof ValvulaLogica) tipoChave = 'valve';
-            else if (comp instanceof TanqueLogico) tipoChave = 'tank';
+            if (component_data instanceof DrenoLogico) tipoChave = 'sink';
+            else if (component_data instanceof BombaLogica) tipoChave = 'pump';
+            else if (component_data instanceof ValvulaLogica) tipoChave = 'valve';
+            else if (component_data instanceof TanqueLogico) tipoChave = 'tank';
 
             const spec = REGISTRO_COMPONENTES[tipoChave];
 
             propContent.innerHTML = `
                 <div class="prop-group">
                     <label>Tag (Nome)</label>
-                    <input type="text" id="input-tag" value="${comp.tag}">
+                    <input type="text" id="input-tag" value="${component_data.tag}">
                 </div>
-                ${spec.propriedadesAdicionais(comp)}
+                ${spec.propriedadesAdicionais(component_data)}
             `;
 
             document.getElementById('input-tag').addEventListener('input', e => {
-                comp.tag = e.target.value;
-                comp.notify({ tipo: 'tag_update' });
+                component_data.tag = e.target.value;
+                component_data.notify({ tipo: 'tag_update' });
             });
-            if (spec.setupProps) spec.setupProps(comp);
+            if (spec.setupProps) spec.setupProps(component_data);
         } else if (dados.tipo === 'update_painel') {
-            const comp = ENGINE.selectedComponent;
+            const component = ENGINE.selectedComponent;
 
-            if (comp instanceof TanqueLogico && document.getElementById('disp-vol'))
-                document.getElementById('disp-vol').value = comp.volumeAtual.toFixed(1);
+            if (component instanceof TanqueLogico && document.getElementById('disp-vol'))
+                document.getElementById('disp-vol').value = component.volumeAtual.toFixed(1);
 
-            if (comp instanceof ValvulaLogica) {
+            if (component instanceof ValvulaLogica) {
                 const abEl = document.getElementById('input-abertura');
                 const numInput = document.getElementById('val-abertura');
                 if (abEl && document.activeElement !== numInput && document.activeElement !== abEl) {
-                    abEl.value = Math.round(comp.grauAbertura);
-                    if (numInput) numInput.value = Math.round(comp.grauAbertura);
+                    abEl.value = Math.round(component.grauAbertura);
+                    if (numInput) numInput.value = Math.round(component.grauAbertura);
                 }
                 if (document.getElementById('disp-vazao-valvula'))
-                    document.getElementById('disp-vazao-valvula').value = comp.fluxoReal.toFixed(2);
+                    document.getElementById('disp-vazao-valvula').value = component.fluxoReal.toFixed(2);
             }
 
-            if (comp instanceof BombaLogica) {
+            if (component instanceof BombaLogica) {
                 const acEl = document.getElementById('input-acionamento');
                 const numInput = document.getElementById('val-acionamento');
                 if (acEl && document.activeElement !== numInput && document.activeElement !== acEl) {
-                    acEl.value = Math.round(comp.grauAcionamento);
-                    if (numInput) numInput.value = Math.round(comp.grauAcionamento);
+                    acEl.value = Math.round(component.grauAcionamento);
+                    if (numInput) numInput.value = Math.round(component.grauAcionamento);
                 }
             }
 

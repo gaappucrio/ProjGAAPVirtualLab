@@ -3,7 +3,6 @@
 // Ficheiro: js/controllers/DragDropController.js
 // =========================================
 
-import { ENGINE } from '../MotorFisico.js'
 import { REGISTRO_COMPONENTES } from '../RegistroComponentes.js'
 import { FabricaDeEquipamentos, updatePortStates } from '../FabricaEquipamentos.js'
 import { camera } from './CameraController.js'

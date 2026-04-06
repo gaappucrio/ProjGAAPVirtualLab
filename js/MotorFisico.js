@@ -33,7 +33,12 @@ export class Observable {
 /* A classe Fluido representa um fluido com um nome e uma densidade,
 que pode ser usado para simular o comportamento de líquidos no sistema. */
 export class Fluido {   /* O construtor da classe Fluido recebe um nome e uma densidade, que são armazenados como propriedades do objeto. */
-    constructor(nome, densidade) { this.nome = nome; this.densidade = densidade; }
+    constructor(nome, densidade, pressao, temperatura) { 
+        this.nome = nome;
+        this.densidade = densidade; // kg/m³
+        this.pressao = pressao; //Bar
+        this.temperatura = temperatura;  //°C
+    }
 }
 
 /* A classe SistemaSimulacao é o núcleo da simulação, gerenciando os componentes,
@@ -47,7 +52,7 @@ export class SistemaSimulacao extends Observable {
     constructor() {
         super();
         this.velocidade = 1.0;
-        this.fluidoOperante = new Fluido("Água", 1000.0);
+        this.fluidoOperante = new Fluido("Água", 1000.0, 1.0, 25.0);
         this.componentes = [];
         this.conexoes = [];
         this.isRunning = false;
@@ -75,12 +80,21 @@ export class SistemaSimulacao extends Observable {
 
     /* O método start inicia a simulação, definindo o estado de execução como verdadeiro,
     registrando o tempo atual e iniciando o loop de atualização usando requestAnimationFrame.*/
-    start() { this.isRunning = true; this.lastTime = performance.now(); requestAnimationFrame(this.tick.bind(this)); this.notify({ tipo: 'estado_motor', rodando: true }); }
+    start() { 
+        this.isRunning = true; 
+        this.lastTime = performance.now(); 
+        requestAnimationFrame(this.tick.bind(this)); 
+        this.notify({ tipo: 'estado_motor', rodando: true }); 
+    }
 
     /* O método stop para a simulação, definindo o estado de execução como falso,
     notificando a interface do usuário sobre a mudança de estado
     e atualizando a visualização dos canos para refletir que o sistema parou. */
-    stop() { this.isRunning = false; this.notify({ tipo: 'estado_motor', rodando: false }); this.updatePipesVisual(); }
+    stop() { 
+        this.isRunning = false; 
+        this.notify({ tipo: 'estado_motor', rodando: false }); 
+        this.updatePipesVisual(); 
+    }
 
     /* O método selectComponent é usado para selecionar um componente específico na simulação,
     armazenando-o como o componente selecionado e notificando a interface do usuário sobre a seleção. */
@@ -180,7 +194,8 @@ export class ComponenteFisico extends Observable {
     conectarSaida(destino) { 
         if (!this.outputs.includes(destino)) { 
             this.outputs.push(destino); 
-            destino.inputs.push(this); 
+            destino.inputs.push(this);
+            this.notify({ tipo: 'conexao', source: this, target: destino });
         } 
     }
     /* O método desconectarSaida é usado para desconectar a saída deste componente de um componente de destino.
@@ -227,7 +242,8 @@ export class BombaLogica extends ComponenteFisico {
         super(id, tag, x, y); 
         this.isOn = false; 
         this.vazaoNominal = 45.0; 
-        this.grauAcionamento = 0; 
+        this.grauAcionamento = 0;
+        this.pressaoMaxima = 5.0;
         this.fluxoReal = 0; 
     }
 
@@ -267,7 +283,9 @@ export class BombaLogica extends ComponenteFisico {
     com base no nível normalizado do fluido na entrada,
     mas para a BombaLogica, ele simplesmente retorna o fluxo de saída calculado no método getFluxoSaida,
     já que a disponibilidade de fluido na entrada é considerada no cálculo do fluxo real. */
-    getFluxoSaidaFromTank(nivelNormalizado) { return this.getFluxoSaida(); }
+    getFluxoSaidaFromTank() {
+        return this.getFluxoSaida(); 
+    }
 }
 
 /* A ValvulaLogica simula uma válvula de controle onde o fluxo de saída depende do grau de abertura
@@ -322,7 +340,9 @@ export class ValvulaLogica extends ComponenteFisico {
     com base no nível normalizado do fluido na entrada, mas para a ValvulaLogica,
     ele simplesmente retorna o fluxo de saída calculado no método getFluxoSaida,
     já que o cálculo do fluxo real considera o nível do fluido na entrada e o grau de abertura da válvula. */
-    getFluxoSaidaFromTank(nivelNormalizado) { this.fluxoReal = this._calcFluxo(nivelNormalizado); return this.fluxoReal; }
+    getFluxoSaidaFromTank(nivelNormalizado) {
+        this.fluxoReal = this._calcFluxo(nivelNormalizado); 
+        return this.fluxoReal; }
 }
 
 /* A classe TanqueLogico simula um tanque de fluido onde o volume atual é atualizado com base no fluxo de entrada e saída,
@@ -343,7 +363,8 @@ export class TanqueLogico extends ComponenteFisico {
 
     /* O método _rodarControlador é responsável por executar o controlador PID para ajustar as entradas e saídas do tanque
     com base no erro entre o setpoint e o nível atual do fluido. */
-    _rodarControlador(dt) {
+    _rodarControlador(dt)
+    {
         if (!this.setpointAtivo) return;
         const erro = (this.setpoint / 100) - (this.capacidadeMaxima > 0 ? this.volumeAtual / this.capacidadeMaxima : 0);
         if (this._lastErro !== undefined && (this._lastErro * erro < 0)) this._ctrlIntegral = 0;

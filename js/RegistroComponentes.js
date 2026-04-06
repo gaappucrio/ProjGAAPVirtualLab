@@ -343,4 +343,5 @@ export const REGISTRO_COMPONENTES = {
             document.getElementById('input-ki').addEventListener('change', e => { comp.ki = Math.max(0, parseFloat(e.target.value) || 0); comp.resetControlador(); });
         }
     }
+    
 };

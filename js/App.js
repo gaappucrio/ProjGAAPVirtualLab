@@ -5,9 +5,9 @@
 
 import { ENGINE, setPortStateUpdater, setConnectionFlowGetter } from './MotorFisico.js'
 import { updatePortStates } from './FabricaEquipamentos.js'
-import { setupUI, updatePipesVisualUI } from './controllers/UIController.js'
-import { setupCameraControl, updateCameraTransform } from './controllers/CameraController.js'
-import { setupPipeControl, updateAllPipes, getConnectionFlow } from './controllers/PipeController.js'
+import { setupUI } from './controllers/UIController.js'
+import { setupCameraControl } from './controllers/CameraController.js'
+import { setupPipeControl, getConnectionFlow } from './controllers/PipeController.js'
 import { setupDragDrop } from './controllers/DragDropController.js'
 
 // Inicializar controllers
