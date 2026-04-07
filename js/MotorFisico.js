@@ -14,7 +14,6 @@ export function setPortStateUpdater(fn) {
 export function setConnectionFlowGetter(fn) {
     connectionFlowGetter = fn;
 }
-
 /* A classe Observable é uma implementação simples do padrão de design Observer,
 permitindo que os componentes do sistema de simulação notifiquem os ouvintes sobre mudanças de estado ou eventos. */
 export class Observable {
@@ -36,7 +35,7 @@ export class Fluido {   /* O construtor da classe Fluido recebe um nome e uma de
     constructor(nome, densidade, pressao, temperatura) { 
         this.nome = nome;
         this.densidade = densidade; // kg/m³
-        this.pressao = pressao; //Bar
+        this.pressao = pressao; //bar
         this.temperatura = temperatura;  //°C
     }
 }
@@ -113,11 +112,41 @@ export class SistemaSimulacao extends Observable {
         this.lastTime = timestamp; if (dt > 0.1) dt = 0.1;
 
         this.elapsedTime += dt;
+        
+        this.avaliarFluxosRede();
+
         this.componentes.forEach(c => { if (c instanceof TanqueLogico) c.atualizarFisica(dt, this.fluidoOperante); });
         this.updatePipesVisual();
         this.notify({ tipo: 'update_painel', dt: dt });
 
         requestAnimationFrame(this.tick.bind(this));
+    }
+
+    avaliarFluxosRede() {
+        this.componentes.forEach(c => { c.fluxoReal = 0; });
+        
+        const nosFinais = this.componentes.filter(c => 
+            c instanceof DrenoLogico || 
+            c instanceof TanqueLogico || 
+            (c.outputs.length === 0 && !(c instanceof FonteLogica) && !(c instanceof TanqueLogico))
+        );
+
+        nosFinais.forEach(c => {
+            if (c instanceof TanqueLogico) {
+                let qIn = 0;
+                c.inputs.forEach(inp => {
+                    if (typeof inp.puxarFluxo === 'function') qIn += inp.puxarFluxo(Infinity);
+                });
+                c.lastQin = qIn;
+                c.fluxoReal = qIn;
+            } else {
+                let qIn = 0;
+                c.inputs.forEach(inp => {
+                    if (typeof inp.puxarFluxo === 'function') qIn += inp.puxarFluxo(Infinity);
+                });
+                c.fluxoReal = qIn;
+            }
+        });
     }
 
     /* O método updatePipesVisual é responsável por atualizar a aparência dos canos de conexão com base no fluxo atual do sistema.
@@ -126,11 +155,11 @@ export class SistemaSimulacao extends Observable {
     updatePipesVisual() {
         this.conexoes.forEach(conn => {
             const sourceLogic = this.componentes.find(c => c.id === conn.sourceEl.dataset.compId);
+            const targetLogic = this.componentes.find(c => c.id === conn.targetEl.dataset.compId);
             let flow = 0;
-            if (sourceLogic && this.isRunning) {
-                if (sourceLogic instanceof TanqueLogico) flow = sourceLogic.volumeAtual > 0 ? 1 : 0;
-                else if (sourceLogic.fluxoReal !== undefined) flow = sourceLogic.fluxoReal;
-                else if (sourceLogic instanceof FonteLogica) flow = 1;
+            if (sourceLogic && targetLogic && this.isRunning) {
+                if (sourceLogic instanceof TanqueLogico) flow = targetLogic.fluxoReal;
+                else flow = sourceLogic.fluxoReal;
             }
 
             if (flow > 0.1) {
@@ -142,13 +171,10 @@ export class SistemaSimulacao extends Observable {
             }
 
             if (conn.label) {
-                const flowVal = connectionFlowGetter ? connectionFlowGetter(conn) : 0;
-                if (flowVal === null || flowVal === undefined) {
+                if (flow === null || flow === undefined) {
                     conn.label.textContent = '';
-                } else if (flowVal === Infinity) {
-                    conn.label.textContent = '∞ L/s';
                 } else {
-                    conn.label.textContent = flowVal.toFixed(1) + ' L/s';
+                    conn.label.textContent = flow.toFixed(1) + ' L/s';
                 }
             }
         });
@@ -206,30 +232,40 @@ export class ComponenteFisico extends Observable {
         destino.inputs = destino.inputs.filter(inp => inp !== this);
     }
 
-    /* O método getFluxoSaida é um método genérico que deve ser implementado por cada tipo específico de componente para calcular o fluxo de saída com base no estado atual do componente e suas conexões.
-    Na classe base, ele retorna 0 por padrão, mas as classes derivadas como:
-    FonteLogica, DrenoLogico, BombaLogica, ValvulaLogica e TanqueLogico
-    irão implementar a lógica específica para calcular o fluxo de saída. */
-    getFluxoSaida() { return 0; }
+    puxarFluxo(demanda) { 
+        return 0; 
+    }
 }
-
-/* As classes FonteLogica, DrenoLogico, BombaLogica, ValvulaLogica e TanqueLogico estendem ComponenteFisico
-e implementam a lógica específica para cada tipo de componente,
-incluindo como calcular o fluxo de saída com base no estado atual do componente e suas conexões. */
 
 export class FonteLogica extends ComponenteFisico {   /* A classe FonteLogica simula uma fonte de fluido onde o fluxo de saída é constante e infinito,
             representando uma entrada ilimitada de fluido no sistema. */
-    getFluxoSaida() { return 99999; }
+        constructor(id, tag, x, y) { 
+            super(id, tag, x, y); 
+            this.vazaoNominal = 45.0;
+            this.fluido = new Fluido("Água", 1000.0, 1.0, 25.0);
+            this.fluxoReal = 0;
+        }
+
+    puxarFluxo(demanda) {
+        const fluxoFornecido = Math.min(demanda, this.vazaoNominal);
+        this.fluxoReal = fluxoFornecido; 
+        return fluxoFornecido;
+    }
 }
 
 /* O DrenoLogico simula um dreno onde o fluxo de saída depende do nível do fluido,
 seguindo uma relação de raiz quadrada para representar a perda de carga. */
 export class DrenoLogico extends ComponenteFisico {   /* O método getFluxoSaida do DrenoLogico calcula o fluxo de saída com base no nível normalizado do fluido,
-            usando uma relação de raiz quadrada para representar a perda de carga,
-            onde o fluxo é proporcional à raiz quadrada do nível do fluido,
-            multiplicado por um fator de 10 para ajustar a escala do fluxo. */
-    getFluxoSaidaFromTank(nivelNormalizado) { 
-        return nivelNormalizado > 0 ? 10.0 * Math.sqrt(nivelNormalizado) : 0; 
+            puxando o fluxo dos componentes a montante. */
+    puxarFluxo(demanda) { 
+        let fluxoObtido = 0;
+        this.inputs.forEach(c => {
+            if (typeof c.puxarFluxo === 'function') {
+                fluxoObtido += c.puxarFluxo(demanda - fluxoObtido);
+            }
+        });
+        this.fluxoReal = fluxoObtido;
+        return fluxoObtido;
     }
 }
 
@@ -241,9 +277,8 @@ export class BombaLogica extends ComponenteFisico {
     constructor(id, tag, x, y) { 
         super(id, tag, x, y); 
         this.isOn = false; 
-        this.vazaoNominal = 45.0; 
+        this.pressaoAdicionadaMax = 5.0; 
         this.grauAcionamento = 0;
-        this.pressaoMaxima = 5.0;
         this.fluxoReal = 0; 
     }
 
@@ -260,31 +295,21 @@ export class BombaLogica extends ComponenteFisico {
         this.notify({ tipo: 'estado', isOn: this.isOn, grau: this.grauAcionamento });
     }
 
-    /* O método getFluxoSaida calcula o fluxo real de saída da bomba,
-    considerando a disponibilidade de fluido na entrada e o grau de acionamento.
-    Ele verifica se a bomba está ligada; se não estiver, o fluxo real é definido como 0.
-    Em seguida, ele calcula a disponibilidade de fluido na entrada somando o fluxo de saída de todas as conexões de entrada.
-    O fluxo desejado é calculado com base no grau de acionamento da bomba e sua vazão nominal.
-    O fluxo real é então determinado como o mínimo entre a disponibilidade de fluido na entrada e o fluxo desejado,
-    garantindo que o fluxo real não exceda a capacidade da bomba ou a disponibilidade de fluido. */
-    getFluxoSaida() {
-        if (!this.isOn) { this.fluxoReal = 0; return 0; }
-        let fluxoEntradaDisp = 0;
+    puxarFluxo(demanda) {
+        if (!this.isOn || this.grauAcionamento <= 0) {
+            this.fluxoReal = 0;
+            return 0;
+        }
+        
+        let fluxoObtido = 0;
         this.inputs.forEach(c => {
-            if (c instanceof TanqueLogico) fluxoEntradaDisp += c.volumeAtual > 0 ? 99999 : 0;
-            else if (typeof c.getFluxoSaida === 'function') fluxoEntradaDisp += c.getFluxoSaida();
+            if (typeof c.puxarFluxo === 'function') {
+                fluxoObtido += c.puxarFluxo(demanda - fluxoObtido);
+            }
         });
-        const fluxoDesejado = (this.grauAcionamento / 100.0) * this.vazaoNominal;
-        this.fluxoReal = Math.min(fluxoEntradaDisp, fluxoDesejado);
+        
+        this.fluxoReal = fluxoObtido;
         return this.fluxoReal;
-    }
-
-    /* O método getFluxoSaidaFromTank é usado para calcular o fluxo de saída da bomba
-    com base no nível normalizado do fluido na entrada,
-    mas para a BombaLogica, ele simplesmente retorna o fluxo de saída calculado no método getFluxoSaida,
-    já que a disponibilidade de fluido na entrada é considerada no cálculo do fluxo real. */
-    getFluxoSaidaFromTank() {
-        return this.getFluxoSaida(); 
     }
 }
 
@@ -323,26 +348,25 @@ export class ValvulaLogica extends ComponenteFisico {
         return this.cv * Math.sqrt(nivelNormalizado * this.deltaP) * (this.grauAbertura / 100.0);
     }
 
-    /*O método getFluxoSaida calcula o fluxo real de saída da válvula,
-    considerando o nível do fluido na entrada, o grau de abertura da válvula e a perda de carga,
-    garantindo que o fluxo real seja proporcional ao grau de abertura e à raiz quadrada do nível do fluido.*/
-    getFluxoSaida() {
-        let fluxoMontante = 0;
+    puxarFluxo(demanda) {
+        if (!this.aberta || this.grauAbertura <= 0) {
+            this.fluxoReal = 0;
+            return 0;
+        }
+
+        const minhaCapacidade = this.cv * Math.sqrt(this.deltaP) * (this.grauAbertura / 100.0);
+        const demandaEfetiva = Math.min(demanda, minhaCapacidade);
+        
+        let fluxoObtido = 0;
         this.inputs.forEach(c => {
-            if (c instanceof TanqueLogico) fluxoMontante += this._calcFluxo(c.capacidadeMaxima > 0 ? c.volumeAtual / c.capacidadeMaxima : 0);
-            else if (typeof c.getFluxoSaida === 'function') fluxoMontante += c.getFluxoSaida() * (this.grauAbertura / 100.0);
+            if (typeof c.puxarFluxo === 'function') {
+                fluxoObtido += c.puxarFluxo(demandaEfetiva - fluxoObtido);
+            }
         });
-        this.fluxoReal = fluxoMontante;
+        
+        this.fluxoReal = fluxoObtido;
         return this.fluxoReal;
     }
-
-    /* O método getFluxoSaidaFromTank é usado para calcular o fluxo de saída da válvula
-    com base no nível normalizado do fluido na entrada, mas para a ValvulaLogica,
-    ele simplesmente retorna o fluxo de saída calculado no método getFluxoSaida,
-    já que o cálculo do fluxo real considera o nível do fluido na entrada e o grau de abertura da válvula. */
-    getFluxoSaidaFromTank(nivelNormalizado) {
-        this.fluxoReal = this._calcFluxo(nivelNormalizado); 
-        return this.fluxoReal; }
 }
 
 /* A classe TanqueLogico simula um tanque de fluido onde o volume atual é atualizado com base no fluxo de entrada e saída,
@@ -391,45 +415,31 @@ export class TanqueLogico extends ComponenteFisico {
     o que pode ser útil para evitar comportamentos indesejados quando o setpoint é ativado ou desativado. */
     resetControlador() { this._ctrlIntegral = 0; this._lastErro = 0; }
 
-    /* O método dVdt calcula a taxa de variação do volume do tanque com base no fluxo de entrada e saída.
-    Ele soma o fluxo de entrada de todas as conexões de entrada e o fluxo de saída de todas as conexões de saída,
-    considerando o nível do fluido para calcular o fluxo de saída usando a relação de raiz quadrada.
-    O resultado é a diferença entre o fluxo de entrada e o fluxo de saída,
-    que representa a taxa de variação do volume do tanque. */
-    dVdt(V) {
-        let qIn = 0, qOut = 0;
-        this.inputs.forEach(c => { if (typeof c.getFluxoSaida === 'function') qIn += c.getFluxoSaida(); });
-        const nv = V / this.capacidadeMaxima;
-        this.outputs.forEach(c => { if (typeof c.getFluxoSaidaFromTank === 'function') qOut += c.getFluxoSaidaFromTank(nv > 0 ? nv : 0); });
-        this.lastQin = qIn;
-        return qIn - qOut;
-    }
-
     /* O método atualizarFisica é chamado a cada tick da simulação para atualizar o estado do tanque
     com base na física do sistema. Ele executa o controlador PID para ajustar as entradas e saídas do tanque,
-    calcula a variação do volume usando o método dVdt, e atualiza o volume atual do tanque
-    usando o método de Runge-Kutta de quarta ordem para integração numérica.
+    calcula a variação do volume com base nos fluxos reais e atualiza o volume atual do tanque.
     Ele também garante que o volume atual do tanque não seja negativo ou exceda a capacidade máxima
     e notifica a interface do usuário sobre o estado atual do tanque, incluindo o volume atual,
     a porcentagem de capacidade, e o último fluxo de entrada. */
     atualizarFisica(dt, fluido) {
         this._rodarControlador(dt);
-        const k1 = this.dVdt(this.volumeAtual), k2 = this.dVdt(this.volumeAtual + 0.5 * k1 * dt), k3 = this.dVdt(this.volumeAtual + 0.5 * k2 * dt), k4 = this.dVdt(this.volumeAtual + k3 * dt);
-        this.volumeAtual += (1 / 6) * (k1 + 2 * k2 + 2 * k3 + k4) * dt;
+        
+        let qOut = 0;
+        this.outputs.forEach(out => {
+            qOut += out.fluxoReal || 0;
+        });
+        
+        const deltaV = (this.lastQin - qOut) * dt;
+        this.volumeAtual += deltaV;
+
         if (isNaN(this.volumeAtual) || this.volumeAtual < 0) this.volumeAtual = 0;
         if (this.volumeAtual > this.capacidadeMaxima) this.volumeAtual = this.capacidadeMaxima;
         this.notify({ tipo: 'volume', perc: this.volumeAtual / this.capacidadeMaxima, abs: this.volumeAtual, qIn: this.lastQin });
     }
 
-    /* O método getFluxoSaida calcula o fluxo de saída do tanque com base no nível atual do fluido,
-    usando uma relação de raiz quadrada para representar a perda de carga,
-    onde o fluxo é proporcional à raiz quadrada do nível do fluido,
-    multiplicado por um fator de 10 para ajustar a escala do fluxo. */
-    getFluxoSaida() { const nv = this.capacidadeMaxima > 0 ? this.volumeAtual / this.capacidadeMaxima : 0; return nv > 0 ? 10.0 * Math.sqrt(nv) : 0; }
-
-    /* O método getFluxoSaidaFromTank é usado para calcular o fluxo de saída do tanque com base no nível normalizado do fluido,
-    seguindo a mesma relação de raiz quadrada para representar a perda de carga,
-    onde o fluxo é proporcional à raiz quadrada do nível do fluido,
-    multiplicado por um fator de 10 para ajustar a escala do fluxo. */
-    getFluxoSaidaFromTank(nivelMontante) { return nivelMontante > 0 ? 10.0 * Math.sqrt(nivelMontante) : 0; }
+    puxarFluxo(demanda) { 
+        const nv = this.capacidadeMaxima > 0 ? this.volumeAtual / this.capacidadeMaxima : 0; 
+        const minhaCapacidade = nv > 0 ? 10.0 * Math.sqrt(nv) : 0;
+        return Math.min(demanda, minhaCapacidade);
+    }
 }

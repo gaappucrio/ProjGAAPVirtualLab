@@ -3,7 +3,7 @@
 // Ficheiro: js/controllers/PipeController.js
 // =========================================
 
-import { ENGINE, FonteLogica, BombaLogica, ValvulaLogica, TanqueLogico } from '../MotorFisico.js'
+import { ENGINE } from '../MotorFisico.js'
 import { camera } from './CameraController.js'
 import { updatePortStates } from '../utils/PortStateManager.js'
 
@@ -23,23 +23,6 @@ export function getPortCoords(portEl) {
 export function drawCurve(x1, y1, x2, y2) {
     const dx = Math.abs(x2 - x1) * 0.5;
     return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
-}
-
-export function getConnectionFlow(conn) {
-    const sourceLogic = ENGINE.componentes.find(c => c.id === conn.sourceEl.dataset.compId);
-    const targetLogic = ENGINE.componentes.find(c => c.id === conn.targetEl.dataset.compId);
-    if (!sourceLogic || !ENGINE.isRunning) return null;
-
-    if (sourceLogic instanceof FonteLogica) return Infinity;
-    if (sourceLogic instanceof BombaLogica || sourceLogic instanceof ValvulaLogica)
-        return sourceLogic.fluxoReal || 0;
-    if (sourceLogic instanceof TanqueLogico) {
-        const nv = sourceLogic.capacidadeMaxima > 0 ? sourceLogic.volumeAtual / sourceLogic.capacidadeMaxima : 0;
-        if (targetLogic && typeof targetLogic.getFluxoSaidaFromTank === 'function')
-            return targetLogic.getFluxoSaidaFromTank(nv > 0 ? nv : 0);
-        return sourceLogic.getFluxoSaida();
-    }
-    return 0;
 }
 
 export function updateAllPipes() {

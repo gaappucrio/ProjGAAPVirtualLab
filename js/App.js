@@ -3,11 +3,11 @@
 // Ficheiro: js/App.js
 // =============================================
 
-import { ENGINE, setPortStateUpdater, setConnectionFlowGetter } from './MotorFisico.js'
+import { ENGINE, setPortStateUpdater } from './MotorFisico.js'
 import { updatePortStates } from './FabricaEquipamentos.js'
 import { setupUI } from './controllers/UIController.js'
 import { setupCameraControl } from './controllers/CameraController.js'
-import { setupPipeControl, getConnectionFlow } from './controllers/PipeController.js'
+import { setupPipeControl } from './controllers/PipeController.js'
 import { setupDragDrop } from './controllers/DragDropController.js'
 
 // Inicializar controllers
@@ -18,7 +18,6 @@ setupDragDrop();
 
 // Registrar callbacks para resolver dependências circulares
 setPortStateUpdater(() => updatePortStates());
-setConnectionFlowGetter((conn) => getConnectionFlow(conn));
 
 // Controles gerais (iniciar, pausar, limpar)
 const btnRun = document.getElementById('btn-run');

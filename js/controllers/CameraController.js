@@ -3,8 +3,6 @@
 // Ficheiro: js/controllers/CameraController.js
 // ========================================
 
-import { GRID_SIZE } from '../Config.js'
-
 export const camera = {
     scale: 1,
     x: 0,

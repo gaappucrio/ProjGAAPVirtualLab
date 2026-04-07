@@ -3,9 +3,8 @@
 // Ficheiro: js/controllers/UIController.js
 // ====================================
 
-import { ENGINE, TanqueLogico, BombaLogica, ValvulaLogica, FonteLogica, DrenoLogico } from '../MotorFisico.js'
+import { ENGINE, TanqueLogico, BombaLogica, ValvulaLogica, DrenoLogico } from '../MotorFisico.js'
 import { REGISTRO_COMPONENTES } from '../RegistroComponentes.js'
-import { getConnectionFlow } from './PipeController.js'
 
 let volumeChart;
 let chartUpdateTimer = 0;
@@ -232,59 +231,4 @@ function setupSubscriptions() {
     });
 
     ENGINE.selectComponent(null);
-}
-
-export function updatePipesVisualUI() {
-    ENGINE.conexoes.forEach(conn => {
-        const sourceLogic = ENGINE.componentes.find(c => c.id === conn.sourceEl.dataset.compId);
-        let flow = 0;
-        if (sourceLogic && ENGINE.isRunning) {
-            if (sourceLogic instanceof TanqueLogico)
-                flow = sourceLogic.volumeAtual > 0 ? 1 : 0;
-            else if (sourceLogic.fluxoReal !== undefined)
-                flow = sourceLogic.fluxoReal;
-            else if (sourceLogic instanceof FonteLogica)
-                flow = 1;
-        }
-
-        if (flow > 0.1) {
-            conn.path.classList.add('active');
-            // Não alterar marker se o pipe estiver selecionado
-            if (!conn.path.classList.contains('selected')) {
-                conn.path.setAttribute("marker-end", "url(#arrow-active)");
-            }
-        } else {
-            conn.path.classList.remove('active');
-            // Não alterar marker se o pipe estiver selecionado
-            if (!conn.path.classList.contains('selected')) {
-                conn.path.setAttribute("marker-end", "url(#arrow)");
-            }
-        }
-
-        if (conn.label) {
-            const flowVal = getConnectionFlow(conn);
-            if (flowVal === null || flowVal === undefined) {
-                conn.label.textContent = '';
-            } else if (flowVal === Infinity) {
-                conn.label.textContent = '∞ L/s';
-            } else {
-                conn.label.textContent = flowVal.toFixed(1) + ' L/s';
-            }
-        }
-    });
-
-    if (ENGINE.isRunning) {
-        ENGINE.componentes.forEach(c => {
-            if (c instanceof TanqueLogico && c.setpointAtivo) {
-                const notificarEstado = (equipamento) => {
-                    if (equipamento instanceof ValvulaLogica)
-                        equipamento.notify({ tipo: 'estado', aberta: equipamento.aberta, grau: equipamento.grauAbertura });
-                    else if (equipamento instanceof BombaLogica)
-                        equipamento.notify({ tipo: 'estado', isOn: equipamento.isOn, grau: equipamento.grauAcionamento });
-                };
-                c.inputs.forEach(notificarEstado);
-                c.outputs.forEach(notificarEstado);
-            }
-        });
-    }
 }

@@ -41,7 +41,35 @@ export const REGISTRO_COMPONENTES = {
         setup: (visual, logica, id) => {
             logica.subscribe((d) => { if (d.tipo === 'tag_update') visual.querySelector(`#tag-${id}`).textContent = logica.tag; });
         },
-        propriedadesAdicionais: () => ""
+        propriedadesAdicionais: (comp) => `
+                    <div class="prop-group">
+                        <label>Vazão Nominal (L/s)</label>
+                        <input type="number" id="input-fonte-vazao" value="${comp.vazaoNominal}" step="1" min="0">
+                    </div>
+                    <div class="prop-group">
+                        <label>Fluido</label>
+                        <input type="text" id="input-fonte-fluido" value="${comp.fluido.nome}">
+                    </div>
+                    <div class="prop-group">
+                        <label>Densidade (kg/m³)</label>
+                        <input type="number" id="input-fonte-densidade" value="${comp.fluido.densidade}" step="10" min="1">
+                    </div>
+                    <div class="prop-group">
+                        <label>Pressão (bar)</label>
+                        <input type="number" id="input-fonte-pressao" value="${comp.fluido.pressao}" step="0.1" min="0">
+                    </div>
+                    <div class="prop-group">
+                        <label>Temperatura (°C)</label>
+                        <input type="number" id="input-fonte-temp" value="${comp.fluido.temperatura}" step="1">
+                    </div>
+                `,
+        setupProps: (comp) => {
+            document.getElementById('input-fonte-vazao').addEventListener('change', e => comp.vazaoNominal = Math.max(0, parseFloat(e.target.value) || 0));
+            document.getElementById('input-fonte-fluido').addEventListener('change', e => comp.fluido.nome = e.target.value);
+            document.getElementById('input-fonte-densidade').addEventListener('change', e => comp.fluido.densidade = Math.max(1, parseFloat(e.target.value) || 1000));
+            document.getElementById('input-fonte-pressao').addEventListener('change', e => comp.fluido.pressao = Math.max(0, parseFloat(e.target.value) || 1));
+            document.getElementById('input-fonte-temp').addEventListener('change', e => comp.fluido.temperatura = parseFloat(e.target.value) || 25);
+        }
     },
     'sink': {
         Classe: DrenoLogico,
@@ -85,10 +113,10 @@ export const REGISTRO_COMPONENTES = {
                         <input type="range" id="input-acionamento" min="0" max="100" value="${comp.grauAcionamento}">
                     </div>
                     <div class="prop-group">
-                        <label>Vazão Nominal Máx (L/s)
-                            <span class="help-icon" title="É a vazão máxima teórica da bomba quando operando em 100% de sua potência. Aumentar isso eleva o fluxo limite da linha.">i</span>
+                        <label>Pressão Adicionada Máx (bar)
+                            <span class="help-icon" title="Pressão máxima que a bomba pode adicionar ao fluido em 100% de acionamento.">i</span>
                         </label>
-                        <input type="number" id="input-vazmax" value="${comp.vazaoNominal}" step="5" min="5">
+                        <input type="number" id="input-pressao-max" value="${comp.pressaoAdicionadaMax}" step="0.5" min="0">
                     </div>
                 `,
         setupProps: (comp) => {
@@ -111,7 +139,7 @@ export const REGISTRO_COMPONENTES = {
 
             slider.addEventListener('input', e => updateFromSlider(e.target.value));
             numInput.addEventListener('change', e => updateFromInput(e.target.value));
-            document.getElementById('input-vazmax').addEventListener('change', e => comp.vazaoNominal = parseFloat(e.target.value));
+            document.getElementById('input-pressao-max').addEventListener('change', e => comp.pressaoAdicionadaMax = parseFloat(e.target.value) || 0);
 
             comp.subscribe(d => {
                 if (d.tipo === 'estado' && slider) {
