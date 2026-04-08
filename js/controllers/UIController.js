@@ -189,8 +189,26 @@ function setupSubscriptions() {
         } else if (dados.tipo === 'update_painel') {
             const component = ENGINE.selectedComponent;
 
-            if (component instanceof TanqueLogico && document.getElementById('disp-vol'))
-                document.getElementById('disp-vol').value = component.volumeAtual.toFixed(1);
+            if (component instanceof FonteLogica) {
+                if (document.getElementById('disp-vazao-fonte'))
+                    document.getElementById('disp-vazao-fonte').value = component.fluxoReal.toFixed(2);
+            }
+
+            if (component instanceof DrenoLogico) {
+                if (document.getElementById('disp-vazao-dreno'))
+                    document.getElementById('disp-vazao-dreno').value = component.vazaoRecebidaLps.toFixed(2);
+            }
+
+            if (component instanceof TanqueLogico) {
+                if (document.getElementById('disp-vol'))
+                    document.getElementById('disp-vol').value = component.volumeAtual.toFixed(1);
+                if (document.getElementById('disp-pressao-tanque'))
+                    document.getElementById('disp-pressao-tanque').value = component.pressaoFundoBar.toFixed(2);
+                if (document.getElementById('disp-qin-tanque'))
+                    document.getElementById('disp-qin-tanque').value = component.lastQin.toFixed(2);
+                if (document.getElementById('disp-qout-tanque'))
+                    document.getElementById('disp-qout-tanque').value = component.lastQout.toFixed(2);
+            }
 
             if (component instanceof ValvulaLogica) {
                 const abEl = document.getElementById('input-abertura');
@@ -201,6 +219,8 @@ function setupSubscriptions() {
                 }
                 if (document.getElementById('disp-vazao-valvula'))
                     document.getElementById('disp-vazao-valvula').value = component.fluxoReal.toFixed(2);
+                if (document.getElementById('disp-deltap-valvula'))
+                    document.getElementById('disp-deltap-valvula').value = component.deltaPAtualBar.toFixed(2);
             }
 
             if (component instanceof BombaLogica) {
@@ -210,6 +230,12 @@ function setupSubscriptions() {
                     acEl.value = Math.round(component.grauAcionamento);
                     if (numInput) numInput.value = Math.round(component.grauAcionamento);
                 }
+                if (document.getElementById('disp-vazao-bomba'))
+                    document.getElementById('disp-vazao-bomba').value = component.fluxoReal.toFixed(2);
+                if (document.getElementById('disp-succao-bomba'))
+                    document.getElementById('disp-succao-bomba').value = component.pressaoSucaoAtualBar.toFixed(2);
+                if (document.getElementById('disp-descarga-bomba'))
+                    document.getElementById('disp-descarga-bomba').value = component.pressaoDescargaAtualBar.toFixed(2);
             }
 
             chartUpdateTimer += dados.dt;
