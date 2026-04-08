@@ -13,7 +13,7 @@ import {
     DrenoLogico
 } from '../MotorFisico.js'
 import { REGISTRO_COMPONENTES } from '../RegistroComponentes.js'
-import { getConnectionFlow } from './PipeController.js'
+
 import {
     formatUnitValue,
     getUnitOptions,
@@ -169,8 +169,8 @@ function displayStep(category, baseStep, digits = 6) {
 function renderUnitControls() {
     const prefs = getUnitPreferences();
     const categories = [
-        { id: 'pressure', label: 'Pressao', hint: 'Unidade usada para exibir e editar pressao.' },
-        { id: 'flow', label: 'Vazao', hint: 'Unidade usada para exibir e editar vazao.' },
+        { id: 'pressure', label: 'Pressão', hint: 'Unidade usada para exibir e editar pressao.' },
+        { id: 'flow', label: 'Vazão', hint: 'Unidade usada para exibir e editar vazao.' },
         { id: 'length', label: 'Comprimento', hint: 'Unidade usada para exibir e editar comprimentos e cotas.' },
         { id: 'volume', label: 'Volume', hint: 'Unidade usada para exibir e editar volumes e capacidades.' },
         { id: 'temperature', label: 'Temperatura', hint: 'Unidade usada para exibir e editar temperatura.' }
@@ -325,7 +325,7 @@ function renderPumpCurveChart(component) {
                     pointRadius: 0
                 },
                 {
-                    label: 'Eficiencia (%)',
+                    label: 'Eficiência (%)',
                     data: datasets.efficiencyPoints,
                     borderColor: '#27ae60',
                     backgroundColor: 'rgba(39, 174, 96, 0.1)',
@@ -373,13 +373,13 @@ function renderPumpCurveChart(component) {
                 },
                 tooltip: {
                     callbacks: {
-                        title: (ctx) => `Vazao: ${Number(ctx[0].parsed.x).toFixed(2)} ${datasets.flowUnit}`,
+                        title: (ctx) => `Vazão: ${Number(ctx[0].parsed.x).toFixed(2)} ${datasets.flowUnit}`,
                         label: (ctx) => {
                             if (ctx.dataset.yAxisID === 'yHead') {
                                 return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.pressureUnit}`;
                             }
                             if (ctx.dataset.yAxisID === 'yEff') {
-                                return `Eficiencia: ${Number(ctx.parsed.y).toFixed(1)} %`;
+                                return `Eficiência: ${Number(ctx.parsed.y).toFixed(1)} %`;
                             }
                             if (ctx.dataset.yAxisID === 'yNpsh') {
                                 return `NPSHr: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.lengthUnit}`;
@@ -392,7 +392,7 @@ function renderPumpCurveChart(component) {
             scales: {
                 x: {
                     type: 'linear',
-                    title: { display: true, text: `Vazao (${datasets.flowUnit})` }
+                    title: { display: true, text: `Vazão (${datasets.flowUnit})` }
                 },
                 yHead: {
                     type: 'linear',
@@ -405,7 +405,7 @@ function renderPumpCurveChart(component) {
                     min: 0,
                     max: 100,
                     grid: { drawOnChartArea: false },
-                    title: { display: true, text: 'Eficiencia (%)' }
+                    title: { display: true, text: 'Eficiência (%)' }
                 },
                 yNpsh: {
                     type: 'linear',
@@ -428,16 +428,16 @@ function refreshPumpCurveChart(component) {
     pumpCurveChart.data.datasets[2].label = `NPSHr (${datasets.lengthUnit})`;
     pumpCurveChart.data.datasets[2].data = datasets.npshPoints;
     pumpCurveChart.data.datasets[3].data = [{ x: datasets.currentFlow, y: datasets.currentHead }];
-    pumpCurveChart.options.scales.x.title.text = `Vazao (${datasets.flowUnit})`;
+    pumpCurveChart.options.scales.x.title.text = `Vazão (${datasets.flowUnit})`;
     pumpCurveChart.options.scales.yHead.title.text = `Carga (${datasets.pressureUnit})`;
     pumpCurveChart.options.scales.yNpsh.title.text = `NPSHr (${datasets.lengthUnit})`;
-    pumpCurveChart.options.plugins.tooltip.callbacks.title = (ctx) => `Vazao: ${Number(ctx[0].parsed.x).toFixed(2)} ${datasets.flowUnit}`;
+    pumpCurveChart.options.plugins.tooltip.callbacks.title = (ctx) => `Vazão: ${Number(ctx[0].parsed.x).toFixed(2)} ${datasets.flowUnit}`;
     pumpCurveChart.options.plugins.tooltip.callbacks.label = (ctx) => {
         if (ctx.dataset.yAxisID === 'yHead') {
             return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.pressureUnit}`;
         }
         if (ctx.dataset.yAxisID === 'yEff') {
-            return `Eficiencia: ${Number(ctx.parsed.y).toFixed(1)} %`;
+            return `Eficiência: ${Number(ctx.parsed.y).toFixed(1)} %`;
         }
         if (ctx.dataset.yAxisID === 'yNpsh') {
             return `NPSHr: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.lengthUnit}`;
@@ -489,12 +489,12 @@ function renderDefaultProperties() {
             <input type="number" id="input-fluid-temp" title="Temperatura do fluido operante para referencia do caso." value="${toDisplayValue('temperature', ENGINE.fluidoOperante.temperatura).toFixed(1)}" step="${getUnitStep('temperature')}" min="${toDisplayValue('temperature', -20).toFixed(1)}" max="${toDisplayValue('temperature', 200).toFixed(1)}">
         </div>
         <div class="prop-group">
-            <label title="Pressao de vapor absoluta usada no calculo de cavitacao.">Pressao de Vapor (${getUnitSymbol('pressure')} abs)</label>
-            <input type="number" id="input-fluid-vapor" title="Pressao de vapor absoluta usada no calculo de cavitacao." value="${displayUnitValue('pressure', ENGINE.fluidoOperante.pressaoVaporBar, 3)}" step="${displayStep('pressure', 0.001)}" min="${displayBound('pressure', 0.0001)}" max="${displayBound('pressure', 5)}">
+            <label title="Pressão de vapor absoluta usada no calculo de cavitacao.">Pressão de Vapor (${getUnitSymbol('pressure')} abs)</label>
+            <input type="number" id="input-fluid-vapor" title="Pressão de vapor absoluta usada no calculo de cavitacao." value="${displayUnitValue('pressure', ENGINE.fluidoOperante.pressaoVaporBar, 3)}" step="${displayStep('pressure', 0.001)}" min="${displayBound('pressure', 0.0001)}" max="${displayBound('pressure', 5)}">
         </div>
         <div class="prop-group">
-            <label title="Pressao atmosferica absoluta usada como referencia externa.">Pressao Atmosferica (${getUnitSymbol('pressure')} abs)</label>
-            <input type="number" id="input-fluid-atm" title="Pressao atmosferica absoluta usada como referencia externa." value="${displayUnitValue('pressure', ENGINE.fluidoOperante.pressaoAtmosfericaBar, 3)}" step="${displayStep('pressure', 0.001)}" min="${displayBound('pressure', 0.5)}" max="${displayBound('pressure', 2)}">
+            <label title="Pressão atmosferica absoluta usada como referencia externa.">Pressão Atmosferica (${getUnitSymbol('pressure')} abs)</label>
+            <input type="number" id="input-fluid-atm" title="Pressão atmosferica absoluta usada como referencia externa." value="${displayUnitValue('pressure', ENGINE.fluidoOperante.pressaoAtmosfericaBar, 3)}" step="${displayStep('pressure', 0.001)}" min="${displayBound('pressure', 0.5)}" max="${displayBound('pressure', 2)}">
         </div>
         <p style="font-size: 12px; color:#95a5a6; text-align:center;">Clique em um componente ou em um cano para editar os parametros fisicos da planta.</p>
     `;
@@ -580,11 +580,11 @@ function renderConnectionProperties(conn) {
             <input type="number" id="input-pipe-loss-k" title="Perda localizada adicional causada por curvas, acessorios ou singularidades." value="${conn.perdaLocalK}" step="0.1" min="0" max="100">
         </div>
         <div class="prop-group">
-            <label>Vazao Atual (${getUnitSymbol('flow')})</label>
+            <label>Vazão Atual (${getUnitSymbol('flow')})</label>
             <input type="text" id="disp-pipe-flow" value="${displayUnitValue('flow', state.flowLps, 2)}" disabled>
         </div>
         <div class="prop-group">
-            <label>Vazao Alvo (${getUnitSymbol('flow')})</label>
+            <label>Vazão Alvo (${getUnitSymbol('flow')})</label>
             <input type="text" id="disp-pipe-target-flow" value="${displayUnitValue('flow', state.targetFlowLps, 2)}" disabled>
         </div>
         <div class="prop-group">
@@ -612,7 +612,7 @@ function renderConnectionProperties(conn) {
             <input type="text" id="disp-pipe-length" value="${displayUnitValue('length', state.lengthM || geometry.lengthM, 2)}" disabled>
         </div>
         <div class="prop-group">
-            <label>Resposta Hidraulica (s)</label>
+            <label>Resposta Hidráulica (s)</label>
             <input type="text" id="disp-pipe-response" value="${state.responseTimeS.toFixed(2)}" disabled>
         </div>
     `;
@@ -741,7 +741,7 @@ function setupSubscriptions() {
                     document.getElementById('input-volume-tanque').value = toDisplayValue('volume', component.volumeAtual).toFixed(2);
                 }
                 setFieldValue('disp-pressao-tanque', component.pressaoFundoBar, 'pressure', 2);
-                setFieldValue('disp-nivel-tanque', component.getAlturaLiquidoM(), 'length', 2);
+                setFieldValue('disp-nível-tanque', component.getAlturaLiquidoM(), 'length', 2);
                 setFieldValue('disp-qin-tanque', component.lastQin, 'flow', 2);
                 setFieldValue('disp-qout-tanque', component.lastQout, 'flow', 2);
             }
@@ -767,7 +767,7 @@ function setupSubscriptions() {
                 }
                 if (document.getElementById('disp-acionamento-real-bomba')) document.getElementById('disp-acionamento-real-bomba').value = component.acionamentoEfetivo.toFixed(1);
                 setFieldValue('disp-vazao-bomba', component.fluxoReal, 'flow', 2);
-                setFieldValue('disp-succao-bomba', component.pressaoSucaoAtualBar, 'pressure', 2);
+                setFieldValue('disp-sucção-bomba', component.pressaoSucaoAtualBar, 'pressure', 2);
                 setFieldValue('disp-descarga-bomba', component.pressaoDescargaAtualBar, 'pressure', 2);
                 if (document.getElementById('disp-cavitacao-bomba')) document.getElementById('disp-cavitacao-bomba').value = (component.fatorCavitacaoAtual * 100).toFixed(0) + '%';
                 setFieldValue('disp-npsh-bomba', component.npshDisponivelM, 'length', 2);

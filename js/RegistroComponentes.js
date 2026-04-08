@@ -32,33 +32,33 @@ const notifyPanelRefresh = () => ENGINE.notify({ tipo: 'update_painel', dt: 0 })
 const volumeText = (baseValue, digits = null) => `${displayUnitValue('volume', baseValue, digits)} ${getUnitSymbol('volume')}`;
 
 const TOOLTIP = {
-    sourcePressure: 'Pressao disponivel na fronteira de entrada da planta.',
-    sourceFlow: 'Limite maximo de vazao que a fonte consegue entregar.',
-    sinkPressure: 'Contrapressao imposta na fronteira de saida da planta.',
+    sourcePressure: 'Pressão disponível na fronteira de entrada da planta.',
+    sourceFlow: 'Limite máximo de vazão que a fonte consegue entregar.',
+    sinkPressure: 'Contrapressão imposta na fronteira de saída da planta.',
     pumpDrive: 'Comando percentual aplicado ao acionamento da bomba.',
-    pumpFlow: 'Vazao nominal maxima no ponto de projeto da bomba.',
-    pumpPressure: 'Carga ou pressao maxima gerada na condicao de vazao zero.',
-    pumpEfficiency: 'Eficiencia hidraulica maxima esperada perto do ponto de melhor eficiencia.',
-    pumpNpshr: 'NPSH requerido da bomba para evitar cavitacao na condicao nominal.',
+    pumpFlow: 'Vazão nominal máxima no ponto de projeto da bomba.',
+    pumpPressure: 'Carga ou pressão máxima gerada na condição de vazão zero.',
+    pumpEfficiency: 'Eficiência hidráulica máxima esperada perto do ponto de melhor eficiência.',
+    pumpNpshr: 'NPSH requerido da bomba para evitar cavitação na condicao nominal.',
     pumpRamp: 'Tempo de resposta do acionamento da bomba ate atingir o novo comando.',
-    pumpCurve: 'Curva nominal da bomba mostrando carga, eficiencia e NPSHr em funcao da vazao.',
-    valveOpening: 'Posicao de abertura desejada para a valvula de controle.',
-    valveCv: 'Capacidade intrinseca de vazao da valvula em plena abertura.',
-    valveK: 'Perda localizada adicional introduzida pelo corpo e internos da valvula.',
-    valveCharacteristic: 'Lei intrinseca que relaciona abertura e capacidade de passagem.',
-    valveRangeability: 'Razao entre a maior e a menor capacidade controlavel da valvula.',
-    valveStroke: 'Tempo necessario para a valvula percorrer o curso ate a nova posicao.',
-    tankCapacity: 'Volume total util armazenavel no tanque.',
-    tankVolume: 'Inventario atual de fluido dentro do tanque.',
-    tankHeight: 'Altura util de liquido usada para gerar carga hidrostatica.',
-    tankInletHeight: 'Cota vertical do bocal de entrada em relacao ao fundo do tanque.',
-    tankOutletHeight: 'Cota vertical do bocal de saida em relacao ao fundo do tanque.',
-    tankCd: 'Coeficiente de descarga efetivo da saida do tanque.',
+    pumpCurve: 'Curva nominal da bomba mostrando carga, eficiencia e NPSHr em função da vazão.',
+    valveOpening: 'Posicao de abertura desejada para a válvula de controle.',
+    valveCv: 'Capacidade intrínseca de vazão da válvula em plena abertura.',
+    valveK: 'Perda localizada adicional introduzida pelo corpo e internos da válvula.',
+    valveCharacteristic: 'Lei intrínseca que relaciona abertura e capacidade de passagem.',
+    valveRangeability: 'Razão entre a maior e a menor capacidade controlável da válvula.',
+    valveStroke: 'Tempo necessário para a válvula percorrer o curso até a nova posição.',
+    tankCapacity: 'Volume total útil armazenável no tanque.',
+    tankVolume: 'Volume atual de fluido dentro do tanque.',
+    tankHeight: 'Altura útil de líquido usada para gerar carga hidrostática.',
+    tankInletHeight: 'Cota vertical do bocal de entrada em relação ao fundo do tanque.',
+    tankOutletHeight: 'Cota vertical do bocal de saída em relação ao fundo do tanque.',
+    tankCd: 'Coeficiente de descarga efetivo da saída do tanque.',
     tankEntryK: 'Perda localizada de entrada associada ao enchimento do tanque.',
-    tankSpActive: 'Liga ou desliga o controlador automatico de nivel do tanque.',
-    tankSetpoint: 'Nivel desejado para o controlador automatico em percentual da capacidade util.',
-    tankKp: 'Ganho proporcional do controlador de nivel.',
-    tankKi: 'Ganho integral do controlador de nivel.'
+    tankSpActive: 'Liga ou desliga o controlador automático de nível do tanque.',
+    tankSetpoint: 'Nível desejado para o controlador automático em percentual da capacidade útil.',
+    tankKp: 'Ganho proporcional do controlador de nível.',
+    tankKi: 'Ganho integral do controlador de nível.'
 };
 
 function pumpCurveMarkup() {
@@ -69,7 +69,7 @@ function pumpCurveMarkup() {
                             <canvas id="pump-curve-chart"></canvas>
                         </div>
                         <p style="margin:8px 0 0; font-size:11px; line-height:1.45; color:#7f8c8d;">
-                            Curva padrao: Q = vazao, H = carga/pressao gerada, eta = eficiencia e NPSHr = altura minima de succao requerida.
+                            Curva padrao: Q = vazao, H = carga/pressao gerada, eta = eficiencia e NPSHr = altura minima de sucção requerida.
                         </p>
                     </div>
                 `;
@@ -93,15 +93,15 @@ export const REGISTRO_COMPONENTES = {
         },
         propriedadesAdicionais: (comp) => `
                     <div class="prop-group">
-                        ${makeUnitLabel('Pressao de Alimentacao', 'pressure', TOOLTIP.sourcePressure)}
+                        ${makeUnitLabel('Pressão de Alimentacao', 'pressure', TOOLTIP.sourcePressure)}
                         <input type="number" id="input-pressao-fonte" ${hintAttr(TOOLTIP.sourcePressure)} value="${displayEditableUnitValue('pressure', comp.pressaoFonteBar, 3)}" step="${displayStep('pressure', 0.01)}" min="${displayBound('pressure', 0.1)}" max="${displayBound('pressure', 20)}">
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Vazao Maxima', 'flow', TOOLTIP.sourceFlow)}
+                        ${makeUnitLabel('Vazão Máxima', 'flow', TOOLTIP.sourceFlow)}
                         <input type="number" id="input-vazao-fonte-max" ${hintAttr(TOOLTIP.sourceFlow)} value="${displayEditableUnitValue('flow', comp.vazaoMaxima, 3)}" step="${displayStep('flow', 1)}" min="${displayBound('flow', 1)}" max="${displayBound('flow', 1000)}">
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Vazao Atual', 'flow', 'Vazao atualmente entregue pela fonte.')}
+                        ${makeUnitLabel('Vazão Atual', 'flow', 'Vazão atualmente entregue pela fonte.')}
                         <input type="text" id="disp-vazao-fonte" value="${displayUnitValue('flow', comp.fluxoReal, 2)}" disabled>
                     </div>
                 `,
@@ -118,7 +118,7 @@ export const REGISTRO_COMPONENTES = {
     },
     'sink': {
         Classe: DrenoLogico,
-        prefixoTag: 'Saida',
+        prefixoTag: 'Saída',
         w: 40, h: 40, offX: -20, offY: -20,
         svg: (id, tag) => `
                     <circle cx="40" cy="40" r="25" fill="#95a5a6" stroke="#7f8c8d" stroke-width="4"/>
@@ -133,11 +133,11 @@ export const REGISTRO_COMPONENTES = {
         },
         propriedadesAdicionais: (comp) => `
                     <div class="prop-group">
-                        ${makeUnitLabel('Pressao de Descarga', 'pressure', TOOLTIP.sinkPressure)}
+                        ${makeUnitLabel('Pressão de Descarga', 'pressure', TOOLTIP.sinkPressure)}
                         <input type="number" id="input-pressao-dreno" ${hintAttr(TOOLTIP.sinkPressure)} value="${displayEditableUnitValue('pressure', comp.pressaoSaidaBar, 3)}" step="${displayStep('pressure', 0.01)}" min="${displayBound('pressure', 0)}" max="${displayBound('pressure', 10)}">
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Vazao Recebida', 'flow', 'Vazao atualmente absorvida pela saida.')}
+                        ${makeUnitLabel('Vazão Recebida', 'flow', 'Vazão atualmente absorvida pela saída.')}
                         <input type="text" id="disp-vazao-dreno" value="${displayUnitValue('flow', comp.vazaoRecebidaLps, 2)}" disabled>
                     </div>
                 `,
@@ -178,15 +178,15 @@ export const REGISTRO_COMPONENTES = {
                         <input type="range" id="input-acionamento" min="0" max="100" value="${Math.round(comp.grauAcionamento)}" ${hintAttr(TOOLTIP.pumpDrive)}>
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Vazao Nominal Max', 'flow', TOOLTIP.pumpFlow)}
+                        ${makeUnitLabel('Vazão Nominal Max', 'flow', TOOLTIP.pumpFlow)}
                         <input type="number" id="input-vazmax" ${hintAttr(TOOLTIP.pumpFlow)} value="${displayEditableUnitValue('flow', comp.vazaoNominal, 3)}" step="${displayStep('flow', 0.5)}" min="${displayBound('flow', 5)}">
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Pressao Maxima', 'pressure', TOOLTIP.pumpPressure)}
+                        ${makeUnitLabel('Pressão Máxima', 'pressure', TOOLTIP.pumpPressure)}
                         <input type="number" id="input-pressao-max-bomba" ${hintAttr(TOOLTIP.pumpPressure)} value="${displayEditableUnitValue('pressure', comp.pressaoMaxima, 3)}" step="${displayStep('pressure', 0.01)}" min="${displayBound('pressure', 0.5)}" max="${displayBound('pressure', 20)}">
                     </div>
                     <div class="prop-group">
-                        ${makeLabel('Eficiencia Hidraulica (0-1)', TOOLTIP.pumpEfficiency)}
+                        ${makeLabel('Eficiência Hidráulica (0-1)', TOOLTIP.pumpEfficiency)}
                         <input type="number" id="input-eficiencia-bomba" ${hintAttr(TOOLTIP.pumpEfficiency)} value="${comp.eficienciaHidraulica}" step="0.01" min="0.2" max="1">
                     </div>
                     <div class="prop-group">
@@ -202,27 +202,27 @@ export const REGISTRO_COMPONENTES = {
                         <input type="text" id="disp-acionamento-real-bomba" value="${comp.acionamentoEfetivo.toFixed(1)}" disabled>
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Vazao Atual', 'flow', 'Vazao atual de operacao da bomba.')}
+                        ${makeUnitLabel('Vazão Atual', 'flow', 'Vazão atual de operacao da bomba.')}
                         <input type="text" id="disp-vazao-bomba" value="${displayUnitValue('flow', comp.fluxoReal, 2)}" disabled>
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Pressao de Succao', 'pressure', 'Pressao medida na entrada da bomba.')}
-                        <input type="text" id="disp-succao-bomba" value="${displayUnitValue('pressure', comp.pressaoSucaoAtualBar, 2)}" disabled>
+                        ${makeUnitLabel('Pressão de Sucção', 'pressure', 'Pressão medida na entrada da bomba.')}
+                        <input type="text" id="disp-sucção-bomba" value="${displayUnitValue('pressure', comp.pressaoSucaoAtualBar, 2)}" disabled>
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Pressao de Descarga', 'pressure', 'Pressao medida na saida da bomba.')}
+                        ${makeUnitLabel('Pressão de Descarga', 'pressure', 'Pressão medida na saída da bomba.')}
                         <input type="text" id="disp-descarga-bomba" value="${displayUnitValue('pressure', comp.pressaoDescargaAtualBar, 2)}" disabled>
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('NPSHa Atual', 'length', 'NPSH disponivel nas condicoes atuais de succao.')}
+                        ${makeUnitLabel('NPSHa Atual', 'length', 'NPSH disponivel nas condicoes atuais de sucção.')}
                         <input type="text" id="disp-npsh-bomba" value="${displayUnitValue('length', comp.npshDisponivelM, 2)}" disabled>
                     </div>
                     <div class="prop-group">
-                        <label>Saude Hidraulica</label>
+                        <label>Saude Hidráulica</label>
                         <input type="text" id="disp-cavitacao-bomba" value="${(comp.fatorCavitacaoAtual * 100).toFixed(0)}%" disabled>
                     </div>
                     <div class="prop-group">
-                        <label>Eficiencia Atual</label>
+                        <label>Eficiência Atual</label>
                         <input type="text" id="disp-eficiencia-bomba" value="${(comp.eficienciaAtual * 100).toFixed(0)}%" disabled>
                     </div>
                     ${pumpCurveMarkup()}
@@ -322,7 +322,7 @@ export const REGISTRO_COMPONENTES = {
                         <input type="range" id="input-abertura" min="0" max="100" value="${Math.round(comp.grauAbertura)}" ${hintAttr(TOOLTIP.valveOpening)}>
                     </div>
                     <div class="prop-group">
-                        ${makeLabel('Coeficiente de Vazao (Cv)', TOOLTIP.valveCv)}
+                        ${makeLabel('Coeficiente de Vazão (Cv)', TOOLTIP.valveCv)}
                         <input type="number" id="input-cv" ${hintAttr(TOOLTIP.valveCv)} value="${comp.cv}" step="0.1" min="0.1" max="20">
                     </div>
                     <div class="prop-group">
@@ -350,7 +350,7 @@ export const REGISTRO_COMPONENTES = {
                         <input type="text" id="disp-abertura-efetiva-valvula" value="${comp.aberturaEfetiva.toFixed(1)}" disabled>
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Vazao Atual', 'flow', 'Vazao atual na valvula.')}
+                        ${makeUnitLabel('Vazão Atual', 'flow', 'Vazão atual na valvula.')}
                         <input type="text" id="disp-vazao-valvula" value="${displayUnitValue('flow', comp.fluxoReal, 2)}" disabled>
                     </div>
                     <div class="prop-group">
@@ -496,7 +496,7 @@ export const REGISTRO_COMPONENTES = {
                         <input type="number" id="input-volume-tanque" ${hintAttr(TOOLTIP.tankVolume)} value="${displayEditableUnitValue('volume', comp.volumeAtual, 3)}" step="${displayStep('volume', 10)}" min="${displayBound('volume', 0)}" max="${displayBound('volume', comp.capacidadeMaxima)}">
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Altura Util', 'length', TOOLTIP.tankHeight)}
+                        ${makeUnitLabel('Altura Útil', 'length', TOOLTIP.tankHeight)}
                         <input type="number" id="input-altura-tanque" ${hintAttr(TOOLTIP.tankHeight)} value="${displayEditableUnitValue('length', comp.alturaUtilMetros, 3)}" step="${displayStep('length', 0.05)}" min="${displayBound('length', 0.5)}" max="${displayBound('length', 10)}">
                     </div>
                     <div class="prop-group">
@@ -504,8 +504,8 @@ export const REGISTRO_COMPONENTES = {
                         <input type="number" id="input-altura-entrada-tanque" ${hintAttr(TOOLTIP.tankInletHeight)} value="${displayEditableUnitValue('length', comp.alturaBocalEntradaM, 3)}" step="${displayStep('length', 0.01)}" min="${displayBound('length', 0)}" max="${displayBound('length', comp.alturaUtilMetros)}">
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Cota do Bocal de Saida', 'length', TOOLTIP.tankOutletHeight)}
-                        <input type="number" id="input-altura-saida-tanque" ${hintAttr(TOOLTIP.tankOutletHeight)} value="${displayEditableUnitValue('length', comp.alturaBocalSaidaM, 3)}" step="${displayStep('length', 0.01)}" min="${displayBound('length', 0)}" max="${displayBound('length', comp.alturaUtilMetros)}">
+                        ${makeUnitLabel('Cota do Bocal de Saída', 'length', TOOLTIP.tankOutletHeight)}
+                        <input type="number" id="input-altura-saída-tanque" ${hintAttr(TOOLTIP.tankOutletHeight)} value="${displayEditableUnitValue('length', comp.alturaBocalSaidaM, 3)}" step="${displayStep('length', 0.01)}" min="${displayBound('length', 0)}" max="${displayBound('length', comp.alturaUtilMetros)}">
                     </div>
                     <div class="prop-group">
                         ${makeLabel('Coeficiente de Descarga (Cd)', TOOLTIP.tankCd)}
@@ -516,28 +516,28 @@ export const REGISTRO_COMPONENTES = {
                         <input type="number" id="input-k-entrada-tanque" ${hintAttr(TOOLTIP.tankEntryK)} value="${comp.perdaEntradaK}" step="0.1" min="0" max="50">
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Pressao no Fundo', 'pressure', 'Pressao hidrostatica no fundo do tanque.')}
+                        ${makeUnitLabel('Pressão no Fundo', 'pressure', 'Pressão hidrostática no fundo do tanque.')}
                         <input type="text" id="disp-pressao-tanque" value="${displayUnitValue('pressure', comp.pressaoFundoBar, 2)}" disabled>
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Nivel Liquido', 'length', 'Altura atual do espelho de liquido em relacao ao fundo.')}
-                        <input type="text" id="disp-nivel-tanque" value="${displayUnitValue('length', comp.getAlturaLiquidoM(), 2)}" disabled>
+                        ${makeUnitLabel('Nível Líquido', 'length', 'Altura atual do espelho de líquido em relação ao fundo.')}
+                        <input type="text" id="disp-nível-tanque" value="${displayUnitValue('length', comp.getAlturaLiquidoM(), 2)}" disabled>
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Qin', 'flow', 'Vazao de entrada atual no tanque.')}
+                        ${makeUnitLabel('Qin', 'flow', 'Vazão de entrada atual no tanque.')}
                         <input type="text" id="disp-qin-tanque" value="${displayUnitValue('flow', comp.lastQin, 2)}" disabled>
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Qout', 'flow', 'Vazao de saida atual do tanque.')}
+                        ${makeUnitLabel('Qout', 'flow', 'Vazão de saída atual do tanque.')}
                         <input type="text" id="disp-qout-tanque" value="${displayUnitValue('flow', comp.lastQout, 2)}" disabled>
                     </div>
                     <div class="prop-group" id="grp-sp-main" style="border-color: ${comp.setpointAtivo ? '#e74c3c' : '#eee'}; background: ${comp.setpointAtivo ? '#fdf5f4' : '#f9fbfb'};">
-                        <label ${hintAttr('Controle automatico do nivel do tanque por sinal proporcional e integral.')} style="color: #c0392b; font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">
-                            Controlador de Nivel (PI)
+                        <label ${hintAttr('Controle automático do nível do tanque por sinal proporcional e integral.')} style="color: #c0392b; font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">
+                            Controlador de Nível (PI)
                         </label>
                         <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
                             <input type="checkbox" id="input-sp-ativo" ${hintAttr(TOOLTIP.tankSpActive)} ${comp.setpointAtivo ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer;">
-                            <span ${hintAttr(TOOLTIP.tankSpActive)} style="font-size:13px; font-weight:bold;">Ativar controle automatico</span>
+                            <span ${hintAttr(TOOLTIP.tankSpActive)} style="font-size:13px; font-weight:bold;">Ativar controle automático</span>
                         </div>
                         <label ${hintAttr(TOOLTIP.tankSetpoint)}>Setpoint
                             <span style="display:flex; align-items:center; gap:2px;">
@@ -568,7 +568,7 @@ export const REGISTRO_COMPONENTES = {
 
                 const pressureDisplay = document.getElementById('disp-pressao-tanque');
                 if (pressureDisplay) pressureDisplay.value = displayUnitValue('pressure', comp.pressaoFundoBar, 2);
-                const levelDisplay = document.getElementById('disp-nivel-tanque');
+                const levelDisplay = document.getElementById('disp-nível-tanque');
                 if (levelDisplay) levelDisplay.value = displayUnitValue('length', comp.getAlturaLiquidoM(), 2);
                 notifyPanelRefresh();
             };
@@ -593,9 +593,9 @@ export const REGISTRO_COMPONENTES = {
                 comp.alturaBocalEntradaM = Math.min(comp.alturaBocalEntradaM, comp.alturaUtilMetros);
                 comp.alturaBocalSaidaM = Math.min(comp.alturaBocalSaidaM, comp.alturaUtilMetros);
                 document.getElementById('input-altura-entrada-tanque').max = displayBound('length', comp.alturaUtilMetros);
-                document.getElementById('input-altura-saida-tanque').max = displayBound('length', comp.alturaUtilMetros);
+                document.getElementById('input-altura-saída-tanque').max = displayBound('length', comp.alturaUtilMetros);
                 document.getElementById('input-altura-entrada-tanque').value = displayEditableUnitValue('length', comp.alturaBocalEntradaM, 3);
-                document.getElementById('input-altura-saida-tanque').value = displayEditableUnitValue('length', comp.alturaBocalSaidaM, 3);
+                document.getElementById('input-altura-saída-tanque').value = displayEditableUnitValue('length', comp.alturaBocalSaidaM, 3);
                 comp.sincronizarMetricasFisicas();
                 emitirVolumeAtualizado();
             });
@@ -604,7 +604,7 @@ export const REGISTRO_COMPONENTES = {
                 comp.sincronizarMetricasFisicas();
                 emitirVolumeAtualizado();
             });
-            document.getElementById('input-altura-saida-tanque').addEventListener('change', e => {
+            document.getElementById('input-altura-saída-tanque').addEventListener('change', e => {
                 comp.alturaBocalSaidaM = Math.max(0, Math.min(comp.alturaUtilMetros, baseFromDisplay('length', e.target.value, comp.alturaBocalSaidaM)));
                 comp.sincronizarMetricasFisicas();
                 emitirVolumeAtualizado();

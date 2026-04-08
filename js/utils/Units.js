@@ -1,6 +1,6 @@
 const UNIT_CONFIG = {
     pressure: {
-        label: 'Pressao',
+        label: 'Pressão',
         default: 'kpa',
         units: {
             bar: { label: 'bar', symbol: 'bar', fromBase: (v) => v, toBase: (v) => v, step: 0.05, digits: 2 },
@@ -10,7 +10,7 @@ const UNIT_CONFIG = {
         }
     },
     flow: {
-        label: 'Vazao',
+        label: 'Vazão',
         default: 'm3s',
         units: {
             m3s: { label: 'm3/s', symbol: 'm3/s', fromBase: (v) => v / 1000, toBase: (v) => v * 1000, step: 0.001, digits: 3 },

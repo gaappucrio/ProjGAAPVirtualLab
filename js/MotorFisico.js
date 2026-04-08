@@ -87,14 +87,14 @@ function classifyFlowRegime(reynolds) {
 
 export const FLUID_PRESETS = {
     agua: {
-        nome: 'Agua',
+        nome: 'Água',
         densidade: 997,
         temperatura: 25,
         viscosidadeDinamicaPaS: 0.00089,
         pressaoVaporBar: 0.0317
     },
     oleo_leve: {
-        nome: 'Oleo leve',
+        nome: 'Óleo leve',
         densidade: 860,
         temperatura: 25,
         viscosidadeDinamicaPaS: 0.035,
