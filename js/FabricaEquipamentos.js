@@ -68,6 +68,11 @@ export class FabricaDeEquipamentos {
             visual.addEventListener('mousedown', () => {
                 ENGINE.selectComponent(logica);
                 document.querySelectorAll('.placed-component').forEach(el => el.classList.remove('selected'));
+                document.querySelectorAll('.pipe-line').forEach(el => {
+                    el.classList.remove('selected');
+                    if (el.classList.contains('active')) el.setAttribute("marker-end", "url(#arrow-active)");
+                    else el.setAttribute("marker-end", "url(#arrow)");
+                });
                 visual.classList.add('selected');
             });
         }

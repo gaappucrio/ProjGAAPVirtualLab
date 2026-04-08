@@ -85,14 +85,25 @@ export function setupPipeControl() {
                 if (sourceLogic && targetLogic && sourceLogic !== targetLogic) {
                     sourceLogic.conectarSaida(targetLogic);
                     const finalPipe = tempPipe;
+                    const connection = {
+                        sourceEl: dragSourcePort,
+                        targetEl: dropTarget,
+                        path: finalPipe,
+                        label: null,
+                        diameterM: 0.08,
+                        roughnessMm: 0.045,
+                        extraLengthM: 0,
+                        perdaLocalK: 0.8
+                    };
 
                     const labelEl = document.createElementNS("http://www.w3.org/2000/svg", "text");
                     labelEl.setAttribute("class", "pipe-flow-label");
                     labelEl.setAttribute("text-anchor", "middle");
                     pipeLayer.appendChild(labelEl);
+                    connection.label = labelEl;
 
                     finalPipe.addEventListener('mousedown', function (ev) {
-                        ENGINE.selectComponent(null);
+                        ENGINE.selectConnection(connection);
                         document.querySelectorAll('.placed-component').forEach(el => el.classList.remove('selected'));
                         document.querySelectorAll('.pipe-line').forEach(el => {
                             el.classList.remove('selected');
@@ -110,25 +121,18 @@ export function setupPipeControl() {
 
                     finalPipe.addEventListener('dblclick', function (ev) {
                         sourceLogic.desconectarSaida(targetLogic);
-                        const ci = ENGINE.conexoes.findIndex(c => c.path === finalPipe);
+                        const ci = ENGINE.conexoes.findIndex(c => c === connection);
                         if (ci !== -1) {
                             if (ENGINE.conexoes[ci].label) ENGINE.conexoes[ci].label.remove();
                             ENGINE.conexoes.splice(ci, 1);
                         }
+                        if (ENGINE.selectedConnection === connection) ENGINE.selectComponent(null);
                         finalPipe.remove();
                         updatePortStates();
                         ev.stopPropagation();
                     });
 
-                    ENGINE.conexoes.push({
-                        sourceEl: dragSourcePort,
-                        targetEl: dropTarget,
-                        path: finalPipe,
-                        label: labelEl,
-                        diameterM: 0.08,
-                        fatorAtrito: 0.028,
-                        perdaLocalK: 0.8
-                    });
+                    ENGINE.conexoes.push(connection);
                     updateAllPipes();
                     updatePortStates();
                 } else {

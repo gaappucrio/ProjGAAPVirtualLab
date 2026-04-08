@@ -76,6 +76,7 @@ document.addEventListener('keydown', (e) => {
                 if (conn.label) conn.label.remove();
                 ENGINE.conexoes.splice(connIndex, 1);
                 selectedPipe.remove();
+                ENGINE.selectComponent(null);
                 updatePortStates();
             }
         }

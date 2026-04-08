@@ -30,6 +30,10 @@ export const REGISTRO_COMPONENTES = {
                         <input type="number" id="input-pressao-fonte" value="${comp.pressaoFonteBar}" step="0.1" min="0.1" max="20">
                     </div>
                     <div class="prop-group">
+                        <label>Vazao Maxima (L/s)</label>
+                        <input type="number" id="input-vazao-fonte-max" value="${comp.vazaoMaxima}" step="5" min="1" max="1000">
+                    </div>
+                    <div class="prop-group">
                         <label>Vazao Atual (L/s)</label>
                         <input type="text" id="disp-vazao-fonte" value="${comp.fluxoReal.toFixed(2)}" disabled>
                     </div>
@@ -37,6 +41,9 @@ export const REGISTRO_COMPONENTES = {
         setupProps: (comp) => {
             document.getElementById('input-pressao-fonte').addEventListener('change', e => {
                 comp.pressaoFonteBar = Math.max(0.1, parseFloat(e.target.value) || 1.0);
+            });
+            document.getElementById('input-vazao-fonte-max').addEventListener('change', e => {
+                comp.vazaoMaxima = Math.max(1, parseFloat(e.target.value) || 500);
             });
         }
     },
@@ -109,6 +116,22 @@ export const REGISTRO_COMPONENTES = {
                         <input type="number" id="input-pressao-max-bomba" value="${comp.pressaoMaxima}" step="0.1" min="0.5" max="20">
                     </div>
                     <div class="prop-group">
+                        <label>Eficiencia Hidraulica (0-1)</label>
+                        <input type="number" id="input-eficiencia-bomba" value="${comp.eficienciaHidraulica}" step="0.01" min="0.2" max="1">
+                    </div>
+                    <div class="prop-group">
+                        <label>NPSHr (m)</label>
+                        <input type="number" id="input-npsh-bomba" value="${comp.npshRequeridoM}" step="0.1" min="0.5" max="20">
+                    </div>
+                    <div class="prop-group">
+                        <label>Tempo de Rampa (s)</label>
+                        <input type="number" id="input-rampa-bomba" value="${comp.tempoRampaSegundos}" step="0.1" min="0.1" max="20">
+                    </div>
+                    <div class="prop-group">
+                        <label>Acionamento Efetivo (%)</label>
+                        <input type="text" id="disp-acionamento-real-bomba" value="${comp.acionamentoEfetivo.toFixed(1)}" disabled>
+                    </div>
+                    <div class="prop-group">
                         <label>Vazao Atual (L/s)</label>
                         <input type="text" id="disp-vazao-bomba" value="${comp.fluxoReal.toFixed(2)}" disabled>
                     </div>
@@ -119,6 +142,18 @@ export const REGISTRO_COMPONENTES = {
                     <div class="prop-group">
                         <label>Pressao de Descarga (bar)</label>
                         <input type="text" id="disp-descarga-bomba" value="${comp.pressaoDescargaAtualBar.toFixed(2)}" disabled>
+                    </div>
+                    <div class="prop-group">
+                        <label>NPSHa Atual (m)</label>
+                        <input type="text" id="disp-npsh-bomba" value="${comp.npshDisponivelM.toFixed(2)}" disabled>
+                    </div>
+                    <div class="prop-group">
+                        <label>Saude Hidraulica</label>
+                        <input type="text" id="disp-cavitacao-bomba" value="${(comp.fatorCavitacaoAtual * 100).toFixed(0)}%" disabled>
+                    </div>
+                    <div class="prop-group">
+                        <label>Eficiencia Atual</label>
+                        <input type="text" id="disp-eficiencia-bomba" value="${(comp.eficienciaAtual * 100).toFixed(0)}%" disabled>
                     </div>
                 `,
         setupProps: (comp) => {
@@ -147,11 +182,22 @@ export const REGISTRO_COMPONENTES = {
             document.getElementById('input-pressao-max-bomba').addEventListener('change', e => {
                 comp.pressaoMaxima = Math.max(0.5, parseFloat(e.target.value) || 5.0);
             });
+            document.getElementById('input-eficiencia-bomba').addEventListener('change', e => {
+                comp.eficienciaHidraulica = Math.max(0.2, Math.min(1, parseFloat(e.target.value) || 0.78));
+            });
+            document.getElementById('input-npsh-bomba').addEventListener('change', e => {
+                comp.npshRequeridoM = Math.max(0.5, parseFloat(e.target.value) || 2.5);
+            });
+            document.getElementById('input-rampa-bomba').addEventListener('change', e => {
+                comp.tempoRampaSegundos = Math.max(0.1, parseFloat(e.target.value) || 1.6);
+            });
 
             comp.subscribe(d => {
                 if (d.tipo === 'estado' && slider) {
                     slider.value = d.grau;
                     numInput.value = d.grau;
+                    const effectiveDisplay = document.getElementById('disp-acionamento-real-bomba');
+                    if (effectiveDisplay) effectiveDisplay.value = (d.grauEfetivo ?? d.grau).toFixed(1);
                 }
             });
         }
@@ -172,7 +218,7 @@ export const REGISTRO_COMPONENTES = {
             visual.addEventListener('dblclick', () => logica.toggle());
             logica.subscribe((d) => {
                 if (d.tipo === 'estado') {
-                    const perc = d.grau / 100.0;
+                    const perc = (typeof d.grauEfetivo === 'number' ? d.grauEfetivo : d.grau) / 100.0;
                     const r = Math.round(231 + (46 - 231) * perc);
                     const g = Math.round(76 + (204 - 76) * perc);
                     const b = Math.round(60 + (113 - 60) * perc);
@@ -200,6 +246,26 @@ export const REGISTRO_COMPONENTES = {
                     <div class="prop-group">
                         <label>Coeficiente de Perda (K)</label>
                         <input type="number" id="input-perda-k" value="${comp.perdaLocalK}" step="0.5" min="0.5" max="50">
+                    </div>
+                    <div class="prop-group">
+                        <label>Caracteristica da Valvula</label>
+                        <select id="input-caracteristica-valvula">
+                            <option value="equal_percentage" ${comp.tipoCaracteristica === 'equal_percentage' ? 'selected' : ''}>Equal percentage</option>
+                            <option value="linear" ${comp.tipoCaracteristica === 'linear' ? 'selected' : ''}>Linear</option>
+                            <option value="quick_opening" ${comp.tipoCaracteristica === 'quick_opening' ? 'selected' : ''}>Quick opening</option>
+                        </select>
+                    </div>
+                    <div class="prop-group">
+                        <label>Rangeabilidade</label>
+                        <input type="number" id="input-rangeabilidade-valvula" value="${comp.rangeabilidade}" step="1" min="5" max="100">
+                    </div>
+                    <div class="prop-group">
+                        <label>Tempo de Curso (s)</label>
+                        <input type="number" id="input-curso-valvula" value="${comp.tempoCursoSegundos}" step="0.1" min="0.1" max="20">
+                    </div>
+                    <div class="prop-group">
+                        <label>Abertura Efetiva (%)</label>
+                        <input type="text" id="disp-abertura-efetiva-valvula" value="${comp.aberturaEfetiva.toFixed(1)}" disabled>
                     </div>
                     <div class="prop-group">
                         <label>Vazao Atual (L/s)</label>
@@ -236,11 +302,22 @@ export const REGISTRO_COMPONENTES = {
             document.getElementById('input-perda-k').addEventListener('change', e => {
                 comp.perdaLocalK = Math.max(0.5, parseFloat(e.target.value) || 6.0);
             });
+            document.getElementById('input-caracteristica-valvula').addEventListener('change', e => {
+                comp.tipoCaracteristica = e.target.value;
+            });
+            document.getElementById('input-rangeabilidade-valvula').addEventListener('change', e => {
+                comp.rangeabilidade = Math.max(5, parseFloat(e.target.value) || 30);
+            });
+            document.getElementById('input-curso-valvula').addEventListener('change', e => {
+                comp.tempoCursoSegundos = Math.max(0.1, parseFloat(e.target.value) || 0.85);
+            });
 
             comp.subscribe(d => {
                 if (d.tipo === 'estado' && slider) {
                     slider.value = d.grau;
                     numInput.value = d.grau;
+                    const effectiveDisplay = document.getElementById('disp-abertura-efetiva-valvula');
+                    if (effectiveDisplay) effectiveDisplay.value = (d.grauEfetivo ?? d.grau).toFixed(1);
                 }
             });
         }
@@ -309,15 +386,35 @@ export const REGISTRO_COMPONENTES = {
                     </div>
                     <div class="prop-group">
                         <label>Volume Atual (L)</label>
-                        <input type="text" id="disp-vol" value="${comp.volumeAtual.toFixed(1)}" disabled>
+                        <input type="number" id="input-volume-tanque" value="${comp.volumeAtual.toFixed(1)}" step="10" min="0" max="${comp.capacidadeMaxima}">
                     </div>
                     <div class="prop-group">
                         <label>Altura Util (m)</label>
                         <input type="number" id="input-altura-tanque" value="${comp.alturaUtilMetros}" step="0.1" min="0.5" max="10">
                     </div>
                     <div class="prop-group">
+                        <label>Cota do Bocal de Entrada (m)</label>
+                        <input type="number" id="input-altura-entrada-tanque" value="${comp.alturaBocalEntradaM}" step="0.05" min="0" max="${comp.alturaUtilMetros}">
+                    </div>
+                    <div class="prop-group">
+                        <label>Cota do Bocal de Saida (m)</label>
+                        <input type="number" id="input-altura-saida-tanque" value="${comp.alturaBocalSaidaM}" step="0.05" min="0" max="${comp.alturaUtilMetros}">
+                    </div>
+                    <div class="prop-group">
+                        <label>Coeficiente de Descarga (Cd)</label>
+                        <input type="number" id="input-cd-tanque" value="${comp.coeficienteSaida}" step="0.01" min="0.1" max="1.5">
+                    </div>
+                    <div class="prop-group">
+                        <label>Perda na Entrada (K)</label>
+                        <input type="number" id="input-k-entrada-tanque" value="${comp.perdaEntradaK}" step="0.1" min="0" max="50">
+                    </div>
+                    <div class="prop-group">
                         <label>Pressao no Fundo (bar)</label>
                         <input type="text" id="disp-pressao-tanque" value="${comp.pressaoFundoBar.toFixed(2)}" disabled>
+                    </div>
+                    <div class="prop-group">
+                        <label>Nivel Liquido (m)</label>
+                        <input type="text" id="disp-nivel-tanque" value="${comp.getAlturaLiquidoM().toFixed(2)}" disabled>
                     </div>
                     <div class="prop-group">
                         <label>Qin (L/s)</label>
@@ -352,8 +449,7 @@ export const REGISTRO_COMPONENTES = {
                     </div>
                 `,
         setupProps: (comp) => {
-            document.getElementById('input-cap').addEventListener('change', e => {
-                comp.capacidadeMaxima = parseFloat(e.target.value) || 100;
+            const emitirVolumeAtualizado = () => {
                 comp.notify({
                     tipo: 'volume',
                     perc: comp.capacidadeMaxima > 0 ? comp.volumeAtual / comp.capacidadeMaxima : 0,
@@ -362,18 +458,54 @@ export const REGISTRO_COMPONENTES = {
                     qOut: comp.lastQout,
                     pBottom: comp.pressaoFundoBar
                 });
+
+                const pressureDisplay = document.getElementById('disp-pressao-tanque');
+                if (pressureDisplay) pressureDisplay.value = comp.pressaoFundoBar.toFixed(2);
+                const levelDisplay = document.getElementById('disp-nivel-tanque');
+                if (levelDisplay) levelDisplay.value = comp.getAlturaLiquidoM().toFixed(2);
+            };
+
+            document.getElementById('input-cap').addEventListener('change', e => {
+                comp.capacidadeMaxima = Math.max(100, parseFloat(e.target.value) || 100);
+                comp.volumeAtual = Math.min(comp.volumeAtual, comp.capacidadeMaxima);
+                document.getElementById('input-volume-tanque').max = comp.capacidadeMaxima;
+                comp.sincronizarMetricasFisicas();
+                emitirVolumeAtualizado();
+            });
+
+            document.getElementById('input-volume-tanque').addEventListener('change', e => {
+                comp.volumeAtual = Math.max(0, Math.min(comp.capacidadeMaxima, parseFloat(e.target.value) || 0));
+                comp.volumeInicial = comp.volumeAtual;
+                comp.sincronizarMetricasFisicas();
+                emitirVolumeAtualizado();
             });
 
             document.getElementById('input-altura-tanque').addEventListener('change', e => {
                 comp.alturaUtilMetros = Math.max(0.5, parseFloat(e.target.value) || 2.4);
-                comp.notify({
-                    tipo: 'volume',
-                    perc: comp.capacidadeMaxima > 0 ? comp.volumeAtual / comp.capacidadeMaxima : 0,
-                    abs: comp.volumeAtual,
-                    qIn: comp.lastQin,
-                    qOut: comp.lastQout,
-                    pBottom: comp.pressaoFundoBar
-                });
+                comp.alturaBocalEntradaM = Math.min(comp.alturaBocalEntradaM, comp.alturaUtilMetros);
+                comp.alturaBocalSaidaM = Math.min(comp.alturaBocalSaidaM, comp.alturaUtilMetros);
+                document.getElementById('input-altura-entrada-tanque').max = comp.alturaUtilMetros;
+                document.getElementById('input-altura-saida-tanque').max = comp.alturaUtilMetros;
+                document.getElementById('input-altura-entrada-tanque').value = comp.alturaBocalEntradaM.toFixed(2);
+                document.getElementById('input-altura-saida-tanque').value = comp.alturaBocalSaidaM.toFixed(2);
+                comp.sincronizarMetricasFisicas();
+                emitirVolumeAtualizado();
+            });
+            document.getElementById('input-altura-entrada-tanque').addEventListener('change', e => {
+                comp.alturaBocalEntradaM = Math.max(0, Math.min(comp.alturaUtilMetros, parseFloat(e.target.value) || 0));
+                comp.sincronizarMetricasFisicas();
+                emitirVolumeAtualizado();
+            });
+            document.getElementById('input-altura-saida-tanque').addEventListener('change', e => {
+                comp.alturaBocalSaidaM = Math.max(0, Math.min(comp.alturaUtilMetros, parseFloat(e.target.value) || 0));
+                comp.sincronizarMetricasFisicas();
+                emitirVolumeAtualizado();
+            });
+            document.getElementById('input-cd-tanque').addEventListener('change', e => {
+                comp.coeficienteSaida = Math.max(0.1, parseFloat(e.target.value) || 0.82);
+            });
+            document.getElementById('input-k-entrada-tanque').addEventListener('change', e => {
+                comp.perdaEntradaK = Math.max(0, parseFloat(e.target.value) || 1.0);
             });
 
             const spAtivoEl = document.getElementById('input-sp-ativo');
