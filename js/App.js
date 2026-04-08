@@ -1,5 +1,5 @@
 // =============================================
-// CONTROLLER MAIN: Orquestrador da Aplicação
+// CONTROLLER MAIN: Orquestrador da Aplicacao
 // Ficheiro: js/App.js
 // =============================================
 
@@ -10,40 +10,82 @@ import { setupCameraControl } from './controllers/CameraController.js'
 import { setupPipeControl, getConnectionFlow } from './controllers/PipeController.js'
 import { setupDragDrop } from './controllers/DragDropController.js'
 
-// Inicializar controllers
 setupUI();
 setupCameraControl();
 setupPipeControl();
 setupDragDrop();
 
-// Registrar callbacks para resolver dependências circulares
 setPortStateUpdater(() => updatePortStates());
 setConnectionFlowGetter((conn) => getConnectionFlow(conn));
 
-// Controles gerais (iniciar, pausar, limpar)
 const btnRun = document.getElementById('btn-run');
-btnRun.addEventListener('click', () => {
-    if (ENGINE.isRunning) {
-        ENGINE.stop();
-        btnRun.innerHTML = "▶ Iniciar Simulação Física";
-        btnRun.style.background = "#2ecc71";
-        btnRun.style.borderColor = "#27ae60";
-    } else {
-        ENGINE.start();
-        btnRun.innerHTML = "⏸ Pausar Simulação";
-        btnRun.style.background = "#e74c3c";
-        btnRun.style.borderColor = "#c0392b";
+const btnClear = document.getElementById('btn-clear');
+const relativeHeightToggle = document.getElementById('toggle-relative-height');
+const relativeHeightNote = document.getElementById('toolbar-height-note');
+
+function updateRunButtonUI(isRunning) {
+    if (isRunning) {
+        btnRun.innerHTML = '&#9208; Pausar Simulacao';
+        btnRun.style.background = '#e74c3c';
+        btnRun.style.borderColor = '#c0392b';
+        return;
     }
+
+    btnRun.innerHTML = '&#9654; Iniciar Simulacao Fisica';
+    btnRun.style.background = '#2ecc71';
+    btnRun.style.borderColor = '#27ae60';
+}
+
+function updateRelativeHeightUI(enabled) {
+    if (enabled) {
+        relativeHeightNote.textContent = 'Desniveis entre componentes afetam a pressao e a vazao.';
+        relativeHeightNote.style.color = '#5f6f7f';
+        relativeHeightNote.style.background = '#f4f7f8';
+        relativeHeightNote.style.borderColor = '#ecf0f1';
+        return;
+    }
+
+    relativeHeightNote.textContent = 'Modo sem altura relativa: a bomba perde utilidade para vencer desniveis.';
+    relativeHeightNote.style.color = '#a84300';
+    relativeHeightNote.style.background = '#fff4e8';
+    relativeHeightNote.style.borderColor = '#f3c89f';
+}
+
+updateRunButtonUI(ENGINE.isRunning);
+relativeHeightToggle.checked = ENGINE.usarAlturaRelativa;
+updateRelativeHeightUI(ENGINE.usarAlturaRelativa);
+
+btnRun.addEventListener('click', () => {
+    if (ENGINE.isRunning) ENGINE.stop();
+    else ENGINE.start();
+
+    updateRunButtonUI(ENGINE.isRunning);
 });
 
-document.getElementById('btn-clear').addEventListener('click', () => {
+relativeHeightToggle.addEventListener('change', (e) => {
+    ENGINE.setUsarAlturaRelativa(e.target.checked);
+    updateRelativeHeightUI(ENGINE.usarAlturaRelativa);
+});
+
+btnClear.addEventListener('click', () => {
     document.querySelectorAll('#workspace-canvas .placed-component').forEach(item => item.remove());
     ENGINE.clear();
 });
 
-// Controle de deleção com teclas
+ENGINE.subscribe((dados) => {
+    if (dados.tipo === 'estado_motor') {
+        updateRunButtonUI(dados.rodando);
+    }
+
+    if (dados.tipo === 'config_simulacao') {
+        relativeHeightToggle.checked = dados.usarAlturaRelativa;
+        updateRelativeHeightUI(dados.usarAlturaRelativa);
+    }
+});
+
 document.addEventListener('keydown', (e) => {
     if (e.target.tagName.toLowerCase() === 'input') return;
+
     if (e.key === 'Delete' || e.key === 'Backspace') {
         const selectedCompDiv = document.querySelector('.placed-component.selected');
         if (selectedCompDiv) {
@@ -59,6 +101,7 @@ document.addEventListener('keydown', (e) => {
                 }
                 return true;
             });
+
             ENGINE.componentes = ENGINE.componentes.filter(c => c.id !== compId);
             selectedCompDiv.remove();
             ENGINE.selectComponent(null);
@@ -83,4 +126,4 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-console.log('✅ App.js loaded - All controllers initialized');
+console.log('App.js loaded - All controllers initialized');

@@ -3,6 +3,8 @@
 // Ficheiro: js/MotorFisico.js
 // ==================================
 
+import { formatUnitValue, getUnitSymbol } from './utils/Units.js'
+
 let portStateUpdater = null;
 let connectionFlowGetter = null;
 
@@ -162,6 +164,7 @@ export class SistemaSimulacao extends Observable {
         this.elapsedTime = 0;
         this.selectedComponent = null;
         this.selectedConnection = null;
+        this.usarAlturaRelativa = true;
     }
 
     add(comp) {
@@ -196,6 +199,7 @@ export class SistemaSimulacao extends Observable {
         this.isRunning = false;
         this.clearConnectionDynamics();
         this.resetHydraulicState();
+        this.componentes.forEach(c => c.onSimulationStop());
         this.notify({ tipo: 'estado_motor', rodando: false });
         this.updatePipesVisual();
     }
@@ -210,6 +214,14 @@ export class SistemaSimulacao extends Observable {
         this.selectedComponent = null;
         this.selectedConnection = conn;
         this.notify({ tipo: 'selecao', componente: null, conexao: conn });
+    }
+
+    setUsarAlturaRelativa(ativo) {
+        this.usarAlturaRelativa = ativo !== false;
+        this.clearConnectionDynamics();
+        if (!this.isRunning) this.resetHydraulicState();
+        this.updatePipesVisual();
+        this.notify({ tipo: 'config_simulacao', usarAlturaRelativa: this.usarAlturaRelativa });
     }
 
     atualizarFluido(dados) {
@@ -341,7 +353,7 @@ export class SistemaSimulacao extends Observable {
         return {
             straightLengthM,
             lengthM: straightLengthM + extraLengthM,
-            headGainM: (p2.y - p1.y) / PIXELS_PER_METER
+            headGainM: this.usarAlturaRelativa ? (p2.y - p1.y) / PIXELS_PER_METER : 0
         };
     }
 
@@ -816,13 +828,13 @@ export class SistemaSimulacao extends Observable {
                 if (!this.isRunning || labelFlow === null || labelFlow === undefined || labelFlow <= EPSILON_FLOW) {
                     conn.label.textContent = '';
                 } else {
-                    conn.label.textContent = labelFlow.toFixed(1) + ' L/s';
+                    conn.label.textContent = `${formatUnitValue('flow', labelFlow, 2)} ${getUnitSymbol('flow')}`;
                 }
             }
 
             conn.path.setAttribute(
                 'data-hydraulic-state',
-                `${flow.toFixed(2)} L/s | ${state.velocityMps.toFixed(2)} m/s | Re ${Math.round(state.reynolds)} | ${state.regime}`
+                `${formatUnitValue('flow', flow, 2)} ${getUnitSymbol('flow')} | ${state.velocityMps.toFixed(2)} m/s | Re ${Math.round(state.reynolds)} | ${state.regime}`
             );
         });
 
@@ -922,6 +934,8 @@ export class ComponenteFisico extends Observable {
 
     atualizarDinamica() {}
 
+    onSimulationStop() {}
+
     conectarSaida(destino) {
         if (!this.outputs.includes(destino)) {
             this.outputs.push(destino);
@@ -1008,6 +1022,13 @@ export class BombaLogica extends ComponenteFisico {
         return clamp(this.acionamentoEfetivo / 100.0, 0, 1);
     }
 
+    getCurvaPressaoBar(flowLps, drive = 1) {
+        const driveClamped = clamp(drive, 0, 1);
+        const qMax = Math.max(EPSILON_FLOW, this.vazaoNominal * Math.max(driveClamped, 0.05));
+        const curveFrac = 1 - Math.pow(clamp(flowLps / qMax, 0, 1), 2);
+        return this.pressaoMaxima * driveClamped * driveClamped * Math.max(0, curveFrac);
+    }
+
     getEficienciaInstantanea(flowLps = this.fluxoReal) {
         const drive = this.getDriveAtual();
         const qMax = this.vazaoNominal * drive;
@@ -1019,10 +1040,27 @@ export class BombaLogica extends ComponenteFisico {
         return clamp(this.eficienciaHidraulica * efficiencyShape, 0.22, this.eficienciaHidraulica);
     }
 
+    getCurvaEficiencia(flowLps, drive = 1) {
+        const driveClamped = clamp(drive, 0, 1);
+        const qMax = Math.max(EPSILON_FLOW, this.vazaoNominal * Math.max(driveClamped, 0.05));
+        const qBep = Math.max(EPSILON_FLOW, qMax * this.fracaoMelhorEficiencia);
+        const deviation = (flowLps - qBep) / qBep;
+        const efficiencyShape = 1 - (0.32 * deviation * deviation);
+        return clamp(this.eficienciaHidraulica * efficiencyShape, 0.18, this.eficienciaHidraulica);
+    }
+
+    getCurvaNpshRequeridoM(flowLps, drive = 1) {
+        const driveClamped = clamp(drive, 0, 1);
+        const qMax = Math.max(EPSILON_FLOW, this.vazaoNominal * Math.max(driveClamped, 0.05));
+        const normalizedFlow = clamp(flowLps / qMax, 0, 1);
+        const ratio = 0.42 + (0.58 * Math.pow(normalizedFlow, 1.8));
+        return Math.max(0.2, this.npshRequeridoM * ratio);
+    }
+
     setAcionamento(valor) {
         this.grauAcionamento = clamp(Number(valor) || 0, 0, 100);
-        if (!ENGINE.isRunning) this.acionamentoEfetivo = this.grauAcionamento;
-        this.isOn = this.acionamentoEfetivo > 0.5;
+        if (!ENGINE.isRunning) this.acionamentoEfetivo = 0;
+        this.isOn = ENGINE.isRunning && this.acionamentoEfetivo > 0.5;
         this.notify({ tipo: 'estado', isOn: this.isOn, grau: this.grauAcionamento, grauEfetivo: this.acionamentoEfetivo });
     }
 
@@ -1034,6 +1072,18 @@ export class BombaLogica extends ComponenteFisico {
         if (Math.abs(this.acionamentoEfetivo - previousDrive) > 0.05) {
             this.notify({ tipo: 'estado', isOn: this.isOn, grau: this.grauAcionamento, grauEfetivo: this.acionamentoEfetivo });
         }
+    }
+
+    onSimulationStop() {
+        this.acionamentoEfetivo = 0;
+        this.isOn = false;
+        this.fluxoReal = 0;
+        this.pressaoSucaoAtualBar = 0;
+        this.pressaoDescargaAtualBar = 0;
+        this.cargaGeradaBar = 0;
+        this.npshDisponivelM = 0;
+        this.fatorCavitacaoAtual = 1;
+        this.notify({ tipo: 'estado', isOn: false, grau: this.grauAcionamento, grauEfetivo: 0 });
     }
 
     sincronizarMetricasFisicas() {
