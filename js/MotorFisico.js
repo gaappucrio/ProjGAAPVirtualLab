@@ -3,56 +3,63 @@
 // Ficheiro: js/MotorFisico.js
 // ==================================
 
-import { formatUnitValue, getUnitSymbol } from './utils/Units.js'
+import {
+    areaFromDiameter,
+    BAR_TO_PA,
+    clamp,
+    ComponenteFisico,
+    DEFAULT_ATMOSPHERIC_PRESSURE_BAR,
+    DEFAULT_ENTRY_LOSS,
+    DEFAULT_FLUID_VAPOR_PRESSURE_BAR,
+    DEFAULT_FLUID_VISCOSITY_PA_S,
+    DEFAULT_PIPE_DIAMETER_M,
+    DEFAULT_PIPE_EXTRA_LENGTH_M,
+    DEFAULT_PIPE_FRICTION,
+    DEFAULT_PIPE_MINOR_LOSS,
+    DEFAULT_PIPE_ROUGHNESS_MM,
+    EPSILON_FLOW,
+    flowFromBernoulli,
+    GRAVITY,
+    lpsToM3s,
+    m3sToLps,
+    MAX_NETWORK_FLOW_LPS,
+    Observable,
+    pressureFromHeadBar,
+    pressureLossFromFlow,
+    smoothFirstOrder
+} from './componentes/BaseComponente.js';
+import { BombaLogica } from './componentes/BombaLogica.js';
+import { Fluido } from './componentes/Fluido.js';
+import { DrenoLogico } from './componentes/DrenoLogico.js';
+import { FonteLogica } from './componentes/FonteLogica.js';
+import { TanqueLogico } from './componentes/TanqueLogico.js';
+import { formatUnitValue, getUnitSymbol } from './utils/Units.js';
+import { ValvulaLogica } from './componentes/ValvulaLogica.js';
+
+export {
+    clamp,
+    ComponenteFisico,
+    DEFAULT_ATMOSPHERIC_PRESSURE_BAR,
+    DEFAULT_FLUID_VAPOR_PRESSURE_BAR,
+    DEFAULT_FLUID_VISCOSITY_PA_S,
+    EPSILON_FLOW,
+    flowFromBernoulli,
+    MAX_NETWORK_FLOW_LPS,
+    Observable,
+    pressureFromHeadBar,
+    pressureLossFromFlow,
+    smoothFirstOrder
+} from './componentes/BaseComponente.js';
 
 let portStateUpdater = null;
 let connectionFlowGetter = null;
 
-const BAR_TO_PA = 100000;
-const GRAVITY = 9.81;
-const LPS_TO_M3S = 0.001;
-const M3S_TO_LPS = 1000;
-const EPSILON_FLOW = 0.0001;
-const DEFAULT_PIPE_DIAMETER_M = 0.08;
-const DEFAULT_PIPE_FRICTION = 0.028;
-const DEFAULT_PIPE_ROUGHNESS_MM = 0.045;
-const DEFAULT_PIPE_EXTRA_LENGTH_M = 0;
-const DEFAULT_PIPE_MINOR_LOSS = 0.8;
-const DEFAULT_ENTRY_LOSS = 0.35;
-const DEFAULT_FLUID_VISCOSITY_PA_S = 0.00089;
-const DEFAULT_FLUID_VAPOR_PRESSURE_BAR = 0.0317;
-const DEFAULT_ATMOSPHERIC_PRESSURE_BAR = 1.01325;
 const PIXELS_PER_METER = 80;
-const MAX_NETWORK_FLOW_LPS = 500;
 const MAX_QUEUE_STEPS = 512;
 const MAX_COMPONENT_VISITS = 8;
 
-const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const lerp = (start, end, t) => start + ((end - start) * t);
-const lpsToM3s = (value) => value * LPS_TO_M3S;
-const m3sToLps = (value) => value * M3S_TO_LPS;
-const areaFromDiameter = (diameterM) => Math.PI * Math.pow(diameterM / 2, 2);
-const pressureFromHeadBar = (headM, density) => (density * GRAVITY * headM) / BAR_TO_PA;
-const safeLossCoeff = (lossCoeff) => Math.max(0.1, lossCoeff);
 const safeViscosity = (value) => Math.max(0.00001, value || DEFAULT_FLUID_VISCOSITY_PA_S);
-const smoothFirstOrder = (current, target, dt, timeConstantS) => {
-    if (dt <= 0) return target;
-    if (!Number.isFinite(timeConstantS) || timeConstantS <= 0.001) return target;
-    const alpha = 1 - Math.exp(-dt / timeConstantS);
-    return current + ((target - current) * alpha);
-};
-
-function flowFromBernoulli(deltaPBar, areaM2, density, lossCoeff) {
-    if (deltaPBar <= 0 || areaM2 <= 0) return 0;
-    const velocity = Math.sqrt((2 * deltaPBar * BAR_TO_PA) / (density * safeLossCoeff(lossCoeff)));
-    return m3sToLps(areaM2 * velocity);
-}
-
-function pressureLossFromFlow(flowLps, areaM2, density, lossCoeff) {
-    if (flowLps <= 0 || areaM2 <= 0) return 0;
-    const velocity = lpsToM3s(flowLps) / areaM2;
-    return ((density * velocity * velocity * safeLossCoeff(lossCoeff)) / 2) / BAR_TO_PA;
-}
 
 function reynoldsFromFlow(flowLps, diameterM, areaM2, density, viscosityPaS) {
     if (flowLps <= 0 || diameterM <= 0 || areaM2 <= 0) return 0;
@@ -115,40 +122,6 @@ export function setPortStateUpdater(fn) {
 
 export function setConnectionFlowGetter(fn) {
     connectionFlowGetter = fn;
-}
-
-export class Observable {
-    constructor() {
-        this.listeners = [];
-    }
-
-    subscribe(fn) {
-        this.listeners.push(fn);
-    }
-
-    notify(data) {
-        this.listeners.forEach(fn => fn(data));
-    }
-}
-
-export class Fluido {
-    constructor(
-        nome,
-        densidade,
-        pressao,
-        temperatura,
-        viscosidadeDinamicaPaS = DEFAULT_FLUID_VISCOSITY_PA_S,
-        pressaoVaporBar = DEFAULT_FLUID_VAPOR_PRESSURE_BAR,
-        pressaoAtmosfericaBar = DEFAULT_ATMOSPHERIC_PRESSURE_BAR
-    ) {
-        this.nome = nome;
-        this.densidade = densidade;
-        this.pressao = pressao; // bar(g)
-        this.temperatura = temperatura;
-        this.viscosidadeDinamicaPaS = viscosidadeDinamicaPaS;
-        this.pressaoVaporBar = pressaoVaporBar;
-        this.pressaoAtmosfericaBar = pressaoAtmosfericaBar;
-    }
 }
 
 export class SistemaSimulacao extends Observable {
@@ -441,7 +414,7 @@ export class SistemaSimulacao extends Observable {
     }
 
     getTargetBackPressureBar(target) {
-        if (target instanceof TanqueLogico) return target.getBackPressureAtInletBar(this.fluidoOperante);
+        if (target instanceof TanqueLogico) return target.getBackPressureAtInletBar(this.fluidoOperante, this.usarAlturaRelativa);
         if (target instanceof DrenoLogico) return target.pressaoSaidaBar;
         return 0;
     }
@@ -491,7 +464,7 @@ export class SistemaSimulacao extends Observable {
         if (comp instanceof TanqueLogico) {
             if (!estimating && comp.jaEmitiuIntrinseco()) return null;
             const availableFromInventory = dt > 0 ? comp.volumeAtual / dt : MAX_NETWORK_FLOW_LPS;
-            const hydrostaticPressureBar = comp.getPressaoDisponivelSaidaBar(this.fluidoOperante);
+            const hydrostaticPressureBar = comp.getPressaoDisponivelSaidaBar(this.fluidoOperante, this.usarAlturaRelativa);
             const localLossCoeff = 1.0 / Math.max(0.15, comp.coeficienteSaida * comp.coeficienteSaida);
             const hydraulicCapacity = flowFromBernoulli(
                 hydrostaticPressureBar,
@@ -857,444 +830,3 @@ export class SistemaSimulacao extends Observable {
 }
 
 export const ENGINE = new SistemaSimulacao();
-
-export class ComponenteFisico extends Observable {
-    constructor(id, tag, x, y) {
-        super();
-        this.id = id;
-        this.tag = tag;
-        this.x = x;
-        this.y = y;
-        this.inputs = [];
-        this.outputs = [];
-        this.diametroConexaoM = DEFAULT_PIPE_DIAMETER_M;
-        this.resetEstadoHidraulico();
-    }
-
-    resetEstadoHidraulico() {
-        this.estadoHidraulico = {
-            entradaVazaoLps: 0,
-            entradaPressaoPonderadaBar: 0,
-            entradaConsumidaLps: 0,
-            saidaVazaoLps: 0,
-            saidaPressaoPonderadaBar: 0,
-            emissaoIntrinsecaConsumida: false
-        };
-        this.pressaoEntradaAtualBar = 0;
-        this.pressaoSaidaAtualBar = 0;
-    }
-
-    getAreaConexaoM2() {
-        return areaFromDiameter(this.diametroConexaoM);
-    }
-
-    getPressaoEntradaBar() {
-        if (this.estadoHidraulico.entradaVazaoLps <= EPSILON_FLOW) return 0;
-        return this.estadoHidraulico.entradaPressaoPonderadaBar / this.estadoHidraulico.entradaVazaoLps;
-    }
-
-    getPressaoSaidaBar() {
-        if (this.estadoHidraulico.saidaVazaoLps <= EPSILON_FLOW) return 0;
-        return this.estadoHidraulico.saidaPressaoPonderadaBar / this.estadoHidraulico.saidaVazaoLps;
-    }
-
-    getFluxoPendenteLps() {
-        return Math.max(0, this.estadoHidraulico.entradaVazaoLps - this.estadoHidraulico.entradaConsumidaLps);
-    }
-
-    registrarEntrada(flowLps, pressureBar) {
-        if (flowLps <= EPSILON_FLOW) return;
-        this.estadoHidraulico.entradaVazaoLps += flowLps;
-        this.estadoHidraulico.entradaPressaoPonderadaBar += pressureBar * flowLps;
-    }
-
-    registrarSaida(flowLps, pressureBar) {
-        if (flowLps <= EPSILON_FLOW) return;
-        this.estadoHidraulico.saidaVazaoLps += flowLps;
-        this.estadoHidraulico.saidaPressaoPonderadaBar += pressureBar * flowLps;
-    }
-
-    consumirEntrada(flowLps) {
-        if (flowLps <= EPSILON_FLOW) return;
-        this.estadoHidraulico.entradaConsumidaLps += flowLps;
-    }
-
-    marcarEmissaoIntrinseca() {
-        this.estadoHidraulico.emissaoIntrinsecaConsumida = true;
-    }
-
-    jaEmitiuIntrinseco() {
-        return this.estadoHidraulico.emissaoIntrinsecaConsumida;
-    }
-
-    sincronizarMetricasFisicas() {
-        this.pressaoEntradaAtualBar = this.getPressaoEntradaBar();
-        this.pressaoSaidaAtualBar = this.getPressaoSaidaBar();
-    }
-
-    atualizarDinamica() {}
-
-    onSimulationStop() {}
-
-    conectarSaida(destino) {
-        if (!this.outputs.includes(destino)) {
-            this.outputs.push(destino);
-            destino.inputs.push(this);
-            this.notify({ tipo: 'conexao', source: this, target: destino });
-        }
-    }
-
-    desconectarSaida(destino) {
-        this.outputs = this.outputs.filter(out => out !== destino);
-        destino.inputs = destino.inputs.filter(inp => inp !== this);
-    }
-
-    getFluxoSaida() {
-        return this.estadoHidraulico.saidaVazaoLps || 0;
-    }
-}
-
-export class FonteLogica extends ComponenteFisico {
-    constructor(id, tag, x, y) {
-        super(id, tag, x, y);
-        this.pressaoFonteBar = 1.0;
-        this.vazaoMaxima = MAX_NETWORK_FLOW_LPS;
-        this.fluxoReal = 0;
-    }
-
-    sincronizarMetricasFisicas() {
-        super.sincronizarMetricasFisicas();
-        this.pressaoSaidaAtualBar = this.pressaoFonteBar;
-        this.fluxoReal = this.estadoHidraulico.saidaVazaoLps;
-    }
-}
-
-export class DrenoLogico extends ComponenteFisico {
-    constructor(id, tag, x, y) {
-        super(id, tag, x, y);
-        this.pressaoSaidaBar = 0.0;
-        this.perdaEntradaK = 1.1;
-        this.vazaoRecebidaLps = 0;
-    }
-
-    sincronizarMetricasFisicas() {
-        super.sincronizarMetricasFisicas();
-        this.vazaoRecebidaLps = this.estadoHidraulico.entradaVazaoLps;
-    }
-
-    getFluxoSaidaFromTank(nivelNormalizado) {
-        const headBar = pressureFromHeadBar(Math.max(0, nivelNormalizado) * 2.4, ENGINE.fluidoOperante.densidade);
-        return flowFromBernoulli(headBar, this.getAreaConexaoM2(), ENGINE.fluidoOperante.densidade, 1 + this.perdaEntradaK);
-    }
-}
-
-export class BombaLogica extends ComponenteFisico {
-    constructor(id, tag, x, y) {
-        super(id, tag, x, y);
-        this.isOn = false;
-        this.vazaoNominal = 45.0;
-        this.grauAcionamento = 0;
-        this.acionamentoEfetivo = 0;
-        this.pressaoMaxima = 5.0;
-        this.eficienciaHidraulica = 0.78;
-        this.eficienciaAtual = this.eficienciaHidraulica;
-        this.npshRequeridoM = 2.5;
-        this.npshDisponivelM = 0;
-        this.fatorCavitacaoAtual = 1;
-        this.tempoRampaSegundos = 1.6;
-        this.fracaoMelhorEficiencia = 0.72;
-        this.fluxoReal = 0;
-        this.pressaoSucaoAtualBar = 0;
-        this.pressaoDescargaAtualBar = 0;
-        this.cargaGeradaBar = 0;
-    }
-
-    calcularFatorCavitacao(npshDisponivelM) {
-        if (npshDisponivelM >= this.npshRequeridoM * 1.1) return 1;
-        return clamp(Math.pow(npshDisponivelM / Math.max(0.1, this.npshRequeridoM), 1.7), 0.12, 1);
-    }
-
-    toggle() {
-        this.setAcionamento(this.grauAcionamento > 0 ? 0 : 100);
-    }
-
-    getDriveAtual() {
-        return clamp(this.acionamentoEfetivo / 100.0, 0, 1);
-    }
-
-    getCurvaPressaoBar(flowLps, drive = 1) {
-        const driveClamped = clamp(drive, 0, 1);
-        const qMax = Math.max(EPSILON_FLOW, this.vazaoNominal * Math.max(driveClamped, 0.05));
-        const curveFrac = 1 - Math.pow(clamp(flowLps / qMax, 0, 1), 2);
-        return this.pressaoMaxima * driveClamped * driveClamped * Math.max(0, curveFrac);
-    }
-
-    getEficienciaInstantanea(flowLps = this.fluxoReal) {
-        const drive = this.getDriveAtual();
-        const qMax = this.vazaoNominal * drive;
-        if (qMax <= EPSILON_FLOW) return Math.max(0.2, this.eficienciaHidraulica * 0.6);
-
-        const qBep = Math.max(EPSILON_FLOW, qMax * this.fracaoMelhorEficiencia);
-        const deviation = (flowLps - qBep) / qBep;
-        const efficiencyShape = 1 - (0.32 * deviation * deviation);
-        return clamp(this.eficienciaHidraulica * efficiencyShape, 0.22, this.eficienciaHidraulica);
-    }
-
-    getCurvaEficiencia(flowLps, drive = 1) {
-        const driveClamped = clamp(drive, 0, 1);
-        const qMax = Math.max(EPSILON_FLOW, this.vazaoNominal * Math.max(driveClamped, 0.05));
-        const qBep = Math.max(EPSILON_FLOW, qMax * this.fracaoMelhorEficiencia);
-        const deviation = (flowLps - qBep) / qBep;
-        const efficiencyShape = 1 - (0.32 * deviation * deviation);
-        return clamp(this.eficienciaHidraulica * efficiencyShape, 0.18, this.eficienciaHidraulica);
-    }
-
-    getCurvaNpshRequeridoM(flowLps, drive = 1) {
-        const driveClamped = clamp(drive, 0, 1);
-        const qMax = Math.max(EPSILON_FLOW, this.vazaoNominal * Math.max(driveClamped, 0.05));
-        const normalizedFlow = clamp(flowLps / qMax, 0, 1);
-        const ratio = 0.42 + (0.58 * Math.pow(normalizedFlow, 1.8));
-        return Math.max(0.2, this.npshRequeridoM * ratio);
-    }
-
-    setAcionamento(valor) {
-        this.grauAcionamento = clamp(Number(valor) || 0, 0, 100);
-        if (!ENGINE.isRunning) this.acionamentoEfetivo = 0;
-        this.isOn = ENGINE.isRunning && this.acionamentoEfetivo > 0.5;
-        this.notify({ tipo: 'estado', isOn: this.isOn, grau: this.grauAcionamento, grauEfetivo: this.acionamentoEfetivo });
-    }
-
-    atualizarDinamica(dt) {
-        const previousDrive = this.acionamentoEfetivo;
-        this.acionamentoEfetivo = smoothFirstOrder(previousDrive, this.grauAcionamento, dt, this.tempoRampaSegundos);
-        this.isOn = this.acionamentoEfetivo > 0.5;
-
-        if (Math.abs(this.acionamentoEfetivo - previousDrive) > 0.05) {
-            this.notify({ tipo: 'estado', isOn: this.isOn, grau: this.grauAcionamento, grauEfetivo: this.acionamentoEfetivo });
-        }
-    }
-
-    onSimulationStop() {
-        this.acionamentoEfetivo = 0;
-        this.isOn = false;
-        this.fluxoReal = 0;
-        this.pressaoSucaoAtualBar = 0;
-        this.pressaoDescargaAtualBar = 0;
-        this.cargaGeradaBar = 0;
-        this.npshDisponivelM = 0;
-        this.fatorCavitacaoAtual = 1;
-        this.notify({ tipo: 'estado', isOn: false, grau: this.grauAcionamento, grauEfetivo: 0 });
-    }
-
-    sincronizarMetricasFisicas() {
-        super.sincronizarMetricasFisicas();
-        this.fluxoReal = this.estadoHidraulico.saidaVazaoLps;
-        this.pressaoSucaoAtualBar = this.getPressaoEntradaBar();
-        const drive = this.getDriveAtual();
-        const qMax = this.vazaoNominal * drive;
-        const curveFrac = qMax > EPSILON_FLOW ? 1 - Math.pow(clamp(this.fluxoReal / qMax, 0, 1), 2) : 0;
-        this.eficienciaAtual = this.getEficienciaInstantanea(this.fluxoReal);
-        this.cargaGeradaBar = drive > 0 ? this.pressaoMaxima * drive * drive * Math.max(0.05, curveFrac) * this.fatorCavitacaoAtual : 0;
-        this.pressaoDescargaAtualBar = this.pressaoSucaoAtualBar + this.cargaGeradaBar;
-        this.pressaoSaidaAtualBar = this.pressaoDescargaAtualBar;
-    }
-
-    getFluxoSaidaFromTank() {
-        return this.fluxoReal;
-    }
-}
-
-export class ValvulaLogica extends ComponenteFisico {
-    constructor(id, tag, x, y) {
-        super(id, tag, x, y);
-        this.aberta = false;
-        this.grauAbertura = 0;
-        this.aberturaEfetiva = 0;
-        this.fluxoReal = 0;
-        this.cv = 4.0;
-        this.perdaLocalK = 6.0;
-        this.tipoCaracteristica = 'equal_percentage';
-        this.rangeabilidade = 30;
-        this.deltaPAtualBar = 0;
-        this.tempoCursoSegundos = 0.85;
-    }
-
-    getCharacteristicFactor(opening) {
-        const safeOpening = clamp(opening, 0, 1);
-        if (this.tipoCaracteristica === 'linear') return safeOpening;
-        if (this.tipoCaracteristica === 'quick_opening') return Math.sqrt(safeOpening);
-        const minFactor = 1 / Math.max(2, this.rangeabilidade);
-        const normalized = (Math.pow(this.rangeabilidade, safeOpening) - 1) / (this.rangeabilidade - 1);
-        return clamp(minFactor + ((1 - minFactor) * normalized), minFactor, 1);
-    }
-
-    toggle() {
-        this.setAbertura(this.grauAbertura > 0 ? 0 : 100);
-    }
-
-    getAberturaNormalizadaAtual() {
-        return clamp(this.aberturaEfetiva / 100.0, 0, 1);
-    }
-
-    setAbertura(valor) {
-        this.grauAbertura = clamp(Number(valor) || 0, 0, 100);
-        if (!ENGINE.isRunning) this.aberturaEfetiva = this.grauAbertura;
-        this.aberta = this.aberturaEfetiva > 0.5;
-        this.notify({ tipo: 'estado', aberta: this.aberta, grau: this.grauAbertura, grauEfetivo: this.aberturaEfetiva });
-    }
-
-    atualizarDinamica(dt) {
-        const previousOpening = this.aberturaEfetiva;
-        this.aberturaEfetiva = smoothFirstOrder(previousOpening, this.grauAbertura, dt, this.tempoCursoSegundos);
-        this.aberta = this.aberturaEfetiva > 0.5;
-
-        if (Math.abs(this.aberturaEfetiva - previousOpening) > 0.05) {
-            this.notify({ tipo: 'estado', aberta: this.aberta, grau: this.grauAbertura, grauEfetivo: this.aberturaEfetiva });
-        }
-    }
-
-    sincronizarMetricasFisicas() {
-        super.sincronizarMetricasFisicas();
-        this.fluxoReal = this.estadoHidraulico.saidaVazaoLps;
-        const opening = this.getAberturaNormalizadaAtual();
-        const cvFactor = Math.max(0.2, this.cv);
-        const characteristicFactor = this.getCharacteristicFactor(opening);
-        const areaM2 = this.getAreaConexaoM2() * Math.max(0.08, characteristicFactor);
-        const localLossCoeff = this.perdaLocalK / Math.max(0.025, Math.pow(Math.max(characteristicFactor, 0.01), 2.1) * cvFactor);
-        this.deltaPAtualBar = opening > 0
-            ? pressureLossFromFlow(this.fluxoReal, areaM2, ENGINE.fluidoOperante.densidade, localLossCoeff)
-            : 0;
-        this.pressaoSaidaAtualBar = Math.max(0, this.pressaoEntradaAtualBar - this.deltaPAtualBar);
-    }
-
-    getFluxoSaidaFromTank() {
-        return this.fluxoReal;
-    }
-}
-
-export class TanqueLogico extends ComponenteFisico {
-    constructor(id, tag, x, y) {
-        super(id, tag, x, y);
-        this.capacidadeMaxima = 1000.0;
-        this.volumeAtual = 0;
-        this.lastQin = 0;
-        this.lastQout = 0;
-        this.alturaUtilMetros = 2.4;
-        this.coeficienteSaida = 0.82;
-        this.perdaEntradaK = 1.0;
-        this.alturaBocalEntradaM = 2.2;
-        this.alturaBocalSaidaM = 0.1;
-        this.volumeInicial = 0;
-        this.pressaoFundoBar = 0;
-        this.setpointAtivo = false;
-        this.setpoint = 50;
-        this.kp = 250;
-        this.ki = 25;
-        this._ctrlIntegral = 0;
-        this._lastErro = 0;
-    }
-
-    getNivelNormalizado() {
-        return this.capacidadeMaxima > 0 ? clamp(this.volumeAtual / this.capacidadeMaxima, 0, 1) : 0;
-    }
-
-    getAlturaLiquidoM() {
-        return this.getNivelNormalizado() * this.alturaUtilMetros;
-    }
-
-    normalizarAlturasBocais() {
-        this.alturaBocalEntradaM = clamp(this.alturaBocalEntradaM, 0, this.alturaUtilMetros);
-        this.alturaBocalSaidaM = clamp(this.alturaBocalSaidaM, 0, this.alturaUtilMetros);
-    }
-
-    getPressaoHidrostaticaBar(fluido) {
-        return pressureFromHeadBar(this.getAlturaLiquidoM(), fluido.densidade);
-    }
-
-    getPressaoDisponivelSaidaBar(fluido) {
-        this.normalizarAlturasBocais();
-        const availableHeadM = Math.max(0, this.getAlturaLiquidoM() - this.alturaBocalSaidaM);
-        return pressureFromHeadBar(availableHeadM, fluido.densidade);
-    }
-
-    getBackPressureAtInletBar(fluido) {
-        this.normalizarAlturasBocais();
-        const submergedHeightM = Math.max(0, this.getAlturaLiquidoM() - this.alturaBocalEntradaM);
-        return pressureFromHeadBar(submergedHeightM, fluido.densidade);
-    }
-
-    _rodarControlador(dt) {
-        if (!this.setpointAtivo) return;
-
-        const erro = (this.setpoint / 100) - this.getNivelNormalizado();
-        if (this._lastErro !== undefined && (this._lastErro * erro < 0)) this._ctrlIntegral = 0;
-        this._lastErro = erro;
-        this._ctrlIntegral += erro * dt;
-
-        const clampInt = this.ki > 0 ? 1 / this.ki : 1;
-        this._ctrlIntegral = Math.max(-clampInt, Math.min(clampInt, this._ctrlIntegral));
-
-        const u = Math.max(-1, Math.min(1, this.kp * erro + this.ki * this._ctrlIntegral));
-        const grauEntrada = Math.max(0, u * 100);
-        const grauSaida = Math.max(0, -u * 100);
-
-        this.inputs.forEach(c => {
-            if (c instanceof ValvulaLogica) c.setAbertura(grauEntrada);
-            else if (c instanceof BombaLogica) c.setAcionamento(grauEntrada);
-        });
-
-        this.outputs.forEach(c => {
-            if (c instanceof ValvulaLogica) c.setAbertura(grauSaida);
-            else if (c instanceof BombaLogica) c.setAcionamento(grauSaida);
-        });
-
-        this.notify({ tipo: 'ctrl_update', grau: u * 100, erro: erro });
-    }
-
-    resetControlador() {
-        this._ctrlIntegral = 0;
-        this._lastErro = 0;
-    }
-
-    atualizarFisica(dt, fluido) {
-        this.normalizarAlturasBocais();
-        this.lastQin = this.estadoHidraulico.entradaVazaoLps;
-        this.lastQout = this.estadoHidraulico.saidaVazaoLps;
-        this.volumeAtual += (this.lastQin - this.lastQout) * dt;
-        this.volumeAtual = clamp(this.volumeAtual, 0, this.capacidadeMaxima);
-        this.pressaoFundoBar = this.getPressaoHidrostaticaBar(fluido);
-        this.sincronizarMetricasFisicas(fluido);
-
-        this.notify({
-            tipo: 'volume',
-            perc: this.capacidadeMaxima > 0 ? this.volumeAtual / this.capacidadeMaxima : 0,
-            abs: this.volumeAtual,
-            qIn: this.lastQin,
-            qOut: this.lastQout,
-            pBottom: this.pressaoFundoBar
-        });
-    }
-
-    sincronizarMetricasFisicas(fluido) {
-        this.normalizarAlturasBocais();
-        super.sincronizarMetricasFisicas(fluido);
-        this.pressaoFundoBar = this.getPressaoHidrostaticaBar(fluido || ENGINE.fluidoOperante);
-    }
-
-    getFluxoSaida() {
-        return this.lastQout || 0;
-    }
-
-    getFluxoSaidaFromTank(nivelMontante) {
-        const headBar = pressureFromHeadBar(
-            Math.max(0, (nivelMontante * this.alturaUtilMetros) - this.alturaBocalSaidaM),
-            ENGINE.fluidoOperante.densidade
-        );
-        return flowFromBernoulli(
-            headBar,
-            this.getAreaConexaoM2(),
-            ENGINE.fluidoOperante.densidade,
-            1.0 / Math.max(0.15, this.coeficienteSaida * this.coeficienteSaida)
-        );
-    }
-}

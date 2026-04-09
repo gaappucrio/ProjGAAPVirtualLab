@@ -3,11 +3,11 @@
 // Ficheiro: js/controllers/DragDropController.js
 // =========================================
 
-import { REGISTRO_COMPONENTES } from '../RegistroComponentes.js'
-import { FabricaDeEquipamentos, updatePortStates } from '../FabricaEquipamentos.js'
-import { camera } from './CameraController.js'
-import { updateAllPipes } from './PipeController.js'
-import { GRID_SIZE } from '../Config.js'
+import { REGISTRO_COMPONENTES } from '../RegistroComponentes.js';
+import { FabricaDeEquipamentos, updatePortStates } from '../FabricaEquipamentos.js';
+import { camera } from './CameraController.js';
+import { updateAllPipes } from './PipeController.js';
+import { GRID_SIZE } from '../Config.js';
 
 export function setupDragDrop() {
     const workspaceContainer = document.getElementById('workspace');

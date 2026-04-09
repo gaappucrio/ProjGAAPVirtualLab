@@ -5,14 +5,14 @@
 
 import {
     ENGINE,
-    FLUID_PRESETS,
-    TanqueLogico,
-    BombaLogica,
-    ValvulaLogica,
-    FonteLogica,
-    DrenoLogico
-} from '../MotorFisico.js'
-import { REGISTRO_COMPONENTES } from '../RegistroComponentes.js'
+    FLUID_PRESETS
+} from '../MotorFisico.js';
+import { TanqueLogico } from '../componentes/TanqueLogico.js';
+import { ValvulaLogica } from '../componentes/ValvulaLogica.js';
+import { BombaLogica } from '../componentes/BombaLogica.js';
+import { DrenoLogico } from '../componentes/DrenoLogico.js';
+import { FonteLogica } from '../componentes/FonteLogica.js';
+import { REGISTRO_COMPONENTES } from '../RegistroComponentes.js';
 
 import {
     formatUnitValue,
@@ -23,12 +23,13 @@ import {
     setUnitPreference,
     toBaseValue,
     toDisplayValue
-} from '../utils/Units.js'
+} from '../utils/Units.js';
 
 let volumeChart;
 let pumpCurveChart = null;
 let chartUpdateTimer = 0;
 let chartedTankId = null;
+let chartedPumpId = null;
 
 export function setupUI() {
     setupPanelToggles();
@@ -63,6 +64,7 @@ function setupPanelToggles() {
         btnMaxChart.textContent = isMax ? '✕ Fechar' : '⛶ Expandir';
         chartMaxHeader.style.display = isMax ? 'flex' : 'none';
         if (volumeChart) volumeChart.resize();
+        if (pumpCurveChart) pumpCurveChart.resize();
     }
 
     btnMaxChart.addEventListener('click', toggleChartMaximize);
@@ -80,6 +82,9 @@ function setupPanelToggles() {
 }
 
 function setupChart() {
+    destroyPumpCurveChart();
+    if (volumeChart) volumeChart.destroy();
+
     const ctx = document.getElementById('gaap-volume-chart').getContext('2d');
 
     volumeChart = new Chart(ctx, {
@@ -87,7 +92,7 @@ function setupChart() {
         data: {
             labels: [0],
             datasets: [{
-                label: 'Selecione um Tanque',
+                label: 'Selecione um Tanque ou uma Bomba',
                 data: [0],
                 borderColor: '#3498db',
                 backgroundColor: 'rgba(52, 152, 219, 0.2)',
@@ -129,6 +134,12 @@ function setupChart() {
             }
         }
     });
+    chartedPumpId = null;
+}
+
+function ensureVolumeChart() {
+    if (pumpCurveChart) destroyPumpCurveChart();
+    if (!volumeChart) setupChart();
 }
 
 function getPropContent() {
@@ -140,6 +151,7 @@ function destroyPumpCurveChart() {
         pumpCurveChart.destroy();
         pumpCurveChart = null;
     }
+    chartedPumpId = null;
 }
 
 function setFieldValue(id, value, category = null, digits = 2, suffix = '') {
@@ -218,7 +230,8 @@ function renderCurrentProperties() {
     const connection = ENGINE.selectedConnection;
 
     refreshChartSelection(component, connection);
-    refreshVolumeChartPresentation();
+    if (component instanceof BombaLogica) refreshPumpCurveChart(component);
+    else refreshVolumeChartPresentation();
 
     if (connection) {
         renderConnectionProperties(connection);
@@ -300,14 +313,19 @@ function buildPumpCurveDatasets(component) {
 }
 
 function renderPumpCurveChart(component) {
-    const canvas = document.getElementById('pump-curve-chart');
+    const canvas = document.getElementById('gaap-volume-chart');
     if (!canvas) {
         destroyPumpCurveChart();
         return;
     }
 
     const datasets = buildPumpCurveDatasets(component);
+    if (volumeChart) {
+        volumeChart.destroy();
+        volumeChart = null;
+    }
     destroyPumpCurveChart();
+    chartedPumpId = component.id;
 
     pumpCurveChart = new Chart(canvas.getContext('2d'), {
         type: 'line',
@@ -420,7 +438,11 @@ function renderPumpCurveChart(component) {
 }
 
 function refreshPumpCurveChart(component) {
-    if (!(component instanceof BombaLogica) || !pumpCurveChart) return;
+    if (!(component instanceof BombaLogica)) return;
+    if (!pumpCurveChart || chartedPumpId !== component.id) {
+        renderPumpCurveChart(component);
+        return;
+    }
     const datasets = buildPumpCurveDatasets(component);
     pumpCurveChart.data.datasets[0].label = `Carga (${datasets.pressureUnit})`;
     pumpCurveChart.data.datasets[0].data = datasets.headPoints;
@@ -448,7 +470,6 @@ function refreshPumpCurveChart(component) {
 }
 
 function renderDefaultProperties() {
-    destroyPumpCurveChart();
     const propContent = getPropContent();
     const currentPreset = getCurrentFluidPresetId();
     const fluidOptions = Object.entries(FLUID_PRESETS)
@@ -489,14 +510,14 @@ function renderDefaultProperties() {
             <input type="number" id="input-fluid-temp" title="Temperatura do fluido operante para referencia do caso." value="${toDisplayValue('temperature', ENGINE.fluidoOperante.temperatura).toFixed(1)}" step="${getUnitStep('temperature')}" min="${toDisplayValue('temperature', -20).toFixed(1)}" max="${toDisplayValue('temperature', 200).toFixed(1)}">
         </div>
         <div class="prop-group">
-            <label title="Pressão de vapor absoluta usada no calculo de cavitacao.">Pressão de Vapor (${getUnitSymbol('pressure')} abs)</label>
-            <input type="number" id="input-fluid-vapor" title="Pressão de vapor absoluta usada no calculo de cavitacao." value="${displayUnitValue('pressure', ENGINE.fluidoOperante.pressaoVaporBar, 3)}" step="${displayStep('pressure', 0.001)}" min="${displayBound('pressure', 0.0001)}" max="${displayBound('pressure', 5)}">
+            <label title="Pressão de vapor absoluta usada no cálculo de cavitação.">Pressão de Vapor (${getUnitSymbol('pressure')} abs)</label>
+            <input type="number" id="input-fluid-vapor" title="Pressão de vapor absoluta usada no cálculo de cavitação." value="${displayUnitValue('pressure', ENGINE.fluidoOperante.pressaoVaporBar, 3)}" step="${displayStep('pressure', 0.001)}" min="${displayBound('pressure', 0.0001)}" max="${displayBound('pressure', 5)}">
         </div>
         <div class="prop-group">
-            <label title="Pressão atmosferica absoluta usada como referencia externa.">Pressão Atmosferica (${getUnitSymbol('pressure')} abs)</label>
-            <input type="number" id="input-fluid-atm" title="Pressão atmosferica absoluta usada como referencia externa." value="${displayUnitValue('pressure', ENGINE.fluidoOperante.pressaoAtmosfericaBar, 3)}" step="${displayStep('pressure', 0.001)}" min="${displayBound('pressure', 0.5)}" max="${displayBound('pressure', 2)}">
+            <label title="Pressão atmosférica absoluta usada como referência externa.">Pressão Atmosférica (${getUnitSymbol('pressure')} abs)</label>
+            <input type="number" id="input-fluid-atm" title="Pressão atmosférica absoluta usada como referência externa." value="${displayUnitValue('pressure', ENGINE.fluidoOperante.pressaoAtmosfericaBar, 3)}" step="${displayStep('pressure', 0.001)}" min="${displayBound('pressure', 0.5)}" max="${displayBound('pressure', 2)}">
         </div>
-        <p style="font-size: 12px; color:#95a5a6; text-align:center;">Clique em um componente ou em um cano para editar os parametros fisicos da planta.</p>
+        <p style="font-size: 12px; color:#95a5a6; text-align:center;">Clique em um componente ou em um cano para editar os parâmetros físicos da planta.</p>
     `;
 
     bindUnitControls();
@@ -550,7 +571,6 @@ function getConnectionDisplay(conn) {
 }
 
 function renderConnectionProperties(conn) {
-    destroyPumpCurveChart();
     const propContent = getPropContent();
     ENGINE.ensureConnectionProperties(conn);
     const state = ENGINE.getConnectionState(conn);
@@ -662,12 +682,35 @@ function renderComponentProperties(component) {
     });
 
     if (spec.setupProps) spec.setupProps(component);
-    if (component instanceof BombaLogica) renderPumpCurveChart(component);
-    else destroyPumpCurveChart();
+
+    if (component instanceof BombaLogica) {
+        const inlinePumpCanvas = document.getElementById('pump-curve-chart');
+        if (inlinePumpCanvas) {
+            const inlineContainer = inlinePumpCanvas.parentElement;
+            if (inlineContainer) inlineContainer.style.display = 'none';
+            const info = document.createElement('p');
+            info.style.margin = '8px 0 0';
+            info.style.fontSize = '11px';
+            info.style.lineHeight = '1.45';
+            info.style.color = '#7f8c8d';
+            info.textContent = 'Curva exibida na area de Monitoramento abaixo. Use o mesmo botao Expandir do grafico do tanque.';
+            if (inlineContainer) inlineContainer.insertAdjacentElement('afterend', info);
+            else inlinePumpCanvas.insertAdjacentElement('afterend', info);
+        }
+    }
 }
 
 function refreshChartSelection(component, connection) {
+    if (component instanceof BombaLogica) {
+        chartedTankId = null;
+        if (!pumpCurveChart || chartedPumpId !== component.id) renderPumpCurveChart(component);
+        return;
+    }
+
+    ensureVolumeChart();
+
     if (component instanceof TanqueLogico) {
+        chartedPumpId = null;
         if (chartedTankId !== component.id) {
             chartedTankId = component.id;
             volumeChart.data.labels = [Math.round(ENGINE.elapsedTime)];
@@ -681,9 +724,10 @@ function refreshChartSelection(component, connection) {
 
     if (connection || !(component instanceof TanqueLogico)) {
         chartedTankId = null;
+        chartedPumpId = null;
         volumeChart.data.labels = [Math.round(ENGINE.elapsedTime)];
         volumeChart.data.datasets[0].data = [0];
-        volumeChart.data.datasets[0].label = 'Selecione um Tanque';
+        volumeChart.data.datasets[0].label = 'Selecione um Tanque ou uma Bomba';
         volumeChart.options.scales.y.max = 1000;
         volumeChart.update();
     }
@@ -767,7 +811,7 @@ function setupSubscriptions() {
                 }
                 if (document.getElementById('disp-acionamento-real-bomba')) document.getElementById('disp-acionamento-real-bomba').value = component.acionamentoEfetivo.toFixed(1);
                 setFieldValue('disp-vazao-bomba', component.fluxoReal, 'flow', 2);
-                setFieldValue('disp-sucção-bomba', component.pressaoSucaoAtualBar, 'pressure', 2);
+                setFieldValue('disp-succao-bomba', component.pressaoSucaoAtualBar, 'pressure', 2);
                 setFieldValue('disp-descarga-bomba', component.pressaoDescargaAtualBar, 'pressure', 2);
                 if (document.getElementById('disp-cavitacao-bomba')) document.getElementById('disp-cavitacao-bomba').value = (component.fatorCavitacaoAtual * 100).toFixed(0) + '%';
                 setFieldValue('disp-npsh-bomba', component.npshDisponivelM, 'length', 2);

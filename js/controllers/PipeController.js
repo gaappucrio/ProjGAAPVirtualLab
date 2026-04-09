@@ -3,9 +3,9 @@
 // Ficheiro: js/controllers/PipeController.js
 // =========================================
 
-import { ENGINE } from '../MotorFisico.js'
-import { camera } from './CameraController.js'
-import { updatePortStates } from '../utils/PortStateManager.js'
+import { ENGINE } from '../MotorFisico.js';
+import { camera } from './CameraController.js';
+import { updatePortStates } from '../utils/PortStateManager.js';
 
 const pipeLayer = document.getElementById('pipe-layer');
 let tempPipe = null;

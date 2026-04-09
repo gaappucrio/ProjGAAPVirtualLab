@@ -45,7 +45,7 @@ function updateRelativeHeightUI(enabled) {
         return;
     }
 
-    relativeHeightNote.textContent = 'Modo sem altura relativa: a bomba perde utilidade para vencer desniveis.';
+    relativeHeightNote.textContent = 'Modo sem altura relativa: a bomba perde utilidade para vencer desníveis.';
     relativeHeightNote.style.color = '#a84300';
     relativeHeightNote.style.background = '#fff4e8';
     relativeHeightNote.style.borderColor = '#f3c89f';

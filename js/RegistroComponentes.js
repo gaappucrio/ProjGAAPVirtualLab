@@ -3,7 +3,12 @@
 // Ficheiro: js/RegistroComponentes.js
 // ===============================================
 
-import { ENGINE, FonteLogica, DrenoLogico, BombaLogica, ValvulaLogica, TanqueLogico } from './MotorFisico.js'
+import { ENGINE } from './MotorFisico.js'
+import { TanqueLogico } from './componentes/TanqueLogico.js';
+import { ValvulaLogica } from './componentes/ValvulaLogica.js';
+import { BombaLogica } from './componentes/BombaLogica.js';
+import { DrenoLogico } from './componentes/DrenoLogico.js';
+import { FonteLogica } from './componentes/FonteLogica.js';
 import { colorPort, labelStyle } from './Config.js'
 import { formatUnitValue, getUnitSymbol, subscribeUnitPreferences, toBaseValue, toDisplayValue } from './utils/Units.js'
 
@@ -162,7 +167,7 @@ export const REGISTRO_COMPONENTES = {
             visual.addEventListener('dblclick', () => logica.toggle());
             logica.subscribe((d) => {
                 if (d.tipo === 'estado') {
-                    visual.querySelector(`#led-${id}`).setAttribute('fill', d.isOn ? '#2ecc71' : '#e74c3c');
+                    visual.querySelector(`#led-${id}`).setAttribute('fill', d.grau > 0 ? '#2ecc71' : '#e74c3c');
                 } else if (d.tipo === 'tag_update') {
                     visual.querySelector(`#tag-${id}`).textContent = logica.tag;
                 }
@@ -207,7 +212,7 @@ export const REGISTRO_COMPONENTES = {
                     </div>
                     <div class="prop-group">
                         ${makeUnitLabel('Pressão de Sucção', 'pressure', 'Pressão medida na entrada da bomba.')}
-                        <input type="text" id="disp-sucção-bomba" value="${displayUnitValue('pressure', comp.pressaoSucaoAtualBar, 2)}" disabled>
+                        <input type="text" id="disp-succao-bomba" value="${displayUnitValue('pressure', comp.pressaoSucaoAtualBar, 2)}" disabled>
                     </div>
                     <div class="prop-group">
                         ${makeUnitLabel('Pressão de Descarga', 'pressure', 'Pressão medida na saída da bomba.')}
@@ -279,7 +284,7 @@ export const REGISTRO_COMPONENTES = {
                     slider.value = d.grau;
                     numInput.value = d.grau;
                     const effectiveDisplay = document.getElementById('disp-acionamento-real-bomba');
-                    if (effectiveDisplay) effectiveDisplay.value = (d.grauEfetivo ?? d.grau).toFixed(1);
+                    if (effectiveDisplay) effectiveDisplay.value = (d.grauEfetivo ?? d.grau).toFixed(1); //
                 }
             });
         }
