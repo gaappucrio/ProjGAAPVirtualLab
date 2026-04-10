@@ -8,20 +8,15 @@ import {
     BAR_TO_PA,
     clamp,
     ComponenteFisico,
-    DEFAULT_ATMOSPHERIC_PRESSURE_BAR,
     DEFAULT_ENTRY_LOSS,
-    DEFAULT_FLUID_VAPOR_PRESSURE_BAR,
     DEFAULT_FLUID_VISCOSITY_PA_S,
     DEFAULT_PIPE_DIAMETER_M,
     DEFAULT_PIPE_EXTRA_LENGTH_M,
     DEFAULT_PIPE_FRICTION,
     DEFAULT_PIPE_MINOR_LOSS,
-    DEFAULT_PIPE_ROUGHNESS_MM,
     EPSILON_FLOW,
     flowFromBernoulli,
     GRAVITY,
-    lpsToM3s,
-    m3sToLps,
     MAX_NETWORK_FLOW_LPS,
     Observable,
     pressureFromHeadBar,
@@ -33,15 +28,14 @@ import { Fluido } from './componentes/Fluido.js';
 import { DrenoLogico } from './componentes/DrenoLogico.js';
 import { FonteLogica } from './componentes/FonteLogica.js';
 import { TanqueLogico } from './componentes/TanqueLogico.js';
-import { formatUnitValue, getUnitSymbol } from './utils/Units.js';
 import { ValvulaLogica } from './componentes/ValvulaLogica.js';
+import { formatUnitValue, getUnitSymbol } from './utils/Units.js';
+import { profiler } from './utils/PerformanceProfiler.js';
+import { getConnectionGeometry, getPipeHydraulics } from './utils/PipeHydraulics.js';
 
 export {
     clamp,
     ComponenteFisico,
-    DEFAULT_ATMOSPHERIC_PRESSURE_BAR,
-    DEFAULT_FLUID_VAPOR_PRESSURE_BAR,
-    DEFAULT_FLUID_VISCOSITY_PA_S,
     EPSILON_FLOW,
     flowFromBernoulli,
     MAX_NETWORK_FLOW_LPS,
@@ -58,39 +52,17 @@ const PIXELS_PER_METER = 80;
 const MAX_QUEUE_STEPS = 512;
 const MAX_COMPONENT_VISITS = 8;
 
-const lerp = (start, end, t) => start + ((end - start) * t);
+// Rastreamento de estabilidade numérica do solver
+const DEBUG_PHYSICS = false; // Ativa logs detalhados do solver
+let solverMetrics = {
+    lastIterations: 0,
+    lastError: 0,
+    maxIterationsHit: 0,
+    convergedCount: 0,
+    totalSolverCalls: 0
+};
+
 const safeViscosity = (value) => Math.max(0.00001, value || DEFAULT_FLUID_VISCOSITY_PA_S);
-
-function reynoldsFromFlow(flowLps, diameterM, areaM2, density, viscosityPaS) {
-    if (flowLps <= 0 || diameterM <= 0 || areaM2 <= 0) return 0;
-    const velocity = lpsToM3s(flowLps) / areaM2;
-    return (density * velocity * diameterM) / safeViscosity(viscosityPaS);
-}
-
-function darcyFrictionFactor(reynolds, relativeRoughness) {
-    if (!Number.isFinite(reynolds) || reynolds <= 0) return DEFAULT_PIPE_FRICTION;
-    if (reynolds < 2300) return clamp(64 / reynolds, 0.008, 0.15);
-
-    const turbulent = 0.25 / Math.pow(
-        Math.log10((relativeRoughness / 3.7) + (5.74 / Math.pow(reynolds, 0.9))),
-        2
-    );
-
-    if (reynolds < 4000) {
-        const laminar = 64 / reynolds;
-        const blend = (reynolds - 2300) / (4000 - 2300);
-        return clamp(lerp(laminar, turbulent, blend), 0.008, 0.15);
-    }
-
-    return clamp(turbulent, 0.008, 0.15);
-}
-
-function classifyFlowRegime(reynolds) {
-    if (reynolds <= 0) return 'sem fluxo';
-    if (reynolds < 2300) return 'laminar';
-    if (reynolds < 4000) return 'transicao';
-    return 'turbulento';
-}
 
 export const FLUID_PRESETS = {
     agua: {
@@ -142,6 +114,39 @@ export class SistemaSimulacao extends Observable {
 
     add(comp) {
         this.componentes.push(comp);
+    }
+
+    removeComponent(comp) {
+        // Remove componente da simulação com limpeza apropriada
+        if (!comp) return;
+        
+        // Desativa o componente se simulação estiver rodando
+        if (this.isRunning) comp.onSimulationStop();
+        
+        // Remove de conexões
+        this.conexoes = this.conexoes.filter(conn => {
+            if (conn.sourceEl.dataset.compId === comp.id || conn.targetEl.dataset.compId === comp.id) {
+                if (conn.label) conn.label.remove();
+                conn.path.remove();
+                return false;
+            }
+            return true;
+        });
+        
+        // Limpa estado e listeners
+        comp.destroy();
+        
+        // Remove do array de componentes
+        this.componentes = this.componentes.filter(c => c.id !== comp.id);
+        
+        // Desseleciona se era o componente selecionado
+        if (this.selectedComponent === comp) {
+            this.selectedComponent = null;
+        }
+    }
+
+    getSolverMetrics() {
+        return { ...solverMetrics };
     }
 
     clear() {
@@ -210,6 +215,8 @@ export class SistemaSimulacao extends Observable {
     tick(timestamp) {
         if (!this.isRunning) return;
 
+        profiler.startTick();
+
         let dt = ((timestamp - this.lastTime) / 1000.0) * this.velocidade;
         this.lastTime = timestamp;
         if (dt > 0.1) dt = 0.1;
@@ -230,6 +237,8 @@ export class SistemaSimulacao extends Observable {
 
         this.updatePipesVisual();
         this.notify({ tipo: 'update_painel', dt: dt });
+
+        profiler.endTick(this.getSolverMetrics());
 
         requestAnimationFrame(this.tick.bind(this));
     }
@@ -288,7 +297,7 @@ export class SistemaSimulacao extends Observable {
 
     ensureConnectionProperties(conn) {
         if (typeof conn.diameterM !== 'number') conn.diameterM = DEFAULT_PIPE_DIAMETER_M;
-        if (typeof conn.roughnessMm !== 'number') conn.roughnessMm = DEFAULT_PIPE_ROUGHNESS_MM;
+        if (typeof conn.roughnessMm !== 'number') conn.roughnessMm = 0.045; // DEFAULT_PIPE_ROUGHNESS_MM
         if (typeof conn.extraLengthM !== 'number') conn.extraLengthM = DEFAULT_PIPE_EXTRA_LENGTH_M;
         if (typeof conn.perdaLocalK !== 'number') conn.perdaLocalK = DEFAULT_PIPE_MINOR_LOSS;
         if (typeof conn.transientFlowLps !== 'number') conn.transientFlowLps = 0;
@@ -315,37 +324,16 @@ export class SistemaSimulacao extends Observable {
         };
     }
 
+    // Usa utilitário importado PipeHydraulics.getConnectionGeometry
     getConnectionGeometry(conn) {
-        const p1 = this.getLogicalPortPosition(conn.sourceEl);
-        const p2 = this.getLogicalPortPosition(conn.targetEl);
-        const dx = p2.x - p1.x;
-        const dy = p2.y - p1.y;
-        const straightLengthM = Math.max(0.35, Math.sqrt(dx * dx + dy * dy) / PIXELS_PER_METER);
-        const extraLengthM = Math.max(0, conn.extraLengthM || 0);
-
-        return {
-            straightLengthM,
-            lengthM: straightLengthM + extraLengthM,
-            headGainM: this.usarAlturaRelativa ? (p2.y - p1.y) / PIXELS_PER_METER : 0
-        };
+        return getConnectionGeometry(conn, conn.sourceEl, conn.targetEl, this.usarAlturaRelativa);
     }
 
+    // Usa utilitário importado PipeHydraulics.getPipeHydraulics
     getPipeHydraulics(conn, geometry, areaM2, flowLps) {
         const density = this.fluidoOperante.densidade;
         const viscosityPaS = this.fluidoOperante.viscosidadeDinamicaPaS;
-        const reynolds = reynoldsFromFlow(flowLps, conn.diameterM, areaM2, density, viscosityPaS);
-        const relativeRoughness = conn.diameterM > 0 ? (Math.max(0, conn.roughnessMm || 0) / 1000) / conn.diameterM : 0;
-        const frictionFactor = darcyFrictionFactor(reynolds, relativeRoughness);
-        const velocityMps = areaM2 > 0 ? lpsToM3s(flowLps) / areaM2 : 0;
-
-        return {
-            velocityMps,
-            reynolds,
-            relativeRoughness,
-            frictionFactor,
-            regime: classifyFlowRegime(reynolds),
-            distributedLossCoeff: frictionFactor * (geometry.lengthM / Math.max(conn.diameterM, 0.001))
-        };
+        return getPipeHydraulics(conn, geometry, areaM2, flowLps, density, viscosityPaS);
     }
 
     getConnectionResponseTimeS(conn, geometry) {
@@ -619,9 +607,14 @@ export class SistemaSimulacao extends Observable {
         let targetEntryLossBar = pressureLossFromFlow(capacityLps, branchAreaM2, density, targetEntryLossCoeff);
         let outletPressureBar = Math.max(backPressureBar, inletPressureBar - targetEntryLossBar);
 
+        // A valvula precisa ser estimada com a pressao motriz do ramo; usar a
+        // pressao residual provisoria daqui pode zerar a vazao antes dela receber entrada.
+        const downstreamInletPressureBar = target instanceof ValvulaLogica
+            ? Math.max(backPressureBar, supply.pressureBar + staticHeadBar)
+            : inletPressureBar;
         const downstreamLimit = this.estimateComponentPotential(
             target,
-            inletPressureBar,
+            downstreamInletPressureBar,
             dt,
             new Set(visited)
         );
@@ -709,6 +702,7 @@ export class SistemaSimulacao extends Observable {
     }
 
     resolvePushBasedNetwork(dt) {
+        solverMetrics.totalSolverCalls++;
         this.resetHydraulicState();
         this.conexoes.forEach(conn => {
             this.ensureConnectionProperties(conn);
@@ -731,6 +725,8 @@ export class SistemaSimulacao extends Observable {
         });
 
         let steps = 0;
+        if (DEBUG_PHYSICS) console.log(`[Solver] Iniciando com ${this.componentes.length} componentes, máx ${MAX_QUEUE_STEPS} iterações`);
+        
         while (queue.length > 0 && steps < MAX_QUEUE_STEPS) {
             steps += 1;
             const comp = queue.shift();
@@ -774,6 +770,16 @@ export class SistemaSimulacao extends Observable {
 
             if (comp instanceof FonteLogica || comp instanceof TanqueLogico) comp.marcarEmissaoIntrinseca();
             else if (emittedFlowLps > EPSILON_FLOW) comp.consumirEntrada(emittedFlowLps);
+        }
+
+        // Rastreamento de convergência do solver
+        solverMetrics.lastIterations = steps;
+        if (steps === MAX_QUEUE_STEPS) {
+            solverMetrics.maxIterationsHit++;
+            if (DEBUG_PHYSICS) console.warn(`[Solver] ⚠️ Limite de iterações atingido (${MAX_QUEUE_STEPS}). Queue final: ${queue.length} componentes pendentes.`);
+        } else {
+            solverMetrics.convergedCount++;
+            if (DEBUG_PHYSICS) console.log(`[Solver] Convergiu em ${steps} iterações com sucesso.`);
         }
 
         this.relaxIdleConnections(dt);

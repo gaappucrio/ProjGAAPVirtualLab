@@ -11,6 +11,7 @@ import { DrenoLogico } from './componentes/DrenoLogico.js';
 import { FonteLogica } from './componentes/FonteLogica.js';
 import { colorPort, labelStyle } from './Config.js'
 import { formatUnitValue, getUnitSymbol, subscribeUnitPreferences, toBaseValue, toDisplayValue } from './utils/Units.js'
+import { InputValidator, showInputError, clearInputError } from './utils/InputValidator.js'
 
 const makePort = (id, cx, cy, inOut) => `<circle class="port-node unconnected" data-type="${inOut}" data-comp-id="${id}" cx="${cx}" cy="${cy}" r="5" fill="#fff" stroke="${colorPort}" stroke-width="2"/>`;
 const escapeAttr = (value) => String(value)
@@ -35,6 +36,37 @@ const baseFromDisplay = (category, rawValue, fallback) => {
 };
 const notifyPanelRefresh = () => ENGINE.notify({ tipo: 'update_painel', dt: 0 });
 const volumeText = (baseValue, digits = null) => `${displayUnitValue('volume', baseValue, digits)} ${getUnitSymbol('volume')}`;
+
+/**
+ * Helper para validação de entrada com feedback visual
+ * @param {HTMLInputElement} inputElement - elemento de input para validar
+ * @param {Function} validatorFn - função validadora (usa InputValidator.validate*)
+ * @param {string} fieldName - nome do campo para mensagens de erro
+ * @param {Function} onSuccess - callback se validação passar (recebe valor convertido)
+ * @param {*} fallback - valor padrão se validação falhar
+ */
+const validateInputWithFeedback = (inputElement, validatorFn, fieldName, onSuccess, fallback) => {
+    if (!inputElement) return fallback;
+    
+    try {
+        const result = validatorFn(inputElement.value, fieldName);
+        
+        if (!result.valid) {
+            showInputError(inputElement, result.error);
+            console.warn(`Validação falhou para ${fieldName}: ${result.error}`);
+            return fallback;
+        }
+        
+        clearInputError(inputElement);
+        if (onSuccess) onSuccess(result.value);
+        notifyPanelRefresh();
+        return result.value;
+    } catch (e) {
+        console.error(`Erro ao validar ${fieldName}:`, e);
+        showInputError(inputElement, `Erro: ${e.message}`);
+        return fallback;
+    }
+};
 
 const TOOLTIP = {
     sourcePressure: 'Pressão disponível na fronteira de entrada da planta.',
@@ -111,13 +143,25 @@ export const REGISTRO_COMPONENTES = {
                     </div>
                 `,
         setupProps: (comp) => {
-            document.getElementById('input-pressao-fonte').addEventListener('change', e => {
-                comp.pressaoFonteBar = Math.max(0.1, baseFromDisplay('pressure', e.target.value, comp.pressaoFonteBar));
-                notifyPanelRefresh();
+            const inputPressure = document.getElementById('input-pressao-fonte');
+            const inputFlow = document.getElementById('input-vazao-fonte-max');
+            
+            inputPressure?.addEventListener('change', (e) => {
+                validateInputWithFeedback(
+                    inputPressure,
+                    (v, name) => InputValidator.validatePressure(v, 100, name),
+                    'Pressão da Fonte',
+                    (val) => { comp.pressaoFonteBar = val; }
+                );
             });
-            document.getElementById('input-vazao-fonte-max').addEventListener('change', e => {
-                comp.vazaoMaxima = Math.max(1, baseFromDisplay('flow', e.target.value, comp.vazaoMaxima));
-                notifyPanelRefresh();
+            
+            inputFlow?.addEventListener('change', (e) => {
+                validateInputWithFeedback(
+                    inputFlow,
+                    (v, name) => InputValidator.validateFlow(v, 500, name),
+                    'Vazão Máxima',
+                    (val) => { comp.vazaoMaxima = val; }
+                );
             });
         }
     },
@@ -147,9 +191,15 @@ export const REGISTRO_COMPONENTES = {
                     </div>
                 `,
         setupProps: (comp) => {
-            document.getElementById('input-pressao-dreno').addEventListener('change', e => {
-                comp.pressaoSaidaBar = Math.max(0, baseFromDisplay('pressure', e.target.value, comp.pressaoSaidaBar));
-                notifyPanelRefresh();
+            const inputPressure = document.getElementById('input-pressao-dreno');
+            
+            inputPressure?.addEventListener('change', (e) => {
+                validateInputWithFeedback(
+                    inputPressure,
+                    (v, name) => InputValidator.validatePressure(v, 100, name),
+                    'Pressão de Saída',
+                    (val) => { comp.pressaoSaidaBar = val; }
+                );
             });
         }
     },
@@ -259,24 +309,44 @@ export const REGISTRO_COMPONENTES = {
             slider.addEventListener('input', e => updateFromSlider(e.target.value));
             numInput.addEventListener('change', e => updateFromInput(e.target.value));
             document.getElementById('input-vazmax').addEventListener('change', e => {
-                comp.vazaoNominal = Math.max(5, baseFromDisplay('flow', e.target.value, comp.vazaoNominal));
-                notifyPanelRefresh();
+                validateInputWithFeedback(
+                    e.target,
+                    (v, name) => InputValidator.validateFlow(v, 500, name),
+                    'Vazão Nominal',
+                    (val) => { comp.vazaoNominal = val; }
+                );
             });
             document.getElementById('input-pressao-max-bomba').addEventListener('change', e => {
-                comp.pressaoMaxima = Math.max(0.5, baseFromDisplay('pressure', e.target.value, comp.pressaoMaxima));
-                notifyPanelRefresh();
+                validateInputWithFeedback(
+                    e.target,
+                    (v, name) => InputValidator.validatePressure(v, 100, name),
+                    'Pressão Máxima',
+                    (val) => { comp.pressaoMaxima = val; }
+                );
             });
             document.getElementById('input-eficiencia-bomba').addEventListener('change', e => {
-                comp.eficienciaHidraulica = Math.max(0.2, Math.min(1, parseFloat(e.target.value) || comp.eficienciaHidraulica));
-                notifyPanelRefresh();
+                validateInputWithFeedback(
+                    e.target,
+                    (v, name) => InputValidator.validateEfficiency(v, name),
+                    'Eficiência',
+                    (val) => { comp.eficienciaHidraulica = val / 100; }
+                );
             });
             document.getElementById('input-npsh-bomba').addEventListener('change', e => {
-                comp.npshRequeridoM = Math.max(0.5, baseFromDisplay('length', e.target.value, comp.npshRequeridoM));
-                notifyPanelRefresh();
+                validateInputWithFeedback(
+                    e.target,
+                    (v, name) => InputValidator.validateNPSH(v, name),
+                    'NPSH Requerido',
+                    (val) => { comp.npshRequeridoM = val; }
+                );
             });
             document.getElementById('input-rampa-bomba').addEventListener('change', e => {
-                comp.tempoRampaSegundos = Math.max(0.1, parseFloat(e.target.value) || comp.tempoRampaSegundos);
-                notifyPanelRefresh();
+                validateInputWithFeedback(
+                    e.target,
+                    (v, name) => InputValidator.validateNumber(v, 0.05, 10, name),
+                    'Tempo de Rampa',
+                    (val) => { comp.tempoRampaSegundos = val; }
+                );
             });
 
             comp.subscribe(d => {
@@ -348,7 +418,7 @@ export const REGISTRO_COMPONENTES = {
                     </div>
                     <div class="prop-group">
                         ${makeLabel('Tempo de Curso (s)', TOOLTIP.valveStroke)}
-                        <input type="number" id="input-curso-valvula" ${hintAttr(TOOLTIP.valveStroke)} value="${comp.tempoCursoSegundos}" step="0.1" min="0.1" max="20">
+                        <input type="number" id="input-curso-valvula" ${hintAttr(TOOLTIP.valveStroke)} value="${comp.tempoCursoSegundos}" step="0.1" min="0" max="60">
                     </div>
                     <div class="prop-group">
                         <label>Abertura Efetiva (%)</label>
@@ -390,24 +460,40 @@ export const REGISTRO_COMPONENTES = {
             slider.addEventListener('input', e => updateFromSlider(e.target.value));
             numInput.addEventListener('change', e => updateFromInput(e.target.value));
             document.getElementById('input-cv').addEventListener('change', e => {
-                comp.cv = Math.max(0.1, parseFloat(e.target.value) || 1.0);
-                notifyPanelRefresh();
+                validateInputWithFeedback(
+                    e.target,
+                    (v, name) => InputValidator.validateNumber(v, 0.05, 100, name),
+                    'Coeficiente Cv',
+                    (val) => { comp.cv = val; }
+                );
             });
             document.getElementById('input-perda-k').addEventListener('change', e => {
-                comp.perdaLocalK = Math.max(0.5, parseFloat(e.target.value) || 6.0);
-                notifyPanelRefresh();
+                validateInputWithFeedback(
+                    e.target,
+                    (v, name) => InputValidator.validateNumber(v, 0.1, 100, name),
+                    'Coeficiente de Perda K',
+                    (val) => { comp.perdaLocalK = val; }
+                );
             });
             document.getElementById('input-caracteristica-valvula').addEventListener('change', e => {
                 comp.tipoCaracteristica = e.target.value;
                 notifyPanelRefresh();
             });
             document.getElementById('input-rangeabilidade-valvula').addEventListener('change', e => {
-                comp.rangeabilidade = Math.max(5, parseFloat(e.target.value) || 30);
-                notifyPanelRefresh();
+                validateInputWithFeedback(
+                    e.target,
+                    (v, name) => InputValidator.validateNumber(v, 5, 1000, name),
+                    'Rangeabilidade',
+                    (val) => { comp.rangeabilidade = val; }
+                );
             });
             document.getElementById('input-curso-valvula').addEventListener('change', e => {
-                comp.tempoCursoSegundos = Math.max(0.1, parseFloat(e.target.value) || 0.85);
-                notifyPanelRefresh();
+                validateInputWithFeedback(
+                    e.target,
+                    (v, name) => InputValidator.validateNumber(v, 0, 30, name),
+                    'Tempo de Curso',
+                    (val) => { comp.tempoCursoSegundos = val; }
+                );
             });
 
             comp.subscribe(d => {
@@ -579,44 +665,86 @@ export const REGISTRO_COMPONENTES = {
             };
 
             document.getElementById('input-cap').addEventListener('change', e => {
-                comp.capacidadeMaxima = Math.max(100, baseFromDisplay('volume', e.target.value, comp.capacidadeMaxima));
-                comp.volumeAtual = Math.min(comp.volumeAtual, comp.capacidadeMaxima);
-                document.getElementById('input-volume-tanque').max = displayBound('volume', comp.capacidadeMaxima);
-                comp.sincronizarMetricasFisicas();
-                emitirVolumeAtualizado();
+                validateInputWithFeedback(
+                    e.target,
+                    (v, name) => InputValidator.validateVolume(v, 10000, name),
+                    'Capacidade Máxima',
+                    (val) => {
+                        comp.capacidadeMaxima = val;
+                        comp.volumeAtual = Math.min(comp.volumeAtual, comp.capacidadeMaxima);
+                        document.getElementById('input-volume-tanque').max = displayBound('volume', comp.capacidadeMaxima);
+                        comp.sincronizarMetricasFisicas();
+                        emitirVolumeAtualizado();
+                    }
+                );
             });
 
             document.getElementById('input-volume-tanque').addEventListener('change', e => {
-                comp.volumeAtual = Math.max(0, Math.min(comp.capacidadeMaxima, baseFromDisplay('volume', e.target.value, comp.volumeAtual)));
-                comp.volumeInicial = comp.volumeAtual;
-                comp.sincronizarMetricasFisicas();
-                emitirVolumeAtualizado();
+                validateInputWithFeedback(
+                    e.target,
+                    (v, name) => InputValidator.validateVolume(v, comp.capacidadeMaxima, name),
+                    'Volume Atual',
+                    (val) => {
+                        comp.volumeAtual = Math.max(0, Math.min(comp.capacidadeMaxima, val));
+                        comp.volumeInicial = comp.volumeAtual;
+                        comp.sincronizarMetricasFisicas();
+                        emitirVolumeAtualizado();
+                    }
+                );
             });
 
             document.getElementById('input-altura-tanque').addEventListener('change', e => {
-                comp.alturaUtilMetros = Math.max(0.5, baseFromDisplay('length', e.target.value, comp.alturaUtilMetros));
-                comp.alturaBocalEntradaM = Math.min(comp.alturaBocalEntradaM, comp.alturaUtilMetros);
-                comp.alturaBocalSaidaM = Math.min(comp.alturaBocalSaidaM, comp.alturaUtilMetros);
-                document.getElementById('input-altura-entrada-tanque').max = displayBound('length', comp.alturaUtilMetros);
-                document.getElementById('input-altura-saída-tanque').max = displayBound('length', comp.alturaUtilMetros);
-                document.getElementById('input-altura-entrada-tanque').value = displayEditableUnitValue('length', comp.alturaBocalEntradaM, 3);
-                document.getElementById('input-altura-saída-tanque').value = displayEditableUnitValue('length', comp.alturaBocalSaidaM, 3);
-                comp.sincronizarMetricasFisicas();
-                emitirVolumeAtualizado();
+                validateInputWithFeedback(
+                    e.target,
+                    (v, name) => InputValidator.validateHeight(v, 100, name),
+                    'Altura Útil',
+                    (val) => {
+                        comp.alturaUtilMetros = val;
+                        comp.alturaBocalEntradaM = Math.min(comp.alturaBocalEntradaM, comp.alturaUtilMetros);
+                        comp.alturaBocalSaidaM = Math.min(comp.alturaBocalSaidaM, comp.alturaUtilMetros);
+                        document.getElementById('input-altura-entrada-tanque').max = displayBound('length', comp.alturaUtilMetros);
+                        document.getElementById('input-altura-saída-tanque').max = displayBound('length', comp.alturaUtilMetros);
+                        document.getElementById('input-altura-entrada-tanque').value = displayEditableUnitValue('length', comp.alturaBocalEntradaM, 3);
+                        document.getElementById('input-altura-saída-tanque').value = displayEditableUnitValue('length', comp.alturaBocalSaidaM, 3);
+                        comp.sincronizarMetricasFisicas();
+                        emitirVolumeAtualizado();
+                    }
+                );
             });
+
             document.getElementById('input-altura-entrada-tanque').addEventListener('change', e => {
-                comp.alturaBocalEntradaM = Math.max(0, Math.min(comp.alturaUtilMetros, baseFromDisplay('length', e.target.value, comp.alturaBocalEntradaM)));
-                comp.sincronizarMetricasFisicas();
-                emitirVolumeAtualizado();
+                validateInputWithFeedback(
+                    e.target,
+                    (v, name) => InputValidator.validateHeight(v, comp.alturaUtilMetros, name),
+                    'Altura Bocal Entrada',
+                    (val) => {
+                        comp.alturaBocalEntradaM = Math.max(0, Math.min(comp.alturaUtilMetros, val));
+                        comp.sincronizarMetricasFisicas();
+                        emitirVolumeAtualizado();
+                    }
+                );
             });
+
             document.getElementById('input-altura-saída-tanque').addEventListener('change', e => {
-                comp.alturaBocalSaidaM = Math.max(0, Math.min(comp.alturaUtilMetros, baseFromDisplay('length', e.target.value, comp.alturaBocalSaidaM)));
-                comp.sincronizarMetricasFisicas();
-                emitirVolumeAtualizado();
+                validateInputWithFeedback(
+                    e.target,
+                    (v, name) => InputValidator.validateHeight(v, comp.alturaUtilMetros, name),
+                    'Altura Bocal Saída',
+                    (val) => {
+                        comp.alturaBocalSaidaM = Math.max(0, Math.min(comp.alturaUtilMetros, val));
+                        comp.sincronizarMetricasFisicas();
+                        emitirVolumeAtualizado();
+                    }
+                );
             });
+
             document.getElementById('input-cd-tanque').addEventListener('change', e => {
-                comp.coeficienteSaida = Math.max(0.1, parseFloat(e.target.value) || 0.82);
-                notifyPanelRefresh();
+                validateInputWithFeedback(
+                    e.target,
+                    (v, name) => InputValidator.validateNumber(v, 0.05, 1, name),
+                    'Coeficiente Descarga',
+                    (val) => { comp.coeficienteSaida = val; }
+                );
             });
             document.getElementById('input-k-entrada-tanque').addEventListener('change', e => {
                 comp.perdaEntradaK = Math.max(0, parseFloat(e.target.value) || 1.0);

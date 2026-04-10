@@ -9,12 +9,12 @@ export class ValvulaLogica extends ComponenteFisico {
         this.grauAbertura = 0;
         this.aberturaEfetiva = 0;
         this.fluxoReal = 0;
-        this.cv = 4.0;
+        this.cv = 4.0; // Coeficiente de vazão (Cv) da válvula, ajustável para simular diferentes tipos de válvulas
         this.perdaLocalK = 6.0;
-        this.tipoCaracteristica = 'equal_percentage';
-        this.rangeabilidade = 30;
+        this.tipoCaracteristica = 'equal_percentage'; // significa
+        this.rangeabilidade = 30; // Relação entre a abertura máxima e a mínima
         this.deltaPAtualBar = 0;
-        this.tempoCursoSegundos = 0.85;
+        this.tempoCursoSegundos = 0.0; //
     }
 
     getCharacteristicFactor(opening) {

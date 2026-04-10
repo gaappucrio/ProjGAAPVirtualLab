@@ -24,12 +24,12 @@ import {
     toBaseValue,
     toDisplayValue
 } from '../utils/Units.js';
+import { InputValidator, showInputError, clearInputError } from '../utils/InputValidator.js';
 
 let volumeChart;
 let pumpCurveChart = null;
 let chartUpdateTimer = 0;
 let chartedTankId = null;
-let chartedPumpId = null;
 
 export function setupUI() {
     setupPanelToggles();
@@ -64,7 +64,6 @@ function setupPanelToggles() {
         btnMaxChart.textContent = isMax ? '✕ Fechar' : '⛶ Expandir';
         chartMaxHeader.style.display = isMax ? 'flex' : 'none';
         if (volumeChart) volumeChart.resize();
-        if (pumpCurveChart) pumpCurveChart.resize();
     }
 
     btnMaxChart.addEventListener('click', toggleChartMaximize);
@@ -82,9 +81,6 @@ function setupPanelToggles() {
 }
 
 function setupChart() {
-    destroyPumpCurveChart();
-    if (volumeChart) volumeChart.destroy();
-
     const ctx = document.getElementById('gaap-volume-chart').getContext('2d');
 
     volumeChart = new Chart(ctx, {
@@ -92,7 +88,7 @@ function setupChart() {
         data: {
             labels: [0],
             datasets: [{
-                label: 'Selecione um Tanque ou uma Bomba',
+                label: 'Selecione um Tanque',
                 data: [0],
                 borderColor: '#3498db',
                 backgroundColor: 'rgba(52, 152, 219, 0.2)',
@@ -134,12 +130,6 @@ function setupChart() {
             }
         }
     });
-    chartedPumpId = null;
-}
-
-function ensureVolumeChart() {
-    if (pumpCurveChart) destroyPumpCurveChart();
-    if (!volumeChart) setupChart();
 }
 
 function getPropContent() {
@@ -151,7 +141,6 @@ function destroyPumpCurveChart() {
         pumpCurveChart.destroy();
         pumpCurveChart = null;
     }
-    chartedPumpId = null;
 }
 
 function setFieldValue(id, value, category = null, digits = 2, suffix = '') {
@@ -230,8 +219,7 @@ function renderCurrentProperties() {
     const connection = ENGINE.selectedConnection;
 
     refreshChartSelection(component, connection);
-    if (component instanceof BombaLogica) refreshPumpCurveChart(component);
-    else refreshVolumeChartPresentation();
+    refreshVolumeChartPresentation();
 
     if (connection) {
         renderConnectionProperties(connection);
@@ -313,19 +301,14 @@ function buildPumpCurveDatasets(component) {
 }
 
 function renderPumpCurveChart(component) {
-    const canvas = document.getElementById('gaap-volume-chart');
+    const canvas = document.getElementById('pump-curve-chart');
     if (!canvas) {
         destroyPumpCurveChart();
         return;
     }
 
     const datasets = buildPumpCurveDatasets(component);
-    if (volumeChart) {
-        volumeChart.destroy();
-        volumeChart = null;
-    }
     destroyPumpCurveChart();
-    chartedPumpId = component.id;
 
     pumpCurveChart = new Chart(canvas.getContext('2d'), {
         type: 'line',
@@ -438,11 +421,7 @@ function renderPumpCurveChart(component) {
 }
 
 function refreshPumpCurveChart(component) {
-    if (!(component instanceof BombaLogica)) return;
-    if (!pumpCurveChart || chartedPumpId !== component.id) {
-        renderPumpCurveChart(component);
-        return;
-    }
+    if (!(component instanceof BombaLogica) || !pumpCurveChart) return;
     const datasets = buildPumpCurveDatasets(component);
     pumpCurveChart.data.datasets[0].label = `Carga (${datasets.pressureUnit})`;
     pumpCurveChart.data.datasets[0].data = datasets.headPoints;
@@ -470,6 +449,7 @@ function refreshPumpCurveChart(component) {
 }
 
 function renderDefaultProperties() {
+    destroyPumpCurveChart();
     const propContent = getPropContent();
     const currentPreset = getCurrentFluidPresetId();
     const fluidOptions = Object.entries(FLUID_PRESETS)
@@ -479,16 +459,16 @@ function renderDefaultProperties() {
     propContent.innerHTML = `
         ${renderUnitControls()}
         <div class="prop-group">
-            <label title="Multiplicador de tempo da simulacao fisica.">Velocidade da Simulacao</label>
+            <label title="Multiplicador de tempo da simulação física.">Velocidade da Simulação</label>
             <select id="sel-vel">
                 <option value="1">1x (Tempo Real)</option>
                 <option value="2">2x (Acelerado)</option>
-                <option value="5">5x (Rapido)</option>
+                <option value="5">5x (Rápido)</option>
             </select>
         </div>
         <div class="prop-group">
-            <label title="Seleciona um conjunto tipico de propriedades fisicas do fluido.">Preset do Fluido</label>
-            <select id="sel-fluid-preset" title="Seleciona um conjunto tipico de propriedades fisicas do fluido.">
+            <label title="Seleciona um conjunto típico de propriedades físicas do fluido.">Preset do Fluido</label>
+            <select id="sel-fluid-preset" title="Seleciona um conjunto típico de propriedades físicas do fluido.">
                 ${fluidOptions}
                 <option value="custom" ${currentPreset === 'custom' ? 'selected' : ''}>Personalizado</option>
             </select>
@@ -527,14 +507,53 @@ function renderDefaultProperties() {
     });
 
     const applyFluidFromInputs = () => {
-        ENGINE.atualizarFluido({
-            nome: document.getElementById('input-fluid-name').value,
-            densidade: parseFloat(document.getElementById('input-fluid-density').value),
-            viscosidadeDinamicaPaS: parseFloat(document.getElementById('input-fluid-viscosity').value),
-            temperatura: temperatureInputValue('input-fluid-temp', ENGINE.fluidoOperante.temperatura),
-            pressaoVaporBar: pressureInputValue('input-fluid-vapor', ENGINE.fluidoOperante.pressaoVaporBar),
-            pressaoAtmosfericaBar: pressureInputValue('input-fluid-atm', ENGINE.fluidoOperante.pressaoAtmosfericaBar)
-        });
+        const fluidData = {};
+        const inputDensity = document.getElementById('input-fluid-density');
+        const inputViscosity = document.getElementById('input-fluid-viscosity');
+        const inputVapor = document.getElementById('input-fluid-vapor');
+        const inputAtm = document.getElementById('input-fluid-atm');
+        
+        // Validar densidade
+        const densityResult = InputValidator.validateDensity(inputDensity.value, 'Densidade');
+        if (!densityResult.valid) {
+            showInputError(inputDensity, densityResult.error);
+            return;
+        }
+        fluidData.densidade = densityResult.value;
+        clearInputError(inputDensity);
+        
+        // Validar viscosidade
+        const viscosityResult = InputValidator.validateViscosity(inputViscosity.value, 'Viscosidade');
+        if (!viscosityResult.valid) {
+            showInputError(inputViscosity, viscosityResult.error);
+            return;
+        }
+        fluidData.viscosidadeDinamicaPaS = viscosityResult.value;
+        clearInputError(inputViscosity);
+        
+        // Validar pressão de vapor
+        const vaporResult = InputValidator.validatePressure(pressureInputValue('input-fluid-vapor', ENGINE.fluidoOperante.pressaoVaporBar), 5, 'Pressão Vapor');
+        if (!vaporResult.valid) {
+            showInputError(inputVapor, vaporResult.error);
+            return;
+        }
+        fluidData.pressaoVaporBar = vaporResult.value;
+        clearInputError(inputVapor);
+        
+        // Validar pressão atmosférica
+        const atmResult = InputValidator.validatePressure(pressureInputValue('input-fluid-atm', ENGINE.fluidoOperante.pressaoAtmosfericaBar), 2, 'Pressão Atmosférica');
+        if (!atmResult.valid) {
+            showInputError(inputAtm, atmResult.error);
+            return;
+        }
+        fluidData.pressaoAtmosfericaBar = atmResult.value;
+        clearInputError(inputAtm);
+        
+        // Campos sempre válidos
+        fluidData.nome = InputValidator.sanitizeText(document.getElementById('input-fluid-name').value, 50);
+        fluidData.temperatura = temperatureInputValue('input-fluid-temp', ENGINE.fluidoOperante.temperatura);
+        
+        ENGINE.atualizarFluido(fluidData);
         document.getElementById('sel-fluid-preset').value = 'custom';
     };
 
@@ -571,6 +590,7 @@ function getConnectionDisplay(conn) {
 }
 
 function renderConnectionProperties(conn) {
+    destroyPumpCurveChart();
     const propContent = getPropContent();
     ENGINE.ensureConnectionProperties(conn);
     const state = ENGINE.getConnectionState(conn);
@@ -638,20 +658,58 @@ function renderConnectionProperties(conn) {
     `;
 
     bindUnitControls();
+    
+    const validatePipeInput = (element, validator, fieldName, setter) => {
+        if (!element) return;
+        try {
+            const result = validator(element.value, fieldName);
+            if (!result.valid) {
+                showInputError(element, result.error);
+                console.warn(`Validação falhou para ${fieldName}: ${result.error}`);
+                return;
+            }
+            clearInputError(element);
+            setter(result.value);
+        } catch (e) {
+            console.error(`Erro ao validar ${fieldName}:`, e);
+            showInputError(element, `Erro: ${e.message}`);
+        }
+    };
+    
     document.getElementById('input-pipe-diameter').addEventListener('change', (e) => {
-        const converted = toBaseValue('length', parseFloat(e.target.value));
-        conn.diameterM = Math.max(0.01, Number.isFinite(converted) ? converted : conn.diameterM);
+        validatePipeInput(
+            e.target,
+            (v, name) => InputValidator.validateDiameter(v, name),
+            'Diâmetro',
+            (val) => { conn.diameterM = val / 1000; } // converter mm para m
+        );
     });
+    
     document.getElementById('input-pipe-extra-length').addEventListener('change', (e) => {
-        const converted = toBaseValue('length', parseFloat(e.target.value));
-        conn.extraLengthM = Math.max(0, Number.isFinite(converted) ? converted : conn.extraLengthM);
+        validatePipeInput(
+            e.target,
+            (v, name) => InputValidator.validateNumber(v, 0, 500, name),
+            'Comprimento Extra',
+            (val) => { conn.extraLengthM = val; }
+        );
     });
+    
     document.getElementById('input-pipe-roughness').addEventListener('change', (e) => {
-        const converted = toBaseValue('length', parseFloat(e.target.value));
-        conn.roughnessMm = Math.max(0.001, (Number.isFinite(converted) ? converted : (conn.roughnessMm / 1000)) * 1000);
+        validatePipeInput(
+            e.target,
+            (v, name) => InputValidator.validateNumber(v, 0.00001, 5, name),
+            'Rugosidade',
+            (val) => { conn.roughnessMm = val * 1000; } // converter m para mm
+        );
     });
+    
     document.getElementById('input-pipe-loss-k').addEventListener('change', (e) => {
-        conn.perdaLocalK = Math.max(0, parseFloat(e.target.value) || 0);
+        validatePipeInput(
+            e.target,
+            (v, name) => InputValidator.validateNumber(v, 0, 100, name),
+            'Coeficiente Perda',
+            (val) => { conn.perdaLocalK = val; }
+        );
     });
 }
 
@@ -682,35 +740,12 @@ function renderComponentProperties(component) {
     });
 
     if (spec.setupProps) spec.setupProps(component);
-
-    if (component instanceof BombaLogica) {
-        const inlinePumpCanvas = document.getElementById('pump-curve-chart');
-        if (inlinePumpCanvas) {
-            const inlineContainer = inlinePumpCanvas.parentElement;
-            if (inlineContainer) inlineContainer.style.display = 'none';
-            const info = document.createElement('p');
-            info.style.margin = '8px 0 0';
-            info.style.fontSize = '11px';
-            info.style.lineHeight = '1.45';
-            info.style.color = '#7f8c8d';
-            info.textContent = 'Curva exibida na area de Monitoramento abaixo. Use o mesmo botao Expandir do grafico do tanque.';
-            if (inlineContainer) inlineContainer.insertAdjacentElement('afterend', info);
-            else inlinePumpCanvas.insertAdjacentElement('afterend', info);
-        }
-    }
+    if (component instanceof BombaLogica) renderPumpCurveChart(component);
+    else destroyPumpCurveChart();
 }
 
 function refreshChartSelection(component, connection) {
-    if (component instanceof BombaLogica) {
-        chartedTankId = null;
-        if (!pumpCurveChart || chartedPumpId !== component.id) renderPumpCurveChart(component);
-        return;
-    }
-
-    ensureVolumeChart();
-
     if (component instanceof TanqueLogico) {
-        chartedPumpId = null;
         if (chartedTankId !== component.id) {
             chartedTankId = component.id;
             volumeChart.data.labels = [Math.round(ENGINE.elapsedTime)];
@@ -724,10 +759,9 @@ function refreshChartSelection(component, connection) {
 
     if (connection || !(component instanceof TanqueLogico)) {
         chartedTankId = null;
-        chartedPumpId = null;
         volumeChart.data.labels = [Math.round(ENGINE.elapsedTime)];
         volumeChart.data.datasets[0].data = [0];
-        volumeChart.data.datasets[0].label = 'Selecione um Tanque ou uma Bomba';
+        volumeChart.data.datasets[0].label = 'Selecione um Tanque';
         volumeChart.options.scales.y.max = 1000;
         volumeChart.update();
     }

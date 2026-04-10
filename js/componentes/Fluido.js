@@ -17,7 +17,7 @@ export class Fluido {
     ) {
         this.nome = nome;
         this.densidade = densidade;
-        this.pressao = pressao; // bar(g)
+        this.pressao = pressao;
         this.temperatura = temperatura;
         this.viscosidadeDinamicaPaS = viscosidadeDinamicaPaS;
         this.pressaoVaporBar = pressaoVaporBar;

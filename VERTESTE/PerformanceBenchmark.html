@@ -1,0 +1,859 @@
+// =======================================
+// TESTE: Benchmark de Desempenho
+// Arquivo: VERTESTE/PerformanceBenchmark.html
+// =======================================
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Benchmark de Desempenho - ProjGAAPVirtualLab</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f2f5;
+            color: #333;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+            gap: 10px;
+            padding: 10px;
+        }
+
+        .canvas-area {
+            flex: 1;
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            overflow: auto;
+            position: relative;
+        }
+
+        #workspace-canvas {
+            position: relative;
+            width: 100%;
+            min-height: 800px;
+            background: white;
+        }
+
+        #pipe-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .placed-component {
+            position: absolute;
+            cursor: move;
+            box-sizing: border-box;
+        }
+
+        .placed-component.selected svg {
+            filter: drop-shadow(0px 0px 10px rgba(52, 152, 219, 0.8));
+        }
+
+        .placed-component svg {
+            position: absolute;
+            overflow: visible;
+            pointer-events: none;
+        }
+
+        .port-node {
+            cursor: crosshair;
+            pointer-events: all;
+            transition: 0.5s;
+        }
+
+        .port-node:hover {
+            r: 8;
+            stroke-width: 3;
+            fill: #f39c12;
+        }
+
+        @keyframes pulse-port {
+            0% {
+                stroke-width: 2;
+                fill: #fff;
+                stroke: #e67e22;
+                filter: drop-shadow(0 0 0px rgba(243, 156, 18, 0));
+            }
+            100% {
+                stroke-width: 6;
+                fill: #fdf5e6;
+                stroke: #f39c12;
+                filter: drop-shadow(0 0 5px rgba(243, 156, 18, 1));
+            }
+        }
+
+        .port-node.unconnected {
+            animation: pulse-port 0.8s infinite alternate ease-in-out;
+        }
+
+        .pipe-line {
+            fill: none;
+            stroke: #95a5a6;
+            stroke-width: 6;
+            stroke-linecap: round;
+            pointer-events: stroke;
+            transition: stroke 0.5s;
+        }
+
+        .pipe-line:hover {
+            stroke: #bdc3c7;
+        }
+
+        .pipe-line.active {
+            stroke: #3498db;
+            animation: flow 1s linear infinite;
+            stroke-dasharray: 12 12;
+        }
+
+        .pipe-line.selected {
+            stroke: #e74c3c;
+            filter: drop-shadow(0px 0px 5px rgba(231, 76, 60, 0.5));
+            cursor: pointer;
+        }
+
+        .pipe-flow-label {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            font-size: 12px;
+            font-weight: bold;
+            fill: #2c3e50;
+            pointer-events: none;
+            paint-order: stroke;
+            stroke: #ffffff;
+            stroke-width: 5px;
+            stroke-linejoin: round;
+        }
+
+        @keyframes flow {
+            to {
+                stroke-dashoffset: -24;
+            }
+        }
+
+        .placed-component {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            border: 2px solid #333;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: bold;
+            color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            cursor: pointer;
+        }
+
+        .metrics-panel {
+            width: 350px;
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .metrics-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .metrics-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            font-size: 12px;
+            line-height: 1.8;
+        }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .metric-label {
+            font-weight: 600;
+            color: #666;
+            min-width: 150px;
+        }
+
+        .metric-value {
+            color: #667eea;
+            font-weight: bold;
+            text-align: right;
+        }
+
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 2px;
+            font-size: 11px;
+            color: #856404;
+        }
+
+        .success {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 2px;
+            font-size: 11px;
+            color: #155724;
+        }
+
+        .error {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 2px;
+            font-size: 11px;
+            color: #721c24;
+        }
+
+        .controls {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 8px 12px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #764ba2;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        #status {
+            font-weight: bold;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .chart-area {
+            margin-top: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .mini-chart {
+            height: 80px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 2px;
+            display: flex;
+            align-items: flex-end;
+            gap: 2px;
+            padding: 4px;
+            margin-top: 5px;
+            overflow-x: auto;
+        }
+
+        .bar {
+            flex-shrink: 0;
+            background: linear-gradient(to top, #667eea, #764ba2);
+            border-radius: 2px;
+            min-width: 3px;
+            opacity: 0.8;
+            transition: opacity 0.1s;
+        }
+
+        .bar:hover {
+            opacity: 1;
+        }
+
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="canvas-area">
+            <div id="workspace-canvas">
+                <svg id="pipe-layer">
+                    <defs>
+                        <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="#95a5a6" style="transition: fill 0.5s ease;" />
+                        </marker>
+                        <marker id="arrow-active" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="#3498db" style="transition: fill 0.5s ease;" />
+                        </marker>
+                        <marker id="arrow-selected" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="#e74c3c" style="transition: fill 0.5s ease;" />
+                        </marker>
+                    </defs>
+                </svg>
+            </div>
+        </div>
+        <div class="metrics-panel">
+            <div class="metrics-header">📊 Métricas de Desempenho</div>
+            <div class="metrics-content">
+                <div class="controls">
+                    <button onclick="startBenchmark()">▶️ Iniciar</button>
+                    <button onclick="stopBenchmark()">⏹️ Parar</button>
+                    <button onclick="resetBenchmark()">🔄 Reset</button>
+                </div>
+
+                <div id="status">Pronto para começar</div>
+
+                <div id="messages"></div>
+
+                <div class="metric-row">
+                    <span class="metric-label">Estado:</span>
+                    <span class="metric-value" id="running">Parado</span>
+                </div>
+
+                <div class="metric-row">
+                    <span class="metric-label">Componentes:</span>
+                    <span class="metric-value" id="componentCount">0</span>
+                </div>
+
+                <div class="metric-row">
+                    <span class="metric-label">Conexões:</span>
+                    <span class="metric-value" id="connectionCount">0</span>
+                </div>
+
+                <div class="metric-row">
+                    <span class="metric-label">FPS:</span>
+                    <span class="metric-value" id="fps">0</span>
+                </div>
+
+                <div class="metric-row">
+                    <span class="metric-label">Tempo de Frame:</span>
+                    <span class="metric-value" id="frameTime">0 ms</span>
+                </div>
+
+                <div class="metric-row">
+                    <span class="metric-label">Iterações/Tick:</span>
+                    <span class="metric-value" id="iterations">0</span>
+                </div>
+
+                <div class="metric-row">
+                    <span class="metric-label">Taxa Convergência:</span>
+                    <span class="metric-value" id="convergence">0%</span>
+                </div>
+
+                <div class="metric-row">
+                    <span class="metric-label">Tempo Solver:</span>
+                    <span class="metric-value" id="solverTime">0 ms</span>
+                </div>
+
+                <div class="metric-row">
+                    <span class="metric-label">Memória JS:</span>
+                    <span class="metric-value" id="memory">0 MB</span>
+                </div>
+
+                <div class="chart-area">
+                    <div>FPS Histórico:</div>
+                    <div class="mini-chart" id="fpsChart"></div>
+                </div>
+
+                <div class="chart-area">
+                    <div>Tempo Solver:</div>
+                    <div class="mini-chart" id="solverChart"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { ENGINE } from '../js/MotorFisico.js';
+        import { FonteLogica } from '../js/componentes/FonteLogica.js';
+        import { BombaLogica } from '../js/componentes/BombaLogica.js';
+        import { TanqueLogico } from '../js/componentes/TanqueLogico.js';
+        import { ValvulaLogica } from '../js/componentes/ValvulaLogica.js';
+        import { DrenoLogico } from '../js/componentes/DrenoLogico.js';
+        import { profiler } from '../js/utils/PerformanceProfiler.js';
+        import { setPortStateUpdater, setConnectionFlowGetter } from '../js/MotorFisico.js';
+        import { FabricaDeEquipamentos, updatePortStates } from '../js/FabricaEquipamentos.js';
+        import { drawCurve, updateAllPipes } from '../js/controllers/PipeController.js';
+
+        let isRunning = false;
+        const fpsHistory = [];
+        const solverTimeHistory = [];
+        const MAX_HISTORY = 60;
+        let pipeLayer = null;
+
+        // Inicializa ENGINE com callbacks dummy
+        setPortStateUpdater(() => {});
+        setConnectionFlowGetter(() => null);
+
+        // Inicializa a camada de pipes assim que o módulo carrega
+        function initializePipeLayer() {
+            if (!pipeLayer) {
+                pipeLayer = document.getElementById('pipe-layer');
+                console.log('✅ Pipe layer inicializado:', pipeLayer ? 'Encontrado' : 'Não encontrado');
+            }
+        }
+
+        // Chamar inicialização assim que o script carregar
+        initializePipeLayer();
+
+        // Métricas locais de performance
+        let lastTime = performance.now();
+        let frameCount = 0;
+        let accumulatedTime = 0;
+
+        window.startBenchmark = function() {
+            if (isRunning) return;
+            
+            console.log('🔧 Iniciando benchmark...');
+            
+            try {
+                isRunning = true;
+                frameCount = 0;
+                accumulatedTime = 0;
+                lastTime = performance.now();
+
+                // Cria cenário de teste com ~50 componentes
+                createBenchmarkScene();
+                console.log(`✅ Cenário criado: ${ENGINE.componentes.length} componentes, ${ENGINE.conexoes.length} conexões`);
+
+                // Inicia simulação (profiler será ativado no tick)
+                ENGINE.start();
+                console.log('▶️ Simulação iniciada');
+
+                // Loop de atualização de métricas
+                updateMetricsLoop();
+
+                updateStatus('Benchmark iniciado ✓', 'success');
+            } catch (err) {
+                console.error('❌ Erro ao iniciar:', err);
+                updateStatus(`❌ Erro: ${err.message}`, 'error');
+                isRunning = false;
+            }
+        };
+
+        window.stopBenchmark = function() {
+            if (!isRunning) return;
+            isRunning = false;
+
+            ENGINE.stop();
+            profiler.disable();
+
+            updateStatus('Benchmark parado. Relatório gerado.', 'warning');
+            printBenchmarkReport();
+        };
+
+        window.resetBenchmark = function() {
+            isRunning = false;
+            ENGINE.stop();
+            ENGINE.clear();
+            
+            // Limpa workspace canvas e pipes
+            const canvas = document.getElementById('workspace-canvas');
+            if (canvas) {
+                // Remove all placed-component divs
+                canvas.querySelectorAll('.placed-component').forEach(el => el.remove());
+            }
+            if (pipeLayer) {
+                // Remove all pipe lines (except SVG defs)
+                pipeLayer.querySelectorAll('.pipe-line').forEach(el => el.remove());
+                pipeLayer.querySelectorAll('.pipe-flow-label').forEach(el => el.remove());
+            }
+            
+            // Reseta históricos
+            fpsHistory.length = 0;
+            solverTimeHistory.length = 0;
+            frameCount = 0;
+            accumulatedTime = 0;
+            lastTime = performance.now();
+            
+            document.getElementById('messages').innerHTML = '';
+            updateStatus('Benchmark resetado ✓', 'success');
+            updateAllMetrics(0);
+            console.log('✅ Benchmark resetado completamente');
+        };
+
+        function createBenchmarkScene() {
+            const workspaceCanvas = document.getElementById('workspace-canvas');
+            if (!pipeLayer) pipeLayer = document.getElementById('pipe-layer');
+
+            console.log('🧹 Limpando cenário anterior...');
+            // Limpa componentes existentes
+            workspaceCanvas.querySelectorAll('.placed-component').forEach(el => el.remove());
+            pipeLayer.querySelectorAll('.pipe-line').forEach(el => el.remove());
+            pipeLayer.querySelectorAll('.pipe-flow-label').forEach(el => el.remove());
+
+            console.log('🏗️ Criando cenário: Source → Pump → Tank → Valve → Drain (com valores padrão)');
+
+            const components = [];
+            let x = 50;
+            const componentPairs = []; // Para criar conexões
+            
+            // Circuit: Source → Pump → Tank → Valve → Drain (3x for testing)
+            for (let circuit = 0; circuit < 3; circuit++) {
+                const y = 50 + (circuit * 250);
+                const circuitComponents = [];
+                
+                // Source
+                const sourceVisual = FabricaDeEquipamentos.criar('source', x, y, false);
+                if (!sourceVisual) {
+                    console.error('❌ Falha ao criar visual da Source');
+                    continue;
+                }
+                workspaceCanvas.appendChild(sourceVisual);
+                const sourceLogica = ENGINE.componentes[ENGINE.componentes.length - 1];
+                circuitComponents.push({ visual: sourceVisual, logica: sourceLogica });
+                console.log(`✅ Source ${circuit} criada:`, sourceLogica.tag, 'em (', x, ',', y, ')');
+                
+                // Pump
+                const pumpVisual = FabricaDeEquipamentos.criar('pump', x + 150, y, false);
+                if (!pumpVisual) {
+                    console.error('❌ Falha ao criar visual da Pump');
+                    continue;
+                }
+                workspaceCanvas.appendChild(pumpVisual);
+                const pumpLogica = ENGINE.componentes[ENGINE.componentes.length - 1];
+                circuitComponents.push({ visual: pumpVisual, logica: pumpLogica });
+                console.log(`✅ Pump ${circuit} criada:`, pumpLogica.tag);
+                
+                // Tank
+                const tankVisual = FabricaDeEquipamentos.criar('tank', x + 300, y, false);
+                if (!tankVisual) {
+                    console.error('❌ Falha ao criar visual do Tank');
+                    continue;
+                }
+                workspaceCanvas.appendChild(tankVisual);
+                const tankLogica = ENGINE.componentes[ENGINE.componentes.length - 1];
+                circuitComponents.push({ visual: tankVisual, logica: tankLogica });
+                console.log(`✅ Tank ${circuit} criado:`, tankLogica.tag);
+                
+                // Valve
+                const valveVisual = FabricaDeEquipamentos.criar('valve', x + 450, y, false);
+                if (!valveVisual) {
+                    console.error('❌ Falha ao criar visual da Valve');
+                    continue;
+                }
+                workspaceCanvas.appendChild(valveVisual);
+                const valveLogica = ENGINE.componentes[ENGINE.componentes.length - 1];
+                circuitComponents.push({ visual: valveVisual, logica: valveLogica });
+                console.log(`✅ Valve ${circuit} criada:`, valveLogica.tag);
+                
+                // Drain
+                const drainVisual = FabricaDeEquipamentos.criar('sink', x + 600, y, false);
+                if (!drainVisual) {
+                    console.error('❌ Falha ao criar visual do Drain');
+                    continue;
+                }
+                workspaceCanvas.appendChild(drainVisual);
+                const drainLogica = ENGINE.componentes[ENGINE.componentes.length - 1];
+                circuitComponents.push({ visual: drainVisual, logica: drainLogica });
+                console.log(`✅ Drain ${circuit} criado:`, drainLogica.tag);
+
+                componentPairs.push(circuitComponents);
+            }
+
+            // Update port states after all components added
+            updatePortStates();
+            console.log('📍 Port states atualizados');
+
+            // Create connections between components
+            let connCount = 0;
+            for (let circuitComponents of componentPairs) {
+                if (circuitComponents.length === 5) {
+                    createConnectionBetween(circuitComponents[0], circuitComponents[1]); // Source → Pump
+                    createConnectionBetween(circuitComponents[1], circuitComponents[2]); // Pump → Tank
+                    createConnectionBetween(circuitComponents[2], circuitComponents[3]); // Tank → Valve
+                    createConnectionBetween(circuitComponents[3], circuitComponents[4]); // Valve → Drain
+                }
+            }
+
+            console.log(`✅ Componentes no DOM: ${workspaceCanvas.querySelectorAll('.placed-component').length}`);
+            console.log(`✅ Pipes desenhadas: ${pipeLayer.querySelectorAll('.pipe-line').length}`);
+            updateStatus(`Cenário pronto: ${ENGINE.componentes.length} componentes e ${ENGINE.conexoes.length} conexões`, 'success');
+            console.log(`🎯 Cenário criado: ${ENGINE.componentes.length} componentes, ${ENGINE.conexoes.length} conexões`);
+        }
+
+        // Helper function to create connections between two components
+        function createConnectionBetween(fromComponent, toComponent) {
+            try {
+                const sourceLogica = fromComponent.logica;
+                const targetLogica = toComponent.logica;
+                const sourceVisual = fromComponent.visual;
+                const targetVisual = toComponent.visual;
+
+                // Find the output port of the source component - search in SVG
+                const sourceSvg = sourceVisual.querySelector('svg');
+                const sourcePort = sourceSvg ? 
+                    sourceSvg.querySelector('.port-node[data-type="out"]') || 
+                    sourceSvg.querySelector('circle.port-node[data-type="out"]') :
+                    sourceVisual.querySelector('.port-node[data-type="out"]');
+                
+                // Find the input port of the target component - search in SVG
+                const targetSvg = targetVisual.querySelector('svg');
+                const targetPort = targetSvg ? 
+                    targetSvg.querySelector('.port-node[data-type="in"]') || 
+                    targetSvg.querySelector('circle.port-node[data-type="in"]') :
+                    targetVisual.querySelector('.port-node[data-type="in"]');
+
+                if (!sourcePort || !targetPort) {
+                    console.warn('⚠️ Ports não encontradas:', {
+                        sourceId: sourceLogica.id,
+                        targetId: targetLogica.id,
+                        sourcePortFound: !!sourcePort,
+                        targetPortFound: !!targetPort,
+                        sourcePortCount: sourceSvg ? sourceSvg.querySelectorAll('.port-node').length : 0,
+                        targetPortCount: targetSvg ? targetSvg.querySelectorAll('.port-node').length : 0
+                    });
+                    return;
+                }
+
+                // Make the logical connection
+                sourceLogica.conectarSaida(targetLogica);
+
+                // Create the visual connection
+                const connection = {
+                    sourceEl: sourcePort,
+                    targetEl: targetPort,
+                    path: null,
+                    label: null,
+                    diameterM: 0.08,
+                    roughnessMm: 0.045,
+                    extraLengthM: 0,
+                    perdaLocalK: 0.8
+                };
+
+                // Calculate port positions in SVG coordinates
+                const p1 = getPortCoordsBenchmark(sourcePort);
+                const p2 = getPortCoordsBenchmark(targetPort);
+
+                // Create the pipe path element
+                const pathEl = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                pathEl.setAttribute("class", "pipe-line");
+                pathEl.setAttribute("marker-end", "url(#arrow)");
+                pathEl.setAttribute("d", drawCurve(p1.x, p1.y, p2.x, p2.y));
+                pipeLayer.appendChild(pathEl);
+                connection.path = pathEl;
+
+                // Create the label element
+                const labelEl = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                labelEl.setAttribute("class", "pipe-flow-label");
+                labelEl.setAttribute("text-anchor", "middle");
+                labelEl.setAttribute("x", (p1.x + p2.x) / 2);
+                labelEl.setAttribute("y", (p1.y + p2.y) / 2 - 10);
+                labelEl.setAttribute("dominant-baseline", "middle");
+                pipeLayer.appendChild(labelEl);
+                connection.label = labelEl;
+
+                // Add connection to ENGINE
+                ENGINE.conexoes.push(connection);
+                console.log(`✅ Conexão criada: ${sourceLogica.tag} → ${targetLogica.tag}`);
+            } catch (err) {
+                console.error('❌ Erro ao criar conexão:', err);
+            }
+        }
+
+        // Helper function to get port coordinates for benchmark (simplified version)
+        function getPortCoordsBenchmark(portEl) {
+            // Get the circle center in viewport coordinates
+            const rect = portEl.getBoundingClientRect();
+            const cx = rect.left + (rect.width / 2);
+            const cy = rect.top + (rect.height / 2);
+
+            // Get workspace-canvas rect
+            const canvasRect = document.getElementById('workspace-canvas').getBoundingClientRect();
+            const canvasX = canvasRect.left;
+            const canvasY = canvasRect.top;
+
+            // Convert to canvas-relative coordinates
+            return {
+                x: cx - canvasX,
+                y: cy - canvasY
+            };
+        }
+
+        function updateMetricsLoop() {
+            if (!isRunning) return;
+
+            try {
+                // Calcula frame time local
+                const now = performance.now();
+                const deltaMs = now - lastTime;
+                lastTime = now;
+                
+                frameCount++;
+                accumulatedTime += deltaMs;
+
+                updateAllMetrics(deltaMs);
+            } catch (err) {
+                console.error('Erro ao atualizar métricas:', err);
+            }
+            requestAnimationFrame(updateMetricsLoop);
+        }
+
+        function updateAllMetrics(deltaMs) {
+            try {
+                // Calcula FPS local
+                const localFps = deltaMs > 0 ? Math.round(1000 / deltaMs) : 0;
+                const fpsEl = document.getElementById('fps');
+                if (fpsEl) {
+                    fpsEl.textContent = localFps;
+                    fpsHistory.push(localFps);
+                    if (fpsHistory.length > MAX_HISTORY) fpsHistory.shift();
+                    updateChart('fpsChart', fpsHistory, 120);
+                }
+
+                // Frame time
+                const frameTimeEl = document.getElementById('frameTime');
+                if (frameTimeEl) frameTimeEl.textContent = deltaMs.toFixed(2) + ' ms';
+
+                // Pega dados do ENGINE e profiler
+                const solverMetrics = ENGINE?.getSolverMetrics?.() || {};
+                const profilerStats = profiler?.getStats?.();
+
+                // Iterações - do ENGINE
+                const iterEl = document.getElementById('iterations');
+                if (iterEl) {
+                    const iters = solverMetrics.lastIterations || 0;
+                    iterEl.textContent = iters;
+                }
+
+                // Convergência - calcula em tempo real
+                const convEl = document.getElementById('convergence');
+                if (convEl) {
+                    const totalCalls = solverMetrics.totalSolverCalls || 1;
+                    const convergence = (solverMetrics.convergedCount || 0) / Math.max(1, totalCalls);
+                    convEl.textContent = (convergence * 100).toFixed(1) + '%';
+                }
+
+                // Tempo solver - aproximado do frame time
+                const solverEl = document.getElementById('solverTime');
+                if (solverEl) {
+                    solverEl.textContent = deltaMs.toFixed(2) + ' ms';
+                    solverTimeHistory.push(parseFloat(deltaMs.toFixed(2)));
+                    if (solverTimeHistory.length > MAX_HISTORY) solverTimeHistory.shift();
+                    updateChart('solverChart', solverTimeHistory, 50);
+                }
+
+                // Memória
+                if (performance.memory) {
+                    const memMB = (performance.memory.usedJSHeapSize / 1048576).toFixed(2);
+                    const memEl = document.getElementById('memory');
+                    if (memEl) memEl.textContent = memMB + ' MB';
+                }
+
+                // Contadores
+                const compCountEl = document.getElementById('componentCount');
+                if (compCountEl) compCountEl.textContent = ENGINE.componentes.length;
+                
+                const connCountEl = document.getElementById('connectionCount');
+                if (connCountEl) connCountEl.textContent = ENGINE.conexoes.length;
+                
+                const runningEl = document.getElementById('running');
+                if (runningEl) runningEl.textContent = isRunning ? 'Rodando ▶️' : 'Parado ⏹️';
+
+                // Log de debug a cada 60 frames
+                if (frameCount % 60 === 0) {
+                    console.log(`📊 [${frameCount}] FPS: ${localFps} | Iter: ${solverMetrics.lastIterations} | Mem: ${(performance.memory?.usedJSHeapSize / 1048576).toFixed(1)}MB`);
+                }
+            } catch (err) {
+                console.error('Erro detalhado ao atualizar:', err);
+            }
+        }
+
+        function updateChart(elementId, data, maxValue) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+
+            el.innerHTML = '';
+            const max = Math.max(...data, maxValue);
+            data.forEach(val => {
+                const bar = document.createElement('div');
+                bar.className = 'bar';
+                bar.style.height = ((val / max) * 100) + '%';
+                bar.title = val.toFixed(2);
+                el.appendChild(bar);
+            });
+        }
+
+        function updateStatus(msg, type) {
+            const el = document.getElementById('status');
+            if (el) {
+                el.textContent = msg;
+                el.className = type || 'info';
+            }
+            console.log(`[${type}] ${msg}`);
+        }
+
+        function printBenchmarkReport() {
+            const stats = profiler?.getStats?.();
+            const solverMetrics = ENGINE?.getSolverMetrics?.() || {};
+
+            const report = `
+=== RELATÓRIO DE BENCHMARK ===
+Componentes: ${ENGINE.componentes.length}
+Conexões: ${ENGINE.conexoes.length}
+
+📊 Estatísticas de Quadros:
+  - FPS estimado: ${stats?.estimatedFps?.toFixed(1) || '?'}
+  - Tempo médio: ${stats?.avgFrameTimeMs?.toFixed(2) || '?'} ms
+  - Tempo máx: ${stats?.maxFrameTimeMs?.toFixed(2) || '?'} ms
+  - Tempo mín: ${stats?.minFrameTimeMs?.toFixed(2) || '?'} ms
+  - Frames analisados: ${stats?.totalFramesAnalyzed || '?'}
+
+⚙️ Solver:
+  - Iterações médias: ${stats?.avgSolverIterations?.toFixed(1) || '?'}
+  - Iterações máximas: ${stats?.maxSolverIterations || '?'}
+  - Taxa de convergência: ${stats?.convergenceRate?.toFixed(1) || '?'}%
+  - Limites atingidos: ${solverMetrics.maxIterationsHit || 0}
+
+💾 Memória:
+  - Heap usado: ${(performance.memory?.usedJSHeapSize / 1048576).toFixed(2) || '?'} MB
+  - Heap limite: ${(performance.memory?.jsHeapSizeLimit / 1048576).toFixed(2) || '?'} MB
+            `;
+
+            console.log(report);
+            updateStatus('✅ Benchmark completo!', 'success');
+
+            const msgEl = document.getElementById('messages');
+            if (msgEl) {
+                msgEl.innerHTML += `<div class="success">${report.replace(/\n/g, '<br>')}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -9,6 +9,7 @@ import { setupUI } from './controllers/UIController.js'
 import { setupCameraControl } from './controllers/CameraController.js'
 import { setupPipeControl, getConnectionFlow } from './controllers/PipeController.js'
 import { setupDragDrop } from './controllers/DragDropController.js'
+import { profiler, enablePhysicsDebugging } from './utils/PerformanceProfiler.js'
 
 setupUI();
 setupCameraControl();
@@ -90,22 +91,12 @@ document.addEventListener('keydown', (e) => {
         const selectedCompDiv = document.querySelector('.placed-component.selected');
         if (selectedCompDiv) {
             const compId = selectedCompDiv.dataset.id;
-            ENGINE.conexoes = ENGINE.conexoes.filter(conn => {
-                if (conn.sourceEl.dataset.compId === compId || conn.targetEl.dataset.compId === compId) {
-                    const src = ENGINE.componentes.find(c => c.id === conn.sourceEl.dataset.compId);
-                    const tgt = ENGINE.componentes.find(c => c.id === conn.targetEl.dataset.compId);
-                    if (src && tgt) src.desconectarSaida(tgt);
-                    if (conn.label) conn.label.remove();
-                    conn.path.remove();
-                    return false;
-                }
-                return true;
-            });
-
-            ENGINE.componentes = ENGINE.componentes.filter(c => c.id !== compId);
-            selectedCompDiv.remove();
-            ENGINE.selectComponent(null);
-            updatePortStates();
+            const comp = ENGINE.componentes.find(c => c.id === compId);
+            if (comp) {
+                ENGINE.removeComponent(comp);
+                selectedCompDiv.remove();
+                updatePortStates();
+            }
         }
 
         const selectedPipe = document.querySelector('.pipe-line.selected');
