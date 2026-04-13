@@ -1,7 +1,7 @@
-// ================================
+// ===================================
 // UTILIDADE: Validação de Entradas
 // Arquivo: js/utils/InputValidator.js
-// ================================
+// ===================================
 
 /**
  * Validador centralizado para entradas de usuário

@@ -6,7 +6,6 @@
 import {
     DEFAULT_PIPE_FRICTION,
     DEFAULT_PIPE_ROUGHNESS_MM,
-    EPSILON_FLOW,
     lpsToM3s,
     clamp,
     areaFromDiameter
@@ -76,7 +75,13 @@ export function getConnectionGeometry(conn, sourceEl, targetEl, usarAlturaRelati
     const p2 = getLogicalPortPosition(targetEl);
     const dx = p2.x - p1.x;
     const dy = p2.y - p1.y;
-    const straightLengthM = Math.max(0.35, Math.sqrt(dx * dx + dy * dy) / PIXELS_PER_METER);
+    
+    // Se a altura relativa estiver desligada, tratamos o diagrama como um esquemático lógico
+    // e o comprimento visual não deve afetar a perda de carga. Fixamos um comprimento padrão (ex: 1 metro).
+    const straightLengthM = usarAlturaRelativa 
+        ? Math.max(0.35, Math.sqrt(dx * dx + dy * dy) / PIXELS_PER_METER)
+        : 1.0;
+        
     const extraLengthM = Math.max(0, conn.extraLengthM || 0);
 
     return {

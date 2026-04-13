@@ -345,9 +345,9 @@ export class SistemaSimulacao extends Observable {
         return clamp(baseTimeS * Math.pow(viscosityFactor, 0.12), 0.05, 2.8);
     }
 
-    applyConnectionDynamics(conn, targetFlowLps, dt, geometry) {
+    applyConnectionDynamics(conn, targetFlowLps, dt, geometry, isPassThrough = false) {
         const responseTimeS = this.getConnectionResponseTimeS(conn, geometry);
-        const actualFlowLps = smoothFirstOrder(
+        const actualFlowLps = isPassThrough ? targetFlowLps : smoothFirstOrder(
             Math.max(0, conn.transientFlowLps || 0),
             Math.max(0, targetFlowLps),
             dt,
@@ -408,7 +408,13 @@ export class SistemaSimulacao extends Observable {
     }
 
     getTargetEntryLossCoeff(target) {
-        if (target instanceof ValvulaLogica) return 0;
+        if (target instanceof ValvulaLogica) {
+            const opening = target.getAberturaNormalizadaAtual();
+            if (opening <= 0) return 1e6;
+            const cvFactor = Math.max(0.2, target.cv);
+            const characteristicFactor = target.getCharacteristicFactor(opening);
+            return target.perdaLocalK / Math.max(0.025, Math.pow(characteristicFactor, 2.1) * cvFactor);
+        }
         if (target instanceof BombaLogica) return 0;
         if (target instanceof TanqueLogico) return target.perdaEntradaK;
         if (target instanceof DrenoLogico) return target.perdaEntradaK;
@@ -607,11 +613,9 @@ export class SistemaSimulacao extends Observable {
         let targetEntryLossBar = pressureLossFromFlow(capacityLps, branchAreaM2, density, targetEntryLossCoeff);
         let outletPressureBar = Math.max(backPressureBar, inletPressureBar - targetEntryLossBar);
 
-        // A valvula precisa ser estimada com a pressao motriz do ramo; usar a
-        // pressao residual provisoria daqui pode zerar a vazao antes dela receber entrada.
-        const downstreamInletPressureBar = target instanceof ValvulaLogica
-            ? Math.max(backPressureBar, supply.pressureBar + staticHeadBar)
-            : inletPressureBar;
+        // A valvula agora repassa seu proprio coeficiente de perda, entao podemos usar 
+        // a pressao residual provisoria normal sem medo de zerar o fluxo indevidamente.
+        const downstreamInletPressureBar = inletPressureBar;
         const downstreamLimit = this.estimateComponentPotential(
             target,
             downstreamInletPressureBar,
@@ -650,7 +654,8 @@ export class SistemaSimulacao extends Observable {
         const target = this.getComponentById(conn.targetEl.dataset.compId);
         if (!target) return 0;
 
-        const dynamics = this.applyConnectionDynamics(conn, flowLps, dt, estimate.geometry);
+        const isPassThrough = !(comp instanceof FonteLogica || comp instanceof TanqueLogico);
+        const dynamics = this.applyConnectionDynamics(conn, flowLps, dt, estimate.geometry, isPassThrough);
         const actualFlowLps = dynamics.flowLps;
         const state = this.getConnectionState(conn);
         state.targetFlowLps = flowLps;

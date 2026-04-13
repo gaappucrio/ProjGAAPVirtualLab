@@ -9,7 +9,6 @@ import { setupUI } from './controllers/UIController.js'
 import { setupCameraControl } from './controllers/CameraController.js'
 import { setupPipeControl, getConnectionFlow } from './controllers/PipeController.js'
 import { setupDragDrop } from './controllers/DragDropController.js'
-import { profiler, enablePhysicsDebugging } from './utils/PerformanceProfiler.js'
 
 setupUI();
 setupCameraControl();

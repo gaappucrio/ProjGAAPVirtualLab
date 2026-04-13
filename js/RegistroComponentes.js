@@ -149,7 +149,7 @@ export const REGISTRO_COMPONENTES = {
             inputPressure?.addEventListener('change', (e) => {
                 validateInputWithFeedback(
                     inputPressure,
-                    (v, name) => InputValidator.validatePressure(v, 100, name),
+                    (v, name) => InputValidator.validatePressure(baseFromDisplay('pressure', v, 0), 100, name),
                     'Pressão da Fonte',
                     (val) => { comp.pressaoFonteBar = val; }
                 );
@@ -158,7 +158,7 @@ export const REGISTRO_COMPONENTES = {
             inputFlow?.addEventListener('change', (e) => {
                 validateInputWithFeedback(
                     inputFlow,
-                    (v, name) => InputValidator.validateFlow(v, 500, name),
+                    (v, name) => InputValidator.validateFlow(baseFromDisplay('flow', v, 0), 500, name),
                     'Vazão Máxima',
                     (val) => { comp.vazaoMaxima = val; }
                 );
@@ -196,7 +196,7 @@ export const REGISTRO_COMPONENTES = {
             inputPressure?.addEventListener('change', (e) => {
                 validateInputWithFeedback(
                     inputPressure,
-                    (v, name) => InputValidator.validatePressure(v, 100, name),
+                    (v, name) => InputValidator.validatePressure(baseFromDisplay('pressure', v, 0), 100, name),
                     'Pressão de Saída',
                     (val) => { comp.pressaoSaidaBar = val; }
                 );
@@ -311,7 +311,7 @@ export const REGISTRO_COMPONENTES = {
             document.getElementById('input-vazmax').addEventListener('change', e => {
                 validateInputWithFeedback(
                     e.target,
-                    (v, name) => InputValidator.validateFlow(v, 500, name),
+                    (v, name) => InputValidator.validateFlow(baseFromDisplay('flow', v, 0), 500, name),
                     'Vazão Nominal',
                     (val) => { comp.vazaoNominal = val; }
                 );
@@ -319,7 +319,7 @@ export const REGISTRO_COMPONENTES = {
             document.getElementById('input-pressao-max-bomba').addEventListener('change', e => {
                 validateInputWithFeedback(
                     e.target,
-                    (v, name) => InputValidator.validatePressure(v, 100, name),
+                    (v, name) => InputValidator.validatePressure(baseFromDisplay('pressure', v, 0), 100, name),
                     'Pressão Máxima',
                     (val) => { comp.pressaoMaxima = val; }
                 );
@@ -335,7 +335,7 @@ export const REGISTRO_COMPONENTES = {
             document.getElementById('input-npsh-bomba').addEventListener('change', e => {
                 validateInputWithFeedback(
                     e.target,
-                    (v, name) => InputValidator.validateNPSH(v, name),
+                    (v, name) => InputValidator.validateNPSH(baseFromDisplay('length', v, 0), name),
                     'NPSH Requerido',
                     (val) => { comp.npshRequeridoM = val; }
                 );
@@ -402,7 +402,7 @@ export const REGISTRO_COMPONENTES = {
                     </div>
                     <div class="prop-group">
                         ${makeLabel('Coeficiente de Perda (K)', TOOLTIP.valveK)}
-                        <input type="number" id="input-perda-k" ${hintAttr(TOOLTIP.valveK)} value="${comp.perdaLocalK}" step="0.5" min="0.5" max="50">
+                        <input type="number" id="input-perda-k" ${hintAttr(TOOLTIP.valveK)} value="${comp.perdaLocalK}" step="0.1" min="0.0" max="50">
                     </div>
                     <div class="prop-group">
                         ${makeLabel('Caracteristica da Valvula', TOOLTIP.valveCharacteristic)}
@@ -667,7 +667,7 @@ export const REGISTRO_COMPONENTES = {
             document.getElementById('input-cap').addEventListener('change', e => {
                 validateInputWithFeedback(
                     e.target,
-                    (v, name) => InputValidator.validateVolume(v, 10000, name),
+                    (v, name) => InputValidator.validateVolume(baseFromDisplay('volume', v, 0), 10000, name),
                     'Capacidade Máxima',
                     (val) => {
                         comp.capacidadeMaxima = val;
@@ -682,7 +682,7 @@ export const REGISTRO_COMPONENTES = {
             document.getElementById('input-volume-tanque').addEventListener('change', e => {
                 validateInputWithFeedback(
                     e.target,
-                    (v, name) => InputValidator.validateVolume(v, comp.capacidadeMaxima, name),
+                    (v, name) => InputValidator.validateVolume(baseFromDisplay('volume', v, 0), comp.capacidadeMaxima, name),
                     'Volume Atual',
                     (val) => {
                         comp.volumeAtual = Math.max(0, Math.min(comp.capacidadeMaxima, val));
@@ -696,7 +696,7 @@ export const REGISTRO_COMPONENTES = {
             document.getElementById('input-altura-tanque').addEventListener('change', e => {
                 validateInputWithFeedback(
                     e.target,
-                    (v, name) => InputValidator.validateHeight(v, 100, name),
+                    (v, name) => InputValidator.validateHeight(baseFromDisplay('length', v, 0), 100, name),
                     'Altura Útil',
                     (val) => {
                         comp.alturaUtilMetros = val;
@@ -715,7 +715,7 @@ export const REGISTRO_COMPONENTES = {
             document.getElementById('input-altura-entrada-tanque').addEventListener('change', e => {
                 validateInputWithFeedback(
                     e.target,
-                    (v, name) => InputValidator.validateHeight(v, comp.alturaUtilMetros, name),
+                    (v, name) => InputValidator.validateHeight(baseFromDisplay('length', v, 0), comp.alturaUtilMetros, name),
                     'Altura Bocal Entrada',
                     (val) => {
                         comp.alturaBocalEntradaM = Math.max(0, Math.min(comp.alturaUtilMetros, val));
@@ -728,7 +728,7 @@ export const REGISTRO_COMPONENTES = {
             document.getElementById('input-altura-saída-tanque').addEventListener('change', e => {
                 validateInputWithFeedback(
                     e.target,
-                    (v, name) => InputValidator.validateHeight(v, comp.alturaUtilMetros, name),
+                    (v, name) => InputValidator.validateHeight(baseFromDisplay('length', v, 0), comp.alturaUtilMetros, name),
                     'Altura Bocal Saída',
                     (val) => {
                         comp.alturaBocalSaidaM = Math.max(0, Math.min(comp.alturaUtilMetros, val));

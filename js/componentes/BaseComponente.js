@@ -23,6 +23,7 @@ export const pressureFromHeadBar = (headM, density) => (density * GRAVITY * head
 
 const safeLossCoeff = (lossCoeff) => Math.max(0.1, lossCoeff); // Garante que o coeficiente de perda seja razoável para evitar resultados extremos
 
+
 export const smoothFirstOrder = (current, target, dt, timeConstantS) => {
     if (dt <= 0) return target;
     if (!Number.isFinite(timeConstantS) || timeConstantS <= 0.001) return target;
