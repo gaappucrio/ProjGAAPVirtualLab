@@ -413,7 +413,7 @@ export class SistemaSimulacao extends Observable {
             if (opening <= 0) return 1e6;
             const cvFactor = Math.max(0.2, target.cv);
             const characteristicFactor = target.getCharacteristicFactor(opening);
-            return target.perdaLocalK / Math.max(0.025, Math.pow(characteristicFactor, 2.1) * cvFactor);
+            return target.perdaLocalK + (1.0 / Math.max(0.025, Math.pow(characteristicFactor, 2.1) * cvFactor));
         }
         if (target instanceof BombaLogica) return 0;
         if (target instanceof TanqueLogico) return target.perdaEntradaK;
@@ -521,7 +521,7 @@ export class SistemaSimulacao extends Observable {
             const cvFactor = Math.max(0.2, comp.cv);
             const characteristicFactor = comp.getCharacteristicFactor(opening);
             const hydraulicAreaM2 = areaM2 * Math.max(0.08, characteristicFactor);
-            const localLossCoeff = comp.perdaLocalK / Math.max(0.025, Math.pow(characteristicFactor, 2.1) * cvFactor);
+            const localLossCoeff = comp.perdaLocalK + (1.0 / Math.max(0.025, Math.pow(characteristicFactor, 2.1) * cvFactor));
 
             return {
                 availableFlowLps: availableFlow,

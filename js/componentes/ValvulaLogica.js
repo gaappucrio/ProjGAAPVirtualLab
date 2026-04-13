@@ -8,13 +8,13 @@ export class ValvulaLogica extends ComponenteFisico {
         this.aberta = false;
         this.grauAbertura = 0;
         this.aberturaEfetiva = 0;
-        this.fluxoReal = 0;
+        this.fluxoReal = 0; 
         this.cv = 4.0; // Coeficiente de vazão (Cv) da válvula, ajustável para simular diferentes tipos de válvulas
-        this.perdaLocalK = 1.0;
+        this.perdaLocalK = 1.0; // Coeficiente de perda local da válvula
         this.tipoCaracteristica = 'equal_percentage'; // significa
         this.rangeabilidade = 30; // Relação entre a abertura máxima e a mínima
-        this.deltaPAtualBar = 0;
-        this.tempoCursoSegundos = 0.0; //
+        this.deltaPAtualBar = 0; // Queda de pressão atual através da válvula, em bar
+        this.tempoCursoSegundos = 0.0; // Tempo que a válvula leva para ir de totalmente fechada a totalmente aberta, em segundos
     }
 
     getCharacteristicFactor(opening) {
@@ -58,7 +58,8 @@ export class ValvulaLogica extends ComponenteFisico {
         const cvFactor = Math.max(0.2, this.cv);
         const characteristicFactor = this.getCharacteristicFactor(opening);
         const areaM2 = this.getAreaConexaoM2() * Math.max(0.08, characteristicFactor);
-        const localLossCoeff = this.perdaLocalK / Math.max(0.025, Math.pow(Math.max(characteristicFactor, 0.01), 2.1) * cvFactor);
+        //
+        const localLossCoeff = this.perdaLocalK + (1.0 / Math.max(0.025, Math.pow(Math.max(characteristicFactor, 0.01), 2.1) * cvFactor));
         this.deltaPAtualBar = opening > 0
             ? pressureLossFromFlow(this.fluxoReal, areaM2, ENGINE.fluidoOperante.densidade, localLossCoeff)
             : 0;
