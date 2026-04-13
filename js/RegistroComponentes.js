@@ -654,11 +654,9 @@ export const REGISTRO_COMPONENTES = {
                     if (!el) return;
 
                     if (ENGINE.usarAlturaRelativa) {
-                        // O chão visual (cy=240) recebe o offY de -40
-                        const chaoGeometricoY = logica.y - 40 + 240;
-
-                        const alturaBocalM = tipo === 'in' ? logica.alturaBocalEntradaM : logica.alturaBocalSaidaM;
-                        const logicalY = chaoGeometricoY - (alturaBocalM * 80);
+                        const cy = parseFloat(el.getAttribute('data-cy'));
+                        // Retornamos ao padrão visual: Posição Y + offY do Tanque (-40) + cy da porta
+                        const logicalY = logica.y - 40 + cy;
                         const elevM = (logicalY / 80).toFixed(2);
 
                         el.textContent = `Elev: ${elevM}m`;
