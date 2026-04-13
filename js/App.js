@@ -7,7 +7,7 @@ import { ENGINE, setPortStateUpdater, setConnectionFlowGetter } from './MotorFis
 import { updatePortStates } from './FabricaEquipamentos.js'
 import { setupUI } from './controllers/UIController.js'
 import { setupCameraControl } from './controllers/CameraController.js'
-import { setupPipeControl, getConnectionFlow } from './controllers/PipeController.js'
+import { setupPipeControl, getConnectionFlow, updateAllPipes} from './controllers/PipeController.js'
 import { setupDragDrop } from './controllers/DragDropController.js'
 
 setupUI();
@@ -65,6 +65,7 @@ btnRun.addEventListener('click', () => {
 relativeHeightToggle.addEventListener('change', (e) => {
     ENGINE.setUsarAlturaRelativa(e.target.checked);
     updateRelativeHeightUI(ENGINE.usarAlturaRelativa);
+    updateAllPipes();
 });
 
 btnClear.addEventListener('click', () => {

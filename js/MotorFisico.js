@@ -7,7 +7,6 @@ import {
     areaFromDiameter,
     BAR_TO_PA,
     clamp,
-    ComponenteFisico,
     DEFAULT_ENTRY_LOSS,
     DEFAULT_FLUID_VISCOSITY_PA_S,
     DEFAULT_PIPE_DIAMETER_M,

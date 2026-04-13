@@ -38,9 +38,31 @@ export function updateAllPipes() {
         const p1 = getPortCoords(conn.sourceEl);
         const p2 = getPortCoords(conn.targetEl);
         conn.path.setAttribute('d', drawCurve(p1.x, p1.y, p2.x, p2.y));
+
         if (conn.label) {
             conn.label.setAttribute('x', (p1.x + p2.x) / 2);
             conn.label.setAttribute('y', (p1.y + p2.y) / 2 - 10);
+        }
+
+        // NOVO CÓDIGO: Atualizar a posição e o texto do ΔY
+        if (conn.labelHeight) {
+            conn.labelHeight.setAttribute('x', (p1.x + p2.x) / 2);
+            conn.labelHeight.setAttribute('y', (p1.y + p2.y) / 2 + 15); // 15px abaixo do meio
+
+            if (ENGINE.usarAlturaRelativa) {
+                const geom = ENGINE.getConnectionGeometry(conn);
+                const dy = geom.headGainM;
+
+                // Exibir apenas se houver desnível significativo
+                if (Math.abs(dy) > 0.01) {
+                    const signal = dy > 0 ? '+' : '';
+                    conn.labelHeight.textContent = `ΔY: ${signal}${dy.toFixed(2)}m`;
+                } else {
+                    conn.labelHeight.textContent = '';
+                }
+            } else {
+                conn.labelHeight.textContent = '';
+            }
         }
     });
 }
@@ -101,6 +123,14 @@ export function setupPipeControl() {
                     labelEl.setAttribute("text-anchor", "middle");
                     pipeLayer.appendChild(labelEl);
                     connection.label = labelEl;
+                    const labelHeightEl = document.createElementNS("http://www.w3.org/2000/svg", "text");
+
+                    //Altura do grafo
+                    labelHeightEl.setAttribute("class", "pipe-flow-label");
+                    labelHeightEl.setAttribute("fill", "#e67e22");
+                    labelHeightEl.setAttribute("text-anchor", "middle");
+                    pipeLayer.appendChild(labelHeightEl);
+                    connection.labelHeight = labelHeightEl;
 
                     finalPipe.addEventListener('mousedown', function (ev) {
                         ENGINE.selectConnection(connection);
@@ -122,10 +152,16 @@ export function setupPipeControl() {
                     finalPipe.addEventListener('dblclick', function (ev) {
                         sourceLogic.desconectarSaida(targetLogic);
                         const ci = ENGINE.conexoes.findIndex(c => c === connection);
+                        
                         if (ci !== -1) {
+                            // 1. Remove os dois textos do SVG PRIMEIRO
                             if (ENGINE.conexoes[ci].label) ENGINE.conexoes[ci].label.remove();
+                            if (ENGINE.conexoes[ci].labelHeight) ENGINE.conexoes[ci].labelHeight.remove();
+                            
+                            // 2. Remove o cano da array UMA ÚNICA VEZ
                             ENGINE.conexoes.splice(ci, 1);
                         }
+                        
                         if (ENGINE.selectedConnection === connection) ENGINE.selectComponent(null);
                         finalPipe.remove();
                         updatePortStates();

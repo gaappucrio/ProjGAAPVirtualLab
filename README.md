@@ -1,2 +1,0 @@
-# ProjGAAPVirtualLab
-Laboratório Virtual GAAP

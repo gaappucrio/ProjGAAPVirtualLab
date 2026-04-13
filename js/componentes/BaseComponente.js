@@ -15,7 +15,7 @@ export const DEFAULT_FLUID_VAPOR_PRESSURE_BAR = 0.0317;
 export const DEFAULT_ATMOSPHERIC_PRESSURE_BAR = 1.01325;
 export const MAX_NETWORK_FLOW_LPS = 500;
 
-export const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+export const clamp = (value, min, max) => Math.max(min, Math.min(max, value)); // Retorna o valor fornecido entre min e max ou o limite min ou max caso extrapole
 export const lpsToM3s = (value) => value * LPS_TO_M3S; // Converte litros por segundo para metros cúbicos por segundo
 export const m3sToLps = (value) => value * M3S_TO_LPS; // Converte metros cúbicos por segundo para litros por segundo
 export const areaFromDiameter = (diameterM) => Math.PI * Math.pow(diameterM / 2, 2); // Calcula a área de um círculo a partir do diâmetro
@@ -23,7 +23,7 @@ export const pressureFromHeadBar = (headM, density) => (density * GRAVITY * head
 
 const safeLossCoeff = (lossCoeff) => Math.max(0.1, lossCoeff); // Garante que o coeficiente de perda seja razoável para evitar resultados extremos
 
-
+// Função
 export const smoothFirstOrder = (current, target, dt, timeConstantS) => {
     if (dt <= 0) return target;
     if (!Number.isFinite(timeConstantS) || timeConstantS <= 0.001) return target;

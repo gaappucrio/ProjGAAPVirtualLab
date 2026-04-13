@@ -68,6 +68,29 @@ export function getConnectionGeometry(conn, sourceEl, targetEl, usarAlturaRelati
         const svgY = svgEl ? parseFloat(svgEl.style.top || '0') : 0;
         const localX = parseFloat(portEl.getAttribute('cx') || '0');
         const localY = parseFloat(portEl.getAttribute('cy') || '0');
+
+        // Coordenada Y visual padrão
+        let logicalY = compY + svgY + localY;
+
+        // --- NOVA LÓGICA DE ALTURA REAL PARA O TANQUE ---
+        // Acessamos a lógica do componente diretamente do elemento DOM
+        const logicComp = parentComponent ? parentComponent.logica : null;
+
+        // Verificamos se é um Tanque através da existência da propriedade 'alturaUtilMetros'
+        if (logicComp && typeof logicComp.alturaUtilMetros !== 'undefined') {
+            const tipoPorta = portEl.dataset.type; // 'in' ou 'out'
+
+            // Definimos o "chão" geométrico como a base do SVG do tanque (cy = 240)
+            const chaoGeometricoY = compY + svgY + 240;
+
+            // Subimos a partir do chão calculando (Altura Lógica * 80 pixels)
+            if (tipoPorta === 'out') {
+                logicalY = chaoGeometricoY - (logicComp.alturaBocalSaidaM * PIXELS_PER_METER);
+            } else if (tipoPorta === 'in') {
+                logicalY = chaoGeometricoY - (logicComp.alturaBocalEntradaM * PIXELS_PER_METER);
+            }
+        }
+
         return { x: compX + svgX + localX, y: compY + svgY + localY };
     };
 
@@ -75,13 +98,13 @@ export function getConnectionGeometry(conn, sourceEl, targetEl, usarAlturaRelati
     const p2 = getLogicalPortPosition(targetEl);
     const dx = p2.x - p1.x;
     const dy = p2.y - p1.y;
-    
+
     // Se a altura relativa estiver desligada, tratamos o diagrama como um esquemático lógico
     // e o comprimento visual não deve afetar a perda de carga. Fixamos um comprimento padrão (ex: 1 metro).
-    const straightLengthM = usarAlturaRelativa 
+    const straightLengthM = usarAlturaRelativa
         ? Math.max(0.35, Math.sqrt(dx * dx + dy * dy) / PIXELS_PER_METER)
         : 1.0;
-        
+
     const extraLengthM = Math.max(0, conn.extraLengthM || 0);
 
     return {
@@ -132,7 +155,7 @@ export function ensureConnectionProperties(conn) {
     if (typeof conn.perdaLocalK !== 'number') conn.perdaLocalK = 0.8;
     if (typeof conn.transientFlowLps !== 'number') conn.transientFlowLps = 0;
     if (typeof conn.lastResolvedFlowLps !== 'number') conn.lastResolvedFlowLps = 0;
-    
+
     conn.areaM2 = areaFromDiameter(conn.diameterM);
     return conn;
 }

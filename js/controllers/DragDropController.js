@@ -68,6 +68,10 @@ export function setupDragDrop() {
             const newX = initX + (e.clientX - startX) / camera.scale;
             const newY = initY + (e.clientY - startY) / camera.scale;
 
+            element.logica.x = parseInt(element.style.left);
+            element.logica.y = parseInt(element.style.top);
+            element.logica.notify({ tipo: 'pos_update' });
+
             element.style.left = `${Math.round(newX / GRID_SIZE) * GRID_SIZE}px`;
             element.style.top = `${Math.round(newY / GRID_SIZE) * GRID_SIZE}px`;
             updateAllPipes();

@@ -13,7 +13,17 @@ import { colorPort, labelStyle } from './Config.js'
 import { formatUnitValue, getUnitSymbol, subscribeUnitPreferences, toBaseValue, toDisplayValue } from './utils/Units.js'
 import { InputValidator, showInputError, clearInputError } from './utils/InputValidator.js'
 
-const makePort = (id, cx, cy, inOut) => `<circle class="port-node unconnected" data-type="${inOut}" data-comp-id="${id}" cx="${cx}" cy="${cy}" r="5" fill="#fff" stroke="${colorPort}" stroke-width="2"/>`;
+const makePort = (id, cx, cy, inOut) => {
+    const isInput = inOut === 'in';
+    const textX = isInput ? cx - 10 : cx + 10;
+    const anchor = isInput ? 'end' : 'start';
+
+    return `
+        <circle class="port-node unconnected" data-type="${inOut}" data-comp-id="${id}" cx="${cx}" cy="${cy}" r="5" fill="#fff" stroke="${colorPort}" stroke-width="2"/>
+        <text id="elev-${inOut}-${id}" x="${textX}" y="${cy + 3}" font-size="10" font-family="monospace" fill="#e67e22" font-weight="bold" text-anchor="${anchor}" opacity="0" data-cy="${cy}" pointer-events="none"></text>
+    `;
+};
+
 const escapeAttr = (value) => String(value)
     .replace(/&/g, '&amp;')
     .replace(/"/g, '&quot;')
@@ -39,24 +49,19 @@ const volumeText = (baseValue, digits = null) => `${displayUnitValue('volume', b
 
 /**
  * Helper para validação de entrada com feedback visual
- * @param {HTMLInputElement} inputElement - elemento de input para validar
- * @param {Function} validatorFn - função validadora (usa InputValidator.validate*)
- * @param {string} fieldName - nome do campo para mensagens de erro
- * @param {Function} onSuccess - callback se validação passar (recebe valor convertido)
- * @param {*} fallback - valor padrão se validação falhar
  */
 const validateInputWithFeedback = (inputElement, validatorFn, fieldName, onSuccess, fallback) => {
     if (!inputElement) return fallback;
-    
+
     try {
         const result = validatorFn(inputElement.value, fieldName);
-        
+
         if (!result.valid) {
             showInputError(inputElement, result.error);
             console.warn(`Validação falhou para ${fieldName}: ${result.error}`);
             return fallback;
         }
-        
+
         clearInputError(inputElement);
         if (onSuccess) onSuccess(result.value);
         notifyPanelRefresh();
@@ -124,9 +129,35 @@ export const REGISTRO_COMPONENTES = {
                     <g> ${makePort(id, 65, 40, 'out')} </g>
                 `,
         setup: (visual, logica, id) => {
+            const atualizarElevacoes = () => {
+                ['in', 'out'].forEach(tipo => {
+                    const el = visual.querySelector(`#elev-${tipo}-${id}`);
+                    if (!el) return;
+
+                    if (ENGINE.usarAlturaRelativa) {
+                        const cy = parseFloat(el.getAttribute('data-cy'));
+                        // Aplica o offY de -20px do SVG para sincronizar com a física
+                        const logicalY = logica.y - 20 + cy;
+                        const elevM = (logicalY / 80).toFixed(2);
+
+                        el.textContent = `Elev: ${elevM}m`;
+                        el.setAttribute('opacity', '1');
+                    } else {
+                        el.setAttribute('opacity', '0');
+                    }
+                });
+            };
+
             logica.subscribe((d) => {
+                if (d.tipo === 'pos_update') atualizarElevacoes();
                 if (d.tipo === 'tag_update') visual.querySelector(`#tag-${id}`).textContent = logica.tag;
             });
+
+            ENGINE.subscribe((d) => {
+                if (d.tipo === 'config_simulacao') atualizarElevacoes();
+            });
+
+            atualizarElevacoes();
         },
         propriedadesAdicionais: (comp) => `
                     <div class="prop-group">
@@ -145,7 +176,7 @@ export const REGISTRO_COMPONENTES = {
         setupProps: (comp) => {
             const inputPressure = document.getElementById('input-pressao-fonte');
             const inputFlow = document.getElementById('input-vazao-fonte-max');
-            
+
             inputPressure?.addEventListener('change', (e) => {
                 validateInputWithFeedback(
                     inputPressure,
@@ -154,7 +185,7 @@ export const REGISTRO_COMPONENTES = {
                     (val) => { comp.pressaoFonteBar = val; }
                 );
             });
-            
+
             inputFlow?.addEventListener('change', (e) => {
                 validateInputWithFeedback(
                     inputFlow,
@@ -176,9 +207,35 @@ export const REGISTRO_COMPONENTES = {
                     <g> ${makePort(id, 15, 40, 'in')} </g>
                 `,
         setup: (visual, logica, id) => {
+            const atualizarElevacoes = () => {
+                ['in', 'out'].forEach(tipo => {
+                    const el = visual.querySelector(`#elev-${tipo}-${id}`);
+                    if (!el) return;
+
+                    if (ENGINE.usarAlturaRelativa) {
+                        const cy = parseFloat(el.getAttribute('data-cy'));
+                        // Aplica o offY de -20px do SVG para sincronizar com a física
+                        const logicalY = logica.y - 20 + cy;
+                        const elevM = (logicalY / 80).toFixed(2);
+
+                        el.textContent = `Elev: ${elevM}m`;
+                        el.setAttribute('opacity', '1');
+                    } else {
+                        el.setAttribute('opacity', '0');
+                    }
+                });
+            };
+
             logica.subscribe((d) => {
+                if (d.tipo === 'pos_update') atualizarElevacoes();
                 if (d.tipo === 'tag_update') visual.querySelector(`#tag-${id}`).textContent = logica.tag;
             });
+
+            ENGINE.subscribe((d) => {
+                if (d.tipo === 'config_simulacao') atualizarElevacoes();
+            });
+
+            atualizarElevacoes();
         },
         propriedadesAdicionais: (comp) => `
                     <div class="prop-group">
@@ -192,7 +249,7 @@ export const REGISTRO_COMPONENTES = {
                 `,
         setupProps: (comp) => {
             const inputPressure = document.getElementById('input-pressao-dreno');
-            
+
             inputPressure?.addEventListener('change', (e) => {
                 validateInputWithFeedback(
                     inputPressure,
@@ -214,14 +271,41 @@ export const REGISTRO_COMPONENTES = {
                     <g> ${makePort(id, 0, 40, 'in')} ${makePort(id, 80, 40, 'out')} </g>
                 `,
         setup: (visual, logica, id) => {
+            const atualizarElevacoes = () => {
+                ['in', 'out'].forEach(tipo => {
+                    const el = visual.querySelector(`#elev-${tipo}-${id}`);
+                    if (!el) return;
+
+                    if (ENGINE.usarAlturaRelativa) {
+                        const cy = parseFloat(el.getAttribute('data-cy'));
+                        // A Bomba não possui deslocamento (offY = 0)
+                        const logicalY = logica.y + cy;
+                        const elevM = (logicalY / 80).toFixed(2);
+
+                        el.textContent = `Elev: ${elevM}m`;
+                        el.setAttribute('opacity', '1');
+                    } else {
+                        el.setAttribute('opacity', '0');
+                    }
+                });
+            };
+
             visual.addEventListener('dblclick', () => logica.toggle());
+
             logica.subscribe((d) => {
+                if (d.tipo === 'pos_update') atualizarElevacoes();
                 if (d.tipo === 'estado') {
                     visual.querySelector(`#led-${id}`).setAttribute('fill', d.grau > 0 ? '#2ecc71' : '#e74c3c');
                 } else if (d.tipo === 'tag_update') {
                     visual.querySelector(`#tag-${id}`).textContent = logica.tag;
                 }
             });
+
+            ENGINE.subscribe((d) => {
+                if (d.tipo === 'config_simulacao') atualizarElevacoes();
+            });
+
+            atualizarElevacoes();
         },
         propriedadesAdicionais: (comp) => `
                     <div class="prop-group">
@@ -354,7 +438,7 @@ export const REGISTRO_COMPONENTES = {
                     slider.value = d.grau;
                     numInput.value = d.grau;
                     const effectiveDisplay = document.getElementById('disp-acionamento-real-bomba');
-                    if (effectiveDisplay) effectiveDisplay.value = (d.grauEfetivo ?? d.grau).toFixed(1); //
+                    if (effectiveDisplay) effectiveDisplay.value = (d.grauEfetivo ?? d.grau).toFixed(1);
                 }
             });
         }
@@ -372,8 +456,29 @@ export const REGISTRO_COMPONENTES = {
                     <g> ${makePort(id, 20, 40, 'in')} ${makePort(id, 60, 40, 'out')} </g>
                 `,
         setup: (visual, logica, id) => {
+            const atualizarElevacoes = () => {
+                ['in', 'out'].forEach(tipo => {
+                    const el = visual.querySelector(`#elev-${tipo}-${id}`);
+                    if (!el) return;
+
+                    if (ENGINE.usarAlturaRelativa) {
+                        const cy = parseFloat(el.getAttribute('data-cy'));
+                        // Aplica o offY de -20px do SVG para sincronizar com a física
+                        const logicalY = logica.y - 20 + cy;
+                        const elevM = (logicalY / 80).toFixed(2);
+
+                        el.textContent = `Elev: ${elevM}m`;
+                        el.setAttribute('opacity', '1');
+                    } else {
+                        el.setAttribute('opacity', '0');
+                    }
+                });
+            };
+
             visual.addEventListener('dblclick', () => logica.toggle());
+
             logica.subscribe((d) => {
+                if (d.tipo === 'pos_update') atualizarElevacoes();
                 if (d.tipo === 'estado') {
                     const perc = (typeof d.grauEfetivo === 'number' ? d.grauEfetivo : d.grau) / 100.0;
                     const r = Math.round(231 + (46 - 231) * perc);
@@ -386,6 +491,12 @@ export const REGISTRO_COMPONENTES = {
                     visual.querySelector(`#tag-${id}`).textContent = logica.tag;
                 }
             });
+
+            ENGINE.subscribe((d) => {
+                if (d.tipo === 'config_simulacao') atualizarElevacoes();
+            });
+
+            atualizarElevacoes();
         },
         propriedadesAdicionais: (comp) => `
                     <div class="prop-group">
@@ -530,15 +641,37 @@ export const REGISTRO_COMPONENTES = {
                     <text id="sp-label-${id}" x="165" y="124" font-size="11" font-family="Arial" font-weight="bold" fill="#e74c3c" text-anchor="start" opacity="0">SP</text>
                     <rect id="sp-badge-${id}" x="4" y="44" width="44" height="14" rx="4" fill="#e74c3c" opacity="0"/>
                     <text id="sp-badge-txt-${id}" x="26" y="54" font-size="9" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#fff" opacity="0">SP ON</text>
+                    <text id="alt-util-${id}" x="80" y="205" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#2c3e50"></text>
                     <text id="cap-max-${id}" x="80" y="220" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#2c3e50">Capacidade: ${volumeText(1000)}</text>
                     <text id="tag-${id}" x="80" y="100" font-size="20" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#1a252f">${tag}</text>
                     <text id="vol-${id}" x="80" y="125" font-family="Arial" font-size="18" font-weight="bold" text-anchor="middle" fill="#1a252f">${volumeText(0)}</text>
                     <g> ${makePort(id, 80, 0, 'in')} ${makePort(id, 80, 240, 'out')} </g>
                 `,
         setup: (visual, logica, id) => {
-            const atualizarRotulosVolume = () => {
+            const atualizarElevacoes = () => {
+                ['in', 'out'].forEach(tipo => {
+                    const el = visual.querySelector(`#elev-${tipo}-${id}`);
+                    if (!el) return;
+
+                    if (ENGINE.usarAlturaRelativa) {
+                        // O chão visual (cy=240) recebe o offY de -40
+                        const chaoGeometricoY = logica.y - 40 + 240;
+
+                        const alturaBocalM = tipo === 'in' ? logica.alturaBocalEntradaM : logica.alturaBocalSaidaM;
+                        const logicalY = chaoGeometricoY - (alturaBocalM * 80);
+                        const elevM = (logicalY / 80).toFixed(2);
+
+                        el.textContent = `Elev: ${elevM}m`;
+                        el.setAttribute('opacity', '1');
+                    } else {
+                        el.setAttribute('opacity', '0');
+                    }
+                });
+            };
+            const atualizarRotulosTanque = () => {
                 visual.querySelector(`#vol-${id}`).textContent = volumeText(logica.volumeAtual);
                 visual.querySelector(`#cap-max-${id}`).textContent = `Capacidade: ${volumeText(logica.capacidadeMaxima)}`;
+                visual.querySelector(`#alt-util-${id}`).textContent = `Altura: ${displayUnitValue('length', logica.alturaUtilMetros, 2)} ${getUnitSymbol('length')}`;
             };
 
             const atualizarLinhaSetpoint = () => {
@@ -555,10 +688,11 @@ export const REGISTRO_COMPONENTES = {
             };
 
             logica.subscribe((d) => {
+                if (d.tipo === 'pos_update') atualizarElevacoes();
                 if (d.tipo === 'volume') {
                     visual.querySelector(`#agua-${id}`).setAttribute('height', d.perc * 240);
                     visual.querySelector(`#agua-${id}`).setAttribute('y', 240 - (d.perc * 240));
-                    atualizarRotulosVolume();
+                    atualizarRotulosTanque();
                     visual.querySelector(`#stream-${id}`).style.opacity = d.qIn > 0.1 ? '0.7' : '0';
                 } else if (d.tipo === 'tag_update') {
                     visual.querySelector(`#tag-${id}`).textContent = logica.tag;
@@ -567,15 +701,20 @@ export const REGISTRO_COMPONENTES = {
                 }
             });
 
+            ENGINE.subscribe((d) => {
+                if (d.tipo === 'config_simulacao') atualizarElevacoes();
+            });
+
             const unsubscribeUnits = subscribeUnitPreferences(() => {
                 if (!visual.isConnected) {
                     unsubscribeUnits();
                     return;
                 }
-                atualizarRotulosVolume();
+                atualizarRotulosTanque();
             });
 
-            atualizarRotulosVolume();
+            atualizarRotulosTanque();
+            atualizarElevacoes();
         },
         propriedadesAdicionais: (comp) => `
                     <div class="prop-group">

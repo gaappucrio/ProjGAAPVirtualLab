@@ -19,8 +19,10 @@ export class ValvulaLogica extends ComponenteFisico {
 
     getCharacteristicFactor(opening) {
         const safeOpening = clamp(opening, 0, 1);
-        if (this.tipoCaracteristica === 'linear') return safeOpening;
-        if (this.tipoCaracteristica === 'quick_opening') return Math.sqrt(safeOpening);
+        if (this.tipoCaracteristica === 'linear')
+            return safeOpening;
+        if (this.tipoCaracteristica === 'quick_opening') 
+            return Math.sqrt(safeOpening);
         const minFactor = 1 / Math.max(2, this.rangeabilidade);
         const normalized = (Math.pow(this.rangeabilidade, safeOpening) - 1) / (this.rangeabilidade - 1);
         return clamp(minFactor + ((1 - minFactor) * normalized), minFactor, 1);
@@ -58,7 +60,6 @@ export class ValvulaLogica extends ComponenteFisico {
         const cvFactor = Math.max(0.2, this.cv);
         const characteristicFactor = this.getCharacteristicFactor(opening);
         const areaM2 = this.getAreaConexaoM2() * Math.max(0.08, characteristicFactor);
-        //
         const localLossCoeff = this.perdaLocalK + (1.0 / Math.max(0.025, Math.pow(Math.max(characteristicFactor, 0.01), 2.1) * cvFactor));
         this.deltaPAtualBar = opening > 0
             ? pressureLossFromFlow(this.fluxoReal, areaM2, ENGINE.fluidoOperante.densidade, localLossCoeff)
