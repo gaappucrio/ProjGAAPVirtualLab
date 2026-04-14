@@ -1363,7 +1363,7 @@
                 setup: (visual, logica, id) => {
                     visual.addEventListener('dblclick', () => logica.toggle());
                     logica.subscribe((d) => {
-                        if (d.tipo === 'estado') visual.querySelector(`#led-${id}`).setAttribute('fill', d.isOn ? '#2ecc71' : '#e74c3c');
+                        if (d.tipo === 'estado') visual.querySelector(`#led-${id}`).setAttribute('fill', d.grau > 0 ? '#2ecc71' : '#e74c3c');
                         else if (d.tipo === 'tag_update') visual.querySelector(`#tag-${id}`).textContent = logica.tag;
                     });
                 },

@@ -3,8 +3,6 @@
 // Ficheiro: js/controllers/CameraController.js
 // ========================================
 
-import { GRID_SIZE } from '../Config.js'
-
 export const camera = {
     scale: 1,
     x: 0,
@@ -16,9 +14,19 @@ export const camera = {
 
 let spacePressed = false;
 
-export function setupCameraControl() {
+
+export function updateCameraTransform() {
     const workspaceContainer = document.getElementById('workspace');
     const workspaceCanvas = document.getElementById('workspace-canvas');
+
+    workspaceContainer.style.backgroundPosition = `${camera.x}px ${camera.y}px`;
+    workspaceContainer.style.backgroundSize = `${40 * camera.scale}px ${40 * camera.scale}px`;
+    workspaceCanvas.style.transform = `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`;
+}
+
+
+export function setupCameraControl() {
+    const workspaceContainer = document.getElementById('workspace');
 
     // Eventos de teclado para espaço
     document.addEventListener('keydown', e => {
@@ -73,14 +81,6 @@ export function setupCameraControl() {
     });
 }
 
-export function updateCameraTransform() {
-    const workspaceContainer = document.getElementById('workspace');
-    const workspaceCanvas = document.getElementById('workspace-canvas');
-
-    workspaceContainer.style.backgroundPosition = `${camera.x}px ${camera.y}px`;
-    workspaceContainer.style.backgroundSize = `${40 * camera.scale}px ${40 * camera.scale}px`;
-    workspaceCanvas.style.transform = `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`;
-}
 
 export function getCameraState() {
     return {

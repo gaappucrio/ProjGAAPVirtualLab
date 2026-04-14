@@ -1,11 +1,91 @@
 // ==================================
-// MODELO: Lógica e Física do Sistema
+// MODELO: Logica e Fisica do Sistema
 // Ficheiro: js/MotorFisico.js
 // ==================================
 
-/* Callbacks para resolver dependências circulares */
+import {
+    areaFromDiameter,
+    BAR_TO_PA,
+    clamp,
+    DEFAULT_ENTRY_LOSS,
+    DEFAULT_FLUID_VISCOSITY_PA_S,
+    DEFAULT_PIPE_DIAMETER_M,
+    DEFAULT_PIPE_EXTRA_LENGTH_M,
+    DEFAULT_PIPE_FRICTION,
+    DEFAULT_PIPE_MINOR_LOSS,
+    EPSILON_FLOW,
+    flowFromBernoulli,
+    GRAVITY,
+    MAX_NETWORK_FLOW_LPS,
+    Observable,
+    pressureFromHeadBar,
+    pressureLossFromFlow,
+    smoothFirstOrder
+} from './componentes/BaseComponente.js';
+import { BombaLogica } from './componentes/BombaLogica.js';
+import { Fluido } from './componentes/Fluido.js';
+import { DrenoLogico } from './componentes/DrenoLogico.js';
+import { FonteLogica } from './componentes/FonteLogica.js';
+import { TanqueLogico } from './componentes/TanqueLogico.js';
+import { ValvulaLogica } from './componentes/ValvulaLogica.js';
+import { formatUnitValue, getUnitSymbol } from './utils/Units.js';
+import { profiler } from './utils/PerformanceProfiler.js';
+import { getConnectionGeometry, getPipeHydraulics } from './utils/PipeHydraulics.js';
+
+export {
+    clamp,
+    ComponenteFisico,
+    EPSILON_FLOW,
+    flowFromBernoulli,
+    MAX_NETWORK_FLOW_LPS,
+    Observable,
+    pressureFromHeadBar,
+    pressureLossFromFlow,
+    smoothFirstOrder
+} from './componentes/BaseComponente.js';
+
 let portStateUpdater = null;
 let connectionFlowGetter = null;
+
+const PIXELS_PER_METER = 80;
+const MAX_QUEUE_STEPS = 512;
+const MAX_COMPONENT_VISITS = 8;
+
+// Rastreamento de estabilidade numérica do solver
+const DEBUG_PHYSICS = false; // Ativa logs detalhados do solver
+let solverMetrics = {
+    lastIterations: 0,
+    lastError: 0,
+    maxIterationsHit: 0,
+    convergedCount: 0,
+    totalSolverCalls: 0
+};
+
+const safeViscosity = (value) => Math.max(0.00001, value || DEFAULT_FLUID_VISCOSITY_PA_S);
+
+export const FLUID_PRESETS = {
+    agua: {
+        nome: 'Água',
+        densidade: 997,
+        temperatura: 25,
+        viscosidadeDinamicaPaS: 0.00089,
+        pressaoVaporBar: 0.0317
+    },
+    oleo_leve: {
+        nome: 'Óleo leve',
+        densidade: 860,
+        temperatura: 25,
+        viscosidadeDinamicaPaS: 0.035,
+        pressaoVaporBar: 0.003
+    },
+    glicol_30: {
+        nome: 'Glicol 30%',
+        densidade: 1045,
+        temperatura: 25,
+        viscosidadeDinamicaPaS: 0.0035,
+        pressaoVaporBar: 0.02
+    }
+};
 
 export function setPortStateUpdater(fn) {
     portStateUpdater = fn;
@@ -15,136 +95,741 @@ export function setConnectionFlowGetter(fn) {
     connectionFlowGetter = fn;
 }
 
-/* A classe Observable é uma implementação simples do padrão de design Observer,
-permitindo que os componentes do sistema de simulação notifiquem os ouvintes sobre mudanças de estado ou eventos. */
-export class Observable {
-    /* O construtor inicializa uma lista de ouvintes vazia, que serão notificados quando um evento ocorrer. */
-    constructor() { this.listeners = []; }
-
-    /* O método subscribe permite que os ouvintes se inscrevam para receber notificações.
-    Ele adiciona a função de callback fornecida à lista de ouvintes. */
-    subscribe(fn) { this.listeners.push(fn); }
-
-    /* O método notify é usado para enviar notificações a todos os ouvintes inscritos.
-    Ele percorre a lista de ouvintes e chama cada função de callback, passando os dados relevantes do evento. */
-    notify(data) { this.listeners.forEach(fn => fn(data)); }
-}
-
-/* A classe Fluido representa um fluido com um nome e uma densidade,
-que pode ser usado para simular o comportamento de líquidos no sistema. */
-export class Fluido {   /* O construtor da classe Fluido recebe um nome e uma densidade, que são armazenados como propriedades do objeto. */
-    constructor(nome, densidade) { this.nome = nome; this.densidade = densidade; }
-}
-
-/* A classe SistemaSimulacao é o núcleo da simulação, gerenciando os componentes,
-conexões e a lógica de atualização do sistema.
-Ela é responsável por iniciar e parar a simulação, atualizar o estado dos componentes a cada tick,
-e notificar a interface do usuário sobre mudanças de estado e atualizações. */
 export class SistemaSimulacao extends Observable {
-    /* O construtor da classe SistemaSimulacao inicializa as propriedades do sistema, incluindo a velocidade da simulação,
-    o fluido operante, as listas de componentes e conexões, e o estado de execução da simulação.
-    Ele também define variáveis para controle de tempo e seleção de componentes. */
     constructor() {
         super();
         this.velocidade = 1.0;
-        this.fluidoOperante = new Fluido("Água", 1000.0);
+        this.fluidoOperante = new Fluido("Agua", 997.0, 1.0, 25.0);
         this.componentes = [];
         this.conexoes = [];
+        this.connectionStates = new Map();
         this.isRunning = false;
         this.lastTime = 0;
         this.elapsedTime = 0;
         this.selectedComponent = null;
+        this.selectedConnection = null;
+        this.usarAlturaRelativa = true;
     }
 
-    /* O método add é usado para adicionar um componente à simulação,
-    inserindo-o na lista de componentes gerenciados pelo sistema. */
-    add(comp) { this.componentes.push(comp); }
+    add(comp) {
+        this.componentes.push(comp);
+    }
 
-    /* O método clear é responsável por limpar a simulação, removendo todos os componentes e conexões,
-    resetando o estado de execução e notificando a interface do usuário para atualizar
-    a visualização e os painéis de controle. */
+    removeComponent(comp) {
+        // Remove componente da simulação com limpeza apropriada
+        if (!comp) return;
+        
+        // Desativa o componente se simulação estiver rodando
+        if (this.isRunning) comp.onSimulationStop();
+        
+        // Remove de conexões
+        this.conexoes = this.conexoes.filter(conn => {
+            if (conn.sourceEl.dataset.compId === comp.id || conn.targetEl.dataset.compId === comp.id) {
+                if (conn.label) conn.label.remove();
+                conn.path.remove();
+                return false;
+            }
+            return true;
+        });
+        
+        // Limpa estado e listeners
+        comp.destroy();
+        
+        // Remove do array de componentes
+        this.componentes = this.componentes.filter(c => c.id !== comp.id);
+        
+        // Desseleciona se era o componente selecionado
+        if (this.selectedComponent === comp) {
+            this.selectedComponent = null;
+        }
+    }
+
+    getSolverMetrics() {
+        return { ...solverMetrics };
+    }
+
     clear() {
+        this.clearConnectionDynamics();
         this.componentes = [];
-        this.conexoes.forEach(c => { c.path.remove(); if (c.label) c.label.remove(); });
+        this.conexoes.forEach(c => {
+            c.path.remove();
+            if (c.label) c.label.remove();
+        });
         this.conexoes = [];
+        this.connectionStates.clear();
         this.isRunning = false;
         this.elapsedTime = 0;
-        this.notify({ tipo: 'selecao', componente: null });
+        this.selectedComponent = null;
+        this.selectedConnection = null;
+        this.notify({ tipo: 'selecao', componente: null, conexao: null });
         if (portStateUpdater) portStateUpdater();
     }
 
-    /* O método start inicia a simulação, definindo o estado de execução como verdadeiro,
-    registrando o tempo atual e iniciando o loop de atualização usando requestAnimationFrame.*/
-    start() { this.isRunning = true; this.lastTime = performance.now(); requestAnimationFrame(this.tick.bind(this)); this.notify({ tipo: 'estado_motor', rodando: true }); }
-
-    /* O método stop para a simulação, definindo o estado de execução como falso,
-    notificando a interface do usuário sobre a mudança de estado
-    e atualizando a visualização dos canos para refletir que o sistema parou. */
-    stop() { this.isRunning = false; this.notify({ tipo: 'estado_motor', rodando: false }); this.updatePipesVisual(); }
-
-    /* O método selectComponent é usado para selecionar um componente específico na simulação,
-    armazenando-o como o componente selecionado e notificando a interface do usuário sobre a seleção. */
-    selectComponent(comp) {
-        this.selectedComponent = comp;
-        this.notify({ tipo: 'selecao', componente: comp });
+    start() {
+        this.isRunning = true;
+        this.lastTime = performance.now();
+        requestAnimationFrame(this.tick.bind(this));
+        this.notify({ tipo: 'estado_motor', rodando: true });
     }
 
-    /* O método tick é o loop principal de atualização da simulação, que é chamado a cada frame usando requestAnimationFrame.
-    Ele calcula o tempo decorrido desde a última atualização, atualiza o estado de cada componente com base na física do sistema,
-    atualiza a visualização dos canos para refletir o fluxo atual
-    e notifica a interface do usuário sobre as atualizações para que ela possa atualizar os painéis de controle e monitoramento. */
+    stop() {
+        this.isRunning = false;
+        this.clearConnectionDynamics();
+        this.resetHydraulicState();
+        this.componentes.forEach(c => c.onSimulationStop());
+        this.notify({ tipo: 'estado_motor', rodando: false });
+        this.updatePipesVisual();
+    }
+
+    selectComponent(comp) {
+        this.selectedComponent = comp;
+        this.selectedConnection = null;
+        this.notify({ tipo: 'selecao', componente: comp, conexao: null });
+    }
+
+    selectConnection(conn) {
+        this.selectedComponent = null;
+        this.selectedConnection = conn;
+        this.notify({ tipo: 'selecao', componente: null, conexao: conn });
+    }
+
+    setUsarAlturaRelativa(ativo) {
+        this.usarAlturaRelativa = ativo !== false;
+        this.clearConnectionDynamics();
+        if (!this.isRunning) this.resetHydraulicState();
+        this.updatePipesVisual();
+        this.notify({ tipo: 'config_simulacao', usarAlturaRelativa: this.usarAlturaRelativa });
+    }
+
+    atualizarFluido(dados) {
+        this.fluidoOperante.nome = dados.nome ?? this.fluidoOperante.nome;
+        this.fluidoOperante.densidade = Math.max(1, Number(dados.densidade) || this.fluidoOperante.densidade);
+        this.fluidoOperante.temperatura = Number(dados.temperatura) || this.fluidoOperante.temperatura;
+        this.fluidoOperante.viscosidadeDinamicaPaS = safeViscosity(dados.viscosidadeDinamicaPaS ?? this.fluidoOperante.viscosidadeDinamicaPaS);
+        this.fluidoOperante.pressaoVaporBar = Math.max(0.0001, Number(dados.pressaoVaporBar) || this.fluidoOperante.pressaoVaporBar);
+        this.fluidoOperante.pressaoAtmosfericaBar = Math.max(0.5, Number(dados.pressaoAtmosfericaBar) || this.fluidoOperante.pressaoAtmosfericaBar);
+        this.notify({ tipo: 'fluido_update', fluido: this.fluidoOperante });
+    }
+
     tick(timestamp) {
         if (!this.isRunning) return;
+
+        profiler.startTick();
+
         let dt = ((timestamp - this.lastTime) / 1000.0) * this.velocidade;
-        this.lastTime = timestamp; if (dt > 0.1) dt = 0.1;
+        this.lastTime = timestamp;
+        if (dt > 0.1) dt = 0.1;
 
         this.elapsedTime += dt;
-        this.componentes.forEach(c => { if (c instanceof TanqueLogico) c.atualizarFisica(dt, this.fluidoOperante); });
+
+        this.componentes.forEach(c => {
+            if (c instanceof TanqueLogico) c._rodarControlador(dt);
+        });
+
+        this.componentes.forEach(c => c.atualizarDinamica(dt, this.fluidoOperante));
+        this.resolvePushBasedNetwork(dt);
+
+        this.componentes.forEach(c => {
+            if (c instanceof TanqueLogico) c.atualizarFisica(dt, this.fluidoOperante);
+            else c.sincronizarMetricasFisicas(this.fluidoOperante);
+        });
+
         this.updatePipesVisual();
         this.notify({ tipo: 'update_painel', dt: dt });
+
+        profiler.endTick(this.getSolverMetrics());
 
         requestAnimationFrame(this.tick.bind(this));
     }
 
-    /* O método updatePipesVisual é responsável por atualizar a aparência dos canos de conexão com base no fluxo atual do sistema.
-    Ele percorre todas as conexões, determina o fluxo com base no componente de origem e atualiza a classe CSS e os atributos do cano para refletir se o fluxo está ativo ou não.
-    Ele também atualiza os rótulos de fluxo nos canos, se presentes, para mostrar o valor atual do fluxo em litros por segundo. */
+    resetHydraulicState() {
+        this.connectionStates.clear();
+        this.componentes.forEach(c => c.resetEstadoHidraulico());
+    }
+
+    clearConnectionDynamics() {
+        this.conexoes.forEach(conn => {
+            if (!conn) return;
+            conn.transientFlowLps = 0;
+            conn.lastResolvedFlowLps = 0;
+            conn._activeTick = false;
+        });
+    }
+
+    getConnectionState(conn) {
+        if (!this.connectionStates.has(conn)) {
+            this.connectionStates.set(conn, {
+                flowLps: 0,
+                pressureBar: 0,
+                outletPressureBar: 0,
+                sourcePressureBar: 0,
+                backPressureBar: 0,
+                velocityMps: 0,
+                deltaPBar: 0,
+                totalLossBar: 0,
+                targetLossBar: 0,
+                lengthM: 0,
+                straightLengthM: 0,
+                headGainM: 0,
+                targetFlowLps: 0,
+                responseTimeS: 0,
+                reynolds: 0,
+                frictionFactor: DEFAULT_PIPE_FRICTION,
+                relativeRoughness: 0,
+                regime: 'sem fluxo'
+            });
+        }
+        return this.connectionStates.get(conn);
+    }
+
+    getComponentById(id) {
+        return this.componentes.find(c => c.id === id);
+    }
+
+    getOutputConnections(comp) {
+        return this.conexoes.filter(conn => conn.sourceEl.dataset.compId === comp.id);
+    }
+
+    getInputConnections(comp) {
+        return this.conexoes.filter(conn => conn.targetEl.dataset.compId === comp.id);
+    }
+
+    ensureConnectionProperties(conn) {
+        if (typeof conn.diameterM !== 'number') conn.diameterM = DEFAULT_PIPE_DIAMETER_M;
+        if (typeof conn.roughnessMm !== 'number') conn.roughnessMm = 0.045; // DEFAULT_PIPE_ROUGHNESS_MM
+        if (typeof conn.extraLengthM !== 'number') conn.extraLengthM = DEFAULT_PIPE_EXTRA_LENGTH_M;
+        if (typeof conn.perdaLocalK !== 'number') conn.perdaLocalK = DEFAULT_PIPE_MINOR_LOSS;
+        if (typeof conn.transientFlowLps !== 'number') conn.transientFlowLps = 0;
+        if (typeof conn.lastResolvedFlowLps !== 'number') conn.lastResolvedFlowLps = 0;
+        conn.areaM2 = areaFromDiameter(conn.diameterM);
+        return conn;
+    }
+
+    getLogicalPortPosition(portEl) {
+        if (!portEl) return { x: 0, y: 0 };
+
+        const parentComponent = portEl.closest('.placed-component');
+        const svgEl = portEl.ownerSVGElement;
+        const compX = parentComponent ? parseFloat(parentComponent.style.left || '0') : 0;
+        const compY = parentComponent ? parseFloat(parentComponent.style.top || '0') : 0;
+        const svgX = svgEl ? parseFloat(svgEl.style.left || '0') : 0;
+        const svgY = svgEl ? parseFloat(svgEl.style.top || '0') : 0;
+        const localX = parseFloat(portEl.getAttribute('cx') || '0');
+        const localY = parseFloat(portEl.getAttribute('cy') || '0');
+
+        return {
+            x: compX + svgX + localX,
+            y: compY + svgY + localY
+        };
+    }
+
+    // Usa utilitário importado PipeHydraulics.getConnectionGeometry
+    getConnectionGeometry(conn) {
+        return getConnectionGeometry(conn, conn.sourceEl, conn.targetEl, this.usarAlturaRelativa);
+    }
+
+    // Usa utilitário importado PipeHydraulics.getPipeHydraulics
+    getPipeHydraulics(conn, geometry, areaM2, flowLps) {
+        const density = this.fluidoOperante.densidade;
+        const viscosityPaS = this.fluidoOperante.viscosidadeDinamicaPaS;
+        return getPipeHydraulics(conn, geometry, areaM2, flowLps, density, viscosityPaS);
+    }
+
+    getConnectionResponseTimeS(conn, geometry) {
+        this.ensureConnectionProperties(conn);
+        const lineVolumeL = geometry.lengthM * conn.areaM2 * 1000;
+        const densityFactor = clamp(this.fluidoOperante.densidade / 997, 0.55, 1.8);
+        const viscosityFactor = clamp(this.fluidoOperante.viscosidadeDinamicaPaS / DEFAULT_FLUID_VISCOSITY_PA_S, 0.5, 8);
+        const baseTimeS = 0.08 + (geometry.lengthM * 0.035) + (lineVolumeL * 0.018 * densityFactor);
+        return clamp(baseTimeS * Math.pow(viscosityFactor, 0.12), 0.05, 2.8);
+    }
+
+    applyConnectionDynamics(conn, targetFlowLps, dt, geometry, isPassThrough = false) {
+        const responseTimeS = this.getConnectionResponseTimeS(conn, geometry);
+        const actualFlowLps = isPassThrough ? targetFlowLps : smoothFirstOrder(
+            Math.max(0, conn.transientFlowLps || 0),
+            Math.max(0, targetFlowLps),
+            dt,
+            responseTimeS
+        );
+
+        conn.transientFlowLps = actualFlowLps <= EPSILON_FLOW ? 0 : actualFlowLps;
+        conn.lastResolvedFlowLps = Math.max(0, targetFlowLps);
+
+        return {
+            flowLps: conn.transientFlowLps,
+            responseTimeS
+        };
+    }
+
+    relaxIdleConnections(dt) {
+        this.conexoes.forEach(conn => {
+            if (conn._activeTick) return;
+
+            this.ensureConnectionProperties(conn);
+            const geometry = this.getConnectionGeometry(conn);
+            const { flowLps, responseTimeS } = this.applyConnectionDynamics(conn, 0, dt, geometry);
+            const state = this.getConnectionState(conn);
+
+            state.lengthM = geometry.lengthM;
+            state.straightLengthM = geometry.straightLengthM;
+            state.headGainM = geometry.headGainM;
+            state.targetFlowLps = 0;
+            state.responseTimeS = responseTimeS;
+
+            if (flowLps <= EPSILON_FLOW) {
+                conn.transientFlowLps = 0;
+                conn.lastResolvedFlowLps = 0;
+                return;
+            }
+
+            const pipeHydraulics = this.getPipeHydraulics(conn, geometry, conn.areaM2, flowLps);
+            state.flowLps = flowLps;
+            state.velocityMps = pipeHydraulics.velocityMps;
+            state.reynolds = pipeHydraulics.reynolds;
+            state.frictionFactor = pipeHydraulics.frictionFactor;
+            state.relativeRoughness = pipeHydraulics.relativeRoughness;
+            state.regime = pipeHydraulics.regime;
+            state.deltaPBar = pressureLossFromFlow(
+                flowLps,
+                conn.areaM2,
+                this.fluidoOperante.densidade,
+                1 + conn.perdaLocalK + pipeHydraulics.distributedLossCoeff
+            );
+            state.totalLossBar = state.deltaPBar;
+        });
+    }
+
+    getTargetBackPressureBar(target) {
+        if (target instanceof TanqueLogico) return target.getBackPressureAtInletBar(this.fluidoOperante, this.usarAlturaRelativa);
+        if (target instanceof DrenoLogico) return target.pressaoSaidaBar;
+        return 0;
+    }
+
+    getTargetEntryLossCoeff(target) {
+        if (target instanceof ValvulaLogica) {
+            const opening = target.getAberturaNormalizadaAtual();
+            if (opening <= 0) return 1e6;
+            const cvFactor = Math.max(0.2, target.cv);
+            const characteristicFactor = target.getCharacteristicFactor(opening);
+            return target.perdaLocalK + (1.0 / Math.max(0.025, Math.pow(characteristicFactor, 2.1) * cvFactor));
+        }
+        if (target instanceof BombaLogica) return 0;
+        if (target instanceof TanqueLogico) return target.perdaEntradaK;
+        if (target instanceof DrenoLogico) return target.perdaEntradaK;
+        return 0;
+    }
+
+    getTargetEntranceArea(target) {
+        if (target && typeof target.getAreaConexaoM2 === 'function') return target.getAreaConexaoM2();
+        return areaFromDiameter(DEFAULT_PIPE_DIAMETER_M);
+    }
+
+    hasPendingEmission(comp, dt) {
+        if (comp instanceof FonteLogica) return !comp.jaEmitiuIntrinseco();
+        if (comp instanceof TanqueLogico) {
+            return !comp.jaEmitiuIntrinseco() && comp.volumeAtual > EPSILON_FLOW && comp.capacidadeMaxima > 0;
+        }
+        if (comp instanceof BombaLogica) {
+            const drive = comp.getDriveAtual();
+            return drive > 0 && comp.getFluxoPendenteLps() > EPSILON_FLOW;
+        }
+        if (comp instanceof ValvulaLogica) {
+            return comp.getAberturaNormalizadaAtual() > 0 && comp.getFluxoPendenteLps() > EPSILON_FLOW;
+        }
+        return false;
+    }
+
+    buildSupplyState(comp, dt, options = {}) {
+        const { inletPressureBar = null, estimating = false } = options;
+        const areaM2 = comp.getAreaConexaoM2();
+
+        if (comp instanceof FonteLogica) {
+            if (!estimating && comp.jaEmitiuIntrinseco()) return null;
+            return {
+                availableFlowLps: comp.vazaoMaxima,
+                pressureBar: comp.pressaoFonteBar,
+                hydraulicAreaM2: areaM2,
+                localLossCoeff: DEFAULT_ENTRY_LOSS
+            };
+        }
+
+        if (comp instanceof TanqueLogico) {
+            if (!estimating && comp.jaEmitiuIntrinseco()) return null;
+            const availableFromInventory = dt > 0 ? comp.volumeAtual / dt : MAX_NETWORK_FLOW_LPS;
+            const hydrostaticPressureBar = comp.getPressaoDisponivelSaidaBar(this.fluidoOperante, this.usarAlturaRelativa);
+            const localLossCoeff = 1.0 / Math.max(0.15, comp.coeficienteSaida * comp.coeficienteSaida);
+            const hydraulicCapacity = flowFromBernoulli(
+                hydrostaticPressureBar,
+                areaM2,
+                this.fluidoOperante.densidade,
+                localLossCoeff
+            );
+
+            return {
+                availableFlowLps: Math.min(availableFromInventory, hydraulicCapacity),
+                pressureBar: hydrostaticPressureBar,
+                hydraulicAreaM2: areaM2,
+                localLossCoeff
+            };
+        }
+
+        if (comp instanceof BombaLogica) {
+            const drive = comp.getDriveAtual();
+            if (drive <= 0) return null;
+
+            const qMax = comp.vazaoNominal * drive;
+            const qRemaining = Math.max(0, qMax - comp.estadoHidraulico.saidaVazaoLps);
+            const incomingFlow = estimating ? qRemaining : comp.getFluxoPendenteLps();
+            if (incomingFlow <= EPSILON_FLOW || qRemaining <= EPSILON_FLOW) return null;
+
+            const referenceFlow = clamp(comp.estadoHidraulico.saidaVazaoLps, 0, qMax);
+            const curveFrac = qMax > EPSILON_FLOW ? 1 - Math.pow(referenceFlow / qMax, 2) : 0;
+            const inletPressure = inletPressureBar ?? comp.getPressaoEntradaBar();
+            const efficiency = comp.getEficienciaInstantanea(referenceFlow);
+            const absSuctionBar = this.fluidoOperante.pressaoAtmosfericaBar + inletPressure;
+            const npshAvailableM = Math.max(
+                0,
+                ((absSuctionBar - this.fluidoOperante.pressaoVaporBar) * BAR_TO_PA) / (this.fluidoOperante.densidade * GRAVITY)
+            );
+            const cavitationFactor = comp.calcularFatorCavitacao(npshAvailableM);
+            const boostBar = comp.pressaoMaxima * drive * drive * Math.max(0.05, curveFrac) * cavitationFactor;
+            const effectiveQRemaining = qRemaining * Math.max(0.25, cavitationFactor);
+
+            comp.npshDisponivelM = npshAvailableM;
+            comp.fatorCavitacaoAtual = cavitationFactor;
+            comp.eficienciaAtual = efficiency;
+
+            return {
+                availableFlowLps: Math.min(incomingFlow, effectiveQRemaining),
+                pressureBar: inletPressure + boostBar,
+                hydraulicAreaM2: areaM2,
+                localLossCoeff: 1.0 / Math.max(0.18, efficiency),
+                boostBar,
+                cavitationFactor
+            };
+        }
+
+        if (comp instanceof ValvulaLogica) {
+            const opening = comp.getAberturaNormalizadaAtual();
+            if (opening <= 0) return null;
+
+            const availableFlow = estimating ? MAX_NETWORK_FLOW_LPS : comp.getFluxoPendenteLps();
+            if (availableFlow <= EPSILON_FLOW) return null;
+
+            const cvFactor = Math.max(0.2, comp.cv);
+            const characteristicFactor = comp.getCharacteristicFactor(opening);
+            const hydraulicAreaM2 = areaM2 * Math.max(0.08, characteristicFactor);
+            const localLossCoeff = comp.perdaLocalK + (1.0 / Math.max(0.025, Math.pow(characteristicFactor, 2.1) * cvFactor));
+
+            return {
+                availableFlowLps: availableFlow,
+                pressureBar: inletPressureBar ?? comp.getPressaoEntradaBar(),
+                hydraulicAreaM2,
+                localLossCoeff,
+                characteristicFactor
+            };
+        }
+
+        return null;
+    }
+
+    estimateComponentPotential(comp, inletPressureBar, dt, visited = new Set()) {
+        if (!comp || visited.has(comp.id)) return 0;
+
+        if (comp instanceof DrenoLogico) return MAX_NETWORK_FLOW_LPS;
+
+        if (comp instanceof TanqueLogico) {
+            const inflowAccepted = comp.estadoHidraulico.entradaVazaoLps * dt;
+            const freeVolume = Math.max(0, comp.capacidadeMaxima - comp.volumeAtual - inflowAccepted);
+            return dt > 0 ? freeVolume / dt : MAX_NETWORK_FLOW_LPS;
+        }
+
+        const outputs = this.getOutputConnections(comp);
+        if (outputs.length === 0) return 0;
+
+        const supply = this.buildSupplyState(comp, dt, { inletPressureBar, estimating: true });
+        if (!supply || supply.availableFlowLps <= EPSILON_FLOW) return 0;
+
+        const nextVisited = new Set(visited);
+        nextVisited.add(comp.id);
+
+        const totalPotential = outputs.reduce((sum, conn) => {
+            const estimate = this.estimateBranch(comp, conn, supply, dt, nextVisited);
+            return sum + estimate.capacityLps;
+        }, 0);
+
+        const alreadyAccepted = comp.estadoHidraulico.entradaVazaoLps;
+        return Math.max(0, Math.min(supply.availableFlowLps, totalPotential) - alreadyAccepted);
+    }
+
+    estimateBranch(comp, conn, supply, dt, visited = new Set()) {
+        this.ensureConnectionProperties(conn);
+
+        const target = this.getComponentById(conn.targetEl.dataset.compId);
+        const geometry = this.getConnectionGeometry(conn);
+        const branchAreaM2 = Math.min(
+            conn.areaM2,
+            supply.hydraulicAreaM2 || conn.areaM2,
+            this.getTargetEntranceArea(target)
+        );
+        const targetEntryLossCoeff = this.getTargetEntryLossCoeff(target);
+        const backPressureBar = this.getTargetBackPressureBar(target);
+        const staticHeadBar = pressureFromHeadBar(geometry.headGainM, this.fluidoOperante.densidade);
+        const availableDeltaPBar = Math.max(0, supply.pressureBar + staticHeadBar - backPressureBar);
+
+        if (!target || availableDeltaPBar <= EPSILON_FLOW) {
+            return {
+                capacityLps: 0,
+                areaM2: branchAreaM2,
+                backPressureBar,
+                upstreamLossCoeff: 0,
+                targetEntryLossCoeff,
+                totalLossCoeff: 0,
+                inletPressureBar: 0,
+                outletPressureBar: 0,
+                pipeHydraulics: this.getPipeHydraulics(conn, geometry, branchAreaM2, 0),
+                geometry
+            };
+        }
+
+        const density = this.fluidoOperante.densidade;
+        const baseLossCoeff = 1 + conn.perdaLocalK + (supply.localLossCoeff || 0) + targetEntryLossCoeff + DEFAULT_PIPE_FRICTION * (geometry.lengthM / Math.max(conn.diameterM, 0.001));
+        let capacityLps = Math.min(supply.availableFlowLps, flowFromBernoulli(availableDeltaPBar, branchAreaM2, density, baseLossCoeff));
+        let pipeHydraulics = this.getPipeHydraulics(conn, geometry, branchAreaM2, capacityLps);
+        let upstreamLossCoeff = 1 + conn.perdaLocalK + pipeHydraulics.distributedLossCoeff + (supply.localLossCoeff || 0);
+        let totalLossCoeff = upstreamLossCoeff + targetEntryLossCoeff;
+
+        for (let i = 0; i < 4; i += 1) {
+            capacityLps = Math.min(supply.availableFlowLps, flowFromBernoulli(availableDeltaPBar, branchAreaM2, density, totalLossCoeff));
+            pipeHydraulics = this.getPipeHydraulics(conn, geometry, branchAreaM2, capacityLps);
+            upstreamLossCoeff = 1 + conn.perdaLocalK + pipeHydraulics.distributedLossCoeff + (supply.localLossCoeff || 0);
+            totalLossCoeff = upstreamLossCoeff + targetEntryLossCoeff;
+        }
+
+        let provisionalUpstreamLossBar = pressureLossFromFlow(capacityLps, branchAreaM2, density, upstreamLossCoeff);
+        let inletPressureBar = Math.max(backPressureBar, supply.pressureBar + staticHeadBar - provisionalUpstreamLossBar);
+        let targetEntryLossBar = pressureLossFromFlow(capacityLps, branchAreaM2, density, targetEntryLossCoeff);
+        let outletPressureBar = Math.max(backPressureBar, inletPressureBar - targetEntryLossBar);
+
+        // A valvula agora repassa seu proprio coeficiente de perda, entao podemos usar 
+        // a pressao residual provisoria normal sem medo de zerar o fluxo indevidamente.
+        const downstreamInletPressureBar = inletPressureBar;
+        const downstreamLimit = this.estimateComponentPotential(
+            target,
+            downstreamInletPressureBar,
+            dt,
+            new Set(visited)
+        );
+
+        if (Number.isFinite(downstreamLimit)) {
+            capacityLps = Math.min(capacityLps, downstreamLimit);
+            pipeHydraulics = this.getPipeHydraulics(conn, geometry, branchAreaM2, capacityLps);
+            upstreamLossCoeff = 1 + conn.perdaLocalK + pipeHydraulics.distributedLossCoeff + (supply.localLossCoeff || 0);
+            totalLossCoeff = upstreamLossCoeff + targetEntryLossCoeff;
+            provisionalUpstreamLossBar = pressureLossFromFlow(capacityLps, branchAreaM2, density, upstreamLossCoeff);
+            inletPressureBar = Math.max(backPressureBar, supply.pressureBar + staticHeadBar - provisionalUpstreamLossBar);
+            targetEntryLossBar = pressureLossFromFlow(capacityLps, branchAreaM2, density, targetEntryLossCoeff);
+            outletPressureBar = Math.max(backPressureBar, inletPressureBar - targetEntryLossBar);
+        }
+
+        return {
+            capacityLps,
+            areaM2: branchAreaM2,
+            backPressureBar,
+            upstreamLossCoeff,
+            targetEntryLossCoeff,
+            totalLossCoeff,
+            inletPressureBar,
+            outletPressureBar,
+            pipeHydraulics,
+            geometry
+        };
+    }
+
+    applyBranchFlow(comp, conn, supply, estimate, flowLps, dt) {
+        if (flowLps <= EPSILON_FLOW) return 0;
+
+        const target = this.getComponentById(conn.targetEl.dataset.compId);
+        if (!target) return 0;
+
+        const isPassThrough = !(comp instanceof FonteLogica || comp instanceof TanqueLogico);
+        const dynamics = this.applyConnectionDynamics(conn, flowLps, dt, estimate.geometry, isPassThrough);
+        const actualFlowLps = dynamics.flowLps;
+        const state = this.getConnectionState(conn);
+        state.targetFlowLps = flowLps;
+        state.responseTimeS = dynamics.responseTimeS;
+        state.lengthM = estimate.geometry.lengthM;
+        state.straightLengthM = estimate.geometry.straightLengthM;
+        state.headGainM = estimate.geometry.headGainM;
+
+        if (actualFlowLps <= EPSILON_FLOW) return 0;
+
+        const density = this.fluidoOperante.densidade;
+        const pipeHydraulics = this.getPipeHydraulics(conn, estimate.geometry, estimate.areaM2, actualFlowLps);
+        const upstreamLossCoeff = 1 + conn.perdaLocalK + pipeHydraulics.distributedLossCoeff + (supply.localLossCoeff || 0);
+        const upstreamLossBar = pressureLossFromFlow(actualFlowLps, estimate.areaM2, density, upstreamLossCoeff);
+        const inletPressureBar = Math.max(estimate.backPressureBar, supply.pressureBar + pressureFromHeadBar(estimate.geometry.headGainM, density) - upstreamLossBar);
+        const targetEntryLossBar = pressureLossFromFlow(
+            actualFlowLps,
+            estimate.areaM2,
+            density,
+            estimate.targetEntryLossCoeff
+        );
+        const arrivalPressureBar = Math.max(estimate.backPressureBar, inletPressureBar - targetEntryLossBar);
+        const totalLossBar = upstreamLossBar + targetEntryLossBar;
+
+        comp.registrarSaida(actualFlowLps, supply.pressureBar);
+        target.registrarEntrada(actualFlowLps, inletPressureBar);
+
+        const flowBefore = state.flowLps;
+        state.flowLps += actualFlowLps;
+        state.pressureBar = state.flowLps > EPSILON_FLOW
+            ? ((state.pressureBar * flowBefore) + (inletPressureBar * actualFlowLps)) / state.flowLps
+            : inletPressureBar;
+        state.outletPressureBar = arrivalPressureBar;
+        state.sourcePressureBar = Math.max(state.sourcePressureBar, supply.pressureBar);
+        state.backPressureBar = Math.max(state.backPressureBar, estimate.backPressureBar);
+        state.velocityMps = Math.max(state.velocityMps, pipeHydraulics.velocityMps);
+        state.deltaPBar = Math.max(state.deltaPBar, Math.max(0, supply.pressureBar - inletPressureBar));
+        state.totalLossBar = Math.max(state.totalLossBar, totalLossBar);
+        state.targetLossBar = Math.max(state.targetLossBar, targetEntryLossBar);
+        state.lengthM = estimate.geometry.lengthM;
+        state.straightLengthM = estimate.geometry.straightLengthM;
+        state.headGainM = estimate.geometry.headGainM;
+        state.reynolds = Math.max(state.reynolds, pipeHydraulics.reynolds);
+        state.frictionFactor = pipeHydraulics.frictionFactor;
+        state.relativeRoughness = pipeHydraulics.relativeRoughness;
+        state.regime = pipeHydraulics.regime;
+        conn._activeTick = true;
+        return actualFlowLps;
+    }
+
+    resolvePushBasedNetwork(dt) {
+        solverMetrics.totalSolverCalls++;
+        this.resetHydraulicState();
+        this.conexoes.forEach(conn => {
+            this.ensureConnectionProperties(conn);
+            conn._activeTick = false;
+        });
+
+        const queue = [];
+        const visits = new Map();
+        const enqueue = (comp) => {
+            if (!comp) return;
+            const nextVisits = (visits.get(comp.id) || 0) + 1;
+            if (nextVisits > MAX_COMPONENT_VISITS) return;
+            visits.set(comp.id, nextVisits);
+            queue.push(comp);
+        };
+
+        this.componentes.forEach(comp => {
+            if (comp instanceof FonteLogica) enqueue(comp);
+            else if (comp instanceof TanqueLogico && comp.volumeAtual > EPSILON_FLOW) enqueue(comp);
+        });
+
+        let steps = 0;
+        if (DEBUG_PHYSICS) console.log(`[Solver] Iniciando com ${this.componentes.length} componentes, máx ${MAX_QUEUE_STEPS} iterações`);
+        
+        while (queue.length > 0 && steps < MAX_QUEUE_STEPS) {
+            steps += 1;
+            const comp = queue.shift();
+            if (!this.hasPendingEmission(comp, dt)) continue;
+
+            const outputs = this.getOutputConnections(comp);
+            if (outputs.length === 0) continue;
+
+            const supply = this.buildSupplyState(comp, dt);
+            if (!supply || supply.availableFlowLps <= EPSILON_FLOW) continue;
+
+            const visited = new Set([comp.id]);
+            const estimates = outputs
+                .map(conn => ({ conn, estimate: this.estimateBranch(comp, conn, supply, dt, visited) }))
+                .filter(item => item.estimate.capacityLps > EPSILON_FLOW);
+
+            if (estimates.length === 0) {
+                if (comp instanceof FonteLogica || comp instanceof TanqueLogico) comp.marcarEmissaoIntrinseca();
+                continue;
+            }
+
+            const totalCapacity = estimates.reduce((sum, item) => sum + item.estimate.capacityLps, 0);
+            const totalFlow = Math.min(supply.availableFlowLps, totalCapacity);
+            if (totalFlow <= EPSILON_FLOW) {
+                if (comp instanceof FonteLogica || comp instanceof TanqueLogico) comp.marcarEmissaoIntrinseca();
+                continue;
+            }
+
+            let emittedFlowLps = 0;
+
+            estimates.forEach(item => {
+                const share = totalCapacity > EPSILON_FLOW ? item.estimate.capacityLps / totalCapacity : 0;
+                const branchFlow = totalFlow * share;
+                if (branchFlow <= EPSILON_FLOW) return;
+
+                const deliveredFlow = this.applyBranchFlow(comp, item.conn, supply, item.estimate, branchFlow, dt);
+                emittedFlowLps += deliveredFlow;
+                const target = this.getComponentById(item.conn.targetEl.dataset.compId);
+                if (deliveredFlow > EPSILON_FLOW && (target instanceof BombaLogica || target instanceof ValvulaLogica)) enqueue(target);
+            });
+
+            if (comp instanceof FonteLogica || comp instanceof TanqueLogico) comp.marcarEmissaoIntrinseca();
+            else if (emittedFlowLps > EPSILON_FLOW) comp.consumirEntrada(emittedFlowLps);
+        }
+
+        // Rastreamento de convergência do solver
+        solverMetrics.lastIterations = steps;
+        if (steps === MAX_QUEUE_STEPS) {
+            solverMetrics.maxIterationsHit++;
+            if (DEBUG_PHYSICS) console.warn(`[Solver] ⚠️ Limite de iterações atingido (${MAX_QUEUE_STEPS}). Queue final: ${queue.length} componentes pendentes.`);
+        } else {
+            solverMetrics.convergedCount++;
+            if (DEBUG_PHYSICS) console.log(`[Solver] Convergiu em ${steps} iterações com sucesso.`);
+        }
+
+        this.relaxIdleConnections(dt);
+    }
+
     updatePipesVisual() {
         this.conexoes.forEach(conn => {
-            const sourceLogic = this.componentes.find(c => c.id === conn.sourceEl.dataset.compId);
-            let flow = 0;
-            if (sourceLogic && this.isRunning) {
-                if (sourceLogic instanceof TanqueLogico) flow = sourceLogic.volumeAtual > 0 ? 1 : 0;
-                else if (sourceLogic.fluxoReal !== undefined) flow = sourceLogic.fluxoReal;
-                else if (sourceLogic instanceof FonteLogica) flow = 1;
-            }
+            const state = this.getConnectionState(conn);
+            const flow = this.isRunning ? state.flowLps : 0;
 
-            if (flow > 0.1) {
+            if (flow > 0.05) {
                 conn.path.classList.add('active');
-                conn.path.setAttribute("marker-end", "url(#arrow-active)");
+                if (!conn.path.classList.contains('selected')) {
+                    conn.path.setAttribute("marker-end", "url(#arrow-active)");
+                }
             } else {
                 conn.path.classList.remove('active');
-                conn.path.setAttribute("marker-end", "url(#arrow)");
-            }
-
-            if (conn.label) {
-                const flowVal = connectionFlowGetter ? connectionFlowGetter(conn) : 0;
-                if (flowVal === null || flowVal === undefined) {
-                    conn.label.textContent = '';
-                } else if (flowVal === Infinity) {
-                    conn.label.textContent = '∞ L/s';
-                } else {
-                    conn.label.textContent = flowVal.toFixed(1) + ' L/s';
+                if (!conn.path.classList.contains('selected')) {
+                    conn.path.setAttribute("marker-end", "url(#arrow)");
                 }
             }
+
+            const labelFlow = connectionFlowGetter ? connectionFlowGetter(conn) : flow;
+            if (conn.label) {
+                if (!this.isRunning || labelFlow === null || labelFlow === undefined || labelFlow <= EPSILON_FLOW) {
+                    conn.label.textContent = '';
+                } else {
+                    conn.label.textContent = `${formatUnitValue('flow', labelFlow, 2)} ${getUnitSymbol('flow')}`;
+                }
+            }
+
+            conn.path.setAttribute(
+                'data-hydraulic-state',
+                `${formatUnitValue('flow', flow, 2)} ${getUnitSymbol('flow')} | ${state.velocityMps.toFixed(2)} m/s | Re ${Math.round(state.reynolds)} | ${state.regime}`
+            );
         });
 
         if (this.isRunning) {
             this.componentes.forEach(c => {
                 if (c instanceof TanqueLogico && c.setpointAtivo) {
                     const notificarEstado = (equipamento) => {
-                        if (equipamento instanceof ValvulaLogica) equipamento.notify({ tipo: 'estado', aberta: equipamento.aberta, grau: equipamento.grauAbertura });
-                        else if (equipamento instanceof BombaLogica) equipamento.notify({ tipo: 'estado', isOn: equipamento.isOn, grau: equipamento.grauAcionamento });
+                        if (equipamento instanceof ValvulaLogica) {
+                            equipamento.notify({ tipo: 'estado', aberta: equipamento.aberta, grau: equipamento.grauAbertura });
+                        } else if (equipamento instanceof BombaLogica) {
+                            equipamento.notify({ tipo: 'estado', isOn: equipamento.isOn, grau: equipamento.grauAcionamento });
+                        }
                     };
                     c.inputs.forEach(notificarEstado);
                     c.outputs.forEach(notificarEstado);
@@ -154,261 +839,4 @@ export class SistemaSimulacao extends Observable {
     }
 }
 
-/* Instância global do sistema de simulação, que será usada para gerenciar os componentes e a lógica da simulação. */
 export const ENGINE = new SistemaSimulacao();
-
-/* A classe ComponenteFisico é a classe base para todos os componentes físicos do sistema,
-como tanques, bombas, válvulas, fontes e drenos.
-Ela estende a classe Observable para permitir que os componentes notifiquem mudanças de estado
-e atualizações para a interface do usuário.*/
-export class ComponenteFisico extends Observable {
-    /* O construtor da classe ComponenteFisico recebe um identificador único, uma tag para exibição, e as coordenadas x e y para posicionamento no workspace.
-    Ele inicializa as listas de entradas e saídas, que serão usadas para gerenciar as conexões com outros componentes. */
-    constructor(id, tag, x, y) {
-        super();
-        this.id = id;
-        this.tag = tag;
-        this.x = x;
-        this.y = y;
-        this.inputs = [];
-        this.outputs = [];
-    }
-    /* O método conectarSaida é usado para conectar a saída deste componente a outro componente de destino.
-    Ele verifica se a conexão já existe para evitar duplicatas
-    e se não existir, adiciona o componente de destino à lista de saídas deste componente
-    e adiciona este componente à lista de entradas do componente de destino. */
-    conectarSaida(destino) { 
-        if (!this.outputs.includes(destino)) { 
-            this.outputs.push(destino); 
-            destino.inputs.push(this); 
-        } 
-    }
-    /* O método desconectarSaida é usado para desconectar a saída deste componente de um componente de destino.
-    Ele remove o componente de destino da lista de saídas deste componente
-    e remove este componente da lista de entradas do componente de destino. */
-    desconectarSaida(destino) {
-        this.outputs = this.outputs.filter(out => out !== destino);
-        destino.inputs = destino.inputs.filter(inp => inp !== this);
-    }
-
-    /* O método getFluxoSaida é um método genérico que deve ser implementado por cada tipo específico de componente para calcular o fluxo de saída com base no estado atual do componente e suas conexões.
-    Na classe base, ele retorna 0 por padrão, mas as classes derivadas como:
-    FonteLogica, DrenoLogico, BombaLogica, ValvulaLogica e TanqueLogico
-    irão implementar a lógica específica para calcular o fluxo de saída. */
-    getFluxoSaida() { return 0; }
-}
-
-/* As classes FonteLogica, DrenoLogico, BombaLogica, ValvulaLogica e TanqueLogico estendem ComponenteFisico
-e implementam a lógica específica para cada tipo de componente,
-incluindo como calcular o fluxo de saída com base no estado atual do componente e suas conexões. */
-
-export class FonteLogica extends ComponenteFisico {   /* A classe FonteLogica simula uma fonte de fluido onde o fluxo de saída é constante e infinito,
-            representando uma entrada ilimitada de fluido no sistema. */
-    getFluxoSaida() { return 99999; }
-}
-
-/* O DrenoLogico simula um dreno onde o fluxo de saída depende do nível do fluido,
-seguindo uma relação de raiz quadrada para representar a perda de carga. */
-export class DrenoLogico extends ComponenteFisico {   /* O método getFluxoSaida do DrenoLogico calcula o fluxo de saída com base no nível normalizado do fluido,
-            usando uma relação de raiz quadrada para representar a perda de carga,
-            onde o fluxo é proporcional à raiz quadrada do nível do fluido,
-            multiplicado por um fator de 10 para ajustar a escala do fluxo. */
-    getFluxoSaidaFromTank(nivelNormalizado) { 
-        return nivelNormalizado > 0 ? 10.0 * Math.sqrt(nivelNormalizado) : 0; 
-    }
-}
-
-/* A BombaLogica simula uma bomba centrífuga onde o fluxo de saída depende do grau de acionamento
-e da disponibilidade de fluido na entrada. */
-export class BombaLogica extends ComponenteFisico {
-    /* O construtor da classe BombaLogica inicializa o estado da bomba como desligada, define a vazão nominal da bomba,
-    e inicializa o grau de acionamento e o fluxo real como 0. */
-    constructor(id, tag, x, y) { 
-        super(id, tag, x, y); 
-        this.isOn = false; 
-        this.vazaoNominal = 45.0; 
-        this.grauAcionamento = 0; 
-        this.fluxoReal = 0; 
-    }
-
-    /* O método toggle alterna o estado da bomba entre ligada e desligada,
-    ajustando o grau de acionamento para 100% quando ligada e 0% quando desligada. */
-    toggle() { this.setAcionamento(this.isOn ? 0 : 100); }
-
-    /* O método setAcionamento ajusta o grau de acionamento da bomba e calcula o fluxo de saída
-    com base na disponibilidade de fluido na entrada e no grau de acionamento.
-    Ele define o grau de acionamento da bomba, atualiza o estado de ligado/desligado com base no grau de acionamento
-    e notifica a interface do usuário sobre o estado atual da bomba, incluindo se está ligada e o grau de acionamento. */
-    setAcionamento(valor) {
-        this.grauAcionamento = valor; this.isOn = this.grauAcionamento > 0;
-        this.notify({ tipo: 'estado', isOn: this.isOn, grau: this.grauAcionamento });
-    }
-
-    /* O método getFluxoSaida calcula o fluxo real de saída da bomba,
-    considerando a disponibilidade de fluido na entrada e o grau de acionamento.
-    Ele verifica se a bomba está ligada; se não estiver, o fluxo real é definido como 0.
-    Em seguida, ele calcula a disponibilidade de fluido na entrada somando o fluxo de saída de todas as conexões de entrada.
-    O fluxo desejado é calculado com base no grau de acionamento da bomba e sua vazão nominal.
-    O fluxo real é então determinado como o mínimo entre a disponibilidade de fluido na entrada e o fluxo desejado,
-    garantindo que o fluxo real não exceda a capacidade da bomba ou a disponibilidade de fluido. */
-    getFluxoSaida() {
-        if (!this.isOn) { this.fluxoReal = 0; return 0; }
-        let fluxoEntradaDisp = 0;
-        this.inputs.forEach(c => {
-            if (c instanceof TanqueLogico) fluxoEntradaDisp += c.volumeAtual > 0 ? 99999 : 0;
-            else if (typeof c.getFluxoSaida === 'function') fluxoEntradaDisp += c.getFluxoSaida();
-        });
-        const fluxoDesejado = (this.grauAcionamento / 100.0) * this.vazaoNominal;
-        this.fluxoReal = Math.min(fluxoEntradaDisp, fluxoDesejado);
-        return this.fluxoReal;
-    }
-
-    /* O método getFluxoSaidaFromTank é usado para calcular o fluxo de saída da bomba
-    com base no nível normalizado do fluido na entrada,
-    mas para a BombaLogica, ele simplesmente retorna o fluxo de saída calculado no método getFluxoSaida,
-    já que a disponibilidade de fluido na entrada é considerada no cálculo do fluxo real. */
-    getFluxoSaidaFromTank(nivelNormalizado) { return this.getFluxoSaida(); }
-}
-
-/* A ValvulaLogica simula uma válvula de controle onde o fluxo de saída depende do grau de abertura
-e da pressão disponível, seguindo uma relação de raiz quadrada para representar a perda de carga. */
-export class ValvulaLogica extends ComponenteFisico {
-    /* O construtor da classe ValvulaLogica inicializa o estado da válvula como fechada,
-    define o grau de abertura e o fluxo real como 0,
-    e define o coeficiente de vazão da válvula (cv) e a perda de carga (deltaP)
-    para calcular o fluxo de saída com base no nível do fluido na entrada e no grau de abertura da válvula. */
-    constructor(id, tag, x, y) {
-        super(id, tag, x, y);
-        this.aberta = false; this.grauAbertura = 0; this.fluxoReal = 0;
-        this.cv = 1.0; this.deltaP = 100.0;
-    }
-
-    /*O método toggle alterna o estado da válvula entre aberta e fechada,
-    enquanto o método setAbertura ajusta o grau de abertura da válvula e calcula o fluxo de saída
-    com base no nível do fluido na entrada e no grau de abertura.*/
-    toggle() { this.setAbertura(this.aberta ? 0 : 100); }
-
-    /* O método setAbertura ajusta o grau de abertura da válvula e calcula o fluxo de saída
-    com base no nível do fluido na entrada e no grau de abertura.*/
-    setAbertura(valor) {
-        this.grauAbertura = valor; this.aberta = this.grauAbertura > 0;
-        this.notify({ tipo: 'estado', aberta: this.aberta, grau: this.grauAbertura });
-    }
-
-    /* O método _calcFluxo é uma função auxiliar que calcula o fluxo de saída da válvula
-    com base no nível normalizado do fluido na entrada,
-    usando uma relação de raiz quadrada para representar a perda de carga,
-    onde o fluxo é proporcional à raiz quadrada do nível do fluido,
-    multiplicado pelo coeficiente de vazão da válvula (cv) e ajustado pelo grau de abertura. */
-    _calcFluxo(nivelNormalizado) {
-        if (nivelNormalizado <= 0) return 0;
-        return this.cv * Math.sqrt(nivelNormalizado * this.deltaP) * (this.grauAbertura / 100.0);
-    }
-
-    /*O método getFluxoSaida calcula o fluxo real de saída da válvula,
-    considerando o nível do fluido na entrada, o grau de abertura da válvula e a perda de carga,
-    garantindo que o fluxo real seja proporcional ao grau de abertura e à raiz quadrada do nível do fluido.*/
-    getFluxoSaida() {
-        let fluxoMontante = 0;
-        this.inputs.forEach(c => {
-            if (c instanceof TanqueLogico) fluxoMontante += this._calcFluxo(c.capacidadeMaxima > 0 ? c.volumeAtual / c.capacidadeMaxima : 0);
-            else if (typeof c.getFluxoSaida === 'function') fluxoMontante += c.getFluxoSaida() * (this.grauAbertura / 100.0);
-        });
-        this.fluxoReal = fluxoMontante;
-        return this.fluxoReal;
-    }
-
-    /* O método getFluxoSaidaFromTank é usado para calcular o fluxo de saída da válvula
-    com base no nível normalizado do fluido na entrada, mas para a ValvulaLogica,
-    ele simplesmente retorna o fluxo de saída calculado no método getFluxoSaida,
-    já que o cálculo do fluxo real considera o nível do fluido na entrada e o grau de abertura da válvula. */
-    getFluxoSaidaFromTank(nivelNormalizado) { this.fluxoReal = this._calcFluxo(nivelNormalizado); return this.fluxoReal; }
-}
-
-/* A classe TanqueLogico simula um tanque de fluido onde o volume atual é atualizado com base no fluxo de entrada e saída,
-e pode ter um controlador PID simples para manter um setpoint de nível.
-O tanque calcula o fluxo de saída com base no nível do fluido, seguindo uma relação de raiz quadrada
-para representar a perda de carga. */
-export class TanqueLogico extends ComponenteFisico {
-    /* O construtor da classe TanqueLogico inicializa a capacidade máxima do tanque, o volume atual,
-    o último fluxo de entrada, e as variáveis para o controlador PID, incluindo o estado do setpoint,
-    o valor do setpoint, os ganhos proporcional e integral, e as variáveis para o controle integral e o último erro. */
-    constructor(id, tag, x, y) {
-        super(id, tag, x, y);
-        this.capacidadeMaxima = 1000.0; this.volumeAtual = 0; this.lastQin = 0;
-        this.setpointAtivo = false; this.setpoint = 50;
-        this.kp = 250; this.ki = 25;
-        this._ctrlIntegral = 0; this._lastErro = 0;
-    }
-
-    /* O método _rodarControlador é responsável por executar o controlador PID para ajustar as entradas e saídas do tanque
-    com base no erro entre o setpoint e o nível atual do fluido. */
-    _rodarControlador(dt) {
-        if (!this.setpointAtivo) return;
-        const erro = (this.setpoint / 100) - (this.capacidadeMaxima > 0 ? this.volumeAtual / this.capacidadeMaxima : 0);
-        if (this._lastErro !== undefined && (this._lastErro * erro < 0)) this._ctrlIntegral = 0;
-        this._lastErro = erro;
-        this._ctrlIntegral += erro * dt;
-        const clampInt = this.ki > 0 ? 1 / this.ki : 1;
-        this._ctrlIntegral = Math.max(-clampInt, Math.min(clampInt, this._ctrlIntegral));
-        const u = Math.max(-1, Math.min(1, this.kp * erro + this.ki * this._ctrlIntegral));
-        const grauEntrada = Math.max(0, u * 100);
-        const grauSaida = Math.max(0, -u * 100);
-
-        this.inputs.forEach(c => {
-            if (c instanceof ValvulaLogica) c.setAbertura(grauEntrada);
-            else if (c instanceof BombaLogica) c.setAcionamento(grauEntrada);
-        });
-        this.outputs.forEach(c => {
-            if (c instanceof ValvulaLogica) c.setAbertura(grauSaida);
-            else if (c instanceof BombaLogica) c.setAcionamento(grauSaida);
-        });
-        this.notify({ tipo: 'ctrl_update', grau: u * 100, erro: erro });
-    }
-
-    /* O método resetControlador é usado para resetar o estado do controlador PID, zerando a parte integral e o último erro,
-    o que pode ser útil para evitar comportamentos indesejados quando o setpoint é ativado ou desativado. */
-    resetControlador() { this._ctrlIntegral = 0; this._lastErro = 0; }
-
-    /* O método dVdt calcula a taxa de variação do volume do tanque com base no fluxo de entrada e saída.
-    Ele soma o fluxo de entrada de todas as conexões de entrada e o fluxo de saída de todas as conexões de saída,
-    considerando o nível do fluido para calcular o fluxo de saída usando a relação de raiz quadrada.
-    O resultado é a diferença entre o fluxo de entrada e o fluxo de saída,
-    que representa a taxa de variação do volume do tanque. */
-    dVdt(V) {
-        let qIn = 0, qOut = 0;
-        this.inputs.forEach(c => { if (typeof c.getFluxoSaida === 'function') qIn += c.getFluxoSaida(); });
-        const nv = V / this.capacidadeMaxima;
-        this.outputs.forEach(c => { if (typeof c.getFluxoSaidaFromTank === 'function') qOut += c.getFluxoSaidaFromTank(nv > 0 ? nv : 0); });
-        this.lastQin = qIn;
-        return qIn - qOut;
-    }
-
-    /* O método atualizarFisica é chamado a cada tick da simulação para atualizar o estado do tanque
-    com base na física do sistema. Ele executa o controlador PID para ajustar as entradas e saídas do tanque,
-    calcula a variação do volume usando o método dVdt, e atualiza o volume atual do tanque
-    usando o método de Runge-Kutta de quarta ordem para integração numérica.
-    Ele também garante que o volume atual do tanque não seja negativo ou exceda a capacidade máxima
-    e notifica a interface do usuário sobre o estado atual do tanque, incluindo o volume atual,
-    a porcentagem de capacidade, e o último fluxo de entrada. */
-    atualizarFisica(dt, fluido) {
-        this._rodarControlador(dt);
-        const k1 = this.dVdt(this.volumeAtual), k2 = this.dVdt(this.volumeAtual + 0.5 * k1 * dt), k3 = this.dVdt(this.volumeAtual + 0.5 * k2 * dt), k4 = this.dVdt(this.volumeAtual + k3 * dt);
-        this.volumeAtual += (1 / 6) * (k1 + 2 * k2 + 2 * k3 + k4) * dt;
-        if (isNaN(this.volumeAtual) || this.volumeAtual < 0) this.volumeAtual = 0;
-        if (this.volumeAtual > this.capacidadeMaxima) this.volumeAtual = this.capacidadeMaxima;
-        this.notify({ tipo: 'volume', perc: this.volumeAtual / this.capacidadeMaxima, abs: this.volumeAtual, qIn: this.lastQin });
-    }
-
-    /* O método getFluxoSaida calcula o fluxo de saída do tanque com base no nível atual do fluido,
-    usando uma relação de raiz quadrada para representar a perda de carga,
-    onde o fluxo é proporcional à raiz quadrada do nível do fluido,
-    multiplicado por um fator de 10 para ajustar a escala do fluxo. */
-    getFluxoSaida() { const nv = this.capacidadeMaxima > 0 ? this.volumeAtual / this.capacidadeMaxima : 0; return nv > 0 ? 10.0 * Math.sqrt(nv) : 0; }
-
-    /* O método getFluxoSaidaFromTank é usado para calcular o fluxo de saída do tanque com base no nível normalizado do fluido,
-    seguindo a mesma relação de raiz quadrada para representar a perda de carga,
-    onde o fluxo é proporcional à raiz quadrada do nível do fluido,
-    multiplicado por um fator de 10 para ajustar a escala do fluxo. */
-    getFluxoSaidaFromTank(nivelMontante) { return nivelMontante > 0 ? 10.0 * Math.sqrt(nivelMontante) : 0; }
-}

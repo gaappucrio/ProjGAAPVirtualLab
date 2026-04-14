@@ -3,9 +3,9 @@
 // Ficheiro: js/controllers/PipeController.js
 // =========================================
 
-import { ENGINE, FonteLogica, BombaLogica, ValvulaLogica, TanqueLogico } from '../MotorFisico.js'
-import { camera } from './CameraController.js'
-import { updatePortStates } from '../utils/PortStateManager.js'
+import { ENGINE } from '../MotorFisico.js';
+import { camera } from './CameraController.js';
+import { updatePortStates } from '../utils/PortStateManager.js';
 
 const pipeLayer = document.getElementById('pipe-layer');
 let tempPipe = null;
@@ -26,20 +26,11 @@ export function drawCurve(x1, y1, x2, y2) {
 }
 
 export function getConnectionFlow(conn) {
-    const sourceLogic = ENGINE.componentes.find(c => c.id === conn.sourceEl.dataset.compId);
-    const targetLogic = ENGINE.componentes.find(c => c.id === conn.targetEl.dataset.compId);
-    if (!sourceLogic || !ENGINE.isRunning) return null;
+    if (!ENGINE.isRunning) return null;
 
-    if (sourceLogic instanceof FonteLogica) return Infinity;
-    if (sourceLogic instanceof BombaLogica || sourceLogic instanceof ValvulaLogica)
-        return sourceLogic.fluxoReal || 0;
-    if (sourceLogic instanceof TanqueLogico) {
-        const nv = sourceLogic.capacidadeMaxima > 0 ? sourceLogic.volumeAtual / sourceLogic.capacidadeMaxima : 0;
-        if (targetLogic && typeof targetLogic.getFluxoSaidaFromTank === 'function')
-            return targetLogic.getFluxoSaidaFromTank(nv > 0 ? nv : 0);
-        return sourceLogic.getFluxoSaida();
-    }
-    return 0;
+    const state = ENGINE.getConnectionState(conn);
+    if (!state || state.flowLps <= 0.0001) return 0;
+    return state.flowLps;
 }
 
 export function updateAllPipes() {
@@ -47,9 +38,31 @@ export function updateAllPipes() {
         const p1 = getPortCoords(conn.sourceEl);
         const p2 = getPortCoords(conn.targetEl);
         conn.path.setAttribute('d', drawCurve(p1.x, p1.y, p2.x, p2.y));
+
         if (conn.label) {
             conn.label.setAttribute('x', (p1.x + p2.x) / 2);
             conn.label.setAttribute('y', (p1.y + p2.y) / 2 - 10);
+        }
+
+        // NOVO CÓDIGO: Atualizar a posição e o texto do ΔY
+        if (conn.labelHeight) {
+            conn.labelHeight.setAttribute('x', (p1.x + p2.x) / 2);
+            conn.labelHeight.setAttribute('y', (p1.y + p2.y) / 2 + 15); // 15px abaixo do meio
+
+            if (ENGINE.usarAlturaRelativa) {
+                const geom = ENGINE.getConnectionGeometry(conn);
+                const dy = geom.headGainM;
+
+                // Exibir apenas se houver desnível significativo
+                if (Math.abs(dy) > 0.01) {
+                    const signal = dy > 0 ? '+' : '';
+                    conn.labelHeight.textContent = `ΔY: ${signal}${dy.toFixed(2)}m`;
+                } else {
+                    conn.labelHeight.textContent = '';
+                }
+            } else {
+                conn.labelHeight.textContent = '';
+            }
         }
     });
 }
@@ -94,14 +107,33 @@ export function setupPipeControl() {
                 if (sourceLogic && targetLogic && sourceLogic !== targetLogic) {
                     sourceLogic.conectarSaida(targetLogic);
                     const finalPipe = tempPipe;
+                    const connection = {
+                        sourceEl: dragSourcePort,
+                        targetEl: dropTarget,
+                        path: finalPipe,
+                        label: null,
+                        diameterM: 0.08,
+                        roughnessMm: 0.045,
+                        extraLengthM: 0,
+                        perdaLocalK: 0.8
+                    };
 
                     const labelEl = document.createElementNS("http://www.w3.org/2000/svg", "text");
                     labelEl.setAttribute("class", "pipe-flow-label");
                     labelEl.setAttribute("text-anchor", "middle");
                     pipeLayer.appendChild(labelEl);
+                    connection.label = labelEl;
+                    const labelHeightEl = document.createElementNS("http://www.w3.org/2000/svg", "text");
+
+                    //Altura do grafo
+                    labelHeightEl.setAttribute("class", "pipe-flow-label");
+                    labelHeightEl.setAttribute("fill", "#e67e22");
+                    labelHeightEl.setAttribute("text-anchor", "middle");
+                    pipeLayer.appendChild(labelHeightEl);
+                    connection.labelHeight = labelHeightEl;
 
                     finalPipe.addEventListener('mousedown', function (ev) {
-                        ENGINE.selectComponent(null);
+                        ENGINE.selectConnection(connection);
                         document.querySelectorAll('.placed-component').forEach(el => el.classList.remove('selected'));
                         document.querySelectorAll('.pipe-line').forEach(el => {
                             el.classList.remove('selected');
@@ -119,17 +151,24 @@ export function setupPipeControl() {
 
                     finalPipe.addEventListener('dblclick', function (ev) {
                         sourceLogic.desconectarSaida(targetLogic);
-                        const ci = ENGINE.conexoes.findIndex(c => c.path === finalPipe);
+                        const ci = ENGINE.conexoes.findIndex(c => c === connection);
+                        
                         if (ci !== -1) {
+                            // 1. Remove os dois textos do SVG PRIMEIRO
                             if (ENGINE.conexoes[ci].label) ENGINE.conexoes[ci].label.remove();
+                            if (ENGINE.conexoes[ci].labelHeight) ENGINE.conexoes[ci].labelHeight.remove();
+                            
+                            // 2. Remove o cano da array UMA ÚNICA VEZ
                             ENGINE.conexoes.splice(ci, 1);
                         }
+                        
+                        if (ENGINE.selectedConnection === connection) ENGINE.selectComponent(null);
                         finalPipe.remove();
                         updatePortStates();
                         ev.stopPropagation();
                     });
 
-                    ENGINE.conexoes.push({ sourceEl: dragSourcePort, targetEl: dropTarget, path: finalPipe, label: labelEl });
+                    ENGINE.conexoes.push(connection);
                     updateAllPipes();
                     updatePortStates();
                 } else {

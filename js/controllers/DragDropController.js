@@ -3,12 +3,11 @@
 // Ficheiro: js/controllers/DragDropController.js
 // =========================================
 
-import { ENGINE } from '../MotorFisico.js'
-import { REGISTRO_COMPONENTES } from '../RegistroComponentes.js'
-import { FabricaDeEquipamentos, updatePortStates } from '../FabricaEquipamentos.js'
-import { camera } from './CameraController.js'
-import { updateAllPipes } from './PipeController.js'
-import { GRID_SIZE } from '../Config.js'
+import { REGISTRO_COMPONENTES } from '../RegistroComponentes.js';
+import { FabricaDeEquipamentos, updatePortStates } from '../FabricaEquipamentos.js';
+import { camera } from './CameraController.js';
+import { updateAllPipes } from './PipeController.js';
+import { GRID_SIZE } from '../Config.js';
 
 export function setupDragDrop() {
     const workspaceContainer = document.getElementById('workspace');
@@ -68,6 +67,10 @@ export function setupDragDrop() {
             if (!isDragging) return;
             const newX = initX + (e.clientX - startX) / camera.scale;
             const newY = initY + (e.clientY - startY) / camera.scale;
+
+            element.logica.x = parseInt(element.style.left);
+            element.logica.y = parseInt(element.style.top);
+            element.logica.notify({ tipo: 'pos_update' });
 
             element.style.left = `${Math.round(newX / GRID_SIZE) * GRID_SIZE}px`;
             element.style.top = `${Math.round(newY / GRID_SIZE) * GRID_SIZE}px`;
