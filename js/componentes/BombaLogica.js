@@ -1,5 +1,6 @@
-import { clamp, ComponenteFisico, EPSILON_FLOW, smoothFirstOrder } from './BaseComponente.js';
+import { clamp, ComponenteFisico, smoothFirstOrder } from './BaseComponente.js';
 import { ENGINE } from '../MotorFisico.js';
+import { EPSILON_FLOW } from '../utils/Units.js';
 
 
 export class BombaLogica extends ComponenteFisico {
@@ -72,10 +73,19 @@ export class BombaLogica extends ComponenteFisico {
     }
 
     setAcionamento(valor) {
-        this.grauAcionamento = clamp(Number(valor) || 0, 0, 100);
+        const comandoSolicitado = clamp(Number(valor) || 0, 0, 100);
+        const bloqueadaPorSetpoint = ENGINE.isBombaBloqueadaPorSetpoint?.(this) === true;
+
+        this.grauAcionamento = bloqueadaPorSetpoint ? 100 : comandoSolicitado;
         if (!ENGINE.isRunning) this.acionamentoEfetivo = 0;
         this.isOn = ENGINE.isRunning && this.acionamentoEfetivo > 0.5;
-        this.notify({ tipo: 'estado', isOn: this.isOn, grau: this.grauAcionamento, grauEfetivo: this.acionamentoEfetivo });
+        this.notify({
+            tipo: 'estado',
+            isOn: this.isOn,
+            grau: this.grauAcionamento,
+            grauEfetivo: this.acionamentoEfetivo,
+            bloqueadaPorSetpoint
+        });
     }
 
     atualizarDinamica(dt) {
@@ -84,7 +94,13 @@ export class BombaLogica extends ComponenteFisico {
         this.isOn = this.acionamentoEfetivo > 0.5;
 
         if (Math.abs(this.acionamentoEfetivo - previousDrive) > 0.05) {
-            this.notify({ tipo: 'estado', isOn: this.isOn, grau: this.grauAcionamento, grauEfetivo: this.acionamentoEfetivo });
+            this.notify({
+                tipo: 'estado',
+                isOn: this.isOn,
+                grau: this.grauAcionamento,
+                grauEfetivo: this.acionamentoEfetivo,
+                bloqueadaPorSetpoint: ENGINE.isBombaBloqueadaPorSetpoint?.(this) === true
+            });
         }
     }
 
@@ -97,7 +113,13 @@ export class BombaLogica extends ComponenteFisico {
         this.cargaGeradaBar = 0;
         this.npshDisponivelM = 0;
         this.fatorCavitacaoAtual = 1;
-        this.notify({ tipo: 'estado', isOn: false, grau: this.grauAcionamento, grauEfetivo: 0 });
+        this.notify({
+            tipo: 'estado',
+            isOn: false,
+            grau: this.grauAcionamento,
+            grauEfetivo: 0,
+            bloqueadaPorSetpoint: ENGINE.isBombaBloqueadaPorSetpoint?.(this) === true
+        });
     }
 
     sincronizarMetricasFisicas() {

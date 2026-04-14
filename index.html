@@ -12,9 +12,9 @@
     <div class="gaap-header">
         <h2>Sandbox Modular GAAP - Fronteiras de Controle</h2>
         <p>
-            Use o <b>scroll do mouse para zoom</b> e arraste segurando <b>Espaco</b> para navegar.
+            Use a <b>rolagem do mouse para aproximar ou afastar</b> e arraste segurando <b>Espaço</b> para navegar.
             Aperte <b>DEL</b> para deletar um componente e <b>CLIQUE DUPLO</b> para editar.
-            Voce tambem pode desconectar componentes usando <b>CLIQUE DUPLO</b> nas setas.
+            Você também pode desconectar componentes usando <b>CLIQUE DUPLO</b> nas setas.
         </p>
     </div>
 
@@ -25,12 +25,12 @@
 
                 <div class="palette-item" draggable="true" data-type="source">
                     <img src="assets/components/gaap_source_icon.png" alt="Fonte" class="palette-icon">
-                    <span><b>Entrada (In)</b></span>
+                    <span><b>Entrada</b></span>
                 </div>
 
                 <div class="palette-item" draggable="true" data-type="sink">
                     <img src="assets/components/gaap_sink_icon.png" alt="Dreno" class="palette-icon">
-                    <span><b>Saída (Out)</b></span>
+                    <span><b>Saída</b></span>
                 </div>
 
                 <h3 class="panel-title" style="margin-top:5px;">Equipamentos</h3>
@@ -42,12 +42,12 @@
 
                 <div class="palette-item" draggable="true" data-type="pump">
                     <img src="assets/components/gaap_pump_icon.png" alt="Bomba" class="palette-icon">
-                    <span><b>Bomba Centrifuga</b></span>
+                    <span><b>Bomba Centrífuga</b></span>
                 </div>
 
                 <div class="palette-item" draggable="true" data-type="valve">
-                    <img src="assets/components/gaap_valve_icon.png" alt="Valvula" class="palette-icon">
-                    <span><b>Valvula de Controle</b></span>
+                    <img src="assets/components/gaap_valve_icon.png" alt="Válvula" class="palette-icon">
+                    <span><b>Válvula de Controle</b></span>
                 </div>
             </div>
         </div>
@@ -57,8 +57,8 @@
         <div class="workspace-panel" id="workspace">
             <div class="top-toolbar" style="align-items:center; gap:12px; flex-wrap:wrap;">
                 <div class="toolbar-actions" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                    <button class="gaap-btn success" id="btn-run">&#9654; Iniciar Simulacao Fisica</button>
-                    <button class="gaap-btn" id="btn-clear" style="border-color:#e74c3c; color:#e74c3c;">Limpar Area</button>
+                    <button class="gaap-btn success" id="btn-run">&#9654; Iniciar Simulação Física</button>
+                    <button class="gaap-btn" id="btn-clear" style="border-color:#e74c3c; color:#e74c3c;">Limpar Área</button>
                 </div>
 
                 <div class="toolbar-config" style="display:flex; align-items:center; gap:10px; margin-left:auto; flex-wrap:wrap; justify-content:flex-end;">
@@ -104,7 +104,7 @@
                 <div class="chart-container" id="chart-wrapper">
                     <div id="chart-max-header" style="display: none; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
                         <h3 style="margin: 0; color: #2c3e50; font-size: 16px;">Monitoramento Detalhado</h3>
-                        <button id="btn-close-max-chart" class="gaap-btn danger" style="padding: 5px 15px; font-size: 12px; margin: 0;">&#10006; Fechar Grafico</button>
+                        <button id="btn-close-max-chart" class="gaap-btn danger" style="padding: 5px 15px; font-size: 12px; margin: 0;">&#10006; Fechar Gráfico</button>
                     </div>
                     <div style="flex: 1; position: relative; min-height: 0; height: 100%;">
                         <canvas id="gaap-volume-chart"></canvas>

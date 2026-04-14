@@ -6,10 +6,14 @@
 import {
     DEFAULT_PIPE_FRICTION,
     DEFAULT_PIPE_ROUGHNESS_MM,
+    DEFAULT_PIPE_DIAMETER_M,
+    DEFAULT_PIPE_EXTRA_LENGTH_M,
+    DEFAULT_PIPE_MINOR_LOSS,
+    DEFAULT_FLUID_VISCOSITY_PA_S,
     lpsToM3s,
-    clamp,
     areaFromDiameter
-} from '../componentes/BaseComponente.js';
+} from './Units.js';
+import { clamp } from '../componentes/BaseComponente.js';
 
 const PIXELS_PER_METER = 80;
 
@@ -91,7 +95,7 @@ export function getConnectionGeometry(conn, sourceEl, targetEl, usarAlturaRelati
             }
         }
 
-        return { x: compX + svgX + localX, y: compY + svgY + localY };
+        return { x: compX + svgX + localX, y: logicalY };
     };
 
     const p1 = getLogicalPortPosition(sourceEl);
@@ -140,7 +144,7 @@ export function getConnectionResponseTimeS(conn, geometry, fluidoOperante) {
     ensureConnectionProperties(conn);
     const lineVolumeL = geometry.lengthM * conn.areaM2 * 1000;
     const densityFactor = clamp(fluidoOperante.densidade / 997, 0.55, 1.8);
-    const viscosityFactor = clamp(fluidoOperante.viscosidadeDinamicaPaS / 0.00089, 0.5, 8);
+    const viscosityFactor = clamp(fluidoOperante.viscosidadeDinamicaPaS / DEFAULT_FLUID_VISCOSITY_PA_S, 0.5, 8);
     const baseTimeS = 0.08 + (geometry.lengthM * 0.035) + (lineVolumeL * 0.018 * densityFactor);
     return clamp(baseTimeS * Math.pow(viscosityFactor, 0.12), 0.05, 2.8);
 }
@@ -149,10 +153,10 @@ export function getConnectionResponseTimeS(conn, geometry, fluidoOperante) {
  * Garante que conexão tem todas as propriedades necessárias
  */
 export function ensureConnectionProperties(conn) {
-    if (typeof conn.diameterM !== 'number') conn.diameterM = 0.08;
+    if (typeof conn.diameterM !== 'number') conn.diameterM = DEFAULT_PIPE_DIAMETER_M;
     if (typeof conn.roughnessMm !== 'number') conn.roughnessMm = DEFAULT_PIPE_ROUGHNESS_MM;
-    if (typeof conn.extraLengthM !== 'number') conn.extraLengthM = 0;
-    if (typeof conn.perdaLocalK !== 'number') conn.perdaLocalK = 0.8;
+    if (typeof conn.extraLengthM !== 'number') conn.extraLengthM = DEFAULT_PIPE_EXTRA_LENGTH_M;
+    if (typeof conn.perdaLocalK !== 'number') conn.perdaLocalK = DEFAULT_PIPE_MINOR_LOSS;
     if (typeof conn.transientFlowLps !== 'number') conn.transientFlowLps = 0;
     if (typeof conn.lastResolvedFlowLps !== 'number') conn.lastResolvedFlowLps = 0;
 

@@ -55,7 +55,7 @@ export class PerformanceProfiler {
 
         if (solverMetrics) {
             this.currentTick.solverIterations = solverMetrics.lastIterations;
-            this.currentTick.solverConverged = solverMetrics.maxIterationsHit === 0;
+            this.currentTick.solverConverged = solverMetrics.lastIterations < 512;
             
             if (solverMetrics.lastIterations === 512) {
                 this.currentTick.warnings.push('Solver atingiu limite máximo de iterações');

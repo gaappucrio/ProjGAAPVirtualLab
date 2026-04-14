@@ -25,20 +25,20 @@ const relativeHeightNote = document.getElementById('toolbar-height-note');
 
 function updateRunButtonUI(isRunning) {
     if (isRunning) {
-        btnRun.innerHTML = '&#9208; Pausar Simulacao';
+        btnRun.innerHTML = '&#9208; Pausar Simulação';
         btnRun.style.background = '#e74c3c';
         btnRun.style.borderColor = '#c0392b';
         return;
     }
 
-    btnRun.innerHTML = '&#9654; Iniciar Simulacao Fisica';
+    btnRun.innerHTML = '&#9654; Iniciar Simulação Física';
     btnRun.style.background = '#2ecc71';
     btnRun.style.borderColor = '#27ae60';
 }
 
 function updateRelativeHeightUI(enabled) {
     if (enabled) {
-        relativeHeightNote.textContent = 'Desniveis entre componentes afetam a pressao e a vazao.';
+        relativeHeightNote.textContent = 'Desníveis entre componentes afetam a pressão e a vazão.';
         relativeHeightNote.style.color = '#5f6f7f';
         relativeHeightNote.style.background = '#f4f7f8';
         relativeHeightNote.style.borderColor = '#ecf0f1';
@@ -108,6 +108,7 @@ document.addEventListener('keydown', (e) => {
                 const tgt = ENGINE.componentes.find(c => c.id === conn.targetEl.dataset.compId);
                 if (src && tgt) src.desconectarSaida(tgt);
                 if (conn.label) conn.label.remove();
+                if (conn.labelHeight) conn.labelHeight.remove();
                 ENGINE.conexoes.splice(connIndex, 1);
                 selectedPipe.remove();
                 ENGINE.selectComponent(null);
@@ -117,4 +118,4 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-console.log('App.js loaded - All controllers initialized');
+console.log('App.js carregado - todos os controladores inicializados');

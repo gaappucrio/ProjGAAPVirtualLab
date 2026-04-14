@@ -15,6 +15,7 @@ import { FonteLogica } from '../componentes/FonteLogica.js';
 import { REGISTRO_COMPONENTES } from '../RegistroComponentes.js';
 
 import {
+    DEFAULT_PIPE_ROUGHNESS_MM,
     formatUnitValue,
     getUnitOptions,
     getUnitPreferences,
@@ -24,6 +25,7 @@ import {
     toBaseValue,
     toDisplayValue
 } from '../utils/Units.js';
+import { TOOLTIPS } from '../utils/Tooltips.js';
 import { InputValidator, showInputError, clearInputError } from '../utils/InputValidator.js';
 
 let volumeChart;
@@ -170,8 +172,8 @@ function displayStep(category, baseStep, digits = 6) {
 function renderUnitControls() {
     const prefs = getUnitPreferences();
     const categories = [
-        { id: 'pressure', label: 'Pressão', hint: 'Unidade usada para exibir e editar pressao.' },
-        { id: 'flow', label: 'Vazão', hint: 'Unidade usada para exibir e editar vazao.' },
+        { id: 'pressure', label: 'Pressão', hint: 'Unidade usada para exibir e editar pressão.' },
+        { id: 'flow', label: 'Vazão', hint: 'Unidade usada para exibir e editar vazão.' },
         { id: 'length', label: 'Comprimento', hint: 'Unidade usada para exibir e editar comprimentos e cotas.' },
         { id: 'volume', label: 'Volume', hint: 'Unidade usada para exibir e editar volumes e capacidades.' },
         { id: 'temperature', label: 'Temperatura', hint: 'Unidade usada para exibir e editar temperatura.' }
@@ -194,11 +196,11 @@ function renderUnitControls() {
 
     return `
         <div class="prop-group">
-            <label title="Configura as unidades exibidas e editadas no painel.">Unidades de Exibicao</label>
+            <label title="${TOOLTIPS.unidades.painel}">Unidades de Exibição</label>
             <div style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px;">
                 ${selectors}
             </div>
-            <p style="margin:8px 0 0; font-size:11px; color:#7f8c8d;">Padrao SI: kPa, m3/s, m, m3 e C.</p>
+            <p style="margin:8px 0 0; font-size:11px; color:#7f8c8d;">${TOOLTIPS.unidades.resumoSi}</p>
         </div>
     `;
 }
@@ -241,6 +243,11 @@ function pressureInputValue(id, fallback) {
 
 function temperatureInputValue(id, fallback) {
     const value = toBaseValue('temperature', parseFloat(document.getElementById(id).value));
+    return Number.isFinite(value) ? value : fallback;
+}
+
+function lengthInputValue(rawValue, fallback = NaN) {
+    const value = toBaseValue('length', parseFloat(rawValue));
     return Number.isFinite(value) ? value : fallback;
 }
 
@@ -459,45 +466,45 @@ function renderDefaultProperties() {
     propContent.innerHTML = `
         ${renderUnitControls()}
         <div class="prop-group">
-            <label title="Multiplicador de tempo da simulação física.">Velocidade da Simulação</label>
+            <label title="${TOOLTIPS.fluido.velocidadeSimulacao}">Velocidade da Simulação</label>
             <select id="sel-vel">
-                <option value="1">1x (Tempo Real)</option>
+                <option value="1">1x (Tempo real)</option>
                 <option value="2">2x (Acelerado)</option>
                 <option value="5">5x (Rápido)</option>
             </select>
         </div>
         <div class="prop-group">
-            <label title="Seleciona um conjunto típico de propriedades físicas do fluido.">Preset do Fluido</label>
-            <select id="sel-fluid-preset" title="Seleciona um conjunto típico de propriedades físicas do fluido.">
+            <label title="${TOOLTIPS.fluido.preset}">Predefinição do Fluido</label>
+            <select id="sel-fluid-preset" title="${TOOLTIPS.fluido.preset}">
                 ${fluidOptions}
                 <option value="custom" ${currentPreset === 'custom' ? 'selected' : ''}>Personalizado</option>
             </select>
         </div>
         <div class="prop-group">
-            <label title="Nome exibido para o fluido operante atual.">Nome do Fluido</label>
-            <input type="text" id="input-fluid-name" title="Nome exibido para o fluido operante atual." value="${ENGINE.fluidoOperante.nome}">
+            <label title="${TOOLTIPS.fluido.nome}">Nome do Fluido</label>
+            <input type="text" id="input-fluid-name" title="${TOOLTIPS.fluido.nome}" value="${ENGINE.fluidoOperante.nome}">
         </div>
         <div class="prop-group">
-            <label title="Massa especifica do fluido usada nas equacoes hidraulicas.">Densidade (kg/m3)</label>
-            <input type="number" id="input-fluid-density" title="Massa especifica do fluido usada nas equacoes hidraulicas." value="${ENGINE.fluidoOperante.densidade}" step="1" min="1">
+            <label title="${TOOLTIPS.fluido.densidade}">Densidade (kg/m³)</label>
+            <input type="number" id="input-fluid-density" title="${TOOLTIPS.fluido.densidade}" value="${ENGINE.fluidoOperante.densidade}" step="1" min="1">
         </div>
         <div class="prop-group">
-            <label title="Viscosidade dinamica usada para Reynolds e perdas por atrito.">Viscosidade Dinamica (Pa.s)</label>
-            <input type="number" id="input-fluid-viscosity" title="Viscosidade dinamica usada para Reynolds e perdas por atrito." value="${ENGINE.fluidoOperante.viscosidadeDinamicaPaS}" step="0.0001" min="0.00001">
+            <label title="${TOOLTIPS.fluido.viscosidade}">Viscosidade Dinâmica (Pa.s)</label>
+            <input type="number" id="input-fluid-viscosity" title="${TOOLTIPS.fluido.viscosidade}" value="${ENGINE.fluidoOperante.viscosidadeDinamicaPaS}" step="0.0001" min="0.00001">
         </div>
         <div class="prop-group">
-            <label title="Temperatura do fluido operante para referencia do caso.">Temperatura (${getUnitSymbol('temperature')})</label>
-            <input type="number" id="input-fluid-temp" title="Temperatura do fluido operante para referencia do caso." value="${toDisplayValue('temperature', ENGINE.fluidoOperante.temperatura).toFixed(1)}" step="${getUnitStep('temperature')}" min="${toDisplayValue('temperature', -20).toFixed(1)}" max="${toDisplayValue('temperature', 200).toFixed(1)}">
+            <label title="${TOOLTIPS.fluido.temperatura}">Temperatura (${getUnitSymbol('temperature')})</label>
+            <input type="number" id="input-fluid-temp" title="${TOOLTIPS.fluido.temperatura}" value="${toDisplayValue('temperature', ENGINE.fluidoOperante.temperatura).toFixed(1)}" step="${getUnitStep('temperature')}" min="${toDisplayValue('temperature', -20).toFixed(1)}" max="${toDisplayValue('temperature', 200).toFixed(1)}">
         </div>
         <div class="prop-group">
-            <label title="Pressão de vapor absoluta usada no cálculo de cavitação.">Pressão de Vapor (${getUnitSymbol('pressure')} abs)</label>
-            <input type="number" id="input-fluid-vapor" title="Pressão de vapor absoluta usada no cálculo de cavitação." value="${displayUnitValue('pressure', ENGINE.fluidoOperante.pressaoVaporBar, 3)}" step="${displayStep('pressure', 0.001)}" min="${displayBound('pressure', 0.0001)}" max="${displayBound('pressure', 5)}">
+            <label title="${TOOLTIPS.fluido.pressaoVapor}">Pressão de Vapor (${getUnitSymbol('pressure')} absoluta)</label>
+            <input type="number" id="input-fluid-vapor" title="${TOOLTIPS.fluido.pressaoVapor}" value="${displayUnitValue('pressure', ENGINE.fluidoOperante.pressaoVaporBar, 3)}" step="${displayStep('pressure', 0.001)}" min="${displayBound('pressure', 0.0001)}" max="${displayBound('pressure', 5)}">
         </div>
         <div class="prop-group">
-            <label title="Pressão atmosférica absoluta usada como referência externa.">Pressão Atmosférica (${getUnitSymbol('pressure')} abs)</label>
-            <input type="number" id="input-fluid-atm" title="Pressão atmosférica absoluta usada como referência externa." value="${displayUnitValue('pressure', ENGINE.fluidoOperante.pressaoAtmosfericaBar, 3)}" step="${displayStep('pressure', 0.001)}" min="${displayBound('pressure', 0.5)}" max="${displayBound('pressure', 2)}">
+            <label title="${TOOLTIPS.fluido.pressaoAtmosferica}">Pressão Atmosférica (${getUnitSymbol('pressure')} absoluta)</label>
+            <input type="number" id="input-fluid-atm" title="${TOOLTIPS.fluido.pressaoAtmosferica}" value="${displayUnitValue('pressure', ENGINE.fluidoOperante.pressaoAtmosfericaBar, 3)}" step="${displayStep('pressure', 0.001)}" min="${displayBound('pressure', 0.5)}" max="${displayBound('pressure', 2)}">
         </div>
-        <p style="font-size: 12px; color:#95a5a6; text-align:center;">Clique em um componente ou em um cano para editar os parâmetros físicos da planta.</p>
+        <p style="font-size: 12px; color:#95a5a6; text-align:center;">${TOOLTIPS.painel.estadoVazio}</p>
     `;
 
     bindUnitControls();
@@ -532,7 +539,7 @@ function renderDefaultProperties() {
         clearInputError(inputViscosity);
         
         // Validar pressão de vapor
-        const vaporResult = InputValidator.validatePressure(pressureInputValue('input-fluid-vapor', ENGINE.fluidoOperante.pressaoVaporBar), 5, 'Pressão Vapor');
+        const vaporResult = InputValidator.validatePressure(pressureInputValue('input-fluid-vapor', ENGINE.fluidoOperante.pressaoVaporBar), 5, 'Pressão de Vapor');
         if (!vaporResult.valid) {
             showInputError(inputVapor, vaporResult.error);
             return;
@@ -600,24 +607,24 @@ function renderConnectionProperties(conn) {
     propContent.innerHTML = `
         ${renderUnitControls()}
         <div class="prop-group">
-            <label>Conexao</label>
+            <label>${TOOLTIPS.conexao.titulo}</label>
             <input type="text" value="${labels.sourceLabel} -> ${labels.targetLabel}" disabled>
         </div>
         <div class="prop-group">
-            <label title="Diametro hidraulico interno usado para calcular area de escoamento.">Diametro Interno (${getUnitSymbol('length')})</label>
-            <input type="number" id="input-pipe-diameter" title="Diametro hidraulico interno usado para calcular area de escoamento." value="${displayEditableUnitValue('length', conn.diameterM, 4)}" step="${displayStep('length', 0.005)}" min="${displayBound('length', 0.01)}" max="${displayBound('length', 1)}">
+            <label title="${TOOLTIPS.conexao.diametro}">Diâmetro Interno (${getUnitSymbol('length')})</label>
+            <input type="number" id="input-pipe-diameter" title="${TOOLTIPS.conexao.diametro}" value="${displayEditableUnitValue('length', conn.diameterM, 4)}" step="${displayStep('length', 0.005)}" min="${displayBound('length', 0.01)}" max="${displayBound('length', 1)}">
         </div>
         <div class="prop-group">
-            <label title="Comprimento adicional equivalente alem da geometria desenhada.">Comprimento Extra (${getUnitSymbol('length')})</label>
-            <input type="number" id="input-pipe-extra-length" title="Comprimento adicional equivalente alem da geometria desenhada." value="${displayEditableUnitValue('length', conn.extraLengthM || 0, 4)}" step="${displayStep('length', 0.1)}" min="${displayBound('length', 0)}" max="${displayBound('length', 500)}">
+            <label title="${TOOLTIPS.conexao.comprimentoExtra}">Comprimento Extra (${getUnitSymbol('length')})</label>
+            <input type="number" id="input-pipe-extra-length" title="${TOOLTIPS.conexao.comprimentoExtra}" value="${displayEditableUnitValue('length', conn.extraLengthM || 0, 4)}" step="${displayStep('length', 0.1)}" min="${displayBound('length', 0)}" max="${displayBound('length', 500)}">
         </div>
         <div class="prop-group">
-            <label title="Rugosidade absoluta da parede interna do trecho.">Rugosidade Absoluta (${getUnitSymbol('length')})</label>
-            <input type="number" id="input-pipe-roughness" title="Rugosidade absoluta da parede interna do trecho." value="${displayEditableUnitValue('length', (conn.roughnessMm || 0.045) / 1000, 6)}" step="${displayStep('length', 0.000005, 6)}" min="${displayBound('length', 0.000001, 6)}" max="${displayBound('length', 0.005, 6)}">
+            <label title="${TOOLTIPS.conexao.rugosidade}">Rugosidade Absoluta (${getUnitSymbol('length')})</label>
+            <input type="number" id="input-pipe-roughness" title="${TOOLTIPS.conexao.rugosidade}" value="${displayEditableUnitValue('length', (conn.roughnessMm || DEFAULT_PIPE_ROUGHNESS_MM) / 1000, 6)}" step="${displayStep('length', 0.000005, 6)}" min="${displayBound('length', 0.000001, 6)}" max="${displayBound('length', 0.005, 6)}">
         </div>
         <div class="prop-group">
-            <label title="Perda localizada adicional causada por curvas, acessorios ou singularidades.">Perda Local K</label>
-            <input type="number" id="input-pipe-loss-k" title="Perda localizada adicional causada por curvas, acessorios ou singularidades." value="${conn.perdaLocalK}" step="0.1" min="0" max="100">
+            <label title="${TOOLTIPS.conexao.perdaLocal}">Perda Local K</label>
+            <input type="number" id="input-pipe-loss-k" title="${TOOLTIPS.conexao.perdaLocal}" value="${conn.perdaLocalK}" step="0.1" min="0" max="100">
         </div>
         <div class="prop-group">
             <label>Vazão Atual (${getUnitSymbol('flow')})</label>
@@ -644,7 +651,7 @@ function renderConnectionProperties(conn) {
             <input type="text" id="disp-pipe-regime" value="${state.regime}" disabled>
         </div>
         <div class="prop-group">
-            <label>DeltaP no Trecho (${getUnitSymbol('pressure')})</label>
+            <label>Queda de Pressão no Trecho (${getUnitSymbol('pressure')})</label>
             <input type="text" id="disp-pipe-deltap" value="${displayUnitValue('pressure', state.deltaPBar, 3)}" disabled>
         </div>
         <div class="prop-group">
@@ -679,16 +686,16 @@ function renderConnectionProperties(conn) {
     document.getElementById('input-pipe-diameter').addEventListener('change', (e) => {
         validatePipeInput(
             e.target,
-            (v, name) => InputValidator.validateDiameter(v, name),
+            (v, name) => InputValidator.validateNumber(lengthInputValue(v), 0.001, 0.3, name),
             'Diâmetro',
-            (val) => { conn.diameterM = val / 1000; } // converter mm para m
+            (val) => { conn.diameterM = val; }
         );
     });
     
     document.getElementById('input-pipe-extra-length').addEventListener('change', (e) => {
         validatePipeInput(
             e.target,
-            (v, name) => InputValidator.validateNumber(v, 0, 500, name),
+            (v, name) => InputValidator.validateNumber(lengthInputValue(v), 0, 500, name),
             'Comprimento Extra',
             (val) => { conn.extraLengthM = val; }
         );
@@ -697,9 +704,9 @@ function renderConnectionProperties(conn) {
     document.getElementById('input-pipe-roughness').addEventListener('change', (e) => {
         validatePipeInput(
             e.target,
-            (v, name) => InputValidator.validateNumber(v, 0.00001, 5, name),
+            (v, name) => InputValidator.validateNumber(lengthInputValue(v), 0.000001, 0.005, name),
             'Rugosidade',
-            (val) => { conn.roughnessMm = val * 1000; } // converter m para mm
+            (val) => { conn.roughnessMm = val * 1000; }
         );
     });
     
@@ -727,8 +734,8 @@ function renderComponentProperties(component) {
     propContent.innerHTML = `
         ${renderUnitControls()}
         <div class="prop-group">
-            <label title="Identificacao visual do equipamento no diagrama.">Tag (Nome)</label>
-            <input type="text" id="input-tag" title="Identificacao visual do equipamento no diagrama." value="${component.tag}">
+            <label title="${TOOLTIPS.painel.tagComponente}">Tag (Nome)</label>
+            <input type="text" id="input-tag" title="${TOOLTIPS.painel.tagComponente}" value="${component.tag}">
         </div>
         ${spec.propriedadesAdicionais(component)}
     `;
@@ -827,10 +834,24 @@ function setupSubscriptions() {
             if (component instanceof ValvulaLogica) {
                 const abEl = document.getElementById('input-abertura');
                 const numInput = document.getElementById('val-abertura');
+                const cvInput = document.getElementById('input-cv');
+                const perdaInput = document.getElementById('input-perda-k');
+                const caracteristicaInput = document.getElementById('input-caracteristica-valvula');
+                const rangeabilidadeInput = document.getElementById('input-rangeabilidade-valvula');
+                const cursoInput = document.getElementById('input-curso-valvula');
+                const bloqueadaPorSetpoint = ENGINE.isValvulaBloqueadaPorSetpoint?.(component) === true || component.estaControladaPorSetpoint?.() === true;
+
+                [abEl, numInput, cvInput, perdaInput, caracteristicaInput, rangeabilidadeInput, cursoInput]
+                    .forEach(input => {
+                        if (input) input.disabled = bloqueadaPorSetpoint;
+                    });
+
                 if (abEl && document.activeElement !== numInput && document.activeElement !== abEl) {
                     abEl.value = Math.round(component.grauAbertura);
                     if (numInput) numInput.value = Math.round(component.grauAbertura);
                 }
+                if (cvInput && document.activeElement !== cvInput) cvInput.value = component.cv.toFixed(2);
+                if (perdaInput && document.activeElement !== perdaInput) perdaInput.value = component.perdaLocalK.toFixed(3);
                 if (document.getElementById('disp-abertura-efetiva-valvula')) document.getElementById('disp-abertura-efetiva-valvula').value = component.aberturaEfetiva.toFixed(1);
                 setFieldValue('disp-vazao-valvula', component.fluxoReal, 'flow', 2);
                 setFieldValue('disp-deltap-valvula', component.deltaPAtualBar, 'pressure', 2);

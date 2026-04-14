@@ -6,6 +6,12 @@
 import { ENGINE } from '../MotorFisico.js';
 import { camera } from './CameraController.js';
 import { updatePortStates } from '../utils/PortStateManager.js';
+import {
+    DEFAULT_PIPE_DIAMETER_M,
+    DEFAULT_PIPE_EXTRA_LENGTH_M,
+    DEFAULT_PIPE_MINOR_LOSS,
+    DEFAULT_PIPE_ROUGHNESS_MM
+} from '../utils/Units.js';
 
 const pipeLayer = document.getElementById('pipe-layer');
 let tempPipe = null;
@@ -44,7 +50,7 @@ export function updateAllPipes() {
             conn.label.setAttribute('y', (p1.y + p2.y) / 2 - 10);
         }
 
-        // NOVO CÓDIGO: Atualizar a posição e o texto do ΔY
+        // Atualiza a posição e o texto da diferença de cota.
         if (conn.labelHeight) {
             conn.labelHeight.setAttribute('x', (p1.x + p2.x) / 2);
             conn.labelHeight.setAttribute('y', (p1.y + p2.y) / 2 + 15); // 15px abaixo do meio
@@ -56,7 +62,7 @@ export function updateAllPipes() {
                 // Exibir apenas se houver desnível significativo
                 if (Math.abs(dy) > 0.01) {
                     const signal = dy > 0 ? '+' : '';
-                    conn.labelHeight.textContent = `ΔY: ${signal}${dy.toFixed(2)}m`;
+                    conn.labelHeight.textContent = `Δy: ${signal}${dy.toFixed(2)} m`;
                 } else {
                     conn.labelHeight.textContent = '';
                 }
@@ -112,10 +118,10 @@ export function setupPipeControl() {
                         targetEl: dropTarget,
                         path: finalPipe,
                         label: null,
-                        diameterM: 0.08,
-                        roughnessMm: 0.045,
-                        extraLengthM: 0,
-                        perdaLocalK: 0.8
+                        diameterM: DEFAULT_PIPE_DIAMETER_M,
+                        roughnessMm: DEFAULT_PIPE_ROUGHNESS_MM,
+                        extraLengthM: DEFAULT_PIPE_EXTRA_LENGTH_M,
+                        perdaLocalK: DEFAULT_PIPE_MINOR_LOSS
                     };
 
                     const labelEl = document.createElementNS("http://www.w3.org/2000/svg", "text");

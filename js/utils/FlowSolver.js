@@ -4,7 +4,8 @@
 // =======================================
 
 import { getPipeHydraulics, getConnectionGeometry, ensureConnectionProperties } from './PipeHydraulics.js';
-import { EPSILON_FLOW, lpsToM3s, m3sToLps, clamp } from '../componentes/BaseComponente.js';
+import { clamp } from '../componentes/BaseComponente.js';
+import { EPSILON_FLOW } from './Units.js';
 
 const MAX_QUEUE_STEPS = 512;
 const MAX_COMPONENT_VISITS = 8;

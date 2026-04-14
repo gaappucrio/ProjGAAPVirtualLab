@@ -5,7 +5,9 @@
 
 import { ENGINE } from '../MotorFisico.js'
 
-// Atualiza o estado visual das portas com base nas conexões atuais
+/**
+ * Atualiza o estado visual das portas com base nas conexões atuais
+ */
 export function updatePortStates() {
     const allPorts = document.querySelectorAll('#workspace-canvas .port-node');
     allPorts.forEach(port => port.classList.add('unconnected'));

@@ -3,9 +3,10 @@
 // Ficheiro: js/componentes/TanqueLogico.js
 // ==================================
 import { BombaLogica } from './BombaLogica.js';
-import { clamp, ComponenteFisico, flowFromBernoulli, pressureFromHeadBar } from './BaseComponente.js';
+import { clamp, ComponenteFisico, flowFromBernoulli } from './BaseComponente.js';
 import { ValvulaLogica } from './ValvulaLogica.js';
 import { ENGINE } from '../MotorFisico.js';
+import { pressureFromHeadBar } from '../utils/Units.js';
 
 
 export class TanqueLogico extends ComponenteFisico {
@@ -28,6 +29,7 @@ export class TanqueLogico extends ComponenteFisico {
         this.ki = 25;
         this._ctrlIntegral = 0;
         this._lastErro = 0;
+        this._valvulasControleNivel = new Set();
     }
 
     getNivelNormalizado() {
@@ -62,6 +64,85 @@ export class TanqueLogico extends ComponenteFisico {
         return pressureFromHeadBar(submergedHeightM, fluido.densidade);
     }
 
+    _coletarAtuadoresDaPerna(componentes) {
+        const valvulas = new Set();
+        const bombas = new Set();
+        const registrar = (componente) => {
+            if (componente instanceof ValvulaLogica) valvulas.add(componente);
+            else if (componente instanceof BombaLogica) bombas.add(componente);
+        };
+
+        componentes.forEach(componente => {
+            registrar(componente);
+
+            if (componente instanceof ValvulaLogica || componente instanceof BombaLogica) {
+                componente.inputs.forEach(registrar);
+                componente.outputs.forEach(registrar);
+            }
+        });
+
+        return { valvulas, bombas };
+    }
+
+    getAtuadoresControleNivel() {
+        const entrada = this._coletarAtuadoresDaPerna(this.inputs);
+        const saida = this._coletarAtuadoresDaPerna(this.outputs);
+
+        return {
+            valvulasEntrada: [...entrada.valvulas],
+            valvulasSaida: [...saida.valvulas],
+            bombas: [...new Set([...entrada.bombas, ...saida.bombas])]
+        };
+    }
+
+    isBombaControladaPorSetpoint(bomba) {
+        if (!this.setpointAtivo || !(bomba instanceof BombaLogica)) return false;
+        return this.getAtuadoresControleNivel().bombas.includes(bomba);
+    }
+
+    isValvulaControladaPorSetpoint(valvula) {
+        if (!this.setpointAtivo || !(valvula instanceof ValvulaLogica)) return false;
+        const atuadores = this.getAtuadoresControleNivel();
+        return atuadores.valvulasEntrada.includes(valvula) || atuadores.valvulasSaida.includes(valvula);
+    }
+
+    _manterBombasControleLigadas(bombas = this.getAtuadoresControleNivel().bombas) {
+        bombas.forEach(bomba => {
+            if (bomba.grauAcionamento < 100) bomba.setAcionamento(100);
+        });
+    }
+
+    _sincronizarValvulasControleNivel(valvulas) {
+        const valvulasAtuais = new Set(valvulas);
+        this._valvulasControleNivel.forEach(valvula => {
+            if (!valvulasAtuais.has(valvula)) valvula.liberarControleNivel(this.id);
+        });
+        this._valvulasControleNivel = valvulasAtuais;
+    }
+
+    _liberarValvulasControleNivel(valvulasExtras = []) {
+        const valvulas = new Set([...this._valvulasControleNivel, ...valvulasExtras]);
+        valvulas.forEach(valvula => valvula.liberarControleNivel(this.id));
+        this._valvulasControleNivel.clear();
+    }
+
+    setSetpointAtivo(ativo) {
+        const atuadoresAntes = this.getAtuadoresControleNivel();
+        this.setpointAtivo = ativo === true;
+        this.resetControlador();
+
+        if (this.setpointAtivo) {
+            this._manterBombasControleLigadas(atuadoresAntes.bombas);
+        } else {
+            this._liberarValvulasControleNivel([
+                ...atuadoresAntes.valvulasEntrada,
+                ...atuadoresAntes.valvulasSaida
+            ]);
+        }
+
+        this.notify({ tipo: 'sp_update', ativo: this.setpointAtivo });
+    }
+
     _rodarControlador(dt) {
         if (!this.setpointAtivo) return;
 
@@ -76,18 +157,34 @@ export class TanqueLogico extends ComponenteFisico {
         const u = Math.max(-1, Math.min(1, this.kp * erro + this.ki * this._ctrlIntegral));
         const grauEntrada = Math.max(0, u * 100);
         const grauSaida = Math.max(0, -u * 100);
+        const intensidadeEntrada = grauEntrada / 100;
+        const intensidadeSaida = grauSaida / 100;
+        const atuadores = this.getAtuadoresControleNivel();
+        const valvulasControle = [...atuadores.valvulasEntrada, ...atuadores.valvulasSaida];
 
-        this.inputs.forEach(c => {
-            if (c instanceof ValvulaLogica) c.setAbertura(grauEntrada);
-            else if (c instanceof BombaLogica) c.setAcionamento(grauEntrada);
+        this._sincronizarValvulasControleNivel(valvulasControle);
+        this._manterBombasControleLigadas(atuadores.bombas);
+        atuadores.valvulasEntrada.forEach(valvula => valvula.aplicarControleNivel({
+            abertura: grauEntrada,
+            intensidade: intensidadeEntrada,
+            ownerId: this.id
+        }));
+        atuadores.valvulasSaida.forEach(valvula => valvula.aplicarControleNivel({
+            abertura: grauSaida,
+            intensidade: intensidadeSaida,
+            ownerId: this.id
+        }));
+
+        this.notify({
+            tipo: 'ctrl_update',
+            grau: u * 100,
+            erro,
+            grauEntrada,
+            grauSaida,
+            intensidadeEntrada,
+            intensidadeSaida,
+            bombasLigadas: atuadores.bombas.length
         });
-
-        this.outputs.forEach(c => {
-            if (c instanceof ValvulaLogica) c.setAbertura(grauSaida);
-            else if (c instanceof BombaLogica) c.setAcionamento(grauSaida);
-        });
-
-        this.notify({ tipo: 'ctrl_update', grau: u * 100, erro: erro });
     }
 
     resetControlador() {
@@ -135,5 +232,14 @@ export class TanqueLogico extends ComponenteFisico {
             ENGINE.fluidoOperante.densidade,
             1.0 / Math.max(0.15, this.coeficienteSaida * this.coeficienteSaida)
         );
+    }
+
+    destroy() {
+        const atuadores = this.getAtuadoresControleNivel();
+        this._liberarValvulasControleNivel([
+            ...atuadores.valvulasEntrada,
+            ...atuadores.valvulasSaida
+        ]);
+        super.destroy();
     }
 }

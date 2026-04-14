@@ -4,21 +4,9 @@
 // ==================================
 
 import {
-    areaFromDiameter,
-    BAR_TO_PA,
     clamp,
-    DEFAULT_ENTRY_LOSS,
-    DEFAULT_FLUID_VISCOSITY_PA_S,
-    DEFAULT_PIPE_DIAMETER_M,
-    DEFAULT_PIPE_EXTRA_LENGTH_M,
-    DEFAULT_PIPE_FRICTION,
-    DEFAULT_PIPE_MINOR_LOSS,
-    EPSILON_FLOW,
     flowFromBernoulli,
-    GRAVITY,
-    MAX_NETWORK_FLOW_LPS,
     Observable,
-    pressureFromHeadBar,
     pressureLossFromFlow,
     smoothFirstOrder
 } from './componentes/BaseComponente.js';
@@ -28,21 +16,40 @@ import { DrenoLogico } from './componentes/DrenoLogico.js';
 import { FonteLogica } from './componentes/FonteLogica.js';
 import { TanqueLogico } from './componentes/TanqueLogico.js';
 import { ValvulaLogica } from './componentes/ValvulaLogica.js';
-import { formatUnitValue, getUnitSymbol } from './utils/Units.js';
+import {
+    areaFromDiameter,
+    BAR_TO_PA,
+    DEFAULT_ENTRY_LOSS,
+    DEFAULT_FLUID_VAPOR_PRESSURE_BAR,
+    DEFAULT_FLUID_VISCOSITY_PA_S,
+    DEFAULT_PIPE_DIAMETER_M,
+    DEFAULT_PIPE_EXTRA_LENGTH_M,
+    DEFAULT_PIPE_FRICTION,
+    DEFAULT_PIPE_MINOR_LOSS,
+    DEFAULT_PIPE_ROUGHNESS_MM,
+    EPSILON_FLOW,
+    GRAVITY,
+    MAX_NETWORK_FLOW_LPS,
+    formatUnitValue,
+    getUnitSymbol,
+    pressureFromHeadBar
+} from './utils/Units.js';
 import { profiler } from './utils/PerformanceProfiler.js';
 import { getConnectionGeometry, getPipeHydraulics } from './utils/PipeHydraulics.js';
 
 export {
     clamp,
     ComponenteFisico,
-    EPSILON_FLOW,
     flowFromBernoulli,
-    MAX_NETWORK_FLOW_LPS,
     Observable,
-    pressureFromHeadBar,
     pressureLossFromFlow,
     smoothFirstOrder
 } from './componentes/BaseComponente.js';
+export {
+    EPSILON_FLOW,
+    MAX_NETWORK_FLOW_LPS,
+    pressureFromHeadBar
+} from './utils/Units.js';
 
 let portStateUpdater = null;
 let connectionFlowGetter = null;
@@ -68,8 +75,8 @@ export const FLUID_PRESETS = {
         nome: 'Água',
         densidade: 997,
         temperatura: 25,
-        viscosidadeDinamicaPaS: 0.00089,
-        pressaoVaporBar: 0.0317
+        viscosidadeDinamicaPaS: DEFAULT_FLUID_VISCOSITY_PA_S,
+        pressaoVaporBar: DEFAULT_FLUID_VAPOR_PRESSURE_BAR
     },
     oleo_leve: {
         nome: 'Óleo leve',
@@ -99,7 +106,7 @@ export class SistemaSimulacao extends Observable {
     constructor() {
         super();
         this.velocidade = 1.0;
-        this.fluidoOperante = new Fluido("Agua", 997.0, 1.0, 25.0);
+        this.fluidoOperante = new Fluido("Água", 997.0, 1.0, 25.0);
         this.componentes = [];
         this.conexoes = [];
         this.connectionStates = new Map();
@@ -126,6 +133,7 @@ export class SistemaSimulacao extends Observable {
         this.conexoes = this.conexoes.filter(conn => {
             if (conn.sourceEl.dataset.compId === comp.id || conn.targetEl.dataset.compId === comp.id) {
                 if (conn.label) conn.label.remove();
+                if (conn.labelHeight) conn.labelHeight.remove();
                 conn.path.remove();
                 return false;
             }
@@ -154,6 +162,7 @@ export class SistemaSimulacao extends Observable {
         this.conexoes.forEach(c => {
             c.path.remove();
             if (c.label) c.label.remove();
+            if (c.labelHeight) c.labelHeight.remove();
         });
         this.conexoes = [];
         this.connectionStates.clear();
@@ -294,9 +303,25 @@ export class SistemaSimulacao extends Observable {
         return this.conexoes.filter(conn => conn.targetEl.dataset.compId === comp.id);
     }
 
+    isBombaBloqueadaPorSetpoint(bomba) {
+        return this.componentes.some(comp =>
+            comp instanceof TanqueLogico &&
+            typeof comp.isBombaControladaPorSetpoint === 'function' &&
+            comp.isBombaControladaPorSetpoint(bomba)
+        );
+    }
+
+    isValvulaBloqueadaPorSetpoint(valvula) {
+        return this.componentes.some(comp =>
+            comp instanceof TanqueLogico &&
+            typeof comp.isValvulaControladaPorSetpoint === 'function' &&
+            comp.isValvulaControladaPorSetpoint(valvula)
+        );
+    }
+
     ensureConnectionProperties(conn) {
         if (typeof conn.diameterM !== 'number') conn.diameterM = DEFAULT_PIPE_DIAMETER_M;
-        if (typeof conn.roughnessMm !== 'number') conn.roughnessMm = 0.045; // DEFAULT_PIPE_ROUGHNESS_MM
+        if (typeof conn.roughnessMm !== 'number') conn.roughnessMm = DEFAULT_PIPE_ROUGHNESS_MM;
         if (typeof conn.extraLengthM !== 'number') conn.extraLengthM = DEFAULT_PIPE_EXTRA_LENGTH_M;
         if (typeof conn.perdaLocalK !== 'number') conn.perdaLocalK = DEFAULT_PIPE_MINOR_LOSS;
         if (typeof conn.transientFlowLps !== 'number') conn.transientFlowLps = 0;
@@ -409,10 +434,7 @@ export class SistemaSimulacao extends Observable {
     getTargetEntryLossCoeff(target) {
         if (target instanceof ValvulaLogica) {
             const opening = target.getAberturaNormalizadaAtual();
-            if (opening <= 0) return 1e6;
-            const cvFactor = Math.max(0.2, target.cv);
-            const characteristicFactor = target.getCharacteristicFactor(opening);
-            return target.perdaLocalK + (1.0 / Math.max(0.025, Math.pow(characteristicFactor, 2.1) * cvFactor));
+            return opening <= 0 ? 1e6 : 0;
         }
         if (target instanceof BombaLogica) return 0;
         if (target instanceof TanqueLogico) return target.perdaEntradaK;
@@ -421,8 +443,26 @@ export class SistemaSimulacao extends Observable {
     }
 
     getTargetEntranceArea(target) {
+        if (target instanceof ValvulaLogica) {
+            return target.getParametrosHidraulicos().hydraulicAreaM2;
+        }
         if (target && typeof target.getAreaConexaoM2 === 'function') return target.getAreaConexaoM2();
         return areaFromDiameter(DEFAULT_PIPE_DIAMETER_M);
+    }
+
+    isPressureForwardingTarget(target) {
+        return target instanceof ValvulaLogica || target instanceof BombaLogica;
+    }
+
+    combineSerialFlowLimits(upstreamLimitLps, downstreamLimitLps) {
+        if (upstreamLimitLps <= EPSILON_FLOW || downstreamLimitLps <= EPSILON_FLOW) return 0;
+
+        // Para componentes passantes, a queda de pressão precisa ser dividida
+        // entre o trecho a montante e o restante da rede, em vez de ser gasta
+        // integralmente antes da válvula/bomba.
+        const upstreamResistance = 1 / (upstreamLimitLps * upstreamLimitLps);
+        const downstreamResistance = 1 / (downstreamLimitLps * downstreamLimitLps);
+        return 1 / Math.sqrt(upstreamResistance + downstreamResistance);
     }
 
     hasPendingEmission(comp, dt) {
@@ -511,23 +551,19 @@ export class SistemaSimulacao extends Observable {
         }
 
         if (comp instanceof ValvulaLogica) {
-            const opening = comp.getAberturaNormalizadaAtual();
-            if (opening <= 0) return null;
+            const parametros = comp.getParametrosHidraulicos();
+            if (parametros.opening <= 0) return null;
 
             const availableFlow = estimating ? MAX_NETWORK_FLOW_LPS : comp.getFluxoPendenteLps();
             if (availableFlow <= EPSILON_FLOW) return null;
 
-            const cvFactor = Math.max(0.2, comp.cv);
-            const characteristicFactor = comp.getCharacteristicFactor(opening);
-            const hydraulicAreaM2 = areaM2 * Math.max(0.08, characteristicFactor);
-            const localLossCoeff = comp.perdaLocalK + (1.0 / Math.max(0.025, Math.pow(characteristicFactor, 2.1) * cvFactor));
-
             return {
                 availableFlowLps: availableFlow,
                 pressureBar: inletPressureBar ?? comp.getPressaoEntradaBar(),
-                hydraulicAreaM2,
-                localLossCoeff,
-                characteristicFactor
+                hydraulicAreaM2: Math.min(areaM2, parametros.hydraulicAreaM2),
+                localLossCoeff: parametros.localLossCoeff,
+                characteristicFactor: parametros.characteristicFactor,
+                effectiveCv: parametros.effectiveCv
             };
         }
 
@@ -607,14 +643,27 @@ export class SistemaSimulacao extends Observable {
             totalLossCoeff = upstreamLossCoeff + targetEntryLossCoeff;
         }
 
-        let provisionalUpstreamLossBar = pressureLossFromFlow(capacityLps, branchAreaM2, density, upstreamLossCoeff);
-        let inletPressureBar = Math.max(backPressureBar, supply.pressureBar + staticHeadBar - provisionalUpstreamLossBar);
-        let targetEntryLossBar = pressureLossFromFlow(capacityLps, branchAreaM2, density, targetEntryLossCoeff);
-        let outletPressureBar = Math.max(backPressureBar, inletPressureBar - targetEntryLossBar);
+        let provisionalUpstreamLossBar = 0;
+        let inletPressureBar = backPressureBar;
+        let targetEntryLossBar = 0;
+        let outletPressureBar = backPressureBar;
 
-        // A valvula agora repassa seu proprio coeficiente de perda, entao podemos usar 
-        // a pressao residual provisoria normal sem medo de zerar o fluxo indevidamente.
-        const downstreamInletPressureBar = inletPressureBar;
+        const recalculateBranchPressures = () => {
+            pipeHydraulics = this.getPipeHydraulics(conn, geometry, branchAreaM2, capacityLps);
+            upstreamLossCoeff = 1 + conn.perdaLocalK + pipeHydraulics.distributedLossCoeff + (supply.localLossCoeff || 0);
+            totalLossCoeff = upstreamLossCoeff + targetEntryLossCoeff;
+            provisionalUpstreamLossBar = pressureLossFromFlow(capacityLps, branchAreaM2, density, upstreamLossCoeff);
+            inletPressureBar = Math.max(backPressureBar, supply.pressureBar + staticHeadBar - provisionalUpstreamLossBar);
+            targetEntryLossBar = pressureLossFromFlow(capacityLps, branchAreaM2, density, targetEntryLossCoeff);
+            outletPressureBar = Math.max(backPressureBar, inletPressureBar - targetEntryLossBar);
+        };
+
+        recalculateBranchPressures();
+
+        const targetForwardsPressure = this.isPressureForwardingTarget(target);
+        const downstreamInletPressureBar = targetForwardsPressure
+            ? Math.max(backPressureBar, supply.pressureBar + staticHeadBar)
+            : inletPressureBar;
         const downstreamLimit = this.estimateComponentPotential(
             target,
             downstreamInletPressureBar,
@@ -623,14 +672,10 @@ export class SistemaSimulacao extends Observable {
         );
 
         if (Number.isFinite(downstreamLimit)) {
-            capacityLps = Math.min(capacityLps, downstreamLimit);
-            pipeHydraulics = this.getPipeHydraulics(conn, geometry, branchAreaM2, capacityLps);
-            upstreamLossCoeff = 1 + conn.perdaLocalK + pipeHydraulics.distributedLossCoeff + (supply.localLossCoeff || 0);
-            totalLossCoeff = upstreamLossCoeff + targetEntryLossCoeff;
-            provisionalUpstreamLossBar = pressureLossFromFlow(capacityLps, branchAreaM2, density, upstreamLossCoeff);
-            inletPressureBar = Math.max(backPressureBar, supply.pressureBar + staticHeadBar - provisionalUpstreamLossBar);
-            targetEntryLossBar = pressureLossFromFlow(capacityLps, branchAreaM2, density, targetEntryLossCoeff);
-            outletPressureBar = Math.max(backPressureBar, inletPressureBar - targetEntryLossBar);
+            capacityLps = targetForwardsPressure
+                ? this.combineSerialFlowLimits(capacityLps, downstreamLimit)
+                : Math.min(capacityLps, downstreamLimit);
+            recalculateBranchPressures();
         }
 
         return {
@@ -680,7 +725,7 @@ export class SistemaSimulacao extends Observable {
         const totalLossBar = upstreamLossBar + targetEntryLossBar;
 
         comp.registrarSaida(actualFlowLps, supply.pressureBar);
-        target.registrarEntrada(actualFlowLps, inletPressureBar);
+        target.registrarEntrada(actualFlowLps, arrivalPressureBar);
 
         const flowBefore = state.flowLps;
         state.flowLps += actualFlowLps;

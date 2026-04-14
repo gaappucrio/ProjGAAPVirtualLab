@@ -1,5 +1,6 @@
-import { ComponenteFisico, flowFromBernoulli, pressureFromHeadBar } from './BaseComponente.js';
+import { ComponenteFisico, flowFromBernoulli } from './BaseComponente.js';
 import { ENGINE } from '../MotorFisico.js';
+import { pressureFromHeadBar } from '../utils/Units.js';
 
 
 export class DrenoLogico extends ComponenteFisico {

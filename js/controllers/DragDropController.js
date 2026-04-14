@@ -67,13 +67,14 @@ export function setupDragDrop() {
             if (!isDragging) return;
             const newX = initX + (e.clientX - startX) / camera.scale;
             const newY = initY + (e.clientY - startY) / camera.scale;
+            const snappedX = Math.round(newX / GRID_SIZE) * GRID_SIZE;
+            const snappedY = Math.round(newY / GRID_SIZE) * GRID_SIZE;
 
-            element.logica.x = parseInt(element.style.left);
-            element.logica.y = parseInt(element.style.top);
+            element.style.left = `${snappedX}px`;
+            element.style.top = `${snappedY}px`;
+            element.logica.x = snappedX;
+            element.logica.y = snappedY;
             element.logica.notify({ tipo: 'pos_update' });
-
-            element.style.left = `${Math.round(newX / GRID_SIZE) * GRID_SIZE}px`;
-            element.style.top = `${Math.round(newY / GRID_SIZE) * GRID_SIZE}px`;
             updateAllPipes();
         });
 
@@ -82,13 +83,9 @@ export function setupDragDrop() {
                 isDragging = false;
                 element.logica.x = parseInt(element.style.left);
                 element.logica.y = parseInt(element.style.top);
+                element.logica.notify({ tipo: 'pos_update' });
+                updateAllPipes();
             }
         });
     }
-
-    // Aplicar drag aos componentes na paleta também
-    document.querySelectorAll('.palette-item').forEach(item => {
-        const cliffComponent = item.cloneNode(true);
-        makeDraggable(cliffComponent);
-    });
 }

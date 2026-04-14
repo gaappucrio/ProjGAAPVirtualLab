@@ -11,6 +11,7 @@ import { DrenoLogico } from './componentes/DrenoLogico.js';
 import { FonteLogica } from './componentes/FonteLogica.js';
 import { colorPort, labelStyle } from './Config.js'
 import { formatUnitValue, getUnitSymbol, subscribeUnitPreferences, toBaseValue, toDisplayValue } from './utils/Units.js'
+import { TOOLTIPS } from './utils/Tooltips.js';
 import { InputValidator, showInputError, clearInputError } from './utils/InputValidator.js'
 
 const makePort = (id, cx, cy, inOut) => {
@@ -73,35 +74,7 @@ const validateInputWithFeedback = (inputElement, validatorFn, fieldName, onSucce
     }
 };
 
-const TOOLTIP = {
-    sourcePressure: 'Pressão disponível na fronteira de entrada da planta.',
-    sourceFlow: 'Limite máximo de vazão que a fonte consegue entregar.',
-    sinkPressure: 'Contrapressão imposta na fronteira de saída da planta.',
-    pumpDrive: 'Comando percentual aplicado ao acionamento da bomba.',
-    pumpFlow: 'Vazão nominal máxima no ponto de projeto da bomba.',
-    pumpPressure: 'Carga ou pressão máxima gerada na condição de vazão zero.',
-    pumpEfficiency: 'Eficiência hidráulica máxima esperada perto do ponto de melhor eficiência.',
-    pumpNpshr: 'NPSH requerido da bomba para evitar cavitação na condicao nominal.',
-    pumpRamp: 'Tempo de resposta do acionamento da bomba ate atingir o novo comando.',
-    pumpCurve: 'Curva nominal da bomba mostrando carga, eficiencia e NPSHr em função da vazão.',
-    valveOpening: 'Posicao de abertura desejada para a válvula de controle.',
-    valveCv: 'Capacidade intrínseca de vazão da válvula em plena abertura.',
-    valveK: 'Perda localizada adicional introduzida pelo corpo e internos da válvula.',
-    valveCharacteristic: 'Lei intrínseca que relaciona abertura e capacidade de passagem.',
-    valveRangeability: 'Razão entre a maior e a menor capacidade controlável da válvula.',
-    valveStroke: 'Tempo necessário para a válvula percorrer o curso até a nova posição.',
-    tankCapacity: 'Volume total útil armazenável no tanque.',
-    tankVolume: 'Volume atual de fluido dentro do tanque.',
-    tankHeight: 'Altura útil de líquido usada para gerar carga hidrostática.',
-    tankInletHeight: 'Cota vertical do bocal de entrada em relação ao fundo do tanque.',
-    tankOutletHeight: 'Cota vertical do bocal de saída em relação ao fundo do tanque.',
-    tankCd: 'Coeficiente de descarga efetivo da saída do tanque.',
-    tankEntryK: 'Perda localizada de entrada associada ao enchimento do tanque.',
-    tankSpActive: 'Liga ou desliga o controlador automático de nível do tanque.',
-    tankSetpoint: 'Nível desejado para o controlador automático em percentual da capacidade útil.',
-    tankKp: 'Ganho proporcional do controlador de nível.',
-    tankKi: 'Ganho integral do controlador de nível.'
-};
+const TOOLTIP = TOOLTIPS.componentes;
 
 function pumpCurveMarkup() {
     return `
@@ -111,7 +84,7 @@ function pumpCurveMarkup() {
                             <canvas id="pump-curve-chart"></canvas>
                         </div>
                         <p style="margin:8px 0 0; font-size:11px; line-height:1.45; color:#7f8c8d;">
-                            Curva padrao: Q = vazao, H = carga/pressao gerada, eta = eficiencia e NPSHr = altura minima de sucção requerida.
+                            Curva padrão: Q = vazão, H = carga/pressão gerada, η = eficiência e NPSHr = altura mínima de sucção requerida.
                         </p>
                     </div>
                 `;
@@ -140,7 +113,7 @@ export const REGISTRO_COMPONENTES = {
                         const logicalY = logica.y - 20 + cy;
                         const elevM = (logicalY / 80).toFixed(2);
 
-                        el.textContent = `Elev: ${elevM}m`;
+                        el.textContent = `Elev: ${elevM} m`;
                         el.setAttribute('opacity', '1');
                     } else {
                         el.setAttribute('opacity', '0');
@@ -161,7 +134,7 @@ export const REGISTRO_COMPONENTES = {
         },
         propriedadesAdicionais: (comp) => `
                     <div class="prop-group">
-                        ${makeUnitLabel('Pressão de Alimentacao', 'pressure', TOOLTIP.sourcePressure)}
+                        ${makeUnitLabel('Pressão de Alimentação', 'pressure', TOOLTIP.sourcePressure)}
                         <input type="number" id="input-pressao-fonte" ${hintAttr(TOOLTIP.sourcePressure)} value="${displayEditableUnitValue('pressure', comp.pressaoFonteBar, 3)}" step="${displayStep('pressure', 0.01)}" min="${displayBound('pressure', 0.1)}" max="${displayBound('pressure', 20)}">
                     </div>
                     <div class="prop-group">
@@ -169,7 +142,7 @@ export const REGISTRO_COMPONENTES = {
                         <input type="number" id="input-vazao-fonte-max" ${hintAttr(TOOLTIP.sourceFlow)} value="${displayEditableUnitValue('flow', comp.vazaoMaxima, 3)}" step="${displayStep('flow', 1)}" min="${displayBound('flow', 1)}" max="${displayBound('flow', 1000)}">
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Vazão Atual', 'flow', 'Vazão atualmente entregue pela fonte.')}
+                        ${makeUnitLabel('Vazão Atual', 'flow', TOOLTIP.sourceCurrentFlow)}
                         <input type="text" id="disp-vazao-fonte" value="${displayUnitValue('flow', comp.fluxoReal, 2)}" disabled>
                     </div>
                 `,
@@ -218,7 +191,7 @@ export const REGISTRO_COMPONENTES = {
                         const logicalY = logica.y - 20 + cy;
                         const elevM = (logicalY / 80).toFixed(2);
 
-                        el.textContent = `Elev: ${elevM}m`;
+                        el.textContent = `Elev: ${elevM} m`;
                         el.setAttribute('opacity', '1');
                     } else {
                         el.setAttribute('opacity', '0');
@@ -243,7 +216,7 @@ export const REGISTRO_COMPONENTES = {
                         <input type="number" id="input-pressao-dreno" ${hintAttr(TOOLTIP.sinkPressure)} value="${displayEditableUnitValue('pressure', comp.pressaoSaidaBar, 3)}" step="${displayStep('pressure', 0.01)}" min="${displayBound('pressure', 0)}" max="${displayBound('pressure', 10)}">
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Vazão Recebida', 'flow', 'Vazão atualmente absorvida pela saída.')}
+                        ${makeUnitLabel('Vazão Recebida', 'flow', TOOLTIP.sinkCurrentFlow)}
                         <input type="text" id="disp-vazao-dreno" value="${displayUnitValue('flow', comp.vazaoRecebidaLps, 2)}" disabled>
                     </div>
                 `,
@@ -282,7 +255,7 @@ export const REGISTRO_COMPONENTES = {
                         const logicalY = logica.y + cy;
                         const elevM = (logicalY / 80).toFixed(2);
 
-                        el.textContent = `Elev: ${elevM}m`;
+                        el.textContent = `Elev: ${elevM} m`;
                         el.setAttribute('opacity', '1');
                     } else {
                         el.setAttribute('opacity', '0');
@@ -307,17 +280,22 @@ export const REGISTRO_COMPONENTES = {
 
             atualizarElevacoes();
         },
-        propriedadesAdicionais: (comp) => `
+        propriedadesAdicionais: (comp) => {
+            const bloqueadaPorSetpoint = ENGINE.isBombaBloqueadaPorSetpoint?.(comp) === true;
+            const bloqueioAttr = bloqueadaPorSetpoint ? 'disabled' : '';
+
+            return `
                     <div class="prop-group">
                         <label ${hintAttr(TOOLTIP.pumpDrive)}>Acionamento do Motor
                             <span style="display:flex; align-items:center; gap:2px;">
-                                <input type="number" id="val-acionamento" class="val-display-input" ${hintAttr(TOOLTIP.pumpDrive)} value="${Math.round(comp.grauAcionamento)}"> %
+                                <input type="number" id="val-acionamento" class="val-display-input" ${hintAttr(TOOLTIP.pumpDrive)} value="${Math.round(comp.grauAcionamento)}" ${bloqueioAttr}> %
                             </span>
                         </label>
-                        <input type="range" id="input-acionamento" min="0" max="100" value="${Math.round(comp.grauAcionamento)}" ${hintAttr(TOOLTIP.pumpDrive)}>
+                        <input type="range" id="input-acionamento" min="0" max="100" value="${Math.round(comp.grauAcionamento)}" ${hintAttr(TOOLTIP.pumpDrive)} ${bloqueioAttr}>
+                        ${bloqueadaPorSetpoint ? '<p style="margin:6px 0 0; font-size:11px; color:#c0392b;">Bomba mantida ligada pelo controlador de nível do tanque.</p>' : ''}
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Vazão Nominal Max', 'flow', TOOLTIP.pumpFlow)}
+                        ${makeUnitLabel('Vazão Nominal Máx.', 'flow', TOOLTIP.pumpFlow)}
                         <input type="number" id="input-vazmax" ${hintAttr(TOOLTIP.pumpFlow)} value="${displayEditableUnitValue('flow', comp.vazaoNominal, 3)}" step="${displayStep('flow', 0.5)}" min="${displayBound('flow', 5)}">
                     </div>
                     <div class="prop-group">
@@ -325,8 +303,8 @@ export const REGISTRO_COMPONENTES = {
                         <input type="number" id="input-pressao-max-bomba" ${hintAttr(TOOLTIP.pumpPressure)} value="${displayEditableUnitValue('pressure', comp.pressaoMaxima, 3)}" step="${displayStep('pressure', 0.01)}" min="${displayBound('pressure', 0.5)}" max="${displayBound('pressure', 20)}">
                     </div>
                     <div class="prop-group">
-                        ${makeLabel('Eficiência Hidráulica (0-1)', TOOLTIP.pumpEfficiency)}
-                        <input type="number" id="input-eficiencia-bomba" ${hintAttr(TOOLTIP.pumpEfficiency)} value="${comp.eficienciaHidraulica}" step="0.01" min="0.2" max="1">
+                        ${makeLabel('Eficiência Hidráulica (%)', TOOLTIP.pumpEfficiency)}
+                        <input type="number" id="input-eficiencia-bomba" ${hintAttr(TOOLTIP.pumpEfficiency)} value="${(comp.eficienciaHidraulica * 100).toFixed(0)}" step="1" min="20" max="100">
                     </div>
                     <div class="prop-group">
                         ${makeUnitLabel('NPSHr', 'length', TOOLTIP.pumpNpshr)}
@@ -341,23 +319,23 @@ export const REGISTRO_COMPONENTES = {
                         <input type="text" id="disp-acionamento-real-bomba" value="${comp.acionamentoEfetivo.toFixed(1)}" disabled>
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Vazão Atual', 'flow', 'Vazão atual de operacao da bomba.')}
+                        ${makeUnitLabel('Vazão Atual', 'flow', TOOLTIP.pumpCurrentFlow)}
                         <input type="text" id="disp-vazao-bomba" value="${displayUnitValue('flow', comp.fluxoReal, 2)}" disabled>
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Pressão de Sucção', 'pressure', 'Pressão medida na entrada da bomba.')}
+                        ${makeUnitLabel('Pressão de Sucção', 'pressure', TOOLTIP.pumpSuctionPressure)}
                         <input type="text" id="disp-succao-bomba" value="${displayUnitValue('pressure', comp.pressaoSucaoAtualBar, 2)}" disabled>
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Pressão de Descarga', 'pressure', 'Pressão medida na saída da bomba.')}
+                        ${makeUnitLabel('Pressão de Descarga', 'pressure', TOOLTIP.pumpDischargePressure)}
                         <input type="text" id="disp-descarga-bomba" value="${displayUnitValue('pressure', comp.pressaoDescargaAtualBar, 2)}" disabled>
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('NPSHa Atual', 'length', 'NPSH disponivel nas condicoes atuais de sucção.')}
+                        ${makeUnitLabel('NPSHa Atual', 'length', TOOLTIP.pumpCurrentNpsha)}
                         <input type="text" id="disp-npsh-bomba" value="${displayUnitValue('length', comp.npshDisponivelM, 2)}" disabled>
                     </div>
                     <div class="prop-group">
-                        <label>Saude Hidráulica</label>
+                        <label>Saúde Hidráulica</label>
                         <input type="text" id="disp-cavitacao-bomba" value="${(comp.fatorCavitacaoAtual * 100).toFixed(0)}%" disabled>
                     </div>
                     <div class="prop-group">
@@ -365,12 +343,25 @@ export const REGISTRO_COMPONENTES = {
                         <input type="text" id="disp-eficiencia-bomba" value="${(comp.eficienciaAtual * 100).toFixed(0)}%" disabled>
                     </div>
                     ${pumpCurveMarkup()}
-                `,
+                `;
+        },
         setupProps: (comp) => {
             const slider = document.getElementById('input-acionamento');
             const numInput = document.getElementById('val-acionamento');
+            const bombaBloqueadaPorSetpoint = () => ENGINE.isBombaBloqueadaPorSetpoint?.(comp) === true;
+            const sincronizarBloqueioSetpoint = () => {
+                const bloqueada = bombaBloqueadaPorSetpoint();
+                if (slider) slider.disabled = bloqueada;
+                if (numInput) numInput.disabled = bloqueada;
+            };
             const refreshPumpPanel = () => {
-                comp.notify({ tipo: 'estado', isOn: comp.isOn, grau: comp.grauAcionamento, grauEfetivo: comp.acionamentoEfetivo });
+                comp.notify({
+                    tipo: 'estado',
+                    isOn: comp.isOn,
+                    grau: comp.grauAcionamento,
+                    grauEfetivo: comp.acionamentoEfetivo,
+                    bloqueadaPorSetpoint: bombaBloqueadaPorSetpoint()
+                });
                 notifyPanelRefresh();
             };
 
@@ -435,12 +426,15 @@ export const REGISTRO_COMPONENTES = {
 
             comp.subscribe(d => {
                 if (d.tipo === 'estado' && slider) {
+                    sincronizarBloqueioSetpoint();
                     slider.value = d.grau;
                     numInput.value = d.grau;
                     const effectiveDisplay = document.getElementById('disp-acionamento-real-bomba');
                     if (effectiveDisplay) effectiveDisplay.value = (d.grauEfetivo ?? d.grau).toFixed(1);
                 }
             });
+
+            sincronizarBloqueioSetpoint();
         }
     },
     'valve': {
@@ -467,7 +461,7 @@ export const REGISTRO_COMPONENTES = {
                         const logicalY = logica.y - 20 + cy;
                         const elevM = (logicalY / 80).toFixed(2);
 
-                        el.textContent = `Elev: ${elevM}m`;
+                        el.textContent = `Elev: ${elevM} m`;
                         el.setAttribute('opacity', '1');
                     } else {
                         el.setAttribute('opacity', '0');
@@ -498,67 +492,94 @@ export const REGISTRO_COMPONENTES = {
 
             atualizarElevacoes();
         },
-        propriedadesAdicionais: (comp) => `
+        propriedadesAdicionais: (comp) => {
+            const controladaPorSetpoint = ENGINE.isValvulaBloqueadaPorSetpoint?.(comp) === true || comp.estaControladaPorSetpoint?.() === true;
+            const bloqueioAttr = controladaPorSetpoint ? 'disabled' : '';
+
+            return `
                     <div class="prop-group">
                         <label ${hintAttr(TOOLTIP.valveOpening)}>Abertura
                             <span style="display:flex; align-items:center; gap:2px;">
-                                <input type="number" id="val-abertura" class="val-display-input" ${hintAttr(TOOLTIP.valveOpening)} value="${Math.round(comp.grauAbertura)}"> %
+                                <input type="number" id="val-abertura" class="val-display-input" ${hintAttr(TOOLTIP.valveOpening)} value="${Math.round(comp.grauAbertura)}" ${bloqueioAttr}> %
                             </span>
                         </label>
-                        <input type="range" id="input-abertura" min="0" max="100" value="${Math.round(comp.grauAbertura)}" ${hintAttr(TOOLTIP.valveOpening)}>
+                        <input type="range" id="input-abertura" min="0" max="100" value="${Math.round(comp.grauAbertura)}" ${hintAttr(TOOLTIP.valveOpening)} ${bloqueioAttr}>
+                        ${controladaPorSetpoint ? '<p style="margin:6px 0 0; font-size:11px; color:#c0392b;">Válvula sob controle do ponto de ajuste do tanque. Abertura, Cv e K são ajustados automaticamente.</p>' : ''}
                     </div>
                     <div class="prop-group">
                         ${makeLabel('Coeficiente de Vazão (Cv)', TOOLTIP.valveCv)}
-                        <input type="number" id="input-cv" ${hintAttr(TOOLTIP.valveCv)} value="${comp.cv}" step="0.1" min="0.1" max="20">
+                        <input type="number" id="input-cv" ${hintAttr(TOOLTIP.valveCv)} value="${comp.cv.toFixed(2)}" step="0.1" min="0.1" max="250" ${bloqueioAttr}>
                     </div>
                     <div class="prop-group">
                         ${makeLabel('Coeficiente de Perda (K)', TOOLTIP.valveK)}
-                        <input type="number" id="input-perda-k" ${hintAttr(TOOLTIP.valveK)} value="${comp.perdaLocalK}" step="0.1" min="0.0" max="50">
+                        <input type="number" id="input-perda-k" ${hintAttr(TOOLTIP.valveK)} value="${comp.perdaLocalK.toFixed(3)}" step="0.01" min="0.0" max="100" ${bloqueioAttr}>
                     </div>
                     <div class="prop-group">
-                        ${makeLabel('Caracteristica da Valvula', TOOLTIP.valveCharacteristic)}
-                        <select id="input-caracteristica-valvula" ${hintAttr(TOOLTIP.valveCharacteristic)}>
-                            <option value="equal_percentage" ${comp.tipoCaracteristica === 'equal_percentage' ? 'selected' : ''}>Equal percentage</option>
+                        ${makeLabel('Característica da Válvula', TOOLTIP.valveCharacteristic)}
+                        <select id="input-caracteristica-valvula" ${hintAttr(TOOLTIP.valveCharacteristic)} ${bloqueioAttr}>
+                            <option value="equal_percentage" ${comp.tipoCaracteristica === 'equal_percentage' ? 'selected' : ''}>Igual porcentagem</option>
                             <option value="linear" ${comp.tipoCaracteristica === 'linear' ? 'selected' : ''}>Linear</option>
-                            <option value="quick_opening" ${comp.tipoCaracteristica === 'quick_opening' ? 'selected' : ''}>Quick opening</option>
+                            <option value="quick_opening" ${comp.tipoCaracteristica === 'quick_opening' ? 'selected' : ''}>Abertura rápida</option>
                         </select>
                     </div>
                     <div class="prop-group">
                         ${makeLabel('Rangeabilidade', TOOLTIP.valveRangeability)}
-                        <input type="number" id="input-rangeabilidade-valvula" ${hintAttr(TOOLTIP.valveRangeability)} value="${comp.rangeabilidade}" step="1" min="5" max="100">
+                        <input type="number" id="input-rangeabilidade-valvula" ${hintAttr(TOOLTIP.valveRangeability)} value="${comp.rangeabilidade}" step="1" min="5" max="100" ${bloqueioAttr}>
                     </div>
                     <div class="prop-group">
                         ${makeLabel('Tempo de Curso (s)', TOOLTIP.valveStroke)}
-                        <input type="number" id="input-curso-valvula" ${hintAttr(TOOLTIP.valveStroke)} value="${comp.tempoCursoSegundos}" step="0.1" min="0" max="60">
+                        <input type="number" id="input-curso-valvula" ${hintAttr(TOOLTIP.valveStroke)} value="${comp.tempoCursoSegundos}" step="0.1" min="0" max="60" ${bloqueioAttr}>
                     </div>
                     <div class="prop-group">
                         <label>Abertura Efetiva (%)</label>
                         <input type="text" id="disp-abertura-efetiva-valvula" value="${comp.aberturaEfetiva.toFixed(1)}" disabled>
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Vazão Atual', 'flow', 'Vazão atual na valvula.')}
+                        ${makeUnitLabel('Vazão Atual', 'flow', TOOLTIP.valveCurrentFlow)}
                         <input type="text" id="disp-vazao-valvula" value="${displayUnitValue('flow', comp.fluxoReal, 2)}" disabled>
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('DeltaP Atual', 'pressure', 'Queda de pressao atual atraves da valvula.')}
+                        ${makeUnitLabel('Queda de Pressão Atual', 'pressure', TOOLTIP.valveCurrentDeltaP)}
                         <input type="text" id="disp-deltap-valvula" value="${displayUnitValue('pressure', comp.deltaPAtualBar, 2)}" disabled>
                     </div>
-                `,
+                `;
+        },
         setupProps: (comp) => {
             const slider = document.getElementById('input-abertura');
             const numInput = document.getElementById('val-abertura');
+            const cvInput = document.getElementById('input-cv');
+            const perdaInput = document.getElementById('input-perda-k');
+            const caracteristicaInput = document.getElementById('input-caracteristica-valvula');
+            const rangeabilidadeInput = document.getElementById('input-rangeabilidade-valvula');
+            const cursoInput = document.getElementById('input-curso-valvula');
+            const valvulaBloqueadaPorSetpoint = () => ENGINE.isValvulaBloqueadaPorSetpoint?.(comp) === true || comp.estaControladaPorSetpoint?.() === true;
+            const sincronizarBloqueioSetpoint = () => {
+                const bloqueada = valvulaBloqueadaPorSetpoint();
+                [slider, numInput, cvInput, perdaInput, caracteristicaInput, rangeabilidadeInput, cursoInput]
+                    .forEach(input => {
+                        if (input) input.disabled = bloqueada;
+                    });
+            };
             const refreshValvePanel = () => {
                 comp.notify({ tipo: 'estado', aberta: comp.aberta, grau: comp.grauAbertura, grauEfetivo: comp.aberturaEfetiva });
                 notifyPanelRefresh();
             };
 
             const updateFromSlider = (val) => {
+                if (valvulaBloqueadaPorSetpoint()) {
+                    sincronizarBloqueioSetpoint();
+                    return;
+                }
                 numInput.value = val;
                 comp.setAbertura(val);
                 refreshValvePanel();
             };
 
             const updateFromInput = (val) => {
+                if (valvulaBloqueadaPorSetpoint()) {
+                    sincronizarBloqueioSetpoint();
+                    return;
+                }
                 let parsed = parseInt(val);
                 if (isNaN(parsed)) parsed = 0;
                 const clamped = Math.max(0, Math.min(100, parsed));
@@ -570,27 +591,47 @@ export const REGISTRO_COMPONENTES = {
 
             slider.addEventListener('input', e => updateFromSlider(e.target.value));
             numInput.addEventListener('change', e => updateFromInput(e.target.value));
-            document.getElementById('input-cv').addEventListener('change', e => {
+            cvInput.addEventListener('change', e => {
+                if (valvulaBloqueadaPorSetpoint()) {
+                    e.target.value = comp.cv.toFixed(2);
+                    sincronizarBloqueioSetpoint();
+                    return;
+                }
                 validateInputWithFeedback(
                     e.target,
-                    (v, name) => InputValidator.validateNumber(v, 0.05, 100, name),
+                    (v, name) => InputValidator.validateNumber(v, 0.05, 250, name),
                     'Coeficiente Cv',
-                    (val) => { comp.cv = val; }
+                    (val) => { comp.setCoeficienteVazao(val); }
                 );
             });
-            document.getElementById('input-perda-k').addEventListener('change', e => {
+            perdaInput.addEventListener('change', e => {
+                if (valvulaBloqueadaPorSetpoint()) {
+                    e.target.value = comp.perdaLocalK.toFixed(3);
+                    sincronizarBloqueioSetpoint();
+                    return;
+                }
                 validateInputWithFeedback(
                     e.target,
-                    (v, name) => InputValidator.validateNumber(v, 0.1, 100, name),
+                    (v, name) => InputValidator.validateNumber(v, 0, 100, name),
                     'Coeficiente de Perda K',
-                    (val) => { comp.perdaLocalK = val; }
+                    (val) => { comp.setCoeficientePerda(val); }
                 );
             });
-            document.getElementById('input-caracteristica-valvula').addEventListener('change', e => {
+            caracteristicaInput.addEventListener('change', e => {
+                if (valvulaBloqueadaPorSetpoint()) {
+                    e.target.value = comp.tipoCaracteristica;
+                    sincronizarBloqueioSetpoint();
+                    return;
+                }
                 comp.tipoCaracteristica = e.target.value;
                 notifyPanelRefresh();
             });
-            document.getElementById('input-rangeabilidade-valvula').addEventListener('change', e => {
+            rangeabilidadeInput.addEventListener('change', e => {
+                if (valvulaBloqueadaPorSetpoint()) {
+                    e.target.value = comp.rangeabilidade;
+                    sincronizarBloqueioSetpoint();
+                    return;
+                }
                 validateInputWithFeedback(
                     e.target,
                     (v, name) => InputValidator.validateNumber(v, 5, 1000, name),
@@ -598,7 +639,12 @@ export const REGISTRO_COMPONENTES = {
                     (val) => { comp.rangeabilidade = val; }
                 );
             });
-            document.getElementById('input-curso-valvula').addEventListener('change', e => {
+            cursoInput.addEventListener('change', e => {
+                if (valvulaBloqueadaPorSetpoint()) {
+                    e.target.value = comp.tempoCursoSegundos;
+                    sincronizarBloqueioSetpoint();
+                    return;
+                }
                 validateInputWithFeedback(
                     e.target,
                     (v, name) => InputValidator.validateNumber(v, 0, 30, name),
@@ -609,12 +655,17 @@ export const REGISTRO_COMPONENTES = {
 
             comp.subscribe(d => {
                 if (d.tipo === 'estado' && slider) {
+                    sincronizarBloqueioSetpoint();
                     slider.value = d.grau;
                     numInput.value = d.grau;
+                    if (cvInput && document.activeElement !== cvInput) cvInput.value = comp.cv.toFixed(2);
+                    if (perdaInput && document.activeElement !== perdaInput) perdaInput.value = comp.perdaLocalK.toFixed(3);
                     const effectiveDisplay = document.getElementById('disp-abertura-efetiva-valvula');
                     if (effectiveDisplay) effectiveDisplay.value = (d.grauEfetivo ?? d.grau).toFixed(1);
                 }
             });
+
+            sincronizarBloqueioSetpoint();
         }
     },
     'tank': {
@@ -638,9 +689,9 @@ export const REGISTRO_COMPONENTES = {
                     <g clip-path="url(#clip-${id})">
                         <line id="sp-line-${id}" x1="0" y1="120" x2="160" y2="120" stroke="#e74c3c" stroke-width="3" stroke-dasharray="8,4" opacity="0"/>
                     </g>
-                    <text id="sp-label-${id}" x="165" y="124" font-size="11" font-family="Arial" font-weight="bold" fill="#e74c3c" text-anchor="start" opacity="0">SP</text>
-                    <rect id="sp-badge-${id}" x="4" y="44" width="44" height="14" rx="4" fill="#e74c3c" opacity="0"/>
-                    <text id="sp-badge-txt-${id}" x="26" y="54" font-size="9" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#fff" opacity="0">SP ON</text>
+                    <text id="sp-label-${id}" x="165" y="124" font-size="11" font-family="Arial" font-weight="bold" fill="#e74c3c" text-anchor="start" opacity="0">PA</text>
+                    <rect id="sp-badge-${id}" x="4" y="44" width="52" height="14" rx="4" fill="#e74c3c" opacity="0"/>
+                    <text id="sp-badge-txt-${id}" x="30" y="54" font-size="9" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#fff" opacity="0">PA ativo</text>
                     <text id="alt-util-${id}" x="80" y="205" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#2c3e50"></text>
                     <text id="cap-max-${id}" x="80" y="220" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#2c3e50">Capacidade: ${volumeText(1000)}</text>
                     <text id="tag-${id}" x="80" y="100" font-size="20" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#1a252f">${tag}</text>
@@ -659,7 +710,7 @@ export const REGISTRO_COMPONENTES = {
                         const logicalY = logica.y - 40 + cy;
                         const elevM = (logicalY / 80).toFixed(2);
 
-                        el.textContent = `Elev: ${elevM}m`;
+                        el.textContent = `Elev: ${elevM} m`;
                         el.setAttribute('opacity', '1');
                     } else {
                         el.setAttribute('opacity', '0');
@@ -728,11 +779,11 @@ export const REGISTRO_COMPONENTES = {
                         <input type="number" id="input-altura-tanque" ${hintAttr(TOOLTIP.tankHeight)} value="${displayEditableUnitValue('length', comp.alturaUtilMetros, 3)}" step="${displayStep('length', 0.05)}" min="${displayBound('length', 0.5)}" max="${displayBound('length', 10)}">
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Cota do Bocal de Entrada', 'length', TOOLTIP.tankInletHeight)}
+                        ${makeUnitLabel('Elevação do Bocal de Entrada', 'length', TOOLTIP.tankInletHeight)}
                         <input type="number" id="input-altura-entrada-tanque" ${hintAttr(TOOLTIP.tankInletHeight)} value="${displayEditableUnitValue('length', comp.alturaBocalEntradaM, 3)}" step="${displayStep('length', 0.01)}" min="${displayBound('length', 0)}" max="${displayBound('length', comp.alturaUtilMetros)}">
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Cota do Bocal de Saída', 'length', TOOLTIP.tankOutletHeight)}
+                        ${makeUnitLabel('Elevação do Bocal de Saída', 'length', TOOLTIP.tankOutletHeight)}
                         <input type="number" id="input-altura-saída-tanque" ${hintAttr(TOOLTIP.tankOutletHeight)} value="${displayEditableUnitValue('length', comp.alturaBocalSaidaM, 3)}" step="${displayStep('length', 0.01)}" min="${displayBound('length', 0)}" max="${displayBound('length', comp.alturaUtilMetros)}">
                     </div>
                     <div class="prop-group">
@@ -744,30 +795,30 @@ export const REGISTRO_COMPONENTES = {
                         <input type="number" id="input-k-entrada-tanque" ${hintAttr(TOOLTIP.tankEntryK)} value="${comp.perdaEntradaK}" step="0.1" min="0" max="50">
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Pressão no Fundo', 'pressure', 'Pressão hidrostática no fundo do tanque.')}
+                        ${makeUnitLabel('Pressão no Fundo', 'pressure', TOOLTIP.tankBottomPressure)}
                         <input type="text" id="disp-pressao-tanque" value="${displayUnitValue('pressure', comp.pressaoFundoBar, 2)}" disabled>
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Nível Líquido', 'length', 'Altura atual do espelho de líquido em relação ao fundo.')}
+                        ${makeUnitLabel('Nível Líquido', 'length', TOOLTIP.tankLiquidLevel)}
                         <input type="text" id="disp-nível-tanque" value="${displayUnitValue('length', comp.getAlturaLiquidoM(), 2)}" disabled>
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Qin', 'flow', 'Vazão de entrada atual no tanque.')}
+                        ${makeUnitLabel('Vazão de Entrada', 'flow', TOOLTIP.tankInletFlow)}
                         <input type="text" id="disp-qin-tanque" value="${displayUnitValue('flow', comp.lastQin, 2)}" disabled>
                     </div>
                     <div class="prop-group">
-                        ${makeUnitLabel('Qout', 'flow', 'Vazão de saída atual do tanque.')}
+                        ${makeUnitLabel('Vazão de Saída', 'flow', TOOLTIP.tankOutletFlow)}
                         <input type="text" id="disp-qout-tanque" value="${displayUnitValue('flow', comp.lastQout, 2)}" disabled>
                     </div>
                     <div class="prop-group" id="grp-sp-main" style="border-color: ${comp.setpointAtivo ? '#e74c3c' : '#eee'}; background: ${comp.setpointAtivo ? '#fdf5f4' : '#f9fbfb'};">
-                        <label ${hintAttr('Controle automático do nível do tanque por sinal proporcional e integral.')} style="color: #c0392b; font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">
+                        <label ${hintAttr(TOOLTIP.tankPiController)} style="color: #c0392b; font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">
                             Controlador de Nível (PI)
                         </label>
                         <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
                             <input type="checkbox" id="input-sp-ativo" ${hintAttr(TOOLTIP.tankSpActive)} ${comp.setpointAtivo ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer;">
                             <span ${hintAttr(TOOLTIP.tankSpActive)} style="font-size:13px; font-weight:bold;">Ativar controle automático</span>
                         </div>
-                        <label ${hintAttr(TOOLTIP.tankSetpoint)}>Setpoint
+                        <label ${hintAttr(TOOLTIP.tankSetpoint)}>Ponto de ajuste
                             <span style="display:flex; align-items:center; gap:2px;">
                                 <input type="number" id="val-sp" class="val-display-input" ${hintAttr(TOOLTIP.tankSetpoint)} value="${comp.setpoint}" min="0" max="100">%
                             </span>
@@ -819,7 +870,7 @@ export const REGISTRO_COMPONENTES = {
             document.getElementById('input-volume-tanque').addEventListener('change', e => {
                 validateInputWithFeedback(
                     e.target,
-                    (v, name) => InputValidator.validateVolume(baseFromDisplay('volume', v, 0), comp.capacidadeMaxima, name),
+                    (v, name) => InputValidator.validateNumber(baseFromDisplay('volume', v, 0), 0, comp.capacidadeMaxima, name),
                     'Volume Atual',
                     (val) => {
                         comp.volumeAtual = Math.max(0, Math.min(comp.capacidadeMaxima, val));
@@ -853,7 +904,7 @@ export const REGISTRO_COMPONENTES = {
                 validateInputWithFeedback(
                     e.target,
                     (v, name) => InputValidator.validateHeight(baseFromDisplay('length', v, 0), comp.alturaUtilMetros, name),
-                    'Altura Bocal Entrada',
+                    'Elevação do Bocal de Entrada',
                     (val) => {
                         comp.alturaBocalEntradaM = Math.max(0, Math.min(comp.alturaUtilMetros, val));
                         comp.sincronizarMetricasFisicas();
@@ -866,7 +917,7 @@ export const REGISTRO_COMPONENTES = {
                 validateInputWithFeedback(
                     e.target,
                     (v, name) => InputValidator.validateHeight(baseFromDisplay('length', v, 0), comp.alturaUtilMetros, name),
-                    'Altura Bocal Saída',
+                    'Elevação do Bocal de Saída',
                     (val) => {
                         comp.alturaBocalSaidaM = Math.max(0, Math.min(comp.alturaUtilMetros, val));
                         comp.sincronizarMetricasFisicas();
@@ -879,7 +930,7 @@ export const REGISTRO_COMPONENTES = {
                 validateInputWithFeedback(
                     e.target,
                     (v, name) => InputValidator.validateNumber(v, 0.05, 1, name),
-                    'Coeficiente Descarga',
+                    'Coeficiente de Descarga',
                     (val) => { comp.coeficienteSaida = val; }
                 );
             });
@@ -890,14 +941,12 @@ export const REGISTRO_COMPONENTES = {
 
             const spAtivoEl = document.getElementById('input-sp-ativo');
             spAtivoEl.addEventListener('change', e => {
-                comp.setpointAtivo = e.target.checked;
-                comp.resetControlador();
+                comp.setSetpointAtivo(e.target.checked);
                 document.getElementById('group-ctrl-params').style.display = comp.setpointAtivo ? 'block' : 'none';
                 document.getElementById('group-ctrl-ki').style.display = comp.setpointAtivo ? 'block' : 'none';
                 const grp = document.getElementById('grp-sp-main');
                 grp.style.borderColor = comp.setpointAtivo ? '#e74c3c' : '#eee';
                 grp.style.background = comp.setpointAtivo ? '#fdf5f4' : '#f9fbfb';
-                comp.notify({ tipo: 'sp_update' });
                 notifyPanelRefresh();
             });
 
