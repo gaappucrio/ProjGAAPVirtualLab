@@ -3,7 +3,7 @@ import { ENGINE } from '../MotorFisico.js';
 
 const FATOR_MINIMO_AREA = 0.12;
 const BASE_PERDA_POR_CV = 25;
-const CV_CONTROLE_NIVEL_MAX = 250;
+const CV_CONTROLE_NIVEL_MAX = 800;
 const K_CONTROLE_NIVEL_MIN = 0.02;
 
 export class ValvulaLogica extends ComponenteFisico {
@@ -129,7 +129,7 @@ export class ValvulaLogica extends ComponenteFisico {
         this._controleNivelOwnerId = ownerId;
     }
 
-    aplicarControleNivel({ abertura, intensidade = 0, ownerId = null } = {}) {
+    aplicarControleNivel({ abertura, intensidade = 0, ownerId = null, cvMaximo = null } = {}) {
         this._iniciarControleNivel(ownerId);
 
         const demanda = clamp(Number(intensidade) || 0, 0, 1);
@@ -142,7 +142,10 @@ export class ValvulaLogica extends ComponenteFisico {
         const cvBase = Math.max(0.05, parametrosManuais.cv);
         const kBase = Math.max(K_CONTROLE_NIVEL_MIN, parametrosManuais.perdaLocalK);
         const reforco = Math.pow(demanda, 1.25);
-        const cvControleMaximo = Math.max(CV_CONTROLE_NIVEL_MAX, cvBase);
+
+        // Usa o cvMaximo calculado pelo tanque, ou o padrão se não for fornecido
+        const limiteCv = cvMaximo !== null ? Math.max(CV_CONTROLE_NIVEL_MAX, cvMaximo) : CV_CONTROLE_NIVEL_MAX;
+        const cvControleMaximo = Math.max(limiteCv, cvBase);
 
         this.cv = cvBase + ((cvControleMaximo - cvBase) * reforco);
         this.perdaLocalK = K_CONTROLE_NIVEL_MIN + ((kBase - K_CONTROLE_NIVEL_MIN) * Math.pow(1 - demanda, 1.5));

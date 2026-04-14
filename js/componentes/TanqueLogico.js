@@ -164,6 +164,7 @@ export class TanqueLogico extends ComponenteFisico {
 
         this._sincronizarValvulasControleNivel(valvulasControle);
         this._manterBombasControleLigadas(atuadores.bombas);
+
         atuadores.valvulasEntrada.forEach(valvula => valvula.aplicarControleNivel({
             abertura: grauEntrada,
             intensidade: intensidadeEntrada,
@@ -174,6 +175,23 @@ export class TanqueLogico extends ComponenteFisico {
             intensidade: intensidadeSaida,
             ownerId: this.id
         }));
+
+        // ==========================================
+        //  Detecção de Saturação (Gargalo Físico)
+        // ==========================================
+        const tolerânciaErro = -0.02; // Se passar 2% do Setpoint
+
+        // Se a válvula está 100% aberta (u <= -0.99), o erro continua negativo (enchendo além do SP)
+        // e ainda entra mais água do que sai:
+        if (u <= -0.99 && erro < tolerânciaErro && this.lastQin > this.lastQout * 1.02) {
+            this.alertaSaturacao = {
+                ativo: true,
+                qMax: this.lastQout // A vazão atual de saída é o limite máximo físico do sistema!
+            };
+        } else if (this.alertaSaturacao?.ativo && (u > -0.95 || erro >= 0)) {
+            // Se o controle recuperou a estabilidade, desativa o alerta
+            this.alertaSaturacao.ativo = false;
+        }
 
         this.notify({
             tipo: 'ctrl_update',

@@ -519,7 +519,7 @@ function renderDefaultProperties() {
         const inputViscosity = document.getElementById('input-fluid-viscosity');
         const inputVapor = document.getElementById('input-fluid-vapor');
         const inputAtm = document.getElementById('input-fluid-atm');
-        
+
         // Validar densidade
         const densityResult = InputValidator.validateDensity(inputDensity.value, 'Densidade');
         if (!densityResult.valid) {
@@ -528,7 +528,7 @@ function renderDefaultProperties() {
         }
         fluidData.densidade = densityResult.value;
         clearInputError(inputDensity);
-        
+
         // Validar viscosidade
         const viscosityResult = InputValidator.validateViscosity(inputViscosity.value, 'Viscosidade');
         if (!viscosityResult.valid) {
@@ -537,7 +537,7 @@ function renderDefaultProperties() {
         }
         fluidData.viscosidadeDinamicaPaS = viscosityResult.value;
         clearInputError(inputViscosity);
-        
+
         // Validar pressão de vapor
         const vaporResult = InputValidator.validatePressure(pressureInputValue('input-fluid-vapor', ENGINE.fluidoOperante.pressaoVaporBar), 5, 'Pressão de Vapor');
         if (!vaporResult.valid) {
@@ -546,7 +546,7 @@ function renderDefaultProperties() {
         }
         fluidData.pressaoVaporBar = vaporResult.value;
         clearInputError(inputVapor);
-        
+
         // Validar pressão atmosférica
         const atmResult = InputValidator.validatePressure(pressureInputValue('input-fluid-atm', ENGINE.fluidoOperante.pressaoAtmosfericaBar), 2, 'Pressão Atmosférica');
         if (!atmResult.valid) {
@@ -555,11 +555,11 @@ function renderDefaultProperties() {
         }
         fluidData.pressaoAtmosfericaBar = atmResult.value;
         clearInputError(inputAtm);
-        
+
         // Campos sempre válidos
         fluidData.nome = InputValidator.sanitizeText(document.getElementById('input-fluid-name').value, 50);
         fluidData.temperatura = temperatureInputValue('input-fluid-temp', ENGINE.fluidoOperante.temperatura);
-        
+
         ENGINE.atualizarFluido(fluidData);
         document.getElementById('sel-fluid-preset').value = 'custom';
     };
@@ -665,7 +665,7 @@ function renderConnectionProperties(conn) {
     `;
 
     bindUnitControls();
-    
+
     const validatePipeInput = (element, validator, fieldName, setter) => {
         if (!element) return;
         try {
@@ -682,7 +682,7 @@ function renderConnectionProperties(conn) {
             showInputError(element, `Erro: ${e.message}`);
         }
     };
-    
+
     document.getElementById('input-pipe-diameter').addEventListener('change', (e) => {
         validatePipeInput(
             e.target,
@@ -691,7 +691,7 @@ function renderConnectionProperties(conn) {
             (val) => { conn.diameterM = val; }
         );
     });
-    
+
     document.getElementById('input-pipe-extra-length').addEventListener('change', (e) => {
         validatePipeInput(
             e.target,
@@ -700,7 +700,7 @@ function renderConnectionProperties(conn) {
             (val) => { conn.extraLengthM = val; }
         );
     });
-    
+
     document.getElementById('input-pipe-roughness').addEventListener('change', (e) => {
         validatePipeInput(
             e.target,
@@ -709,7 +709,7 @@ function renderConnectionProperties(conn) {
             (val) => { conn.roughnessMm = val * 1000; }
         );
     });
-    
+
     document.getElementById('input-pipe-loss-k').addEventListener('change', (e) => {
         validatePipeInput(
             e.target,
@@ -732,6 +732,10 @@ function renderComponentProperties(component) {
     const spec = REGISTRO_COMPONENTES[tipoChave];
 
     propContent.innerHTML = `
+        <div id="painel-alerta-saturacao" style="display: none; background-color: #fdeaea; border-left: 4px solid #e74c3c; padding: 10px; margin-bottom: 15px; border-radius: 4px;">
+            <h4 style="margin: 0 0 5px 0; color: #c0392b; font-size: 13px;">⚠️ Sistema Subdimensionado</h4>
+            <p id="texto-alerta-saturacao" style="margin: 0; font-size: 11px; color: #333;"></p>
+        </div>
         ${renderUnitControls()}
         <div class="prop-group">
             <label title="${TOOLTIPS.painel.tagComponente}">Tag (Nome)</label>
@@ -829,6 +833,19 @@ function setupSubscriptions() {
                 setFieldValue('disp-nível-tanque', component.getAlturaLiquidoM(), 'length', 2);
                 setFieldValue('disp-qin-tanque', component.lastQin, 'flow', 2);
                 setFieldValue('disp-qout-tanque', component.lastQout, 'flow', 2);
+                // NOVO: Atualizar o painel de alerta
+                const painelAlerta = document.getElementById('painel-alerta-saturacao');
+                const textoAlerta = document.getElementById('texto-alerta-saturacao');
+
+                if (painelAlerta && textoAlerta) {
+                    if (component.alertaSaturacao && component.alertaSaturacao.ativo) {
+                        painelAlerta.style.display = 'block';
+                        const qMax = component.alertaSaturacao.qMax;
+                        textoAlerta.innerHTML = `A tubulação/válvula de saída atingiu seu limite físico. Para estabilizar no Setpoint atual, reduza a potência das bombas de entrada para fornecer no máximo <b>${qMax} </b>, ou aumente o diâmetro dos canos de saída.`;
+                    } else {
+                        painelAlerta.style.display = 'none';
+                    }
+                }
             }
 
             if (component instanceof ValvulaLogica) {
