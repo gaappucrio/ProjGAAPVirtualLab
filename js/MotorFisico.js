@@ -29,6 +29,7 @@ import {
     DEFAULT_PIPE_ROUGHNESS_MM,
     EPSILON_FLOW,
     GRAVITY,
+    lpsToM3s,
     MAX_NETWORK_FLOW_LPS,
     formatUnitValue,
     getUnitSymbol,
@@ -527,16 +528,26 @@ export class SistemaSimulacao extends Observable {
             const curveFrac = qMax > EPSILON_FLOW ? 1 - Math.pow(referenceFlow / qMax, 2) : 0;
             const inletPressure = inletPressureBar ?? comp.getPressaoEntradaBar();
             const efficiency = comp.getEficienciaInstantanea(referenceFlow);
+            const suctionFlowReference = clamp(
+                Math.max(referenceFlow, estimating ? comp.estadoHidraulico.entradaVazaoLps : incomingFlow),
+                0,
+                qMax
+            );
+            const suctionVelocityMps = areaM2 > 0 ? lpsToM3s(suctionFlowReference) / areaM2 : 0;
+            const suctionVelocityHeadM = (suctionVelocityMps * suctionVelocityMps) / (2 * GRAVITY);
             const absSuctionBar = this.fluidoOperante.pressaoAtmosfericaBar + inletPressure;
             const npshAvailableM = Math.max(
                 0,
-                ((absSuctionBar - this.fluidoOperante.pressaoVaporBar) * BAR_TO_PA) / (this.fluidoOperante.densidade * GRAVITY)
+                (((absSuctionBar - this.fluidoOperante.pressaoVaporBar) * BAR_TO_PA) / (this.fluidoOperante.densidade * GRAVITY))
+                + suctionVelocityHeadM
             );
-            const cavitationFactor = comp.calcularFatorCavitacao(npshAvailableM);
+            const npshRequiredM = comp.getCurvaNpshRequeridoM(suctionFlowReference, drive);
+            const cavitationFactor = comp.calcularFatorCavitacao(npshAvailableM, npshRequiredM);
             const boostBar = comp.pressaoMaxima * drive * drive * Math.max(0.05, curveFrac) * cavitationFactor;
             const effectiveQRemaining = qRemaining * Math.max(0.25, cavitationFactor);
 
             comp.npshDisponivelM = npshAvailableM;
+            comp.npshRequeridoAtualM = npshRequiredM;
             comp.fatorCavitacaoAtual = cavitationFactor;
             comp.eficienciaAtual = efficiency;
 

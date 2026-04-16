@@ -1,4 +1,4 @@
-import { clamp, ComponenteFisico, smoothFirstOrder } from './BaseComponente.js';
+import { clamp, ComponenteFisico, rampToTarget } from './BaseComponente.js';
 import { ENGINE } from '../MotorFisico.js';
 import { EPSILON_FLOW } from '../utils/Units.js';
 
@@ -14,7 +14,9 @@ export class BombaLogica extends ComponenteFisico {
         this.eficienciaHidraulica = 0.78;
         this.eficienciaAtual = this.eficienciaHidraulica;
         this.npshRequeridoM = 2.5;
+        this.npshRequeridoAtualM = this.npshRequeridoM;
         this.npshDisponivelM = 0;
+        this.margemNpshM = 0;
         this.fatorCavitacaoAtual = 1;
         this.tempoRampaSegundos = 1.6;
         this.fracaoMelhorEficiencia = 0.72;
@@ -24,9 +26,10 @@ export class BombaLogica extends ComponenteFisico {
         this.cargaGeradaBar = 0;
     }
 
-    calcularFatorCavitacao(npshDisponivelM) {
-        if (npshDisponivelM >= this.npshRequeridoM * 1.1) return 1;
-        return clamp(Math.pow(npshDisponivelM / Math.max(0.1, this.npshRequeridoM), 1.7), 0.12, 1);
+    calcularFatorCavitacao(npshDisponivelM, npshRequeridoM = this.npshRequeridoAtualM ?? this.npshRequeridoM) {
+        const npshRequeridoSeguroM = Math.max(0.05, npshRequeridoM);
+        if (npshDisponivelM >= npshRequeridoSeguroM) return 1;
+        return clamp(Math.pow(npshDisponivelM / npshRequeridoSeguroM, 1.7), 0.12, 1);
     }
 
     toggle() {
@@ -69,7 +72,21 @@ export class BombaLogica extends ComponenteFisico {
         const qMax = Math.max(EPSILON_FLOW, this.vazaoNominal * Math.max(driveClamped, 0.05));
         const normalizedFlow = clamp(flowLps / qMax, 0, 1);
         const ratio = 0.42 + (0.58 * Math.pow(normalizedFlow, 1.8));
-        return Math.max(0.2, this.npshRequeridoM * ratio);
+        const speedFactor = Math.max(0.05, driveClamped * driveClamped);
+        return Math.max(0.02, this.npshRequeridoM * speedFactor * ratio);
+    }
+
+    getMargemNpshAtualM() {
+        return this.margemNpshM;
+    }
+
+    getCondicaoSucaoAtual() {
+        if (this.getDriveAtual() <= 0.01 && Math.abs(this.fluxoReal) <= EPSILON_FLOW) {
+            return 'Sem bombeamento';
+        }
+        if (this.margemNpshM < 0) return 'Risco de cavitação';
+        if (this.margemNpshM < 0.5) return 'No limite';
+        return 'Com folga';
     }
 
     setAcionamento(valor) {
@@ -90,7 +107,7 @@ export class BombaLogica extends ComponenteFisico {
 
     atualizarDinamica(dt) {
         const previousDrive = this.acionamentoEfetivo;
-        this.acionamentoEfetivo = smoothFirstOrder(previousDrive, this.grauAcionamento, dt, this.tempoRampaSegundos);
+        this.acionamentoEfetivo = rampToTarget(previousDrive, this.grauAcionamento, dt, this.tempoRampaSegundos);
         this.isOn = this.acionamentoEfetivo > 0.5;
 
         if (Math.abs(this.acionamentoEfetivo - previousDrive) > 0.05) {
@@ -111,7 +128,9 @@ export class BombaLogica extends ComponenteFisico {
         this.pressaoSucaoAtualBar = 0;
         this.pressaoDescargaAtualBar = 0;
         this.cargaGeradaBar = 0;
+        this.npshRequeridoAtualM = this.npshRequeridoM;
         this.npshDisponivelM = 0;
+        this.margemNpshM = 0;
         this.fatorCavitacaoAtual = 1;
         this.notify({
             tipo: 'estado',
@@ -130,6 +149,8 @@ export class BombaLogica extends ComponenteFisico {
         const qMax = this.vazaoNominal * drive;
         const curveFrac = qMax > EPSILON_FLOW ? 1 - Math.pow(clamp(this.fluxoReal / qMax, 0, 1), 2) : 0;
         this.eficienciaAtual = this.getEficienciaInstantanea(this.fluxoReal);
+        this.npshRequeridoAtualM = this.getCurvaNpshRequeridoM(this.fluxoReal, drive);
+        this.margemNpshM = this.npshDisponivelM - this.npshRequeridoAtualM;
         this.cargaGeradaBar = drive > 0 ? this.pressaoMaxima * drive * drive * Math.max(0.05, curveFrac) * this.fatorCavitacaoAtual : 0;
         this.pressaoDescargaAtualBar = this.pressaoSucaoAtualBar + this.cargaGeradaBar;
         this.pressaoSaidaAtualBar = this.pressaoDescargaAtualBar;

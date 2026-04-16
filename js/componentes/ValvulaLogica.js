@@ -1,4 +1,4 @@
-import { clamp, ComponenteFisico, pressureLossFromFlow, smoothFirstOrder } from './BaseComponente.js';
+import { clamp, ComponenteFisico, pressureLossFromFlow, rampToTarget } from './BaseComponente.js';
 import { ENGINE } from '../MotorFisico.js';
 
 const FATOR_MINIMO_AREA = 0.12;
@@ -170,7 +170,7 @@ export class ValvulaLogica extends ComponenteFisico {
 
     atualizarDinamica(dt) {
         const previousOpening = this.aberturaEfetiva;
-        this.aberturaEfetiva = smoothFirstOrder(previousOpening, this.grauAbertura, dt, this.tempoCursoSegundos);
+        this.aberturaEfetiva = rampToTarget(previousOpening, this.grauAbertura, dt, this.tempoCursoSegundos);
         this.aberta = this.aberturaEfetiva > 0.5;
 
         if (Math.abs(this.aberturaEfetiva - previousOpening) > 0.05) {

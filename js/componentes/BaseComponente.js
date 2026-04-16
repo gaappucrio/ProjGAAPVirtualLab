@@ -19,6 +19,19 @@ export const smoothFirstOrder = (current, target, dt, timeConstantS) => {
     return current + ((target - current) * alpha);
 };
 
+// Aplica uma rampa linear limitada por tempo total de curso.
+export const rampToTarget = (current, target, dt, fullScaleTimeS, fullScaleRange = 100) => {
+    if (dt <= 0) return current;
+    if (!Number.isFinite(fullScaleTimeS) || fullScaleTimeS <= 0) return target;
+
+    const range = Math.max(Number.EPSILON, Math.abs(fullScaleRange));
+    const maxDelta = (range / fullScaleTimeS) * dt;
+    const delta = target - current;
+
+    if (Math.abs(delta) <= maxDelta) return target;
+    return current + (Math.sign(delta) * maxDelta);
+};
+
 export function flowFromBernoulli(deltaPBar, areaM2, density, lossCoeff) {
     if (deltaPBar <= 0 || areaM2 <= 0) return 0;
     const velocity = Math.sqrt((2 * deltaPBar * BAR_TO_PA) / (density * safeLossCoeff(lossCoeff)));

@@ -383,6 +383,70 @@
       /* Borda sutil para os grupos de propriedades, criando um contraste sutil com o fundo branco do painel de propriedades e ajudando a destacar cada grupo de propriedades para os usuários, além de criar um visual mais organizado e profissional para as propriedades dos componentes selecionados */
   }
 
+  .prop-tabs {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+  }
+
+  .prop-tab-bar {
+      display: flex;
+      gap: 8px;
+      padding: 4px;
+      border: 1px solid #d8e3e7;
+      border-radius: 10px;
+      background: #f4f8f9;
+  }
+
+  .prop-tab-button {
+      flex: 1;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: #60727f;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      padding: 9px 10px;
+      cursor: pointer;
+      transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .prop-tab-button:hover {
+      background: rgba(52, 152, 219, 0.08);
+      color: #2c3e50;
+  }
+
+  .prop-tab-button.is-active {
+      background: #ffffff;
+      color: #1f3a4a;
+      box-shadow: 0 2px 8px rgba(44, 62, 80, 0.12);
+  }
+
+  .prop-tab-panel {
+      display: none;
+      flex-direction: column;
+  }
+
+  .prop-tab-panel.is-active {
+      display: flex;
+  }
+
+  .prop-tab-panel[hidden] {
+      display: none !important;
+  }
+
+  .prop-tab-description {
+      margin: 0 0 12px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #eef6f8;
+      border: 1px solid #d6e8ed;
+      color: #55707e;
+      font-size: 12px;
+      line-height: 1.5;
+  }
+
   .prop-group label
 
   /* RÓTULOS DAS PROPRIEDADES  */

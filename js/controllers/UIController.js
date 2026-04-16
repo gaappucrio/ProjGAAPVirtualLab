@@ -3,17 +3,20 @@
 // Ficheiro: js/controllers/UIController.js
 // ====================================
 
+import { BombaLogica } from '../componentes/BombaLogica.js';
+import { DrenoLogico } from '../componentes/DrenoLogico.js';
+import { FonteLogica } from '../componentes/FonteLogica.js';
+import { TanqueLogico } from '../componentes/TanqueLogico.js';
+import { ValvulaLogica } from '../componentes/ValvulaLogica.js';
 import {
     ENGINE,
     FLUID_PRESETS
 } from '../MotorFisico.js';
-import { TanqueLogico } from '../componentes/TanqueLogico.js';
-import { ValvulaLogica } from '../componentes/ValvulaLogica.js';
-import { BombaLogica } from '../componentes/BombaLogica.js';
-import { DrenoLogico } from '../componentes/DrenoLogico.js';
-import { FonteLogica } from '../componentes/FonteLogica.js';
 import { REGISTRO_COMPONENTES } from '../RegistroComponentes.js';
 
+import { clearInputError, InputValidator, showInputError } from '../utils/InputValidator.js';
+import { bindPropertyTabs, renderPropertyTabs } from '../utils/PropertyTabs.js';
+import { TOOLTIPS } from '../utils/Tooltips.js';
 import {
     DEFAULT_PIPE_ROUGHNESS_MM,
     formatUnitValue,
@@ -25,13 +28,13 @@ import {
     toBaseValue,
     toDisplayValue
 } from '../utils/Units.js';
-import { TOOLTIPS } from '../utils/Tooltips.js';
-import { InputValidator, showInputError, clearInputError } from '../utils/InputValidator.js';
 
 let volumeChart;
 let pumpCurveChart = null;
 let chartUpdateTimer = 0;
 let chartedTankId = null;
+let chartedPumpId = null;
+let monitorChartMode = 'empty';
 
 export function setupUI() {
     setupPanelToggles();
@@ -65,7 +68,12 @@ function setupPanelToggles() {
         const isMax = chartWrapper.classList.toggle('maximized');
         btnMaxChart.textContent = isMax ? '✕ Fechar' : '⛶ Expandir';
         chartMaxHeader.style.display = isMax ? 'flex' : 'none';
-        if (volumeChart) volumeChart.resize();
+        requestAnimationFrame(() => {
+            if (volumeChart) {
+                volumeChart.resize();
+                refreshVolumeChartPresentation();
+            }
+        });
     }
 
     btnMaxChart.addEventListener('click', toggleChartMaximize);
@@ -83,14 +91,37 @@ function setupPanelToggles() {
 }
 
 function setupChart() {
-    const ctx = document.getElementById('gaap-volume-chart').getContext('2d');
+    createEmptyMonitorChart();
+}
+
+function getMonitorChartContext() {
+    const canvas = document.getElementById('gaap-volume-chart');
+    return canvas ? canvas.getContext('2d') : null;
+}
+
+function destroyMonitorChart() {
+    if (volumeChart) {
+        volumeChart.destroy();
+        volumeChart = null;
+    }
+}
+
+function isMonitorChartExpanded() {
+    return document.getElementById('chart-wrapper')?.classList.contains('maximized') === true;
+}
+
+function createEmptyMonitorChart() {
+    const ctx = getMonitorChartContext();
+    if (!ctx) return;
+
+    destroyMonitorChart();
 
     volumeChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: [0],
             datasets: [{
-                label: 'Selecione um Tanque',
+                label: 'Selecione um Tanque ou Bomba',
                 data: [0],
                 borderColor: '#3498db',
                 backgroundColor: 'rgba(52, 152, 219, 0.2)',
@@ -132,6 +163,69 @@ function setupChart() {
             }
         }
     });
+
+    monitorChartMode = 'empty';
+    chartedTankId = null;
+    chartedPumpId = null;
+}
+
+function createTankMonitorChart(component) {
+    const ctx = getMonitorChartContext();
+    if (!ctx) return;
+
+    destroyMonitorChart();
+
+    volumeChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [Math.round(ENGINE.elapsedTime)],
+            datasets: [{
+                label: `Volume: ${component.tag}`,
+                data: [component.volumeAtual],
+                borderColor: '#3498db',
+                backgroundColor: 'rgba(52, 152, 219, 0.2)',
+                borderWidth: 2,
+                fill: true,
+                pointRadius: 0,
+                pointHoverRadius: 6,
+                hitRadius: 15,
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                tooltip: {
+                    backgroundColor: 'rgba(44, 62, 80, 0.9)',
+                    titleFont: { size: 14 },
+                    bodyFont: { size: 14, weight: 'bold' },
+                    padding: 10,
+                    callbacks: {
+                        title: (ctx) => `Tempo: ${ctx[0].label}s`,
+                        label: (ctx) => `Volume: ${toDisplayValue('volume', ctx.parsed.y).toFixed(1)} ${getUnitSymbol('volume')}`
+                    }
+                }
+            },
+            scales: {
+                x: { title: { display: true, text: 'Tempo (s)' } },
+                y: {
+                    min: 0,
+                    max: component.capacidadeMaxima,
+                    title: { display: true, text: `Volume (${getUnitSymbol('volume')})` },
+                    ticks: {
+                        callback: (value) => volumeTickLabel(value)
+                    }
+                }
+            }
+        }
+    });
+
+    monitorChartMode = 'tank';
+    chartedTankId = component.id;
+    chartedPumpId = null;
 }
 
 function getPropContent() {
@@ -167,6 +261,117 @@ function displayBound(category, baseValue, digits = 3) {
 
 function displayStep(category, baseStep, digits = 6) {
     return Math.max(Number(toDisplayValue(category, baseStep).toFixed(digits)), Number.EPSILON);
+}
+
+function formatMeasuredValue(category, baseValue, digits = 2) {
+    return `${formatUnitValue(category, baseValue, digits)} ${getUnitSymbol(category)}`;
+}
+
+function getPumpNpshMargin(component) {
+    const npshRequeridoAtualM = component.npshRequeridoAtualM ?? component.npshRequeridoM ?? 0;
+    return component.getMargemNpshAtualM?.() ?? (component.npshDisponivelM - npshRequeridoAtualM);
+}
+
+function getPumpNpshCondition(component) {
+    return component.getCondicaoSucaoAtual?.() ?? 'Sem leitura';
+}
+
+function getRecommendedSourcePressureText(alerta) {
+    if (!alerta?.autoAjustavel || !Array.isArray(alerta.ajustesFonte) || alerta.ajustesFonte.length === 0) {
+        return null;
+    }
+
+    const valores = alerta.ajustesFonte.map(ajuste => ajuste.pressaoRecomendadaBar);
+    const menor = Math.min(...valores);
+    const maior = Math.max(...valores);
+
+    if (Math.abs(maior - menor) < 0.0005) {
+        return formatMeasuredValue('pressure', maior, 2);
+    }
+
+    return `${formatMeasuredValue('pressure', menor, 2)} a ${formatMeasuredValue('pressure', maior, 2)}`;
+}
+
+function updateTankSaturationAlert(component) {
+    const painelAlerta = document.getElementById('painel-alerta-saturacao');
+    const textoAlerta = document.getElementById('texto-alerta-saturacao');
+    const btnAjuste = document.getElementById('btn-aplicar-alerta-saturacao');
+    const feedbackAjuste = document.getElementById('texto-acao-alerta-saturacao');
+
+    if (!painelAlerta || !textoAlerta || !(component instanceof TanqueLogico)) return;
+
+    const alerta = component.alertaSaturacao;
+    if (!alerta?.ativo) {
+        painelAlerta.style.display = 'none';
+        if (feedbackAjuste) {
+            feedbackAjuste.textContent = '';
+            feedbackAjuste.dataset.state = '';
+        }
+        return;
+    }
+
+    const pressaoRecomendada = getRecommendedSourcePressureText(alerta);
+    const textoModoAltura = alerta.usarAlturaRelativa
+        ? `Com a altura relativa ativa, a recomendação considera a contrapressão no bocal de entrada no set point (${formatMeasuredValue('pressure', alerta.pressaoBaseEntradaSetpointBar, 2)}) e a pressão disponível de saída nesse mesmo nível (${formatMeasuredValue('pressure', alerta.pressaoSaidaSetpointBar, 2)}).`
+        : `Com a altura relativa desativada, a entrada do tanque não considera contrapressão hidrostática; o ajuste usa somente a capacidade de saída estimada para o set point (${formatMeasuredValue('pressure', alerta.pressaoSaidaSetpointBar, 2)}).`;
+    const textoPressao = pressaoRecomendada
+        ? `Para estabilizar no set point de <b>${component.setpoint}%</b>, ajuste a pressão de alimentação para <b>${pressaoRecomendada}</b>.`
+        : 'Nenhuma fonte de entrada foi encontrada para aplicar o ajuste automaticamente.';
+    const textoBombas = alerta.possuiBombasMontante
+        ? ` Há ${alerta.quantidadeBombasMontante} bomba(s) no trecho de entrada; o ajuste automático atua apenas nas fontes de alimentação.`
+        : '';
+
+    painelAlerta.style.display = 'block';
+    textoAlerta.innerHTML = `
+        A saída do tanque atingiu o limite físico para o controle de nível.
+        ${textoPressao}
+        A vazão máxima estimada de saída no set point é <b>${formatMeasuredValue('flow', alerta.vazaoSaidaLimiteSetpointLps, 2)}</b>.
+        ${textoModoAltura}${textoBombas}
+    `;
+
+    if (btnAjuste) {
+        btnAjuste.style.display = 'inline-flex';
+        btnAjuste.disabled = !alerta.autoAjustavel;
+        btnAjuste.textContent = alerta.autoAjustavel
+            ? (alerta.ajustesFonte.length === 1
+                ? 'Aplicar na fonte de entrada'
+                : `Aplicar nas ${alerta.ajustesFonte.length} fontes de entrada`)
+            : 'Ajuste automático indisponível';
+    }
+
+    if (feedbackAjuste && !alerta.autoAjustavel && !feedbackAjuste.dataset.state) {
+        feedbackAjuste.textContent = 'Conecte uma fonte de entrada para permitir o ajuste automático.';
+        feedbackAjuste.style.color = '#a84300';
+    } else if (feedbackAjuste && alerta.autoAjustavel && !feedbackAjuste.dataset.state) {
+        feedbackAjuste.textContent = '';
+    }
+}
+
+function bindTankSaturationAlertActions(component) {
+    if (!(component instanceof TanqueLogico)) return;
+
+    const btnAjuste = document.getElementById('btn-aplicar-alerta-saturacao');
+    const feedbackAjuste = document.getElementById('texto-acao-alerta-saturacao');
+    if (!btnAjuste || !feedbackAjuste) return;
+
+    btnAjuste.addEventListener('click', () => {
+        const resultado = component.aplicarAjustePressaoSetpoint();
+        if (resultado.aplicado) {
+            feedbackAjuste.textContent = resultado.quantidadeFontes === 1
+                ? 'Pressão de alimentação ajustada automaticamente.'
+                : `Pressão ajustada automaticamente em ${resultado.quantidadeFontes} fontes de entrada.`;
+            feedbackAjuste.style.color = '#1e8449';
+            feedbackAjuste.dataset.state = 'success';
+        } else {
+            feedbackAjuste.textContent = resultado.motivo;
+            feedbackAjuste.style.color = '#a84300';
+            feedbackAjuste.dataset.state = 'warning';
+        }
+
+        ENGINE.notify({ tipo: 'update_painel', dt: 0 });
+    });
+
+    updateTankSaturationAlert(component);
 }
 
 function renderUnitControls() {
@@ -266,11 +471,25 @@ function getCurrentFluidPresetId() {
 
 function refreshVolumeChartPresentation() {
     if (!volumeChart) return;
+
+    if (monitorChartMode === 'pump') {
+        const bomba = ENGINE.componentes.find((component) => component.id === chartedPumpId);
+        if (bomba instanceof BombaLogica) {
+            refreshMonitorPumpChart(bomba);
+        }
+        return;
+    }
+
+    if (monitorChartMode === 'empty') {
+        volumeChart.data.datasets[0].label = 'Selecione um Tanque ou Bomba';
+        volumeChart.options.scales.y.max = 1000;
+    }
+
     volumeChart.options.scales.y.title.text = `Volume (${getUnitSymbol('volume')})`;
     volumeChart.options.plugins.tooltip.callbacks.label = (ctx) => `Volume: ${toDisplayValue('volume', ctx.parsed.y).toFixed(1)} ${getUnitSymbol('volume')}`;
     volumeChart.options.scales.y.ticks.callback = (value) => volumeTickLabel(value);
 
-    if (chartedTankId) {
+    if (monitorChartMode === 'tank' && chartedTankId) {
         const tank = ENGINE.componentes.find((component) => component.id === chartedTankId);
         if (tank) volumeChart.options.scales.y.max = tank.capacidadeMaxima;
     }
@@ -307,22 +526,78 @@ function buildPumpCurveDatasets(component) {
     };
 }
 
-function renderPumpCurveChart(component) {
-    const canvas = document.getElementById('pump-curve-chart');
-    if (!canvas) {
-        destroyPumpCurveChart();
-        return;
-    }
+function getPumpMonitorScaleProfile() {
+    const expanded = isMonitorChartExpanded();
+    return {
+        expanded,
+        titleFontSize: expanded ? 13 : 10,
+        tickFontSize: expanded ? 12 : 10,
+        secondaryTickFontSize: expanded ? 11 : 9,
+        legendFontSize: expanded ? 12 : 10,
+        legendPadding: expanded ? 16 : 12,
+        legendBoxSize: expanded ? 10 : 8,
+        maxTicksX: expanded ? 8 : 6,
+        maxTicksY: expanded ? 6 : 5,
+        pointRadius: expanded ? 7 : 5,
+        pointHoverRadius: expanded ? 8 : 6,
+        showSecondaryTitles: expanded,
+        layoutPadding: expanded
+            ? { top: 14, right: 18, left: 10, bottom: 6 }
+            : { top: 8, right: 8, left: 4, bottom: 0 }
+    };
+}
+
+function applyPumpMonitorChartPresentation(chart, datasets) {
+    if (!chart) return;
+
+    const profile = getPumpMonitorScaleProfile();
+
+    chart.options.layout.padding = profile.layoutPadding;
+    chart.options.plugins.legend.position = 'bottom';
+    chart.options.plugins.legend.labels.boxWidth = profile.legendBoxSize;
+    chart.options.plugins.legend.labels.boxHeight = profile.legendBoxSize;
+    chart.options.plugins.legend.labels.padding = profile.legendPadding;
+    chart.options.plugins.legend.labels.font = { size: profile.legendFontSize };
+
+    chart.options.scales.x.title.text = `Vazão (${datasets.flowUnit})`;
+    chart.options.scales.x.title.font = { size: profile.titleFontSize };
+    chart.options.scales.x.ticks.font = { size: profile.tickFontSize };
+    chart.options.scales.x.ticks.maxTicksLimit = profile.maxTicksX;
+
+    chart.options.scales.yHead.title.text = `Carga (${datasets.pressureUnit})`;
+    chart.options.scales.yHead.title.font = { size: profile.titleFontSize };
+    chart.options.scales.yHead.ticks.font = { size: profile.tickFontSize };
+    chart.options.scales.yHead.ticks.maxTicksLimit = profile.maxTicksY;
+
+    chart.options.scales.yEff.title.display = profile.showSecondaryTitles;
+    chart.options.scales.yEff.title.text = 'Eficiência (%)';
+    chart.options.scales.yEff.title.font = { size: profile.titleFontSize };
+    chart.options.scales.yEff.ticks.font = { size: profile.secondaryTickFontSize };
+    chart.options.scales.yEff.ticks.maxTicksLimit = profile.maxTicksY;
+
+    chart.options.scales.yNpsh.title.display = profile.showSecondaryTitles;
+    chart.options.scales.yNpsh.title.text = `NPSHr (${datasets.lengthUnit})`;
+    chart.options.scales.yNpsh.title.font = { size: profile.titleFontSize };
+    chart.options.scales.yNpsh.ticks.font = { size: profile.secondaryTickFontSize };
+    chart.options.scales.yNpsh.ticks.maxTicksLimit = profile.maxTicksY;
+
+    chart.data.datasets[3].pointRadius = profile.pointRadius;
+    chart.data.datasets[3].pointHoverRadius = profile.pointHoverRadius;
+}
+
+function createPumpMonitorChart(component) {
+    const ctx = getMonitorChartContext();
+    if (!ctx) return;
 
     const datasets = buildPumpCurveDatasets(component);
-    destroyPumpCurveChart();
+    destroyMonitorChart();
 
-    pumpCurveChart = new Chart(canvas.getContext('2d'), {
+    volumeChart = new Chart(ctx, {
         type: 'line',
         data: {
             datasets: [
                 {
-                    label: `Carga (${datasets.pressureUnit})`,
+                    label: 'Carga',
                     data: datasets.headPoints,
                     borderColor: '#2980b9',
                     backgroundColor: 'rgba(41, 128, 185, 0.12)',
@@ -333,7 +608,7 @@ function renderPumpCurveChart(component) {
                     pointRadius: 0
                 },
                 {
-                    label: 'Eficiência (%)',
+                    label: 'Eficiência',
                     data: datasets.efficiencyPoints,
                     borderColor: '#27ae60',
                     backgroundColor: 'rgba(39, 174, 96, 0.1)',
@@ -344,7 +619,7 @@ function renderPumpCurveChart(component) {
                     pointRadius: 0
                 },
                 {
-                    label: `NPSHr (${datasets.lengthUnit})`,
+                    label: 'NPSHr',
                     data: datasets.npshPoints,
                     borderColor: '#e67e22',
                     backgroundColor: 'rgba(230, 126, 34, 0.1)',
@@ -356,7 +631,7 @@ function renderPumpCurveChart(component) {
                     pointRadius: 0
                 },
                 {
-                    label: 'Ponto Atual',
+                    label: 'Operação',
                     type: 'scatter',
                     data: [{ x: datasets.currentFlow, y: datasets.currentHead }],
                     borderColor: '#c0392b',
@@ -372,11 +647,17 @@ function renderPumpCurveChart(component) {
             maintainAspectRatio: false,
             animation: false,
             interaction: { mode: 'nearest', intersect: false },
+            layout: { padding: { top: 8, right: 8, left: 4, bottom: 0 } },
             plugins: {
                 legend: {
+                    position: 'bottom',
                     labels: {
-                        boxWidth: 10,
-                        font: { size: 11 }
+                        boxWidth: 8,
+                        boxHeight: 8,
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        padding: 12,
+                        font: { size: 10 }
                     }
                 },
                 tooltip: {
@@ -400,12 +681,14 @@ function renderPumpCurveChart(component) {
             scales: {
                 x: {
                     type: 'linear',
-                    title: { display: true, text: `Vazão (${datasets.flowUnit})` }
+                    title: { display: true, text: `Vazão (${datasets.flowUnit})` },
+                    ticks: { maxTicksLimit: 6 }
                 },
                 yHead: {
                     type: 'linear',
                     position: 'left',
-                    title: { display: true, text: `Carga (${datasets.pressureUnit})` }
+                    title: { display: true, text: `Carga (${datasets.pressureUnit})` },
+                    ticks: { maxTicksLimit: 5 }
                 },
                 yEff: {
                     type: 'linear',
@@ -413,14 +696,217 @@ function renderPumpCurveChart(component) {
                     min: 0,
                     max: 100,
                     grid: { drawOnChartArea: false },
-                    title: { display: true, text: 'Eficiência (%)' }
+                    title: { display: false, text: 'Eficiência (%)' },
+                    ticks: {
+                        maxTicksLimit: 5,
+                        callback: (value) => `${value}%`
+                    }
                 },
                 yNpsh: {
                     type: 'linear',
                     position: 'right',
                     offset: true,
                     grid: { drawOnChartArea: false },
-                    title: { display: true, text: `NPSHr (${datasets.lengthUnit})` }
+                    title: { display: false, text: `NPSHr (${datasets.lengthUnit})` },
+                    ticks: { maxTicksLimit: 5 }
+                }
+            }
+        }
+    });
+
+    applyPumpMonitorChartPresentation(volumeChart, datasets);
+    volumeChart.update();
+
+    monitorChartMode = 'pump';
+    chartedPumpId = component.id;
+    chartedTankId = null;
+}
+
+function refreshMonitorPumpChart(component) {
+    if (!(component instanceof BombaLogica) || !volumeChart || monitorChartMode !== 'pump' || chartedPumpId !== component.id) {
+        return;
+    }
+
+    const datasets = buildPumpCurveDatasets(component);
+    volumeChart.data.datasets[0].label = 'Carga';
+    volumeChart.data.datasets[0].data = datasets.headPoints;
+    volumeChart.data.datasets[1].label = 'Eficiência';
+    volumeChart.data.datasets[1].data = datasets.efficiencyPoints;
+    volumeChart.data.datasets[2].label = 'NPSHr';
+    volumeChart.data.datasets[2].data = datasets.npshPoints;
+    volumeChart.data.datasets[3].label = 'Operação';
+    volumeChart.data.datasets[3].data = [{ x: datasets.currentFlow, y: datasets.currentHead }];
+    volumeChart.options.plugins.tooltip.callbacks.title = (ctx) => `Vazão: ${Number(ctx[0].parsed.x).toFixed(2)} ${datasets.flowUnit}`;
+    volumeChart.options.plugins.tooltip.callbacks.label = (ctx) => {
+        if (ctx.dataset.yAxisID === 'yHead') {
+            return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.pressureUnit}`;
+        }
+        if (ctx.dataset.yAxisID === 'yEff') {
+            return `Eficiência: ${Number(ctx.parsed.y).toFixed(1)} %`;
+        }
+        if (ctx.dataset.yAxisID === 'yNpsh') {
+            return `NPSHr: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.lengthUnit}`;
+        }
+        return `Ponto atual: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.pressureUnit}`;
+    };
+
+    applyPumpMonitorChartPresentation(volumeChart, datasets);
+    volumeChart.update();
+}
+
+function renderPumpCurveChart(component) {
+    const canvas = document.getElementById('pump-curve-chart');
+    if (!canvas) {
+        destroyPumpCurveChart();
+        return;
+    }
+
+    const datasets = buildPumpCurveDatasets(component);
+    destroyPumpCurveChart();
+
+    pumpCurveChart = new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+            datasets: [
+                {
+                    label: 'Carga',
+                    data: datasets.headPoints,
+                    borderColor: '#2980b9',
+                    backgroundColor: 'rgba(41, 128, 185, 0.12)',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.22,
+                    yAxisID: 'yHead',
+                    pointRadius: 0
+                },
+                {
+                    label: 'Eficiência',
+                    data: datasets.efficiencyPoints,
+                    borderColor: '#27ae60',
+                    backgroundColor: 'rgba(39, 174, 96, 0.1)',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.22,
+                    yAxisID: 'yEff',
+                    pointRadius: 0
+                },
+                {
+                    label: 'NPSHr',
+                    data: datasets.npshPoints,
+                    borderColor: '#e67e22',
+                    backgroundColor: 'rgba(230, 126, 34, 0.1)',
+                    borderDash: [6, 4],
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.22,
+                    yAxisID: 'yNpsh',
+                    pointRadius: 0
+                },
+                {
+                    label: 'Operação',
+                    type: 'scatter',
+                    data: [{ x: datasets.currentFlow, y: datasets.currentHead }],
+                    borderColor: '#c0392b',
+                    backgroundColor: '#c0392b',
+                    pointRadius: 5,
+                    pointHoverRadius: 6,
+                    yAxisID: 'yHead'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: { mode: 'nearest', intersect: false },
+            layout: {
+                padding: {
+                    top: 6,
+                    right: 6,
+                    left: 2,
+                    bottom: 0
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        boxWidth: 8,
+                        boxHeight: 8,
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        padding: 12,
+                        font: { size: 10 }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        title: (ctx) => `Vazão: ${Number(ctx[0].parsed.x).toFixed(2)} ${datasets.flowUnit}`,
+                        label: (ctx) => {
+                            if (ctx.dataset.yAxisID === 'yHead') {
+                                return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.pressureUnit}`;
+                            }
+                            if (ctx.dataset.yAxisID === 'yEff') {
+                                return `Eficiência: ${Number(ctx.parsed.y).toFixed(1)} %`;
+                            }
+                            if (ctx.dataset.yAxisID === 'yNpsh') {
+                                return `NPSHr: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.lengthUnit}`;
+                            }
+                            return `Ponto atual: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.pressureUnit}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    type: 'linear',
+                    title: {
+                        display: true,
+                        text: `Vazão (${datasets.flowUnit})`,
+                        font: { size: 10 },
+                        padding: { top: 6 }
+                    },
+                    ticks: {
+                        font: { size: 10 },
+                        maxTicksLimit: 6
+                    }
+                },
+                yHead: {
+                    type: 'linear',
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: `Carga (${datasets.pressureUnit})`,
+                        font: { size: 10 }
+                    },
+                    ticks: {
+                        font: { size: 10 },
+                        maxTicksLimit: 5
+                    }
+                },
+                yEff: {
+                    type: 'linear',
+                    position: 'right',
+                    min: 0,
+                    max: 100,
+                    grid: { drawOnChartArea: false },
+                    title: { display: false, text: 'Eficiência (%)' },
+                    ticks: {
+                        font: { size: 9 },
+                        maxTicksLimit: 5,
+                        callback: (value) => `${value}%`
+                    }
+                },
+                yNpsh: {
+                    type: 'linear',
+                    position: 'right',
+                    offset: true,
+                    grid: { drawOnChartArea: false },
+                    title: { display: false, text: `NPSHr (${datasets.lengthUnit})` },
+                    ticks: {
+                        font: { size: 9 },
+                        maxTicksLimit: 5
+                    }
                 }
             }
         }
@@ -430,11 +916,13 @@ function renderPumpCurveChart(component) {
 function refreshPumpCurveChart(component) {
     if (!(component instanceof BombaLogica) || !pumpCurveChart) return;
     const datasets = buildPumpCurveDatasets(component);
-    pumpCurveChart.data.datasets[0].label = `Carga (${datasets.pressureUnit})`;
+    pumpCurveChart.data.datasets[0].label = 'Carga';
     pumpCurveChart.data.datasets[0].data = datasets.headPoints;
+    pumpCurveChart.data.datasets[1].label = 'Eficiência';
     pumpCurveChart.data.datasets[1].data = datasets.efficiencyPoints;
-    pumpCurveChart.data.datasets[2].label = `NPSHr (${datasets.lengthUnit})`;
+    pumpCurveChart.data.datasets[2].label = 'NPSHr';
     pumpCurveChart.data.datasets[2].data = datasets.npshPoints;
+    pumpCurveChart.data.datasets[3].label = 'Operação';
     pumpCurveChart.data.datasets[3].data = [{ x: datasets.currentFlow, y: datasets.currentHead }];
     pumpCurveChart.options.scales.x.title.text = `Vazão (${datasets.flowUnit})`;
     pumpCurveChart.options.scales.yHead.title.text = `Carga (${datasets.pressureUnit})`;
@@ -462,9 +950,7 @@ function renderDefaultProperties() {
     const fluidOptions = Object.entries(FLUID_PRESETS)
         .map(([id, preset]) => `<option value="${id}" ${currentPreset === id ? 'selected' : ''}>${preset.nome}</option>`)
         .join('');
-
-    propContent.innerHTML = `
-        ${renderUnitControls()}
+    const basicContent = `
         <div class="prop-group">
             <label title="${TOOLTIPS.fluido.velocidadeSimulacao}">Velocidade da Simulação</label>
             <select id="sel-vel">
@@ -486,15 +972,18 @@ function renderDefaultProperties() {
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.fluido.densidade}">Densidade (kg/m³)</label>
-            <input type="number" id="input-fluid-density" title="${TOOLTIPS.fluido.densidade}" value="${ENGINE.fluidoOperante.densidade}" step="1" min="1">
-        </div>
-        <div class="prop-group">
-            <label title="${TOOLTIPS.fluido.viscosidade}">Viscosidade Dinâmica (Pa.s)</label>
-            <input type="number" id="input-fluid-viscosity" title="${TOOLTIPS.fluido.viscosidade}" value="${ENGINE.fluidoOperante.viscosidadeDinamicaPaS}" step="0.0001" min="0.00001">
+            <input type="number" id="input-fluid-density" title="${TOOLTIPS.fluido.densidade}" value="${ENGINE.fluidoOperante.densidade}" step="1" min="100">
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.fluido.temperatura}">Temperatura (${getUnitSymbol('temperature')})</label>
             <input type="number" id="input-fluid-temp" title="${TOOLTIPS.fluido.temperatura}" value="${toDisplayValue('temperature', ENGINE.fluidoOperante.temperatura).toFixed(1)}" step="${getUnitStep('temperature')}" min="${toDisplayValue('temperature', -20).toFixed(1)}" max="${toDisplayValue('temperature', 200).toFixed(1)}">
+        </div>
+        <p style="font-size: 12px; color:#95a5a6; text-align:center;">${TOOLTIPS.painel.estadoVazio}</p>
+    `;
+    const advancedContent = `
+        <div class="prop-group">
+            <label title="${TOOLTIPS.fluido.viscosidade}">Viscosidade Dinâmica (Pa.s)</label>
+            <input type="number" id="input-fluid-viscosity" title="${TOOLTIPS.fluido.viscosidade}" value="${ENGINE.fluidoOperante.viscosidadeDinamicaPaS}" step="0.0001" min="0.0001">
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.fluido.pressaoVapor}">Pressão de Vapor (${getUnitSymbol('pressure')} absoluta)</label>
@@ -504,10 +993,19 @@ function renderDefaultProperties() {
             <label title="${TOOLTIPS.fluido.pressaoAtmosferica}">Pressão Atmosférica (${getUnitSymbol('pressure')} absoluta)</label>
             <input type="number" id="input-fluid-atm" title="${TOOLTIPS.fluido.pressaoAtmosferica}" value="${displayUnitValue('pressure', ENGINE.fluidoOperante.pressaoAtmosfericaBar, 3)}" step="${displayStep('pressure', 0.001)}" min="${displayBound('pressure', 0.5)}" max="${displayBound('pressure', 2)}">
         </div>
-        <p style="font-size: 12px; color:#95a5a6; text-align:center;">${TOOLTIPS.painel.estadoVazio}</p>
+    `;
+
+    propContent.innerHTML = `
+        ${renderUnitControls()}
+        ${renderPropertyTabs({
+            basicContent,
+            advancedContent,
+            advancedDescription: 'Viscosidade e pressões absolutas influenciam atrito, cavitação e disponibilidade de sucção. Em usos mais simples, a aba Geral costuma bastar.'
+        })}
     `;
 
     bindUnitControls();
+    bindPropertyTabs(propContent);
     document.getElementById('sel-vel').value = ENGINE.velocidade;
     document.getElementById('sel-vel').addEventListener('change', (e) => {
         ENGINE.velocidade = parseFloat(e.target.value);
@@ -603,17 +1101,33 @@ function renderConnectionProperties(conn) {
     const state = ENGINE.getConnectionState(conn);
     const labels = getConnectionDisplay(conn);
     const geometry = ENGINE.getConnectionGeometry(conn);
-
-    propContent.innerHTML = `
-        ${renderUnitControls()}
+    const basicContent = `
         <div class="prop-group">
             <label>${TOOLTIPS.conexao.titulo}</label>
             <input type="text" value="${labels.sourceLabel} -> ${labels.targetLabel}" disabled>
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.diametro}">Diâmetro Interno (${getUnitSymbol('length')})</label>
-            <input type="number" id="input-pipe-diameter" title="${TOOLTIPS.conexao.diametro}" value="${displayEditableUnitValue('length', conn.diameterM, 4)}" step="${displayStep('length', 0.005)}" min="${displayBound('length', 0.01)}" max="${displayBound('length', 1)}">
+            <input type="number" id="input-pipe-diameter" title="${TOOLTIPS.conexao.diametro}" value="${displayEditableUnitValue('length', conn.diameterM, 4)}" step="${displayStep('length', 0.005)}" min="${displayBound('length', 0.01)}" max="${displayBound('length', 0.3)}">
         </div>
+        <div class="prop-group">
+            <label>Vazão Atual (${getUnitSymbol('flow')})</label>
+            <input type="text" id="disp-pipe-flow" value="${displayUnitValue('flow', state.flowLps, 2)}" disabled>
+        </div>
+        <div class="prop-group">
+            <label>Vazão Alvo (${getUnitSymbol('flow')})</label>
+            <input type="text" id="disp-pipe-target-flow" value="${displayUnitValue('flow', state.targetFlowLps, 2)}" disabled>
+        </div>
+        <div class="prop-group">
+            <label>Queda de Pressão no Trecho (${getUnitSymbol('pressure')})</label>
+            <input type="text" id="disp-pipe-deltap" value="${displayUnitValue('pressure', state.deltaPBar, 3)}" disabled>
+        </div>
+        <div class="prop-group">
+            <label>Comprimento Total (${getUnitSymbol('length')})</label>
+            <input type="text" id="disp-pipe-length" value="${displayUnitValue('length', state.lengthM || geometry.lengthM, 2)}" disabled>
+        </div>
+    `;
+    const advancedContent = `
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.comprimentoExtra}">Comprimento Extra (${getUnitSymbol('length')})</label>
             <input type="number" id="input-pipe-extra-length" title="${TOOLTIPS.conexao.comprimentoExtra}" value="${displayEditableUnitValue('length', conn.extraLengthM || 0, 4)}" step="${displayStep('length', 0.1)}" min="${displayBound('length', 0)}" max="${displayBound('length', 500)}">
@@ -625,14 +1139,6 @@ function renderConnectionProperties(conn) {
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.perdaLocal}">Perda Local K</label>
             <input type="number" id="input-pipe-loss-k" title="${TOOLTIPS.conexao.perdaLocal}" value="${conn.perdaLocalK}" step="0.1" min="0" max="100">
-        </div>
-        <div class="prop-group">
-            <label>Vazão Atual (${getUnitSymbol('flow')})</label>
-            <input type="text" id="disp-pipe-flow" value="${displayUnitValue('flow', state.flowLps, 2)}" disabled>
-        </div>
-        <div class="prop-group">
-            <label>Vazão Alvo (${getUnitSymbol('flow')})</label>
-            <input type="text" id="disp-pipe-target-flow" value="${displayUnitValue('flow', state.targetFlowLps, 2)}" disabled>
         </div>
         <div class="prop-group">
             <label>Velocidade (m/s)</label>
@@ -651,20 +1157,22 @@ function renderConnectionProperties(conn) {
             <input type="text" id="disp-pipe-regime" value="${state.regime}" disabled>
         </div>
         <div class="prop-group">
-            <label>Queda de Pressão no Trecho (${getUnitSymbol('pressure')})</label>
-            <input type="text" id="disp-pipe-deltap" value="${displayUnitValue('pressure', state.deltaPBar, 3)}" disabled>
-        </div>
-        <div class="prop-group">
-            <label>Comprimento Total (${getUnitSymbol('length')})</label>
-            <input type="text" id="disp-pipe-length" value="${displayUnitValue('length', state.lengthM || geometry.lengthM, 2)}" disabled>
-        </div>
-        <div class="prop-group">
             <label>Resposta Hidráulica (s)</label>
             <input type="text" id="disp-pipe-response" value="${state.responseTimeS.toFixed(2)}" disabled>
         </div>
     `;
 
+    propContent.innerHTML = `
+        ${renderUnitControls()}
+        ${renderPropertyTabs({
+            basicContent,
+            advancedContent,
+            advancedDescription: 'Os parâmetros desta aba refinam perdas distribuídas, perdas locais e a resposta transitória da linha. São úteis quando você quer aproximar melhor a hidráulica do trecho.'
+        })}
+    `;
+
     bindUnitControls();
+    bindPropertyTabs(propContent);
 
     const validatePipeInput = (element, validator, fieldName, setter) => {
         if (!element) return;
@@ -686,7 +1194,7 @@ function renderConnectionProperties(conn) {
     document.getElementById('input-pipe-diameter').addEventListener('change', (e) => {
         validatePipeInput(
             e.target,
-            (v, name) => InputValidator.validateNumber(lengthInputValue(v), 0.001, 0.3, name),
+            (v, name) => InputValidator.validateNumber(lengthInputValue(v), 0.01, 0.3, name),
             'Diâmetro',
             (val) => { conn.diameterM = val; }
         );
@@ -733,8 +1241,10 @@ function renderComponentProperties(component) {
 
     propContent.innerHTML = `
         <div id="painel-alerta-saturacao" style="display: none; background-color: #fdeaea; border-left: 4px solid #e74c3c; padding: 10px; margin-bottom: 15px; border-radius: 4px;">
-            <h4 style="margin: 0 0 5px 0; color: #c0392b; font-size: 13px;">⚠️ Sistema Subdimensionado</h4>
+            <h4 style="margin: 0 0 5px 0; color: #c0392b; font-size: 13px;">Saída Saturada no Set Point</h4>
             <p id="texto-alerta-saturacao" style="margin: 0; font-size: 11px; color: #333;"></p>
+            <button id="btn-aplicar-alerta-saturacao" type="button" style="display:none; margin-top:10px; padding:7px 10px; border:1px solid #c0392b; border-radius:4px; background:#fff; color:#c0392b; font-size:12px; font-weight:600; cursor:pointer;"></button>
+            <p id="texto-acao-alerta-saturacao" style="margin:8px 0 0; font-size:11px;"></p>
         </div>
         ${renderUnitControls()}
         <div class="prop-group">
@@ -745,36 +1255,49 @@ function renderComponentProperties(component) {
     `;
 
     bindUnitControls();
+    bindPropertyTabs(propContent);
     document.getElementById('input-tag').addEventListener('input', (e) => {
         component.tag = e.target.value;
         component.notify({ tipo: 'tag_update' });
     });
 
     if (spec.setupProps) spec.setupProps(component);
-    if (component instanceof BombaLogica) renderPumpCurveChart(component);
-    else destroyPumpCurveChart();
+    if (component instanceof TanqueLogico) bindTankSaturationAlertActions(component);
+    if (component instanceof BombaLogica) {
+        renderPumpCurveChart(component);
+        propContent.querySelector('.prop-tab-button[data-tab-target="advanced"]')?.addEventListener('click', () => {
+            requestAnimationFrame(() => {
+                if (!pumpCurveChart) renderPumpCurveChart(component);
+                if (pumpCurveChart) {
+                    pumpCurveChart.resize();
+                    refreshPumpCurveChart(component);
+                }
+            });
+        });
+    } else destroyPumpCurveChart();
 }
 
 function refreshChartSelection(component, connection) {
     if (component instanceof TanqueLogico) {
-        if (chartedTankId !== component.id) {
-            chartedTankId = component.id;
-            volumeChart.data.labels = [Math.round(ENGINE.elapsedTime)];
-            volumeChart.data.datasets[0].data = [component.volumeAtual];
-            volumeChart.data.datasets[0].label = `Volume: ${component.tag}`;
-            volumeChart.options.scales.y.max = component.capacidadeMaxima;
-            volumeChart.update();
+        if (monitorChartMode !== 'tank' || chartedTankId !== component.id) {
+            createTankMonitorChart(component);
+        }
+        return;
+    }
+
+    if (component instanceof BombaLogica) {
+        if (monitorChartMode !== 'pump' || chartedPumpId !== component.id) {
+            createPumpMonitorChart(component);
+        } else {
+            refreshMonitorPumpChart(component);
         }
         return;
     }
 
     if (connection || !(component instanceof TanqueLogico)) {
-        chartedTankId = null;
-        volumeChart.data.labels = [Math.round(ENGINE.elapsedTime)];
-        volumeChart.data.datasets[0].data = [0];
-        volumeChart.data.datasets[0].label = 'Selecione um Tanque';
-        volumeChart.options.scales.y.max = 1000;
-        volumeChart.update();
+        if (monitorChartMode !== 'empty') {
+            createEmptyMonitorChart();
+        }
     }
 }
 
@@ -796,6 +1319,11 @@ function setupSubscriptions() {
 
     ENGINE.subscribe((dados) => {
         if (dados.tipo === 'selecao') {
+            renderCurrentProperties();
+            return;
+        }
+
+        if (dados.tipo === 'config_simulacao' || dados.tipo === 'fluido_update') {
             renderCurrentProperties();
             return;
         }
@@ -833,15 +1361,17 @@ function setupSubscriptions() {
                 setFieldValue('disp-nível-tanque', component.getAlturaLiquidoM(), 'length', 2);
                 setFieldValue('disp-qin-tanque', component.lastQin, 'flow', 2);
                 setFieldValue('disp-qout-tanque', component.lastQout, 'flow', 2);
+                updateTankSaturationAlert(component);
                 // NOVO: Atualizar o painel de alerta
                 const painelAlerta = document.getElementById('painel-alerta-saturacao');
                 const textoAlerta = document.getElementById('texto-alerta-saturacao');
 
-                if (painelAlerta && textoAlerta) {
+                if (false && painelAlerta && textoAlerta) {
                     if (component.alertaSaturacao && component.alertaSaturacao.ativo) {
                         painelAlerta.style.display = 'block';
                         const qMax = component.alertaSaturacao.qMax;
-                        textoAlerta.innerHTML = `A tubulação/válvula de saída atingiu seu limite físico. Para estabilizar no Setpoint atual, reduza a potência das bombas de entrada para fornecer no máximo <b>${qMax} </b>, ou aumente o diâmetro dos canos de saída.`;
+                        const pMax = component.alertaSaturacao.pMax;
+                        textoAlerta.innerHTML = `A tubulação/válvula de saída atingiu seu limite físico. Para estabilizar no Setpoint atual, reduza a pressão de entrada para fornecer no máximo <b>${pMax.toFixed(2)} </b><b>${getUnitSymbol('pressure')}</b>.`;
                     } else {
                         painelAlerta.style.display = 'none';
                     }
@@ -886,15 +1416,19 @@ function setupSubscriptions() {
                 setFieldValue('disp-succao-bomba', component.pressaoSucaoAtualBar, 'pressure', 2);
                 setFieldValue('disp-descarga-bomba', component.pressaoDescargaAtualBar, 'pressure', 2);
                 if (document.getElementById('disp-cavitacao-bomba')) document.getElementById('disp-cavitacao-bomba').value = (component.fatorCavitacaoAtual * 100).toFixed(0) + '%';
-                setFieldValue('disp-npsh-bomba', component.npshDisponivelM, 'length', 2);
+                setFieldValue('disp-npsha-bomba', component.npshDisponivelM, 'length', 2);
+                setFieldValue('disp-npshr-atual-bomba', component.npshRequeridoAtualM ?? component.npshRequeridoM, 'length', 2);
+                setFieldValue('disp-margem-npsh-bomba', getPumpNpshMargin(component), 'length', 2);
+                if (document.getElementById('disp-condicao-npsh-bomba')) document.getElementById('disp-condicao-npsh-bomba').value = getPumpNpshCondition(component);
                 if (document.getElementById('disp-eficiencia-bomba')) document.getElementById('disp-eficiencia-bomba').value = (component.eficienciaAtual * 100).toFixed(0) + '%';
                 refreshPumpCurveChart(component);
+                refreshMonitorPumpChart(component);
             }
 
             chartUpdateTimer += dados.dt;
             if (chartUpdateTimer >= 1.0) {
                 chartUpdateTimer = 0;
-                if (chartedTankId) {
+                if (monitorChartMode === 'tank' && chartedTankId) {
                     const tank = ENGINE.componentes.find(c => c.id === chartedTankId);
                     if (tank) {
                         volumeChart.data.labels.push(Math.round(ENGINE.elapsedTime));
