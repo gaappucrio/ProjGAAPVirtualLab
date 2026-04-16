@@ -15,7 +15,7 @@ import {
 import { REGISTRO_COMPONENTES } from '../RegistroComponentes.js';
 
 import { clearInputError, InputValidator, showInputError } from '../utils/InputValidator.js';
-import { bindPropertyTabs, renderPropertyTabs } from '../utils/PropertyTabs.js';
+import { bindPropertyTabs, getPropertyTabsState, renderPropertyTabs, restorePropertyTabsState } from '../utils/PropertyTabs.js';
 import { TOOLTIPS } from '../utils/Tooltips.js';
 import {
     DEFAULT_PIPE_ROUGHNESS_MM,
@@ -35,6 +35,144 @@ let chartUpdateTimer = 0;
 let chartedTankId = null;
 let chartedPumpId = null;
 let monitorChartMode = 'empty';
+const tankMonitorHistory = new Map();
+const comparisonMonitorState = {
+    maximized: false,
+    principalFixado: false,
+    slotPrimary: null,
+    slotSecondary: null,
+    heightPx: null,
+    isResizing: false,
+    charts: {
+        primary: null,
+        secondary: null
+    },
+    statusMessage: ''
+};
+
+setupPanelToggles = function () {
+    const toggleLeft = document.getElementById('toggle-left');
+    const panelLeft = document.getElementById('palette');
+    toggleLeft.addEventListener('click', () => {
+        const isCollapsed = panelLeft.classList.toggle('collapsed');
+        toggleLeft.classList.toggle('collapsed');
+        toggleLeft.textContent = isCollapsed ? '▶' : '◀';
+    });
+
+    const toggleRight = document.getElementById('toggle-right');
+    const panelRight = document.getElementById('properties');
+    toggleRight.addEventListener('click', () => {
+        const isCollapsed = panelRight.classList.toggle('collapsed');
+        toggleRight.classList.toggle('collapsed');
+        toggleRight.textContent = isCollapsed ? '◀' : '▶';
+    });
+
+    const btnMaxChart = document.getElementById('btn-max-chart');
+    const chartWrapper = document.getElementById('chart-wrapper');
+    const chartMaxHeader = document.getElementById('chart-max-header');
+    const btnCloseMaxChart = document.getElementById('btn-close-max-chart');
+    const btnPinChart = document.getElementById('btn-pin-chart');
+    const btnUseCurrentCompare = document.getElementById('btn-use-current-compare');
+    const btnClearCompare = document.getElementById('btn-clear-compare');
+    const btnRemoveSecondaryCompare = document.getElementById('btn-remove-secondary-compare');
+
+    function updateResizeHoverState(event) {
+        if (!comparisonMonitorState.maximized || comparisonMonitorState.isResizing) {
+            chartWrapper.classList.remove('is-resize-hover');
+            return;
+        }
+
+        chartWrapper.classList.toggle('is-resize-hover', isPointerNearMonitorPerimeter(event, chartWrapper));
+    }
+
+    function resizeDetailedMonitorFromPointer(event) {
+        const nextHeight = clampDetailedMonitorHeightPx(window.innerHeight - event.clientY - 12);
+        comparisonMonitorState.heightPx = nextHeight;
+        applyDetailedMonitorHeight();
+        scheduleMonitorChartsRefresh();
+    }
+
+    function stopDetailedMonitorResize() {
+        if (!comparisonMonitorState.isResizing) return;
+        comparisonMonitorState.isResizing = false;
+        chartWrapper.classList.remove('is-resizing');
+    }
+
+    function toggleChartMaximize(forceState = null) {
+        const nextState = typeof forceState === 'boolean'
+            ? forceState
+            : !comparisonMonitorState.maximized;
+
+        stopDetailedMonitorResize();
+        comparisonMonitorState.maximized = nextState;
+        chartWrapper.classList.toggle('maximized', nextState);
+        chartWrapper.classList.remove('is-resize-hover');
+        btnMaxChart.textContent = nextState ? 'Fechar detalhado' : '⤢ Expandir';
+        chartMaxHeader.style.display = nextState ? 'flex' : 'none';
+
+        if (nextState) {
+            comparisonMonitorState.principalFixado = false;
+            comparisonMonitorState.slotPrimary = getCurrentCompactMonitorDescriptor();
+            comparisonMonitorState.slotSecondary = null;
+            comparisonMonitorState.statusMessage = '';
+        } else {
+            clearComparisonMonitorState();
+        }
+
+        applyDetailedMonitorHeight();
+        renderComparisonMonitorView();
+        scheduleMonitorChartsRefresh();
+    }
+
+    btnMaxChart.addEventListener('click', () => toggleChartMaximize());
+    btnCloseMaxChart?.addEventListener('click', () => toggleChartMaximize(false));
+    btnPinChart?.addEventListener('click', () => toggleComparisonPrimaryLock());
+    btnUseCurrentCompare?.addEventListener('click', () => tryUseComponentInComparison(ENGINE.selectedComponent, { manual: true }));
+    btnClearCompare?.addEventListener('click', () => clearSecondaryComparisonSlot());
+    btnRemoveSecondaryCompare?.addEventListener('click', () => clearSecondaryComparisonSlot());
+
+    chartWrapper.addEventListener('mousemove', updateResizeHoverState);
+    chartWrapper.addEventListener('mouseleave', () => {
+        if (!comparisonMonitorState.isResizing) {
+            chartWrapper.classList.remove('is-resize-hover');
+        }
+    });
+    chartWrapper.addEventListener('mousedown', (event) => {
+        if (event.button !== 0 || !comparisonMonitorState.maximized) return;
+        if (!isPointerNearMonitorPerimeter(event, chartWrapper)) return;
+
+        comparisonMonitorState.isResizing = true;
+        chartWrapper.classList.add('is-resizing');
+        chartWrapper.classList.remove('is-resize-hover');
+        event.preventDefault();
+        resizeDetailedMonitorFromPointer(event);
+    });
+
+    document.addEventListener('mousemove', (event) => {
+        if (!comparisonMonitorState.isResizing) return;
+        resizeDetailedMonitorFromPointer(event);
+    });
+    document.addEventListener('mouseup', stopDetailedMonitorResize);
+    window.addEventListener('blur', stopDetailedMonitorResize);
+    window.addEventListener('resize', () => {
+        applyDetailedMonitorHeight();
+        scheduleMonitorChartsRefresh();
+    });
+
+    applyDetailedMonitorHeight();
+
+    if (window.innerWidth > 800) {
+        panelLeft.classList.remove('collapsed');
+        toggleLeft.classList.remove('collapsed');
+        toggleLeft.textContent = '◀';
+
+        panelRight.classList.remove('collapsed');
+        toggleRight.classList.remove('collapsed');
+        toggleRight.textContent = '▶';
+    }
+};
+const propertyPanelContextState = new Map();
+let activePropertyContextKey = 'default';
 
 export function setupUI() {
     setupPanelToggles();
@@ -63,21 +201,52 @@ function setupPanelToggles() {
     const chartWrapper = document.getElementById('chart-wrapper');
     const chartMaxHeader = document.getElementById('chart-max-header');
     const btnCloseMaxChart = document.getElementById('btn-close-max-chart');
+    const btnPinChart = document.getElementById('btn-pin-chart');
+    const btnUseCurrentCompare = document.getElementById('btn-use-current-compare');
+    const btnClearCompare = document.getElementById('btn-clear-compare');
+    const btnRemoveSecondaryCompare = document.getElementById('btn-remove-secondary-compare');
 
-    function toggleChartMaximize() {
-        const isMax = chartWrapper.classList.toggle('maximized');
-        btnMaxChart.textContent = isMax ? '✕ Fechar' : '⛶ Expandir';
-        chartMaxHeader.style.display = isMax ? 'flex' : 'none';
+    function toggleChartMaximize(forceState = null) {
+        const nextState = typeof forceState === 'boolean'
+            ? forceState
+            : !comparisonMonitorState.maximized;
+        comparisonMonitorState.maximized = nextState;
+        chartWrapper.classList.toggle('maximized', nextState);
+        btnMaxChart.textContent = nextState ? '✕ Fechar' : '⛶ Expandir';
+        chartMaxHeader.style.display = nextState ? 'flex' : 'none';
+        if (nextState) {
+            comparisonMonitorState.principalFixado = false;
+            comparisonMonitorState.slotPrimary = getCurrentCompactMonitorDescriptor();
+            comparisonMonitorState.slotSecondary = null;
+            comparisonMonitorState.statusMessage = '';
+            renderComparisonMonitorView();
+        } else {
+            clearComparisonMonitorState();
+            renderComparisonMonitorView();
+        }
+
         requestAnimationFrame(() => {
             if (volumeChart) {
                 volumeChart.resize();
                 refreshVolumeChartPresentation();
             }
+            refreshComparisonMonitorCharts();
         });
     }
 
     btnMaxChart.addEventListener('click', toggleChartMaximize);
-    btnCloseMaxChart.addEventListener('click', toggleChartMaximize);
+    btnCloseMaxChart.addEventListener('click', () => toggleChartMaximize(false));
+    btnPinChart?.addEventListener('click', () => toggleComparisonPrimaryLock());
+    btnUseCurrentCompare?.addEventListener('click', () => tryUseComponentInComparison(ENGINE.selectedComponent, { manual: true }));
+    btnClearCompare?.addEventListener('click', () => clearSecondaryComparisonSlot());
+    btnRemoveSecondaryCompare?.addEventListener('click', () => clearSecondaryComparisonSlot());
+    window.addEventListener('resize', () => {
+        if (volumeChart) {
+            volumeChart.resize();
+            refreshVolumeChartPresentation();
+        }
+        refreshComparisonMonitorCharts();
+    });
 
     if (window.innerWidth > 800) {
         panelLeft.classList.remove('collapsed');
@@ -92,6 +261,8 @@ function setupPanelToggles() {
 
 function setupChart() {
     createEmptyMonitorChart();
+    renderComparisonMonitorView();
+    updateComparisonMonitorHeader();
 }
 
 function getMonitorChartContext() {
@@ -108,6 +279,617 @@ function destroyMonitorChart() {
 
 function isMonitorChartExpanded() {
     return document.getElementById('chart-wrapper')?.classList.contains('maximized') === true;
+}
+
+function getMonitorCompactStage() {
+    return document.getElementById('chart-compact-stage');
+}
+
+function getComparisonMonitorGrid() {
+    return document.getElementById('chart-compare-grid');
+}
+
+function getComparisonStatusElement() {
+    return document.getElementById('chart-max-status');
+}
+
+function getSandboxContainer() {
+    return document.querySelector('.sandbox-container');
+}
+
+function getDetailedMonitorDefaultHeightPx() {
+    return Math.round(window.innerHeight * 0.38);
+}
+
+function clampDetailedMonitorHeightPx(value) {
+    const minHeight = Math.max(260, Math.round(window.innerHeight * 0.24));
+    const maxHeight = Math.round(window.innerHeight * 0.5);
+    return Math.min(maxHeight, Math.max(minHeight, value));
+}
+
+function getDetailedMonitorDockSpacePx(heightPx) {
+    return Math.max(0, Math.round(heightPx + 24));
+}
+
+function syncDetailedMonitorClearance(heightPx) {
+    const sandbox = getSandboxContainer();
+    if (!sandbox) return;
+
+    if (!comparisonMonitorState.maximized) {
+        sandbox.classList.remove('monitor-detailed-open');
+        sandbox.style.setProperty('--monitor-dock-space', '0px');
+        return;
+    }
+
+    sandbox.classList.add('monitor-detailed-open');
+    sandbox.style.setProperty('--monitor-dock-space', `${getDetailedMonitorDockSpacePx(heightPx)}px`);
+}
+
+function isPointerNearMonitorPerimeter(event, wrapper = document.getElementById('chart-wrapper')) {
+    if (!wrapper || !comparisonMonitorState.maximized) return false;
+    const rect = wrapper.getBoundingClientRect();
+    const edge = 14;
+    const withinX = event.clientX >= rect.left && event.clientX <= rect.right;
+    const withinY = event.clientY >= rect.top && event.clientY <= rect.bottom;
+    if (!withinX || !withinY) return false;
+
+    return (
+        event.clientY <= rect.top + edge
+        || event.clientX <= rect.left + edge
+        || event.clientX >= rect.right - edge
+    );
+}
+
+function applyDetailedMonitorHeight() {
+    const chartWrapper = document.getElementById('chart-wrapper');
+    if (!chartWrapper) return;
+
+    const currentHeight = Number.isFinite(comparisonMonitorState.heightPx)
+        ? comparisonMonitorState.heightPx
+        : getDetailedMonitorDefaultHeightPx();
+    const heightPx = clampDetailedMonitorHeightPx(currentHeight);
+    comparisonMonitorState.heightPx = heightPx;
+
+    chartWrapper.style.setProperty('--chart-max-height', `${heightPx}px`);
+    syncDetailedMonitorClearance(heightPx);
+
+    if (!comparisonMonitorState.maximized) {
+        chartWrapper.classList.remove('is-resizing');
+    }
+}
+
+function scheduleMonitorChartsRefresh() {
+    requestAnimationFrame(() => {
+        if (volumeChart) {
+            volumeChart.resize();
+            refreshVolumeChartPresentation();
+        }
+        refreshComparisonMonitorCharts();
+    });
+}
+
+function getComparisonSlotElements(slotName) {
+    const prefix = slotName === 'primary' ? 'primary' : 'secondary';
+    return {
+        card: document.getElementById(`chart-compare-${prefix}-card`),
+        title: document.getElementById(`chart-compare-${prefix}-title`),
+        subtitle: document.getElementById(`chart-compare-${prefix}-subtitle`),
+        empty: document.getElementById(`chart-compare-${prefix}-empty`),
+        canvasWrap: document.getElementById(`chart-compare-${prefix}-canvas-wrap`),
+        canvas: document.getElementById(`gaap-compare-chart-${prefix}`),
+        removeButton: slotName === 'secondary'
+            ? document.getElementById('btn-remove-secondary-compare')
+            : null
+    };
+}
+
+function isMonitorableComponent(component) {
+    return component instanceof TanqueLogico || component instanceof BombaLogica;
+}
+
+function createMonitorDescriptor(component) {
+    if (component instanceof TanqueLogico) {
+        return {
+            kind: 'tank',
+            componentId: component.id,
+            label: component.tag
+        };
+    }
+
+    if (component instanceof BombaLogica) {
+        return {
+            kind: 'pump',
+            componentId: component.id,
+            label: component.tag
+        };
+    }
+
+    return null;
+}
+
+function getCurrentCompactMonitorDescriptor() {
+    if (monitorChartMode === 'tank' && chartedTankId) {
+        const component = ENGINE.componentes.find((item) => item.id === chartedTankId);
+        return createMonitorDescriptor(component);
+    }
+
+    if (monitorChartMode === 'pump' && chartedPumpId) {
+        const component = ENGINE.componentes.find((item) => item.id === chartedPumpId);
+        return createMonitorDescriptor(component);
+    }
+
+    return null;
+}
+
+function resolveMonitorDescriptor(descriptor) {
+    if (!descriptor?.componentId) return null;
+
+    const component = ENGINE.componentes.find((item) => item.id === descriptor.componentId);
+    if (!component) return null;
+    if (descriptor.kind === 'tank' && component instanceof TanqueLogico) return component;
+    if (descriptor.kind === 'pump' && component instanceof BombaLogica) return component;
+    return null;
+}
+
+function descriptorsMatch(left, right) {
+    return Boolean(
+        left
+        && right
+        && left.kind === right.kind
+        && left.componentId === right.componentId
+    );
+}
+
+function getMonitorDescriptorLabel(descriptor, component = resolveMonitorDescriptor(descriptor)) {
+    if (!descriptor) return '';
+    const tipo = descriptor.kind === 'tank' ? 'Tanque' : 'Bomba';
+    const nome = component?.tag || descriptor.label || descriptor.componentId;
+    return `${tipo}: ${nome}`;
+}
+
+function ensureTankMonitorHistory(component) {
+    const currentSecond = Math.round(ENGINE.elapsedTime);
+    let history = tankMonitorHistory.get(component.id);
+
+    if (!history) {
+        history = {
+            labels: [currentSecond],
+            values: [component.volumeAtual],
+            lastSampleSecond: currentSecond
+        };
+        tankMonitorHistory.set(component.id, history);
+        return history;
+    }
+
+    if (history.labels.length === 0) {
+        history.labels.push(currentSecond);
+        history.values.push(component.volumeAtual);
+        history.lastSampleSecond = currentSecond;
+    }
+
+    return history;
+}
+
+function sampleTankMonitorHistory(component) {
+    const history = ensureTankMonitorHistory(component);
+    const currentSecond = Math.round(ENGINE.elapsedTime);
+
+    if (history.lastSampleSecond === currentSecond) {
+        if (history.values.length > 0) {
+            history.values[history.values.length - 1] = component.volumeAtual;
+        }
+        return false;
+    }
+
+    history.labels.push(currentSecond);
+    history.values.push(component.volumeAtual);
+    history.lastSampleSecond = currentSecond;
+
+    if (history.labels.length > 60) {
+        history.labels.shift();
+        history.values.shift();
+    }
+
+    return true;
+}
+
+function getTrackedTankMonitorComponents() {
+    const trackedIds = new Set();
+
+    if (monitorChartMode === 'tank' && chartedTankId) trackedIds.add(chartedTankId);
+    if (comparisonMonitorState.slotPrimary?.kind === 'tank') trackedIds.add(comparisonMonitorState.slotPrimary.componentId);
+    if (comparisonMonitorState.slotSecondary?.kind === 'tank') trackedIds.add(comparisonMonitorState.slotSecondary.componentId);
+
+    return [...trackedIds]
+        .map((id) => ENGINE.componentes.find((component) => component.id === id))
+        .filter((component) => component instanceof TanqueLogico);
+}
+
+function destroyComparisonMonitorChart(slotName) {
+    const chart = comparisonMonitorState.charts[slotName];
+    if (chart) {
+        chart.destroy();
+        comparisonMonitorState.charts[slotName] = null;
+    }
+}
+
+function destroyComparisonMonitorCharts() {
+    destroyComparisonMonitorChart('primary');
+    destroyComparisonMonitorChart('secondary');
+}
+
+function clearComparisonMonitorState() {
+    comparisonMonitorState.principalFixado = false;
+    comparisonMonitorState.slotPrimary = null;
+    comparisonMonitorState.slotSecondary = null;
+    comparisonMonitorState.statusMessage = '';
+    destroyComparisonMonitorCharts();
+}
+
+function getComparisonStatusText() {
+    if (comparisonMonitorState.statusMessage) return comparisonMonitorState.statusMessage;
+
+    if (!comparisonMonitorState.slotPrimary) {
+        return 'Selecione um tanque ou bomba para definir o gráfico principal.';
+    }
+
+    if (!comparisonMonitorState.principalFixado) {
+        return 'Fixe o gráfico atual para comparar com outro tanque ou bomba.';
+    }
+
+    if (!comparisonMonitorState.slotSecondary) {
+        return 'Clique em outro tanque ou bomba para preencher a comparação.';
+    }
+
+    return 'Comparação travada com 2 gráficos. Use "Limpar comparação" para escolher outro.';
+}
+
+function updateComparisonMonitorHeader() {
+    const statusEl = getComparisonStatusElement();
+    const pinButton = document.getElementById('btn-pin-chart');
+    const clearButton = document.getElementById('btn-clear-compare');
+    const useCurrentButton = document.getElementById('btn-use-current-compare');
+    const selectedDescriptor = createMonitorDescriptor(ENGINE.selectedComponent);
+    const canUseCurrentSelection = Boolean(
+        comparisonMonitorState.maximized
+        && comparisonMonitorState.principalFixado
+        && comparisonMonitorState.slotPrimary
+        && selectedDescriptor
+        && !comparisonMonitorState.slotSecondary
+        && !descriptorsMatch(selectedDescriptor, comparisonMonitorState.slotPrimary)
+    );
+
+    if (statusEl) statusEl.textContent = getComparisonStatusText();
+
+    if (pinButton) {
+        pinButton.disabled = !comparisonMonitorState.slotPrimary;
+        pinButton.textContent = comparisonMonitorState.principalFixado
+            ? 'Desfixar gráfico principal'
+            : 'Fixar gráfico atual';
+    }
+
+    if (clearButton) {
+        clearButton.disabled = !comparisonMonitorState.slotSecondary;
+    }
+
+    if (useCurrentButton) {
+        useCurrentButton.disabled = !canUseCurrentSelection;
+    }
+}
+
+function renderComparisonSlot(slotName) {
+    const slotKey = slotName === 'primary' ? 'slotPrimary' : 'slotSecondary';
+    const descriptor = comparisonMonitorState[slotKey];
+    const component = resolveMonitorDescriptor(descriptor);
+    const elements = getComparisonSlotElements(slotName);
+    const chartKey = slotName === 'primary' ? 'primary' : 'secondary';
+    const isPrimary = slotName === 'primary';
+
+    if (!elements.card || !elements.empty || !elements.canvasWrap || !elements.canvas) return;
+
+    if (!descriptor || !component) {
+        destroyComparisonMonitorChart(chartKey);
+        elements.card.dataset.kind = 'empty';
+        elements.canvasWrap.hidden = true;
+        elements.empty.hidden = false;
+        elements.title.textContent = isPrimary ? 'Gráfico principal' : 'Comparação';
+        elements.subtitle.textContent = isPrimary
+            ? 'Selecione um tanque ou bomba para monitorar.'
+            : 'Fixe o gráfico principal e clique em outro componente para comparar.';
+        elements.empty.textContent = isPrimary
+            ? 'Nenhum gráfico principal disponível no momento.'
+            : 'A comparação aparecerá aqui quando você escolher um segundo gráfico.';
+        if (elements.removeButton) elements.removeButton.hidden = true;
+        return;
+    }
+
+    elements.card.dataset.kind = descriptor.kind;
+    elements.title.textContent = isPrimary
+        ? `Principal • ${getMonitorDescriptorLabel(descriptor, component)}`
+        : `Comparação • ${getMonitorDescriptorLabel(descriptor, component)}`;
+    elements.subtitle.textContent = descriptor.kind === 'tank'
+        ? 'Histórico de volume ao longo do tempo.'
+        : 'Curva da bomba com ponto de operação atual.';
+    elements.empty.hidden = true;
+    elements.canvasWrap.hidden = false;
+    if (elements.removeButton) elements.removeButton.hidden = false;
+
+    if (descriptor.kind === 'tank') {
+        ensureTankMonitorHistory(component);
+        if (!comparisonMonitorState.charts[chartKey] || comparisonMonitorState.charts[chartKey].$monitorKind !== 'tank') {
+            destroyComparisonMonitorChart(chartKey);
+            comparisonMonitorState.charts[chartKey] = createTankMonitorChartInstance(elements.canvas.getContext('2d'), component);
+            comparisonMonitorState.charts[chartKey].$monitorKind = 'tank';
+        } else {
+            refreshTankMonitorChartInstance(comparisonMonitorState.charts[chartKey], component);
+        }
+        return;
+    }
+
+    if (!comparisonMonitorState.charts[chartKey] || comparisonMonitorState.charts[chartKey].$monitorKind !== 'pump') {
+        destroyComparisonMonitorChart(chartKey);
+        comparisonMonitorState.charts[chartKey] = createPumpMonitorChartInstance(elements.canvas.getContext('2d'), component, true);
+    } else {
+        refreshPumpMonitorChartInstance(comparisonMonitorState.charts[chartKey], component, true);
+    }
+}
+
+function pruneComparisonMonitorSlots() {
+    const primaryComponent = resolveMonitorDescriptor(comparisonMonitorState.slotPrimary);
+    if (!primaryComponent) {
+        comparisonMonitorState.slotPrimary = null;
+        comparisonMonitorState.slotSecondary = null;
+        comparisonMonitorState.principalFixado = false;
+        destroyComparisonMonitorCharts();
+        return;
+    }
+
+    const secondaryComponent = resolveMonitorDescriptor(comparisonMonitorState.slotSecondary);
+    if (!secondaryComponent || descriptorsMatch(comparisonMonitorState.slotPrimary, comparisonMonitorState.slotSecondary)) {
+        comparisonMonitorState.slotSecondary = null;
+        destroyComparisonMonitorChart('secondary');
+    }
+}
+
+function updateComparisonMonitorLayout() {
+    const compareGrid = getComparisonMonitorGrid();
+    const primaryCard = getComparisonSlotElements('primary').card;
+    const secondaryCard = getComparisonSlotElements('secondary').card;
+    const hasSecondary = Boolean(resolveMonitorDescriptor(comparisonMonitorState.slotSecondary));
+
+    if (compareGrid) {
+        compareGrid.dataset.layout = hasSecondary ? 'dual' : 'single';
+    }
+
+    if (primaryCard) {
+        primaryCard.hidden = false;
+    }
+
+    if (secondaryCard) {
+        secondaryCard.hidden = !hasSecondary;
+    }
+}
+
+function renderComparisonMonitorView() {
+    const compactStage = getMonitorCompactStage();
+    const compareGrid = getComparisonMonitorGrid();
+
+    if (compactStage) compactStage.hidden = comparisonMonitorState.maximized;
+    if (compareGrid) compareGrid.hidden = !comparisonMonitorState.maximized;
+
+    if (!comparisonMonitorState.maximized) return;
+
+    pruneComparisonMonitorSlots();
+    updateComparisonMonitorLayout();
+    renderComparisonSlot('primary');
+    renderComparisonSlot('secondary');
+    updateComparisonMonitorHeader();
+}
+
+function refreshComparisonMonitorCharts() {
+    if (!comparisonMonitorState.maximized) return;
+
+    pruneComparisonMonitorSlots();
+    updateComparisonMonitorLayout();
+    renderComparisonSlot('primary');
+    renderComparisonSlot('secondary');
+    updateComparisonMonitorHeader();
+}
+
+function clearSecondaryComparisonSlot() {
+    if (!comparisonMonitorState.slotSecondary) {
+        updateComparisonMonitorHeader();
+        return;
+    }
+
+    comparisonMonitorState.slotSecondary = null;
+    comparisonMonitorState.statusMessage = '';
+    destroyComparisonMonitorChart('secondary');
+    renderComparisonMonitorView();
+}
+
+function toggleComparisonPrimaryLock() {
+    if (!comparisonMonitorState.slotPrimary) {
+        updateComparisonMonitorHeader();
+        return;
+    }
+
+    if (comparisonMonitorState.principalFixado) {
+        comparisonMonitorState.principalFixado = false;
+        comparisonMonitorState.slotSecondary = null;
+        comparisonMonitorState.slotPrimary = getCurrentCompactMonitorDescriptor();
+        comparisonMonitorState.statusMessage = '';
+        destroyComparisonMonitorChart('secondary');
+        renderComparisonMonitorView();
+        return;
+    }
+
+    comparisonMonitorState.principalFixado = true;
+    comparisonMonitorState.slotSecondary = null;
+    comparisonMonitorState.statusMessage = '';
+    destroyComparisonMonitorChart('secondary');
+    renderComparisonMonitorView();
+}
+
+function tryUseComponentInComparison(component, { manual = false } = {}) {
+    if (!comparisonMonitorState.maximized || !comparisonMonitorState.principalFixado) return false;
+
+    const descriptor = createMonitorDescriptor(component);
+    if (!descriptor) {
+        if (manual) {
+            comparisonMonitorState.statusMessage = 'Só tanques e bombas podem entrar na comparação.';
+            updateComparisonMonitorHeader();
+        }
+        return false;
+    }
+
+    if (!comparisonMonitorState.slotPrimary) {
+        comparisonMonitorState.slotPrimary = descriptor;
+        comparisonMonitorState.statusMessage = '';
+        renderComparisonMonitorView();
+        return true;
+    }
+
+    if (descriptorsMatch(descriptor, comparisonMonitorState.slotPrimary)) {
+        if (manual) {
+            comparisonMonitorState.statusMessage = 'O gráfico selecionado já está fixado como principal.';
+            updateComparisonMonitorHeader();
+        }
+        return false;
+    }
+
+    if (descriptorsMatch(descriptor, comparisonMonitorState.slotSecondary)) {
+        if (manual) {
+            comparisonMonitorState.statusMessage = 'Esse gráfico já está aberto na comparação.';
+            updateComparisonMonitorHeader();
+        }
+        return false;
+    }
+
+    if (comparisonMonitorState.slotSecondary) {
+        comparisonMonitorState.statusMessage = 'A comparação já está com 2 gráficos. Use "Limpar comparação" para escolher outro.';
+        updateComparisonMonitorHeader();
+        return false;
+    }
+
+    comparisonMonitorState.slotSecondary = descriptor;
+    comparisonMonitorState.statusMessage = '';
+    const compareComponent = resolveMonitorDescriptor(descriptor);
+    if (compareComponent instanceof TanqueLogico) ensureTankMonitorHistory(compareComponent);
+    renderComparisonMonitorView();
+    return true;
+}
+
+function syncComparisonMonitorSelection(component, connection) {
+    if (!comparisonMonitorState.maximized) return;
+
+    if (!comparisonMonitorState.principalFixado) {
+        comparisonMonitorState.slotPrimary = getCurrentCompactMonitorDescriptor();
+        comparisonMonitorState.slotSecondary = null;
+        comparisonMonitorState.statusMessage = '';
+        renderComparisonMonitorView();
+        return;
+    }
+
+    if (!comparisonMonitorState.slotPrimary) {
+        comparisonMonitorState.slotPrimary = getCurrentCompactMonitorDescriptor();
+        if (!comparisonMonitorState.slotPrimary) {
+            comparisonMonitorState.statusMessage = connection
+                ? 'Conexões não possuem gráfico comparável.'
+                : 'Selecione um tanque ou bomba para definir o gráfico principal.';
+            renderComparisonMonitorView();
+            return;
+        }
+    }
+
+    if (!component || !isMonitorableComponent(component)) {
+        if (!comparisonMonitorState.slotSecondary && connection) {
+            comparisonMonitorState.statusMessage = 'Conexões não possuem gráfico comparável.';
+        }
+        updateComparisonMonitorHeader();
+        return;
+    }
+
+    if (!comparisonMonitorState.slotSecondary) {
+        tryUseComponentInComparison(component);
+        return;
+    }
+
+    const descriptor = createMonitorDescriptor(component);
+    if (
+        descriptor
+        && !descriptorsMatch(descriptor, comparisonMonitorState.slotPrimary)
+        && !descriptorsMatch(descriptor, comparisonMonitorState.slotSecondary)
+    ) {
+        comparisonMonitorState.statusMessage = 'A comparação já está com 2 gráficos. Use "Limpar comparação" para escolher outro.';
+        updateComparisonMonitorHeader();
+    }
+}
+
+function createTankMonitorChartInstance(ctx, component) {
+    const history = ensureTankMonitorHistory(component);
+
+    return new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [...history.labels],
+            datasets: [{
+                label: `Volume: ${component.tag}`,
+                data: [...history.values],
+                borderColor: '#3498db',
+                backgroundColor: 'rgba(52, 152, 219, 0.2)',
+                borderWidth: 2,
+                fill: true,
+                pointRadius: 0,
+                pointHoverRadius: 6,
+                hitRadius: 15,
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                tooltip: {
+                    backgroundColor: 'rgba(44, 62, 80, 0.9)',
+                    titleFont: { size: 14 },
+                    bodyFont: { size: 14, weight: 'bold' },
+                    padding: 10,
+                    callbacks: {
+                        title: (ctx) => `Tempo: ${ctx[0].label}s`,
+                        label: (ctx) => `Volume: ${toDisplayValue('volume', ctx.parsed.y).toFixed(1)} ${getUnitSymbol('volume')}`
+                    }
+                }
+            },
+            scales: {
+                x: { title: { display: true, text: 'Tempo (s)' } },
+                y: {
+                    min: 0,
+                    max: component.capacidadeMaxima,
+                    title: { display: true, text: `Volume (${getUnitSymbol('volume')})` },
+                    ticks: {
+                        callback: (value) => volumeTickLabel(value)
+                    }
+                }
+            }
+        }
+    });
+}
+
+function refreshTankMonitorChartInstance(chart, component) {
+    if (!(component instanceof TanqueLogico) || !chart) return;
+
+    const history = ensureTankMonitorHistory(component);
+    chart.data.labels = [...history.labels];
+    chart.data.datasets[0].label = `Volume: ${component.tag}`;
+    chart.data.datasets[0].data = [...history.values];
+    chart.options.scales.y.max = component.capacidadeMaxima;
+    chart.options.scales.y.title.text = `Volume (${getUnitSymbol('volume')})`;
+    chart.options.plugins.tooltip.callbacks.label = (ctx) => `Volume: ${toDisplayValue('volume', ctx.parsed.y).toFixed(1)} ${getUnitSymbol('volume')}`;
+    chart.options.scales.y.ticks.callback = (value) => volumeTickLabel(value);
+    chart.update();
 }
 
 function createEmptyMonitorChart() {
@@ -173,55 +955,9 @@ function createTankMonitorChart(component) {
     const ctx = getMonitorChartContext();
     if (!ctx) return;
 
+    ensureTankMonitorHistory(component);
     destroyMonitorChart();
-
-    volumeChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: [Math.round(ENGINE.elapsedTime)],
-            datasets: [{
-                label: `Volume: ${component.tag}`,
-                data: [component.volumeAtual],
-                borderColor: '#3498db',
-                backgroundColor: 'rgba(52, 152, 219, 0.2)',
-                borderWidth: 2,
-                fill: true,
-                pointRadius: 0,
-                pointHoverRadius: 6,
-                hitRadius: 15,
-                tension: 0.1
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: false,
-            interaction: { mode: 'index', intersect: false },
-            plugins: {
-                tooltip: {
-                    backgroundColor: 'rgba(44, 62, 80, 0.9)',
-                    titleFont: { size: 14 },
-                    bodyFont: { size: 14, weight: 'bold' },
-                    padding: 10,
-                    callbacks: {
-                        title: (ctx) => `Tempo: ${ctx[0].label}s`,
-                        label: (ctx) => `Volume: ${toDisplayValue('volume', ctx.parsed.y).toFixed(1)} ${getUnitSymbol('volume')}`
-                    }
-                }
-            },
-            scales: {
-                x: { title: { display: true, text: 'Tempo (s)' } },
-                y: {
-                    min: 0,
-                    max: component.capacidadeMaxima,
-                    title: { display: true, text: `Volume (${getUnitSymbol('volume')})` },
-                    ticks: {
-                        callback: (value) => volumeTickLabel(value)
-                    }
-                }
-            }
-        }
-    });
+    volumeChart = createTankMonitorChartInstance(ctx, component);
 
     monitorChartMode = 'tank';
     chartedTankId = component.id;
@@ -230,6 +966,63 @@ function createTankMonitorChart(component) {
 
 function getPropContent() {
     return document.getElementById('prop-content');
+}
+
+function getPropertyScrollContainer() {
+    return document.querySelector('#properties .side-panel-content');
+}
+
+function getConnectionContextKey(connection) {
+    if (!connection) return 'default';
+    const sourceId = connection.sourceEl?.dataset?.compId || 'source';
+    const targetId = connection.targetEl?.dataset?.compId || 'target';
+    return `connection:${sourceId}->${targetId}`;
+}
+
+function getPropertyContextKey(component = ENGINE.selectedComponent, connection = ENGINE.selectedConnection) {
+    if (connection) return getConnectionContextKey(connection);
+    if (component) return `component:${component.id}`;
+    return 'default';
+}
+
+function capturePropertyPanelContextState(contextKey = activePropertyContextKey) {
+    if (!contextKey) return;
+
+    const scrollContainer = getPropertyScrollContainer();
+    const propContent = getPropContent();
+    if (!scrollContainer || !propContent) return;
+
+    propertyPanelContextState.set(contextKey, {
+        scrollTop: scrollContainer.scrollTop,
+        tabStates: getPropertyTabsState(propContent)
+    });
+}
+
+function restorePropertyPanelContextState(contextKey, options = {}) {
+    const scrollContainer = getPropertyScrollContainer();
+    const propContent = getPropContent();
+    if (!scrollContainer || !propContent) return;
+
+    const savedState = propertyPanelContextState.get(contextKey);
+    const restoredTabs = restorePropertyTabsState(propContent, savedState?.tabStates || []);
+
+    requestAnimationFrame(() => {
+        const maxScrollTop = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
+        scrollContainer.scrollTop = Math.min(savedState?.scrollTop || 0, maxScrollTop);
+        options.onAfterRestore?.(restoredTabs, savedState);
+    });
+}
+
+function restorePumpCurveFromSavedContext(component, restoredTabs = []) {
+    if (!(component instanceof BombaLogica) || !restoredTabs.includes('advanced')) return;
+
+    requestAnimationFrame(() => {
+        if (!pumpCurveChart) renderPumpCurveChart(component);
+        if (pumpCurveChart) {
+            pumpCurveChart.resize();
+            refreshPumpCurveChart(component);
+        }
+    });
 }
 
 function destroyPumpCurveChart() {
@@ -422,23 +1215,29 @@ function bindUnitControls() {
 }
 
 function renderCurrentProperties() {
+    capturePropertyPanelContextState();
+
     const component = ENGINE.selectedComponent;
     const connection = ENGINE.selectedConnection;
+    const nextContextKey = getPropertyContextKey(component, connection);
 
     refreshChartSelection(component, connection);
+    syncComparisonMonitorSelection(component, connection);
     refreshVolumeChartPresentation();
+    refreshComparisonMonitorCharts();
 
     if (connection) {
         renderConnectionProperties(connection);
-        return;
-    }
-
-    if (component) {
+    } else if (component) {
         renderComponentProperties(component);
-        return;
+    } else {
+        renderDefaultProperties();
     }
 
-    renderDefaultProperties();
+    activePropertyContextKey = nextContextKey;
+    restorePropertyPanelContextState(nextContextKey, {
+        onAfterRestore: (restoredTabs) => restorePumpCurveFromSavedContext(component, restoredTabs)
+    });
 }
 
 function pressureInputValue(id, fallback) {
@@ -491,7 +1290,11 @@ function refreshVolumeChartPresentation() {
 
     if (monitorChartMode === 'tank' && chartedTankId) {
         const tank = ENGINE.componentes.find((component) => component.id === chartedTankId);
-        if (tank) volumeChart.options.scales.y.max = tank.capacidadeMaxima;
+        if (tank instanceof TanqueLogico) {
+            ensureTankMonitorHistory(tank);
+            refreshTankMonitorChartInstance(volumeChart, tank);
+            return;
+        }
     }
 
     volumeChart.update();
@@ -526,8 +1329,7 @@ function buildPumpCurveDatasets(component) {
     };
 }
 
-function getPumpMonitorScaleProfile() {
-    const expanded = isMonitorChartExpanded();
+function getPumpMonitorScaleProfile(expanded = isMonitorChartExpanded()) {
     return {
         expanded,
         titleFontSize: expanded ? 13 : 10,
@@ -547,10 +1349,10 @@ function getPumpMonitorScaleProfile() {
     };
 }
 
-function applyPumpMonitorChartPresentation(chart, datasets) {
+function applyPumpMonitorChartPresentation(chart, datasets, expanded = isMonitorChartExpanded()) {
     if (!chart) return;
 
-    const profile = getPumpMonitorScaleProfile();
+    const profile = getPumpMonitorScaleProfile(expanded);
 
     chart.options.layout.padding = profile.layoutPadding;
     chart.options.plugins.legend.position = 'bottom';
@@ -583,6 +1385,166 @@ function applyPumpMonitorChartPresentation(chart, datasets) {
 
     chart.data.datasets[3].pointRadius = profile.pointRadius;
     chart.data.datasets[3].pointHoverRadius = profile.pointHoverRadius;
+}
+
+function createPumpMonitorChartInstance(ctx, component, expanded = isMonitorChartExpanded()) {
+    const datasets = buildPumpCurveDatasets(component);
+    const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            datasets: [
+                {
+                    label: 'Carga',
+                    data: datasets.headPoints,
+                    borderColor: '#2980b9',
+                    backgroundColor: 'rgba(41, 128, 185, 0.12)',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.22,
+                    yAxisID: 'yHead',
+                    pointRadius: 0
+                },
+                {
+                    label: 'Eficiência',
+                    data: datasets.efficiencyPoints,
+                    borderColor: '#27ae60',
+                    backgroundColor: 'rgba(39, 174, 96, 0.1)',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.22,
+                    yAxisID: 'yEff',
+                    pointRadius: 0
+                },
+                {
+                    label: 'NPSHr',
+                    data: datasets.npshPoints,
+                    borderColor: '#e67e22',
+                    backgroundColor: 'rgba(230, 126, 34, 0.1)',
+                    borderDash: [6, 4],
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.22,
+                    yAxisID: 'yNpsh',
+                    pointRadius: 0
+                },
+                {
+                    label: 'Operação',
+                    type: 'scatter',
+                    data: [{ x: datasets.currentFlow, y: datasets.currentHead }],
+                    borderColor: '#c0392b',
+                    backgroundColor: '#c0392b',
+                    pointRadius: 5,
+                    pointHoverRadius: 6,
+                    yAxisID: 'yHead'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: { mode: 'nearest', intersect: false },
+            layout: { padding: { top: 8, right: 8, left: 4, bottom: 0 } },
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        boxWidth: 8,
+                        boxHeight: 8,
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        padding: 12,
+                        font: { size: 10 }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        title: (ctx) => `Vazão: ${Number(ctx[0].parsed.x).toFixed(2)} ${datasets.flowUnit}`,
+                        label: (ctx) => {
+                            if (ctx.dataset.yAxisID === 'yHead') {
+                                return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.pressureUnit}`;
+                            }
+                            if (ctx.dataset.yAxisID === 'yEff') {
+                                return `Eficiência: ${Number(ctx.parsed.y).toFixed(1)} %`;
+                            }
+                            if (ctx.dataset.yAxisID === 'yNpsh') {
+                                return `NPSHr: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.lengthUnit}`;
+                            }
+                            return `Ponto atual: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.pressureUnit}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    type: 'linear',
+                    title: { display: true, text: `Vazão (${datasets.flowUnit})` },
+                    ticks: { maxTicksLimit: 6 }
+                },
+                yHead: {
+                    type: 'linear',
+                    position: 'left',
+                    title: { display: true, text: `Carga (${datasets.pressureUnit})` },
+                    ticks: { maxTicksLimit: 5 }
+                },
+                yEff: {
+                    type: 'linear',
+                    position: 'right',
+                    min: 0,
+                    max: 100,
+                    grid: { drawOnChartArea: false },
+                    title: { display: false, text: 'Eficiência (%)' },
+                    ticks: {
+                        maxTicksLimit: 5,
+                        callback: (value) => `${value}%`
+                    }
+                },
+                yNpsh: {
+                    type: 'linear',
+                    position: 'right',
+                    offset: true,
+                    grid: { drawOnChartArea: false },
+                    title: { display: false, text: `NPSHr (${datasets.lengthUnit})` },
+                    ticks: { maxTicksLimit: 5 }
+                }
+            }
+        }
+    });
+
+    applyPumpMonitorChartPresentation(chart, datasets, expanded);
+    chart.update();
+    chart.$monitorKind = 'pump';
+    return chart;
+}
+
+function refreshPumpMonitorChartInstance(chart, component, expanded = isMonitorChartExpanded()) {
+    if (!(component instanceof BombaLogica) || !chart) return;
+
+    const datasets = buildPumpCurveDatasets(component);
+    chart.data.datasets[0].label = 'Carga';
+    chart.data.datasets[0].data = datasets.headPoints;
+    chart.data.datasets[1].label = 'Eficiência';
+    chart.data.datasets[1].data = datasets.efficiencyPoints;
+    chart.data.datasets[2].label = 'NPSHr';
+    chart.data.datasets[2].data = datasets.npshPoints;
+    chart.data.datasets[3].label = 'Operação';
+    chart.data.datasets[3].data = [{ x: datasets.currentFlow, y: datasets.currentHead }];
+    chart.options.plugins.tooltip.callbacks.title = (ctx) => `Vazão: ${Number(ctx[0].parsed.x).toFixed(2)} ${datasets.flowUnit}`;
+    chart.options.plugins.tooltip.callbacks.label = (ctx) => {
+        if (ctx.dataset.yAxisID === 'yHead') {
+            return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.pressureUnit}`;
+        }
+        if (ctx.dataset.yAxisID === 'yEff') {
+            return `Eficiência: ${Number(ctx.parsed.y).toFixed(1)} %`;
+        }
+        if (ctx.dataset.yAxisID === 'yNpsh') {
+            return `NPSHr: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.lengthUnit}`;
+        }
+        return `Ponto atual: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.pressureUnit}`;
+    };
+
+    applyPumpMonitorChartPresentation(chart, datasets, expanded);
+    chart.update();
 }
 
 function createPumpMonitorChart(component) {
@@ -1425,20 +2387,27 @@ function setupSubscriptions() {
                 refreshMonitorPumpChart(component);
             }
 
+            if (comparisonMonitorState.maximized) {
+                refreshComparisonMonitorCharts();
+            }
+
             chartUpdateTimer += dados.dt;
             if (chartUpdateTimer >= 1.0) {
                 chartUpdateTimer = 0;
+
+                getTrackedTankMonitorComponents().forEach((tank) => {
+                    sampleTankMonitorHistory(tank);
+                });
+
                 if (monitorChartMode === 'tank' && chartedTankId) {
                     const tank = ENGINE.componentes.find(c => c.id === chartedTankId);
-                    if (tank) {
-                        volumeChart.data.labels.push(Math.round(ENGINE.elapsedTime));
-                        volumeChart.data.datasets[0].data.push(tank.volumeAtual);
-                        if (volumeChart.data.labels.length > 60) {
-                            volumeChart.data.labels.shift();
-                            volumeChart.data.datasets[0].data.shift();
-                        }
-                        volumeChart.update();
+                    if (tank instanceof TanqueLogico) {
+                        refreshTankMonitorChartInstance(volumeChart, tank);
                     }
+                }
+
+                if (comparisonMonitorState.maximized) {
+                    refreshComparisonMonitorCharts();
                 }
             }
         }
@@ -1450,3 +2419,329 @@ function setupSubscriptions() {
 export function updatePipesVisualUI() {
     ENGINE.updatePipesVisual();
 }
+
+setupPanelToggles = function () {
+    const toggleLeft = document.getElementById('toggle-left');
+    const panelLeft = document.getElementById('palette');
+    toggleLeft.addEventListener('click', () => {
+        const isCollapsed = panelLeft.classList.toggle('collapsed');
+        toggleLeft.classList.toggle('collapsed');
+        toggleLeft.textContent = isCollapsed ? '▶' : '◀';
+    });
+
+    const toggleRight = document.getElementById('toggle-right');
+    const panelRight = document.getElementById('properties');
+    toggleRight.addEventListener('click', () => {
+        const isCollapsed = panelRight.classList.toggle('collapsed');
+        toggleRight.classList.toggle('collapsed');
+        toggleRight.textContent = isCollapsed ? '◀' : '▶';
+    });
+
+    const btnMaxChart = document.getElementById('btn-max-chart');
+    const chartWrapper = document.getElementById('chart-wrapper');
+    const chartMaxHeader = document.getElementById('chart-max-header');
+    const btnCloseMaxChart = document.getElementById('btn-close-max-chart');
+    const btnPinChart = document.getElementById('btn-pin-chart');
+    const btnUseCurrentCompare = document.getElementById('btn-use-current-compare');
+    const btnClearCompare = document.getElementById('btn-clear-compare');
+    const btnRemoveSecondaryCompare = document.getElementById('btn-remove-secondary-compare');
+
+    function updateResizeHoverState(event) {
+        if (!comparisonMonitorState.maximized || comparisonMonitorState.isResizing) {
+            chartWrapper.classList.remove('is-resize-hover');
+            return;
+        }
+
+        chartWrapper.classList.toggle('is-resize-hover', isPointerNearMonitorPerimeter(event, chartWrapper));
+    }
+
+    function resizeDetailedMonitorFromPointer(event) {
+        const nextHeight = clampDetailedMonitorHeightPx(window.innerHeight - event.clientY - 12);
+        comparisonMonitorState.heightPx = nextHeight;
+        applyDetailedMonitorHeight();
+        scheduleMonitorChartsRefresh();
+    }
+
+    function stopDetailedMonitorResize() {
+        if (!comparisonMonitorState.isResizing) return;
+        comparisonMonitorState.isResizing = false;
+        chartWrapper.classList.remove('is-resizing');
+    }
+
+    function toggleChartMaximize(forceState = null) {
+        const nextState = typeof forceState === 'boolean'
+            ? forceState
+            : !comparisonMonitorState.maximized;
+
+        stopDetailedMonitorResize();
+        comparisonMonitorState.maximized = nextState;
+        chartWrapper.classList.toggle('maximized', nextState);
+        chartWrapper.classList.remove('is-resize-hover');
+        btnMaxChart.textContent = nextState ? 'Fechar detalhado' : '⤢ Expandir';
+        chartMaxHeader.style.display = nextState ? 'flex' : 'none';
+
+        if (nextState) {
+            comparisonMonitorState.principalFixado = false;
+            comparisonMonitorState.slotPrimary = getCurrentCompactMonitorDescriptor();
+            comparisonMonitorState.slotSecondary = null;
+            comparisonMonitorState.statusMessage = '';
+        } else {
+            clearComparisonMonitorState();
+        }
+
+        applyDetailedMonitorHeight();
+        renderComparisonMonitorView();
+        scheduleMonitorChartsRefresh();
+    }
+
+    btnMaxChart.addEventListener('click', () => toggleChartMaximize());
+    btnCloseMaxChart?.addEventListener('click', () => toggleChartMaximize(false));
+    btnPinChart?.addEventListener('click', () => toggleComparisonPrimaryLock());
+    btnUseCurrentCompare?.addEventListener('click', () => tryUseComponentInComparison(ENGINE.selectedComponent, { manual: true }));
+    btnClearCompare?.addEventListener('click', () => clearSecondaryComparisonSlot());
+    btnRemoveSecondaryCompare?.addEventListener('click', () => clearSecondaryComparisonSlot());
+
+    chartWrapper.addEventListener('mousemove', updateResizeHoverState);
+    chartWrapper.addEventListener('mouseleave', () => {
+        if (!comparisonMonitorState.isResizing) {
+            chartWrapper.classList.remove('is-resize-hover');
+        }
+    });
+    chartWrapper.addEventListener('mousedown', (event) => {
+        if (event.button !== 0 || !comparisonMonitorState.maximized) return;
+        if (!isPointerNearMonitorPerimeter(event, chartWrapper)) return;
+
+        comparisonMonitorState.isResizing = true;
+        chartWrapper.classList.add('is-resizing');
+        chartWrapper.classList.remove('is-resize-hover');
+        event.preventDefault();
+        resizeDetailedMonitorFromPointer(event);
+    });
+
+    document.addEventListener('mousemove', (event) => {
+        if (!comparisonMonitorState.isResizing) return;
+        resizeDetailedMonitorFromPointer(event);
+    });
+    document.addEventListener('mouseup', stopDetailedMonitorResize);
+    window.addEventListener('blur', stopDetailedMonitorResize);
+
+    window.addEventListener('resize', () => {
+        applyDetailedMonitorHeight();
+        scheduleMonitorChartsRefresh();
+    });
+
+    applyDetailedMonitorHeight();
+
+    if (window.innerWidth > 800) {
+        panelLeft.classList.remove('collapsed');
+        toggleLeft.classList.remove('collapsed');
+        toggleLeft.textContent = '◀';
+
+        panelRight.classList.remove('collapsed');
+        toggleRight.classList.remove('collapsed');
+        toggleRight.textContent = '▶';
+    }
+};
+
+getComparisonStatusText = function () {
+    if (comparisonMonitorState.statusMessage) return comparisonMonitorState.statusMessage;
+
+    if (!comparisonMonitorState.slotPrimary) {
+        return 'Selecione um tanque ou bomba para abrir o gráfico principal.';
+    }
+
+    if (!comparisonMonitorState.principalFixado) {
+        return 'Este modo mostra até 2 gráficos. Fixe o atual para comparar com mais um tanque ou bomba.';
+    }
+
+    if (!comparisonMonitorState.slotSecondary) {
+        return 'Principal fixado. Agora selecione mais um tanque ou bomba para preencher a comparação.';
+    }
+
+    return 'Comparação ativa com 2 gráficos. Use "Limpar comparação" para trocar o segundo.';
+};
+
+updateComparisonMonitorHeader = function () {
+    const statusEl = getComparisonStatusElement();
+    const pinButton = document.getElementById('btn-pin-chart');
+    const clearButton = document.getElementById('btn-clear-compare');
+    const useCurrentButton = document.getElementById('btn-use-current-compare');
+    const selectedDescriptor = createMonitorDescriptor(ENGINE.selectedComponent);
+    const canUseCurrentSelection = Boolean(
+        comparisonMonitorState.maximized
+        && comparisonMonitorState.principalFixado
+        && comparisonMonitorState.slotPrimary
+        && selectedDescriptor
+        && !comparisonMonitorState.slotSecondary
+        && !descriptorsMatch(selectedDescriptor, comparisonMonitorState.slotPrimary)
+    );
+
+    if (statusEl) statusEl.textContent = getComparisonStatusText();
+
+    if (pinButton) {
+        pinButton.disabled = !comparisonMonitorState.slotPrimary;
+        pinButton.textContent = comparisonMonitorState.principalFixado
+            ? 'Desfixar principal'
+            : 'Fixar atual';
+    }
+
+    if (clearButton) {
+        clearButton.disabled = !comparisonMonitorState.slotSecondary;
+    }
+
+    if (useCurrentButton) {
+        useCurrentButton.disabled = !canUseCurrentSelection;
+    }
+};
+
+renderComparisonSlot = function (slotName) {
+    const slotKey = slotName === 'primary' ? 'slotPrimary' : 'slotSecondary';
+    const descriptor = comparisonMonitorState[slotKey];
+    const component = resolveMonitorDescriptor(descriptor);
+    const elements = getComparisonSlotElements(slotName);
+    const chartKey = slotName === 'primary' ? 'primary' : 'secondary';
+    const isPrimary = slotName === 'primary';
+
+    if (!elements.card || !elements.empty || !elements.canvasWrap || !elements.canvas) return;
+
+    if (!descriptor || !component) {
+        destroyComparisonMonitorChart(chartKey);
+        elements.card.dataset.kind = 'empty';
+        elements.canvasWrap.hidden = true;
+        elements.empty.hidden = false;
+        elements.title.textContent = isPrimary ? 'Gráfico principal' : 'Comparação';
+        elements.subtitle.textContent = isPrimary
+            ? 'Selecione um tanque ou bomba para monitorar.'
+            : 'Fixe o gráfico principal e escolha outro componente quando quiser comparar.';
+        elements.empty.textContent = isPrimary
+            ? 'Nenhum gráfico principal disponível no momento.'
+            : 'A comparação aparecerá aqui quando você escolher um segundo gráfico.';
+        if (elements.removeButton) elements.removeButton.hidden = true;
+        return;
+    }
+
+    elements.card.dataset.kind = descriptor.kind;
+    elements.title.textContent = isPrimary
+        ? `Principal • ${getMonitorDescriptorLabel(descriptor, component)}`
+        : `Comparação • ${getMonitorDescriptorLabel(descriptor, component)}`;
+    elements.subtitle.textContent = descriptor.kind === 'tank'
+        ? 'Histórico de volume ao longo do tempo.'
+        : 'Curva da bomba com ponto de operação atual.';
+    elements.empty.hidden = true;
+    elements.canvasWrap.hidden = false;
+    if (elements.removeButton) elements.removeButton.hidden = false;
+
+    if (descriptor.kind === 'tank') {
+        ensureTankMonitorHistory(component);
+        if (!comparisonMonitorState.charts[chartKey] || comparisonMonitorState.charts[chartKey].$monitorKind !== 'tank') {
+            destroyComparisonMonitorChart(chartKey);
+            comparisonMonitorState.charts[chartKey] = createTankMonitorChartInstance(elements.canvas.getContext('2d'), component);
+            comparisonMonitorState.charts[chartKey].$monitorKind = 'tank';
+        } else {
+            refreshTankMonitorChartInstance(comparisonMonitorState.charts[chartKey], component);
+        }
+        return;
+    }
+
+    if (!comparisonMonitorState.charts[chartKey] || comparisonMonitorState.charts[chartKey].$monitorKind !== 'pump') {
+        destroyComparisonMonitorChart(chartKey);
+        comparisonMonitorState.charts[chartKey] = createPumpMonitorChartInstance(elements.canvas.getContext('2d'), component, true);
+    } else {
+        refreshPumpMonitorChartInstance(comparisonMonitorState.charts[chartKey], component, true);
+    }
+};
+
+tryUseComponentInComparison = function (component, { manual = false } = {}) {
+    if (!comparisonMonitorState.maximized || !comparisonMonitorState.principalFixado) return false;
+
+    const descriptor = createMonitorDescriptor(component);
+    if (!descriptor) {
+        if (manual) {
+            comparisonMonitorState.statusMessage = 'Só tanques e bombas podem entrar na comparação.';
+            updateComparisonMonitorHeader();
+        }
+        return false;
+    }
+
+    if (!comparisonMonitorState.slotPrimary) {
+        comparisonMonitorState.slotPrimary = descriptor;
+        comparisonMonitorState.statusMessage = '';
+        renderComparisonMonitorView();
+        return true;
+    }
+
+    if (descriptorsMatch(descriptor, comparisonMonitorState.slotPrimary)) {
+        if (manual) {
+            comparisonMonitorState.statusMessage = 'O gráfico selecionado já está fixado como principal.';
+            updateComparisonMonitorHeader();
+        }
+        return false;
+    }
+
+    if (descriptorsMatch(descriptor, comparisonMonitorState.slotSecondary)) {
+        if (manual) {
+            comparisonMonitorState.statusMessage = 'Esse gráfico já está aberto na comparação.';
+            updateComparisonMonitorHeader();
+        }
+        return false;
+    }
+
+    if (comparisonMonitorState.slotSecondary) {
+        comparisonMonitorState.statusMessage = 'O monitor já está usando 2 gráficos. Limpe a comparação para escolher outro.';
+        updateComparisonMonitorHeader();
+        return false;
+    }
+
+    comparisonMonitorState.slotSecondary = descriptor;
+    comparisonMonitorState.statusMessage = '';
+    const compareComponent = resolveMonitorDescriptor(descriptor);
+    if (compareComponent instanceof TanqueLogico) ensureTankMonitorHistory(compareComponent);
+    renderComparisonMonitorView();
+    return true;
+};
+
+syncComparisonMonitorSelection = function (component, connection) {
+    if (!comparisonMonitorState.maximized) return;
+
+    if (!comparisonMonitorState.principalFixado) {
+        comparisonMonitorState.slotPrimary = getCurrentCompactMonitorDescriptor();
+        comparisonMonitorState.slotSecondary = null;
+        comparisonMonitorState.statusMessage = '';
+        renderComparisonMonitorView();
+        return;
+    }
+
+    if (!comparisonMonitorState.slotPrimary) {
+        comparisonMonitorState.slotPrimary = getCurrentCompactMonitorDescriptor();
+        if (!comparisonMonitorState.slotPrimary) {
+            comparisonMonitorState.statusMessage = connection
+                ? 'Conexões não possuem gráfico comparável.'
+                : 'Selecione um tanque ou bomba para definir o gráfico principal.';
+            renderComparisonMonitorView();
+            return;
+        }
+    }
+
+    if (!component || !isMonitorableComponent(component)) {
+        if (!comparisonMonitorState.slotSecondary && connection) {
+            comparisonMonitorState.statusMessage = 'Conexões não possuem gráfico comparável.';
+        }
+        updateComparisonMonitorHeader();
+        return;
+    }
+
+    if (!comparisonMonitorState.slotSecondary) {
+        tryUseComponentInComparison(component);
+        return;
+    }
+
+    const descriptor = createMonitorDescriptor(component);
+    if (
+        descriptor
+        && !descriptorsMatch(descriptor, comparisonMonitorState.slotPrimary)
+        && !descriptorsMatch(descriptor, comparisonMonitorState.slotSecondary)
+    ) {
+        comparisonMonitorState.statusMessage = 'O monitor já está usando 2 gráficos. Limpe a comparação para escolher outro.';
+        updateComparisonMonitorHeader();
+    }
+};

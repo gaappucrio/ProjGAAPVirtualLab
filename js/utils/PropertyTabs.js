@@ -31,32 +31,51 @@ export function renderPropertyTabs({
     `;
 }
 
+export function activatePropertyTab(tabsEl, target = 'basic') {
+    if (!tabsEl) return 'basic';
+
+    const buttons = [...tabsEl.querySelectorAll('.prop-tab-button')];
+    const panels = [...tabsEl.querySelectorAll('.prop-tab-panel')];
+    const availableTargets = buttons.map((button) => button.dataset.tabTarget);
+    const resolvedTarget = availableTargets.includes(target)
+        ? target
+        : (availableTargets[0] || 'basic');
+
+    buttons.forEach((button) => {
+        const active = button.dataset.tabTarget === resolvedTarget;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+
+    panels.forEach((panel) => {
+        const active = panel.dataset.tabPanel === resolvedTarget;
+        panel.classList.toggle('is-active', active);
+        panel.hidden = !active;
+    });
+
+    tabsEl.dataset.activeTab = resolvedTarget;
+    return resolvedTarget;
+}
+
+export function getPropertyTabsState(root = document) {
+    return [...root.querySelectorAll('.prop-tabs')]
+        .map((tabsEl) => tabsEl.dataset.activeTab || 'basic');
+}
+
+export function restorePropertyTabsState(root = document, tabStates = []) {
+    return [...root.querySelectorAll('.prop-tabs')]
+        .map((tabsEl, index) => activatePropertyTab(tabsEl, tabStates[index] || tabsEl.dataset.activeTab || 'basic'));
+}
+
 export function bindPropertyTabs(root = document) {
     root.querySelectorAll('.prop-tabs').forEach((tabsEl) => {
         if (tabsEl.dataset.bound === 'true') return;
         tabsEl.dataset.bound = 'true';
 
         const buttons = [...tabsEl.querySelectorAll('.prop-tab-button')];
-        const panels = [...tabsEl.querySelectorAll('.prop-tab-panel')];
-
-        const activateTab = (target) => {
-            buttons.forEach((button) => {
-                const active = button.dataset.tabTarget === target;
-                button.classList.toggle('is-active', active);
-                button.setAttribute('aria-selected', active ? 'true' : 'false');
-            });
-
-            panels.forEach((panel) => {
-                const active = panel.dataset.tabPanel === target;
-                panel.classList.toggle('is-active', active);
-                panel.hidden = !active;
-            });
-
-            tabsEl.dataset.activeTab = target;
-        };
 
         buttons.forEach((button) => {
-            button.addEventListener('click', () => activateTab(button.dataset.tabTarget));
+            button.addEventListener('click', () => activatePropertyTab(tabsEl, button.dataset.tabTarget));
         });
     });
 }
