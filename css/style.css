@@ -616,7 +616,7 @@
       /* Remove a margem para inputs numéricos, garantindo que eles se encaixem adequadamente dentro dos limites dos grupos de propriedades e proporcionando um layout mais organizado e profissional para os campos de entrada das propriedades dos componentes selecionados, especialmente quando combinados com o layout flexível e o alinhamento centralizado para destacar os campos de entrada das propriedades */
   }
 
-  /* GRÁFICO MAXIMIZADO */
+  /* GRÁFICO */
   .chart-container
 
   /* CONTAINER DO GRÁFICO DE MONITORAMENTO  */
@@ -647,19 +647,19 @@
 
   /* ESTILO PARA O GRÁFICO QUANDO MAXIMIZADO  */
       {
-      position: fixed;
+      position: absolute;
       /* Torna o gráfico de monitoramento fixo na tela, permitindo que ele se sobreponha ao workspace principal e ao painel de propriedades, criando um efeito de maximização para destacar o gráfico e proporcionar uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para o gráfico de monitoramento, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para o gráfico maximizado */
       top: auto;
       /* Define a posição superior como automática para permitir que o gráfico se posicione na parte inferior da tela quando maximizado, criando um layout mais organizado e profissional para o gráfico de monitoramento maximizado, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para o gráfico de monitoramento */
       bottom: 0;
       /* Posiciona o gráfico de monitoramento na parte inferior da tela quando maximizado, criando um layout mais organizado e profissional para o gráfico de monitoramento maximizado, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para o gráfico de monitoramento */
-      left: 0;
+      left:280px;
       /* Posiciona o gráfico de monitoramento no lado esquerdo da tela quando maximizado, garantindo que ele se encaixe adequadamente dentro dos limites da tela e proporcionando um layout mais organizado e profissional para o gráfico de monitoramento maximizado, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para o gráfico de monitoramento */
-      width: 100vw;
+      width: 50vw;
       /* Largura total da viewport para o gráfico de monitoramento quando maximizado, garantindo que ele se encaixe adequadamente dentro dos limites da tela e proporcionando um layout mais organizado e profissional para o gráfico de monitoramento maximizado, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para o gráfico de monitoramento */
-      height: 35vh;
+      height: auto;
       /* Altura de 35% da viewport para o gráfico de monitoramento quando maximizado, criando um espaço dedicado para o gráfico dentro da tela e garantindo que ele seja exibido de forma clara e legível para os usuários, além de criar um visual mais organizado e profissional para o gráfico de monitoramento maximizado, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para o gráfico de monitoramento */
-      z-index: 9999;
+      z-index: 50;
       /* Z-index alto para o gráfico de monitoramento quando maximizado, garantindo que ele se sobreponha a todos os outros elementos na tela, incluindo o workspace principal e o painel de propriedades, criando um efeito de maximização para destacar o gráfico e proporcionar uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para o gráfico de monitoramento, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para o gráfico maximizado */
       box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.15);
       /* Sombra para o gráfico de monitoramento quando maximizado, criando um efeito de destaque visual que chama a atenção dos usuários para o gráfico e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para o gráfico de monitoramento, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para o gráfico maximizado */
