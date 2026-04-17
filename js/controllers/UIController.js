@@ -15,7 +15,12 @@ import {
 import { REGISTRO_COMPONENTES } from '../RegistroComponentes.js';
 
 import { clearInputError, InputValidator, showInputError } from '../utils/InputValidator.js';
-import { bindPropertyTabs, renderPropertyTabs } from '../utils/PropertyTabs.js';
+import {
+    bindPropertyTabs,
+    getPropertyTabsState,
+    renderPropertyTabs,
+    restorePropertyTabsState
+} from '../utils/PropertyTabs.js';
 import { TOOLTIPS } from '../utils/Tooltips.js';
 import {
     DEFAULT_PIPE_ROUGHNESS_MM,
@@ -35,6 +40,8 @@ let chartUpdateTimer = 0;
 let chartedTankId = null;
 let chartedPumpId = null;
 let monitorChartMode = 'empty';
+const propertyPanelContextState = new Map();
+let activePropertyContextKey = 'default';
 
 export function setupUI() {
     setupPanelToggles();
@@ -232,6 +239,69 @@ function getPropContent() {
     return document.getElementById('prop-content');
 }
 
+function getPropertyScrollContainer() {
+    return document.querySelector('#properties .side-panel-content');
+}
+
+function getConnectionContextKey(connection) {
+    if (!connection) return 'default';
+
+    const sourceId = connection.sourceEl?.dataset?.compId || 'source';
+    const targetId = connection.targetEl?.dataset?.compId || 'target';
+    return `connection:${sourceId}->${targetId}`;
+}
+
+function getPropertyContextKey(component = ENGINE.selectedComponent, connection = ENGINE.selectedConnection) {
+    if (connection) return getConnectionContextKey(connection);
+    if (component) return `component:${component.id}`;
+    return 'default';
+}
+
+function capturePropertyPanelContextState(contextKey = activePropertyContextKey) {
+    if (!contextKey) return;
+
+    const scrollContainer = getPropertyScrollContainer();
+    const propContent = getPropContent();
+    if (!scrollContainer || !propContent) return;
+
+    propertyPanelContextState.set(contextKey, {
+        scrollTop: scrollContainer.scrollTop,
+        tabStates: getPropertyTabsState(propContent)
+    });
+}
+
+function restorePropertyPanelContextState(contextKey, { onAfterRestore } = {}) {
+    const scrollContainer = getPropertyScrollContainer();
+    const propContent = getPropContent();
+    if (!scrollContainer || !propContent) return;
+
+    const savedState = propertyPanelContextState.get(contextKey);
+    const restoredTabs = restorePropertyTabsState(propContent, savedState?.tabStates);
+
+    requestAnimationFrame(() => {
+        const maxScroll = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
+        scrollContainer.scrollTop = Math.min(savedState?.scrollTop || 0, maxScroll);
+        onAfterRestore?.(restoredTabs, savedState);
+    });
+}
+
+function restorePumpCurveFromSavedContext(component, restoredTabs = []) {
+    if (!(component instanceof BombaLogica)) return;
+
+    const advancedActive = restoredTabs.some((tabState) => tabState.activeTab === 'advanced');
+    if (!advancedActive) return;
+
+    requestAnimationFrame(() => {
+        if (!pumpCurveChart) {
+            renderPumpCurveChart(component);
+        }
+        if (pumpCurveChart) {
+            pumpCurveChart.resize();
+            refreshPumpCurveChart(component);
+        }
+    });
+}
+
 function destroyPumpCurveChart() {
     if (pumpCurveChart) {
         pumpCurveChart.destroy();
@@ -422,23 +492,27 @@ function bindUnitControls() {
 }
 
 function renderCurrentProperties() {
+    capturePropertyPanelContextState();
+
     const component = ENGINE.selectedComponent;
     const connection = ENGINE.selectedConnection;
+    const nextContextKey = getPropertyContextKey(component, connection);
 
     refreshChartSelection(component, connection);
     refreshVolumeChartPresentation();
 
     if (connection) {
         renderConnectionProperties(connection);
-        return;
-    }
-
-    if (component) {
+    } else if (component) {
         renderComponentProperties(component);
-        return;
+    } else {
+        renderDefaultProperties();
     }
 
-    renderDefaultProperties();
+    activePropertyContextKey = nextContextKey;
+    restorePropertyPanelContextState(nextContextKey, {
+        onAfterRestore: (restoredTabs) => restorePumpCurveFromSavedContext(component, restoredTabs)
+    });
 }
 
 function pressureInputValue(id, fallback) {

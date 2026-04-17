@@ -31,32 +31,59 @@ export function renderPropertyTabs({
     `;
 }
 
+function activatePropertyTab(tabsEl, target = 'basic') {
+    const buttons = [...tabsEl.querySelectorAll('.prop-tab-button')];
+    const panels = [...tabsEl.querySelectorAll('.prop-tab-panel')];
+    const normalizedTarget = buttons.some((button) => button.dataset.tabTarget === target)
+        ? target
+        : 'basic';
+
+    buttons.forEach((button) => {
+        const active = button.dataset.tabTarget === normalizedTarget;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+
+    panels.forEach((panel) => {
+        const active = panel.dataset.tabPanel === normalizedTarget;
+        panel.classList.toggle('is-active', active);
+        panel.hidden = !active;
+    });
+
+    tabsEl.dataset.activeTab = normalizedTarget;
+    return normalizedTarget;
+}
+
+export function getPropertyTabsState(root = document) {
+    return [...root.querySelectorAll('.prop-tabs')].map((tabsEl, index) => ({
+        index,
+        activeTab: tabsEl.dataset.activeTab || 'basic'
+    }));
+}
+
+export function restorePropertyTabsState(root = document, tabStates = []) {
+    const stateByIndex = new Map(
+        (Array.isArray(tabStates) ? tabStates : [])
+            .filter((state) => state && Number.isInteger(state.index))
+            .map((state) => [state.index, state.activeTab])
+    );
+
+    return [...root.querySelectorAll('.prop-tabs')].map((tabsEl, index) => ({
+        index,
+        activeTab: activatePropertyTab(tabsEl, stateByIndex.get(index) || tabsEl.dataset.activeTab || 'basic')
+    }));
+}
+
 export function bindPropertyTabs(root = document) {
     root.querySelectorAll('.prop-tabs').forEach((tabsEl) => {
         if (tabsEl.dataset.bound === 'true') return;
         tabsEl.dataset.bound = 'true';
 
         const buttons = [...tabsEl.querySelectorAll('.prop-tab-button')];
-        const panels = [...tabsEl.querySelectorAll('.prop-tab-panel')];
-
-        const activateTab = (target) => {
-            buttons.forEach((button) => {
-                const active = button.dataset.tabTarget === target;
-                button.classList.toggle('is-active', active);
-                button.setAttribute('aria-selected', active ? 'true' : 'false');
-            });
-
-            panels.forEach((panel) => {
-                const active = panel.dataset.tabPanel === target;
-                panel.classList.toggle('is-active', active);
-                panel.hidden = !active;
-            });
-
-            tabsEl.dataset.activeTab = target;
-        };
+        activatePropertyTab(tabsEl, tabsEl.dataset.activeTab || 'basic');
 
         buttons.forEach((button) => {
-            button.addEventListener('click', () => activateTab(button.dataset.tabTarget));
+            button.addEventListener('click', () => activatePropertyTab(tabsEl, button.dataset.tabTarget));
         });
     });
 }

@@ -103,7 +103,7 @@
       /* Organizar os elementos dentro dos painéis laterais em uma coluna, facilitando a leitura e a navegação pelo conteúdo, além de criar um visual mais estruturado e profissional */
       z-index: 10;
       /* Garantir que os painéis laterais fiquem acima do workspace principal, permitindo que eles sejam facilmente acessíveis e visíveis para os usuários, mesmo quando o workspace estiver cheio de componentes e conexões */
-      transition: transform 0.3s ease, width 0.3s ease;
+      transition: transform 0.5s ease, width 0.5s ease;
       /* Transição suave para animações de colapsar/expandir os painéis laterais */
       flex-shrink: 0;
       /* Impedir que os painéis laterais encolham quando a janela for redimensionada, garantindo que eles mantenham sua largura e proporção adequados em diferentes tamanhos de tela, especialmente em telas maiores onde o workspace principal pode se expandir significativamente */
@@ -179,6 +179,8 @@
 
   /* BOTÕES DE COLAPSAR */
   .panel-toggle {
+      /* Base compartilhada dos toggles laterais para reduzir duplicidade
+         de estilo e manter a integração visual com os painéis. */
       position: absolute;
       /* Permitir posicionamento absoluto dos botões de colapsar para que eles possam ser colocados sobre os painéis laterais, facilitando a implementação de funcionalidades de colapsar/expandir os painéis e garantindo que os botões estejam sempre acessíveis para os usuários, mesmo quando os painéis estiverem cheios de conteúdo */
       top: 50%;
@@ -189,9 +191,9 @@
       /* Largura dos botões de colapsar, proporcionando espaço suficiente para exibir os ícones de seta e garantir que eles sejam facilmente clicáveis para os usuários, além de criar um visual mais consistente e profissional para os botões de colapsar */
       height: 40px;
       /* Altura dos botões de colapsar, proporcionando espaço suficiente para exibir os ícones de seta e garantir que eles sejam facilmente clicáveis para os usuários, além de criar um visual mais consistente e profissional para os botões de colapsar */
-      background: #fff;
+      background: transparent;
       /* Fundo branco para os botões de colapsar, criando um contraste limpo e profissional com os painéis laterais e o workspace principal, além de melhorar a visibilidade dos botões de colapsar para os usuários, especialmente quando combinados com as bordas e sombras sutis para destacar os botões */
-      border: 1px solid #bdc3c7;
+      border: 1px solid #d9e2e7;
       /* Borda sutil para os botões de colapsar, adicionando um toque de elegância ao design e ajudando a destacar os botões de colapsar para os usuários, além de criar um visual mais consistente e profissional para os botões de colapsar, especialmente quando combinados com o fundo branco e as sombras sutis para melhorar a visibilidade dos botões */
       display: flex;
       /* Layout flexível para organizar o conteúdo interno dos botões de colapsar, permitindo que os ícones de seta sejam centralizados tanto vertical quanto horizontalmente, garantindo que os botões sejam visualmente equilibrados e fáceis de identificar para os usuários, além de criar um visual mais profissional para os botões de colapsar */
@@ -207,9 +209,9 @@
       /* Cor do texto para os ícones de seta nos botões de colapsar, proporcionando um contraste suave com o fundo branco dos botões e garantindo que os ícones sejam facilmente visíveis para os usuários, além de criar um visual mais consistente e profissional para os botões de colapsar, especialmente quando combinados com as bordas e sombras sutis para destacar os botões */
       font-size: 12px;
       /* Tamanho da fonte para os ícones de seta nos botões de colapsar, garantindo que eles sejam facilmente legíveis e identificáveis para os usuários, além de criar um visual mais consistente e profissional para os botões de colapsar, especialmente quando combinados com o fundo branco e as bordas sutis para melhorar a visibilidade dos botões */
-      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      box-shadow: none;
       /* Sombra suave para os botões de colapsar, adicionando profundidade e destacando os botões para os usuários, além de criar um visual mais profissional para os botões de colapsar, especialmente quando combinados com o fundo branco e as bordas sutis para melhorar a visibilidade dos botões */
-      transition: 0.5s;
+      transition: left 0.5s ease, right 0.5s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
       /* Transição suave para os botões de colapsar, permitindo que eles respondam visualmente quando os usuários interagirem com eles, como ao passar o mouse ou clicar, melhorando a experiência do usuário e tornando a interface mais dinâmica e agradável de usar */
   }
 
@@ -217,7 +219,8 @@
 
   /* HOVER PARA BOTÕES DE COLAPSAR  */
       {
-      background: #ecf0f1;
+      border-color: #c7d1d8;
+      /* O hover destaca o contorno sem quebrar a integração com a lateral. */
       /* Fundo mais claro para os botões de colapsar quando o mouse estiver sobre eles, proporcionando um feedback visual para os usuários e incentivando a interação com os botões, além de criar um visual mais dinâmico e agradável para a interface */
       color: #2c3e50;
       /* Cor do texto mais escura para os ícones de seta nos botões de colapsar quando o mouse estiver sobre eles, melhorando a visibilidade dos ícones e proporcionando um feedback visual para os usuários, além de criar um visual mais dinâmico e agradável para a interface, especialmente quando combinado com o fundo mais claro para destacar os botões de colapsar durante a interação do usuário */
@@ -228,12 +231,13 @@
   /* BOTÃO DE COLAPSAR ESQUERDO  */
       {
       left: 280px;
+      background: #f4f7f6;
+      /* Usa a mesma cor da paleta para o toggle parecer uma extensão do painel. */
       /* Posicionar o botão de colapsar do painel esquerdo na borda direita do painel, garantindo que ele esteja facilmente acessível para os usuários e criando um visual mais organizado e profissional para a interface, além de facilitar a implementação de funcionalidades de colapsar/expandir os painéis laterais */
       border-radius: 0 8px 8px 0;
       /* Bordas arredondadas para o botão de colapsar do painel esquerdo, criando um visual mais moderno e amigável, além de destacar o botão e torná-lo mais atraente para os usuários, especialmente quando combinado com o fundo branco e as bordas sutis para melhorar a visibilidade do botão */
       border-left: none;
       /* Remover a borda esquerda do botão de colapsar do painel esquerdo para criar um visual mais limpo e integrado com o painel, além de destacar o botão e torná-lo mais atraente para os usuários, especialmente quando combinado com o fundo branco e as bordas sutis para melhorar a visibilidade do botão */
-      transition: left 0.5s ease;
       /* Transição suave para a posição do botão de colapsar do painel esquerdo, permitindo que ele se mova suavemente quando os usuários interagirem com ele para colapsar ou expandir o painel, melhorando a experiência do usuário e tornando a interface mais dinâmica e agradável de usar, especialmente quando combinado com a transição de largura do painel lateral durante as animações de colapsar/expandir */
   }
 
@@ -250,12 +254,13 @@
   /* BOTÃO DE COLAPSAR DIREITO  */
       {
       right: 340px;
+      background: #fff;
+      /* Usa a mesma cor do painel de propriedades para manter continuidade visual. */
       /* Posicionar o botão de colapsar do painel direito na borda esquerda do painel, garantindo que ele esteja facilmente acessível para os usuários e criando um visual mais organizado e profissional para a interface, além de facilitar a implementação de funcionalidades de colapsar/expandir os painéis laterais */
       border-radius: 8px 0 0 8px;
       /* Bordas arredondadas para o botão de colapsar do painel direito, criando um visual mais moderno e amigável, além de destacar o botão e torná-lo mais atraente para os usuários, especialmente quando combinado com o fundo branco e as bordas sutis para melhorar a visibilidade do botão */
       border-right: none;
       /* Remover a borda direita do botão de colapsar do painel direito para criar um visual mais limpo e integrado com o painel, além de destacar o botão e torná-lo mais atraente para os usuários, especialmente quando combinado com o fundo branco e as bordas sutis para melhorar a visibilidade do botão */
-      transition: right 0.5s ease;
       /* Transição suave para a posição do botão de colapsar do painel direito, permitindo que ele se mova suavemente quando os usuários interagirem com ele para colapsar ou expandir o painel, melhorando a experiência do usuário e tornando a interface mais dinâmica e agradável de usar, especialmente quando combinado com a transição de largura do painel lateral durante as animações de colapsar/expandir */
   }
 
@@ -664,8 +669,6 @@
       /* Borda arredondada para o gráfico de monitoramento quando maximizado, criando um visual mais amigável e atraente, além de destacar o gráfico e torná-lo mais identificável para os usuários, especialmente quando combinado com o fundo branco e as bordas sutis para melhorar a visibilidade do gráfico de monitoramento maximizado */
       border: none;
       /* Remove a borda para o gráfico de monitoramento quando maximizado, criando um visual mais limpo e profissional para o gráfico maximizado, além de permitir que o destaque visual seja controlado por meio de outras propriedades CSS, como a sombra e as bordas arredondadas, para criar um efeito de destaque mais elegante e profissional para o gráfico de monitoramento maximizado */
-      border-top: 4px solid #3498db;
-      /* Borda superior azul para o gráfico de monitoramento quando maximizado, criando um destaque visual que chama a atenção dos usuários para o gráfico e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para o gráfico de monitoramento, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para o gráfico maximizado */
       margin: 0;
       /* Remove a margem para o gráfico de monitoramento quando maximizado, garantindo que ele se encaixe adequadamente dentro dos limites da tela e proporcionando um layout mais organizado e profissional para o gráfico de monitoramento maximizado, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para o gráfico de monitoramento */
       padding: 15px 25px;
@@ -1121,8 +1124,8 @@
       /* ESTILO PARA O PAINEL DE PALETA, AJUSTADO PARA RESPONSIVIDADE EM TELAS MENORES  */
           {
           left: 0;
-          /* Define a posição horizontal do painel de paleta como 0, alinhando-o ao lado esquerdo do contêiner principal */
           z-index: 50;
+          /* Define a posição horizontal do painel de paleta como 0, alinhando-o ao lado esquerdo do contêiner principal */
           /* Define o índice z do painel de paleta como 50, garantindo que ele seja exibido acima do workspace e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para o painel de paleta em telas menores, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para o painel de paleta em telas menores */
       }
 
@@ -1131,8 +1134,8 @@
       /* ESTILO PARA O PAINEL DE PROPRIEDADES, AJUSTADO PARA RESPONSIVIDADE EM TELAS MENORES  */
           {
           right: 0;
-          /* Define a posição horizontal do painel de propriedades como 0, alinhando-o ao lado direito do contêiner principal */
           z-index: 50;
+          /* Define a posição horizontal do painel de propriedades como 0, alinhando-o ao lado direito do contêiner principal */
           /* Define o índice z do painel de propriedades como 50, garantindo que ele seja exibido acima do workspace e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para o painel de propriedades em telas menores, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para o painel de propriedades em telas menores */
       }
 
@@ -1174,6 +1177,7 @@
           {
           left: 280px;
           /* Define a posição horizontal do botão de toggle do painel de paleta como 280px, alinhando-o ao lado esquerdo do contêiner principal */
+          z-index: 50;
       }
 
       #toggle-left.collapsed
@@ -1190,6 +1194,7 @@
           {
           right: 340px;
           /* Define a posição horizontal do botão de toggle do painel de propriedades como 340px, alinhando-o ao lado direito do contêiner principal */
+          z-index: 50;
       }
 
       #toggle-right.collapsed
@@ -1198,5 +1203,6 @@
           {
           right: 0;
           /* Define a posição horizontal do botão de toggle do painel de propriedades como 0 quando está colapsado, alinhando-o ao lado direito do contêiner principal */
+
       }
   }
