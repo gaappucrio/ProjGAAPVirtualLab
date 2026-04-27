@@ -246,8 +246,8 @@ function getPropertyScrollContainer() {
 function getConnectionContextKey(connection) {
     if (!connection) return 'default';
 
-    const sourceId = connection.sourceEl?.dataset?.compId || 'source';
-    const targetId = connection.targetEl?.dataset?.compId || 'target';
+    const sourceId = connection.sourceId || 'source';
+    const targetId = connection.targetId || 'target';
     return `connection:${sourceId}->${targetId}`;
 }
 

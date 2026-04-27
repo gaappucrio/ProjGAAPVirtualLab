@@ -4,27 +4,27 @@
 // =========================================
 
 import { ENGINE } from '../MotorFisico.js';
+import { connectionService } from '../application/services/ConnectionServiceRuntime.js';
+import { EngineEventPayloads } from '../application/events/EventPayloads.js';
+import { TransientConnectionStore } from '../application/stores/TransientConnectionStore.js';
 import { camera } from './CameraController.js';
 import { updatePortStates } from '../utils/PortStateManager.js';
-import { ConnectionModel } from '../domain/models/ConnectionModel.js';
 import {
-    DEFAULT_PIPE_DIAMETER_M,
-    DEFAULT_PIPE_EXTRA_LENGTH_M,
-    DEFAULT_PIPE_MINOR_LOSS,
-    DEFAULT_PIPE_ROUGHNESS_MM
-} from '../utils/Units.js';
+    createConnectionEndpointDefinition,
+    getComponentPortElement
+} from '../infrastructure/dom/ComponentVisualRegistry.js';
+import {
+    createConnectionVisual,
+    createTransientConnectionVisual,
+    removeConnectionVisual,
+    removeTransientConnectionVisual,
+    updateConnectionVisualLayout,
+    updateTransientConnectionVisual
+} from '../infrastructure/rendering/PipeRenderer.js';
 
 const pipeLayer = document.getElementById('pipe-layer');
-let tempPipe = null;
-let dragSourcePort = null;
-
-function validarControleNivelDosComponentes(...componentes) {
-    componentes.forEach((componente) => {
-        if (typeof componente?.garantirConsistenciaControleNivel === 'function') {
-            componente.garantirConsistenciaControleNivel();
-        }
-    });
-}
+const transientConnection = new TransientConnectionStore();
+let transientPath = null;
 
 export function getPortCoords(portEl) {
     const rect = portEl.getBoundingClientRect();
@@ -35,9 +35,68 @@ export function getPortCoords(portEl) {
     };
 }
 
-export function drawCurve(x1, y1, x2, y2) {
-    const dx = Math.abs(x2 - x1) * 0.5;
-    return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+function resetPipeSelection() {
+    document.querySelectorAll('.pipe-line').forEach((element) => {
+        element.classList.remove('selected');
+        if (element.classList.contains('active')) {
+            element.setAttribute('marker-end', 'url(#arrow-active)');
+        } else {
+            element.setAttribute('marker-end', 'url(#arrow)');
+        }
+    });
+}
+
+function selectConnectionPath(connection, pathEl) {
+    ENGINE.selectConnection(connection);
+    document.querySelectorAll('.placed-component').forEach((element) => element.classList.remove('selected'));
+    resetPipeSelection();
+    pathEl.classList.add('selected');
+    pathEl.setAttribute('marker-end', 'url(#arrow-selected)');
+}
+
+function clearTransientConnection() {
+    transientConnection.clear();
+    removeTransientConnectionVisual(transientPath);
+    transientPath = null;
+}
+
+function cancelTransientConnection() {
+    const draft = transientConnection.cancel();
+    removeTransientConnectionVisual(transientPath);
+    transientPath = null;
+
+    if (draft.active) {
+        ENGINE.notify(EngineEventPayloads.connectionCancelled({
+            sourceComponentId: draft.sourceComponentId
+        }));
+    }
+}
+
+function bindConnectionVisual(connection) {
+    createConnectionVisual(pipeLayer, connection, {
+        onMouseDown: (currentConnection, event, pathEl) => {
+            selectConnectionPath(currentConnection, pathEl);
+            event.stopPropagation();
+        },
+        onDoubleClick: (currentConnection, event) => {
+            connectionService.remove(currentConnection);
+            removeConnectionVisual(currentConnection);
+            updatePortStates();
+            event.stopPropagation();
+        }
+    });
+}
+
+function getConnectionRenderPoints(connection) {
+    const sourcePort = getComponentPortElement(connection.sourceId, connection.sourceEndpoint?.portType || 'out');
+    const targetPort = getComponentPortElement(connection.targetId, connection.targetEndpoint?.portType || 'in');
+
+    if (!sourcePort || !targetPort) return null;
+
+    return {
+        sourcePoint: getPortCoords(sourcePort),
+        targetPoint: getPortCoords(targetPort)
+    };
 }
 
 export function getConnectionFlow(conn) {
@@ -49,36 +108,17 @@ export function getConnectionFlow(conn) {
 }
 
 export function updateAllPipes() {
-    ENGINE.conexoes.forEach(conn => {
-        const p1 = getPortCoords(conn.sourceEl);
-        const p2 = getPortCoords(conn.targetEl);
-        conn.path.setAttribute('d', drawCurve(p1.x, p1.y, p2.x, p2.y));
+    ENGINE.conexoes.forEach((connection) => {
+        const renderPoints = getConnectionRenderPoints(connection);
+        if (!renderPoints) return;
 
-        if (conn.label) {
-            conn.label.setAttribute('x', (p1.x + p2.x) / 2);
-            conn.label.setAttribute('y', (p1.y + p2.y) / 2 - 10);
-        }
-
-        // Atualiza a posição e o texto da diferença de cota.
-        if (conn.labelHeight) {
-            conn.labelHeight.setAttribute('x', (p1.x + p2.x) / 2);
-            conn.labelHeight.setAttribute('y', (p1.y + p2.y) / 2 + 15); // 15px abaixo do meio
-
-            if (ENGINE.usarAlturaRelativa) {
-                const geom = ENGINE.getConnectionGeometry(conn);
-                const dy = geom.headGainM;
-
-                // Exibir apenas se houver desnível significativo
-                if (Math.abs(dy) > 0.01) {
-                    const signal = dy > 0 ? '+' : '';
-                    conn.labelHeight.textContent = `Δy: ${signal}${dy.toFixed(2)} m`;
-                } else {
-                    conn.labelHeight.textContent = '';
-                }
-            } else {
-                conn.labelHeight.textContent = '';
-            }
-        }
+        updateConnectionVisualLayout(
+            connection,
+            renderPoints.sourcePoint,
+            renderPoints.targetPoint,
+            ENGINE.getConnectionGeometry(connection),
+            ENGINE.usarAlturaRelativa
+        );
     });
 }
 
@@ -86,136 +126,87 @@ export function setupPipeControl() {
     const workspaceContainer = document.getElementById('workspace');
     const workspaceCanvas = document.getElementById('workspace-canvas');
 
-    // Mouse down para iniciar pipe
-    workspaceContainer.addEventListener('mousedown', (e) => {
-        if (e.target.classList.contains('port-node') && e.target.dataset.type === 'out') {
-            dragSourcePort = e.target;
-            const p1 = getPortCoords(dragSourcePort);
-            tempPipe = document.createElementNS("http://www.w3.org/2000/svg", "path");
-            tempPipe.setAttribute("class", "pipe-line " + (ENGINE.isRunning ? "active" : ""));
-            tempPipe.setAttribute("marker-end", "url(#arrow)");
-            tempPipe.setAttribute("d", drawCurve(p1.x, p1.y, p1.x, p1.y));
-            pipeLayer.appendChild(tempPipe);
-            e.stopPropagation();
-        }
+    workspaceContainer.addEventListener('mousedown', (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        if (!target.classList.contains('port-node') || target.dataset.type !== 'out') return;
+
+        const sourceComponent = ENGINE.getComponentById(target.dataset.compId);
+        if (!sourceComponent) return;
+
+        const sourcePoint = getPortCoords(target);
+        const sourceEndpoint = createConnectionEndpointDefinition(sourceComponent, target);
+
+        transientConnection.begin({
+            sourceComponentId: sourceComponent.id,
+            sourcePortType: 'out',
+            sourceEndpoint,
+            sourcePoint
+        });
+
+        transientPath = createTransientConnectionVisual(pipeLayer, ENGINE.isRunning);
+        updateTransientConnectionVisual(transientPath, sourcePoint, sourcePoint);
+
+        ENGINE.notify(EngineEventPayloads.connectionStarted({
+            sourceComponentId: sourceComponent.id,
+            sourceEndpoint,
+            sourcePoint
+        }));
+
+        event.stopPropagation();
     });
 
-    // Mouse move para atualizar pipe temporário
-    workspaceContainer.addEventListener('mousemove', (e) => {
-        if (tempPipe && dragSourcePort) {
-            const p1 = getPortCoords(dragSourcePort);
-            const canvasRect = workspaceCanvas.getBoundingClientRect();
-            const mouseX = (e.clientX - canvasRect.left) / camera.scale;
-            const mouseY = (e.clientY - canvasRect.top) / camera.scale;
-            tempPipe.setAttribute("d", drawCurve(p1.x, p1.y, mouseX, mouseY));
-        }
+    workspaceContainer.addEventListener('mousemove', (event) => {
+        const draft = transientConnection.snapshot();
+        if (!draft.active || !transientPath || !draft.sourcePoint) return;
+
+        const canvasRect = workspaceCanvas.getBoundingClientRect();
+        const previewPoint = {
+            x: (event.clientX - canvasRect.left) / camera.scale,
+            y: (event.clientY - canvasRect.top) / camera.scale
+        };
+
+        transientConnection.updatePreview(previewPoint);
+        updateTransientConnectionVisual(transientPath, draft.sourcePoint, previewPoint);
+
+        ENGINE.notify(EngineEventPayloads.connectionPreview({
+            sourceComponentId: draft.sourceComponentId,
+            sourcePoint: draft.sourcePoint,
+            previewPoint
+        }));
     });
 
-    // Mouse up para finalizar conexão
-    window.addEventListener('mouseup', (e) => {
-        if (tempPipe) {
-            let dropTarget = e.target;
-            if (dropTarget.classList.contains('port-node') && dropTarget.dataset.type === 'in') {
-                const sourceLogic = ENGINE.componentes.find(c => c.id === dragSourcePort.dataset.compId);
-                const targetLogic = ENGINE.componentes.find(c => c.id === dropTarget.dataset.compId);
+    window.addEventListener('mouseup', (event) => {
+        const draft = transientConnection.snapshot();
+        if (!draft.active) return;
 
-                if (sourceLogic && targetLogic && sourceLogic !== targetLogic) {
-                    sourceLogic.conectarSaida(targetLogic);
-                    validarControleNivelDosComponentes(sourceLogic, targetLogic);
-                    const finalPipe = tempPipe;
-                    
-                    // Criar conexão usando novo ConnectionModel (puro, sem DOM)
-                    const connection = new ConnectionModel({
-                        sourceId: dragSourcePort.dataset.compId,
-                        targetId: dropTarget.dataset.compId,
-                        sourceEndpoint: {
-                            portType: 'out',
-                            offsetX: 0,
-                            offsetY: 0,
-                            floorOffsetY: 0
-                        },
-                        targetEndpoint: {
-                            portType: 'in',
-                            offsetX: 0,
-                            offsetY: 0,
-                            floorOffsetY: 0
-                        },
-                        diameterM: DEFAULT_PIPE_DIAMETER_M,
-                        roughnessMm: DEFAULT_PIPE_ROUGHNESS_MM,
-                        extraLengthM: DEFAULT_PIPE_EXTRA_LENGTH_M,
-                        perdaLocalK: DEFAULT_PIPE_MINOR_LOSS
-                    });
-                    
-                    // Adicionar referências visuais (compatibilidade com renderização legada)
-                    connection.sourceEl = dragSourcePort;
-                    connection.targetEl = dropTarget;
-                    connection.path = finalPipe;
-                    connection.label = null;
+        const dropTarget = event.target instanceof Element ? event.target : null;
+        const isInputPort = dropTarget?.classList.contains('port-node') && dropTarget.dataset.type === 'in';
 
-                    const labelEl = document.createElementNS("http://www.w3.org/2000/svg", "text");
-                    labelEl.setAttribute("class", "pipe-flow-label");
-                    labelEl.setAttribute("text-anchor", "middle");
-                    pipeLayer.appendChild(labelEl);
-                    connection.label = labelEl;
-                    const labelHeightEl = document.createElementNS("http://www.w3.org/2000/svg", "text");
-
-                    //Altura do grafo
-                    labelHeightEl.setAttribute("class", "pipe-flow-label");
-                    labelHeightEl.setAttribute("fill", "#e67e22");
-                    labelHeightEl.setAttribute("text-anchor", "middle");
-                    pipeLayer.appendChild(labelHeightEl);
-                    connection.labelHeight = labelHeightEl;
-
-                    finalPipe.addEventListener('mousedown', function (ev) {
-                        ENGINE.selectConnection(connection);
-                        document.querySelectorAll('.placed-component').forEach(el => el.classList.remove('selected'));
-                        document.querySelectorAll('.pipe-line').forEach(el => {
-                            el.classList.remove('selected');
-                            // Restaurar marker para o estado anterior (cinza ou azul dependendo do fluxo)
-                            if (el.classList.contains('active')) {
-                                el.setAttribute("marker-end", "url(#arrow-active)");
-                            } else {
-                                el.setAttribute("marker-end", "url(#arrow)");
-                            }
-                        });
-                        this.classList.add('selected');
-                        this.setAttribute("marker-end", "url(#arrow-selected)");
-                        ev.stopPropagation();
-                    });
-
-                    finalPipe.addEventListener('dblclick', function (ev) {
-                        sourceLogic.desconectarSaida(targetLogic);
-                        validarControleNivelDosComponentes(sourceLogic, targetLogic);
-                        const ci = ENGINE.conexoes.findIndex(c => c === connection);
-                        
-                        if (ci !== -1) {
-                            // 1. Remove os dois textos do SVG PRIMEIRO
-                            if (ENGINE.conexoes[ci].label) ENGINE.conexoes[ci].label.remove();
-                            if (ENGINE.conexoes[ci].labelHeight) ENGINE.conexoes[ci].labelHeight.remove();
-                            
-                            // 2. Remove o cano da array UMA ÚNICA VEZ
-                            ENGINE.removeConnection(connection);
-                        }
-                        
-                        if (ENGINE.selectedConnection === connection) ENGINE.selectComponent(null);
-                        finalPipe.remove();
-                        updatePortStates();
-                        ENGINE.notify({ tipo: 'update_painel', dt: 0 });
-                        ev.stopPropagation();
-                    });
-
-                    ENGINE.addConnection(connection);
-                    updateAllPipes();
-                    updatePortStates();
-                    ENGINE.notify({ tipo: 'update_painel', dt: 0 });
-                } else {
-                    tempPipe.remove();
-                }
-            } else {
-                tempPipe.remove();
-            }
-            tempPipe = null;
-            dragSourcePort = null;
+        if (!isInputPort) {
+            cancelTransientConnection();
+            return;
         }
+
+        const sourceComponent = ENGINE.getComponentById(draft.sourceComponentId);
+        const targetComponent = ENGINE.getComponentById(dropTarget.dataset.compId);
+        const sourcePort = getComponentPortElement(draft.sourceComponentId, draft.sourcePortType || 'out');
+
+        if (!sourceComponent || !targetComponent || !sourcePort || sourceComponent === targetComponent) {
+            cancelTransientConnection();
+            return;
+        }
+
+        const connection = connectionService.connect(sourceComponent, sourcePort, targetComponent, dropTarget);
+        clearTransientConnection();
+
+        if (!connection) {
+            updatePortStates();
+            return;
+        }
+
+        bindConnectionVisual(connection);
+        updateAllPipes();
+        updatePortStates();
     });
 }

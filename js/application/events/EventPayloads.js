@@ -21,6 +21,30 @@ export const EngineEventPayloads = Object.freeze({
     panelUpdate: (dt = 0) => ({
         tipo: ENGINE_EVENTS.PANEL_UPDATE,
         dt
+    }),
+    connectionStarted: ({ sourceComponentId, sourceEndpoint, sourcePoint }) => ({
+        tipo: ENGINE_EVENTS.CONNECTION_STARTED,
+        sourceComponentId,
+        sourceEndpoint,
+        sourcePoint
+    }),
+    connectionPreview: ({ sourceComponentId, sourcePoint, previewPoint }) => ({
+        tipo: ENGINE_EVENTS.CONNECTION_PREVIEW,
+        sourceComponentId,
+        sourcePoint,
+        previewPoint
+    }),
+    connectionCommitted: (connection) => ({
+        tipo: ENGINE_EVENTS.CONNECTION_COMMITTED,
+        conexao: connection
+    }),
+    connectionCancelled: ({ sourceComponentId } = {}) => ({
+        tipo: ENGINE_EVENTS.CONNECTION_CANCELLED,
+        sourceComponentId: sourceComponentId || null
+    }),
+    connectionRemoved: (connection) => ({
+        tipo: ENGINE_EVENTS.CONNECTION_REMOVED,
+        conexao: connection
     })
 });
 

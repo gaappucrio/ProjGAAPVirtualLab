@@ -1,93 +1,170 @@
 #!/usr/bin/env node
 
-/**
- * Teste de Integração da Fase 1
- * Valida que o novo modelo de conexão funciona sem DOM
- */
+import assert from 'node:assert/strict';
 
+import { ConnectionService } from './js/application/services/ConnectionService.js';
+import { EngineEventPayloads } from './js/application/events/EventPayloads.js';
+import { TransientConnectionStore } from './js/application/stores/TransientConnectionStore.js';
 import { ConnectionModel } from './js/domain/models/ConnectionModel.js';
-import { calculatePortPosition, calculateConnectionGeometry } from './js/domain/services/PortPositionCalculator.js';
-import { getConnectionGeometryFromPoints } from './js/utils/PipeHydraulics.js';
+import { calculateConnectionGeometry } from './js/domain/services/PortPositionCalculator.js';
 
-console.log('=== TESTE: Fase 1 - Modelo de Conexão Puro ===\n');
+function createPort({ compId, type, cx, cy, svgLeft = 0, svgTop = 0 }) {
+    return {
+        dataset: { compId, type },
+        ownerSVGElement: { style: { left: `${svgLeft}px`, top: `${svgTop}px` } },
+        getAttribute(name) {
+            if (name === 'cx') return String(cx);
+            if (name === 'cy') return String(cy);
+            return null;
+        }
+    };
+}
 
-// Teste 1: Criar ConnectionModel
-console.log('✓ Teste 1: Instanciar ConnectionModel');
-const conn = new ConnectionModel({
-    sourceId: 'comp-001',
-    targetId: 'comp-002',
-    sourceEndpoint: { portType: 'out', offsetX: 10, offsetY: 5, floorOffsetY: 0 },
-    targetEndpoint: { portType: 'in', offsetX: -10, offsetY: -5, floorOffsetY: 0 },
-    diameterM: 0.025,
-    roughnessMm: 0.05,
-    extraLengthM: 0.5,
-    perdaLocalK: 0.5
+function runTest(name, fn) {
+    try {
+        fn();
+        console.log(`PASS ${name}`);
+    } catch (error) {
+        console.error(`FAIL ${name}`);
+        throw error;
+    }
+}
+
+runTest('ConnectionModel stays logical and computes derived area', () => {
+    const connection = new ConnectionModel({
+        sourceId: 'source-1',
+        targetId: 'target-1',
+        sourceEndpoint: { portType: 'out', offsetX: 65, offsetY: 40, floorOffsetY: 0 },
+        targetEndpoint: { portType: 'in', offsetX: 15, offsetY: 40, floorOffsetY: 0 }
+    });
+
+    assert.equal(connection.sourceId, 'source-1');
+    assert.equal(connection.targetId, 'target-1');
+    assert.ok(connection.areaM2 > 0);
+    assert.equal('sourceEl' in connection, false);
+    assert.equal('targetEl' in connection, false);
 });
 
-console.log(`  - ID: ${conn.id}`);
-console.log(`  - Source: ${conn.sourceId} → Target: ${conn.targetId}`);
-console.log(`  - Área: ${conn.areaM2.toFixed(6)} m²`);
-console.log(`  ✓ PASSOU\n`);
+runTest('TransientConnectionStore models start, preview and cancel', () => {
+    const store = new TransientConnectionStore();
+    const started = store.begin({
+        sourceComponentId: 'pump-1',
+        sourcePortType: 'out',
+        sourceEndpoint: { portType: 'out', offsetX: 80, offsetY: 40, floorOffsetY: 0 },
+        sourcePoint: { x: 100, y: 200 }
+    });
 
-// Teste 2: Calcular posição de porto (sem DOM)
-console.log('✓ Teste 2: Calcular posição de porto');
-const mockComponent = {
-    alturaUtilMetros: 1.5,
-    alturaBocalSaidaM: 1.2,
-    alturaBocalEntradaM: 0.3
-};
+    assert.equal(started.active, true);
+    assert.deepEqual(started.previewPoint, { x: 100, y: 200 });
 
-const sourcePos = calculatePortPosition(
-    mockComponent,
-    'out',
-    { offsetX: 10, offsetY: 5, floorOffsetY: 240 },
-    { x: 100, y: 200 },
-    true // useRelativeHeight
-);
+    const preview = store.updatePreview({ x: 240, y: 260 });
+    assert.deepEqual(preview.previewPoint, { x: 240, y: 260 });
 
-console.log(`  - Posição (com altura): (${sourcePos.x.toFixed(1)}, ${sourcePos.y.toFixed(1)})`);
-console.log(`  ✓ PASSOU\n`);
+    const cancelled = store.cancel();
+    assert.equal(cancelled.active, true);
+    assert.equal(store.snapshot().active, false);
+});
 
-// Teste 3: Calcular geometria de conexão
-console.log('✓ Teste 3: Calcular geometria de conexão');
-const geometry = calculateConnectionGeometry(
-    { x: 100, y: 200 },
-    { x: 300, y: 250 },
-    conn,
-    true // useRelativeHeight
-);
+runTest('ConnectionService creates logical connections and emits engine events', () => {
+    const events = [];
+    const engine = {
+        selectedConnection: null,
+        _connections: [],
+        addConnection(connection) {
+            this._connections.push(connection);
+            events.push(EngineEventPayloads.connectionCommitted(connection));
+        },
+        removeConnection(connection) {
+            this._connections = this._connections.filter((entry) => entry !== connection);
+            events.push(EngineEventPayloads.connectionRemoved(connection));
+        },
+        notify(payload) {
+            events.push(payload);
+        },
+        getComponentById(id) {
+            return componentsById.get(id) || null;
+        },
+        selectComponent(component) {
+            this.selectedConnection = null;
+            this.selectedComponent = component;
+        }
+    };
 
-console.log(`  - Comprimento reto: ${geometry.straightLengthM.toFixed(3)} m`);
-console.log(`  - Comprimento total: ${geometry.lengthM.toFixed(3)} m`);
-console.log(`  - Ganho de altura: ${geometry.headGainM.toFixed(3)} m`);
-console.log(`  ✓ PASSOU\n`);
+    const sourceComponent = {
+        id: 'pump-1',
+        alturaUtilMetros: undefined,
+        outputs: [],
+        conectarSaida(target) {
+            this.outputs.push(target);
+        },
+        desconectarSaida(target) {
+            this.outputs = this.outputs.filter((entry) => entry !== target);
+        }
+    };
+    const targetComponent = {
+        id: 'tank-1',
+        alturaUtilMetros: 2.5,
+        inputs: []
+    };
+    const componentsById = new Map([
+        [sourceComponent.id, sourceComponent],
+        [targetComponent.id, targetComponent]
+    ]);
 
-// Teste 4: Calcular hidráulica da conexão
-console.log('✓ Teste 4: Calcular hidráulica (versão pura)');
-const hydraulics = getConnectionGeometryFromPoints(
-    { x: 100, y: 200 },
-    { x: 300, y: 250 },
-    conn,
-    false // useRelativeHeight = false (esquemático)
-);
+    const service = new ConnectionService(engine);
+    const sourcePort = createPort({ compId: sourceComponent.id, type: 'out', cx: 80, cy: 40 });
+    const targetPort = createPort({ compId: targetComponent.id, type: 'in', cx: 0, cy: 80, svgTop: 20 });
 
-console.log(`  - Comprimento (esquemático): ${hydraulics.lengthM.toFixed(3)} m`);
-console.log(`  - Ganho de altura: ${hydraulics.headGainM.toFixed(3)} m`);
-console.log(`  ✓ PASSOU\n`);
+    const connection = service.connect(sourceComponent, sourcePort, targetComponent, targetPort);
+    assert.ok(connection);
+    assert.equal(connection.sourceId, sourceComponent.id);
+    assert.equal(connection.targetId, targetComponent.id);
+    assert.equal(engine._connections.length, 1);
+    assert.equal(events.some((event) => event.tipo === 'conexao_confirmada'), true);
+    assert.equal(events.some((event) => event.tipo === 'update_painel'), true);
 
-// Teste 5: Adicionar propriedades visuais (compatibilidade)
-console.log('✓ Teste 5: Compatibilidade com renderização legada');
-conn.sourceEl = { dataset: { compId: 'comp-001' } }; // Mock element
-conn.targetEl = { dataset: { compId: 'comp-002' } }; // Mock element
-conn.path = { setAttribute: () => {} }; // Mock SVG element
-conn.label = null;
+    engine.selectedConnection = connection;
+    service.remove(connection);
+    assert.equal(engine._connections.length, 0);
+    assert.equal(events.some((event) => event.tipo === 'conexao_removida'), true);
+});
 
-console.log(`  - sourceEl.dataset.compId: ${conn.sourceEl?.dataset?.compId}`);
-console.log(`  - Mas também tem sourceId: ${conn.sourceId}`);
-console.log(`  ✓ PASSOU\n`);
+runTest('Engine event payloads formalize transient connection contract', () => {
+    const started = EngineEventPayloads.connectionStarted({
+        sourceComponentId: 'source-1',
+        sourceEndpoint: { portType: 'out' },
+        sourcePoint: { x: 10, y: 20 }
+    });
+    const preview = EngineEventPayloads.connectionPreview({
+        sourceComponentId: 'source-1',
+        sourcePoint: { x: 10, y: 20 },
+        previewPoint: { x: 30, y: 40 }
+    });
+    const cancelled = EngineEventPayloads.connectionCancelled({ sourceComponentId: 'source-1' });
 
-console.log('=== RESULTADO ===');
-console.log('✓ Todos os testes passaram!');
-console.log('✓ Modelo de conexão funciona sem DOM');
-console.log('✓ Compatibilidade com renderização legada mantida');
-console.log('\nPróxima etapa: Testar no navegador (criar, conectar, remover componentes)');
+    assert.equal(started.tipo, 'conexao_iniciada');
+    assert.equal(preview.tipo, 'conexao_preview');
+    assert.equal(cancelled.tipo, 'conexao_cancelada');
+});
+
+runTest('Geometry stays calculable from pure points', () => {
+    const connection = new ConnectionModel({
+        sourceId: 'source-1',
+        targetId: 'target-1',
+        sourceEndpoint: { portType: 'out', offsetX: 0, offsetY: 0, floorOffsetY: 0 },
+        targetEndpoint: { portType: 'in', offsetX: 0, offsetY: 0, floorOffsetY: 0 },
+        extraLengthM: 0.5
+    });
+
+    const geometry = calculateConnectionGeometry(
+        { x: 100, y: 120 },
+        { x: 260, y: 200 },
+        connection,
+        true
+    );
+
+    assert.ok(geometry.lengthM > geometry.straightLengthM - 0.0001);
+    assert.ok(Number.isFinite(geometry.headGainM));
+});
+
+console.log('All phase 1 tests passed.');

@@ -10,6 +10,9 @@ import { setupCameraControl } from './controllers/CameraController.js';
 import { setupPipeControl, getConnectionFlow, updateAllPipes } from './controllers/PipeController.js';
 import { setupDragDrop } from './controllers/DragDropController.js';
 import { setupToolbar } from './presentation/controllers/ToolbarController.js';
+import { connectionService } from './application/services/ConnectionServiceRuntime.js';
+import { findConnectionByPath } from './infrastructure/rendering/ConnectionVisualRegistry.js';
+import { removeConnectionVisual } from './infrastructure/rendering/PipeRenderer.js';
 
 setupUI();
 setupCameraControl();
@@ -43,16 +46,10 @@ document.addEventListener('keydown', (e) => {
 
         const selectedPipe = document.querySelector('.pipe-line.selected');
         if (selectedPipe) {
-            const connIndex = ENGINE.conexoes.findIndex((c) => c.path === selectedPipe);
-            if (connIndex !== -1) {
-                const conn = ENGINE.conexoes[connIndex];
-                const src = ENGINE.componentes.find((c) => c.id === conn.sourceId);
-                const tgt = ENGINE.componentes.find((c) => c.id === conn.targetId);
-                if (src && tgt) src.desconectarSaida(tgt);
-                if (conn.label) conn.label.remove();
-                if (conn.labelHeight) conn.labelHeight.remove();
-                ENGINE.removeConnection(conn);
-                selectedPipe.remove();
+            const conn = findConnectionByPath(selectedPipe);
+            if (conn) {
+                connectionService.remove(conn);
+                removeConnectionVisual(conn);
                 ENGINE.selectComponent(null);
                 updatePortStates();
             }

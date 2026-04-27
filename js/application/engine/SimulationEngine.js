@@ -5,6 +5,7 @@
 
 import {
     clamp,
+    ComponenteFisico,
     flowFromBernoulli,
     Observable,
     pressureLossFromFlow,
@@ -38,13 +39,20 @@ import {
     pressureFromHeadBar
 } from '../../utils/Units.js';
 import { profiler } from '../../utils/PerformanceProfiler.js';
-import { getConnectionGeometry, getPipeHydraulics, getConnectionGeometryFromPoints } from '../../utils/PipeHydraulics.js';
-import { calculatePortPosition, getComponentVisualPosition } from '../../domain/services/PortPositionCalculator.js';
+import { getPipeHydraulics, getConnectionGeometryFromPoints } from '../../utils/PipeHydraulics.js';
+import { calculatePortPosition } from '../../domain/services/PortPositionCalculator.js';
 import { ENGINE_EVENTS } from '../events/EventTypes.js';
+import { EngineEventPayloads } from '../events/EventPayloads.js';
 import { ConnectionStateStore } from '../stores/ConnectionStateStore.js';
 import { SelectionStore } from '../stores/SelectionStore.js';
 import { SimulationConfigStore } from '../stores/SimulationConfigStore.js';
 import { TopologyGraph } from '../stores/TopologyGraph.js';
+import {
+    clearComponentVisualRegistry,
+    getRegisteredComponentVisualPosition,
+    unregisterComponentVisual
+} from '../../infrastructure/dom/ComponentVisualRegistry.js';
+import { removeConnectionVisual, updateConnectionFlowVisual } from '../../infrastructure/rendering/PipeRenderer.js';
 
 export {
     clamp,
@@ -52,13 +60,11 @@ export {
     flowFromBernoulli,
     Observable,
     pressureLossFromFlow,
-    smoothFirstOrder
-} from '../../domain/components/BaseComponente.js';
-export {
+    smoothFirstOrder,
     EPSILON_FLOW,
     MAX_NETWORK_FLOW_LPS,
     pressureFromHeadBar
-} from '../../utils/Units.js';
+};
 
 let portStateUpdater = null;
 let connectionFlowGetter = null;
@@ -204,15 +210,51 @@ export class SistemaSimulacao extends Observable {
 
     addConnection(connection) {
         this.topology.addConnection(connection);
+        this.notify(EngineEventPayloads.connectionCommitted(connection));
         return connection;
     }
 
     removeConnection(connection) {
         this.topology.removeConnection(connection);
+        this.connectionStateStore.delete(connection);
+        this.notify(EngineEventPayloads.connectionRemoved(connection));
         return connection;
     }
 
     removeComponent(comp) {
+        if (!comp) return;
+        if (this.isRunning) comp.onSimulationStop();
+
+        const relatedConnections = this.conexoes.filter((conn) =>
+            conn.sourceId === comp.id || conn.targetId === comp.id
+        );
+
+        relatedConnections.forEach((connection) => {
+            removeConnectionVisual(connection);
+            this.removeConnection(connection);
+        });
+
+        this.conexoes = this.conexoes.filter((conn) =>
+            conn.sourceId !== comp.id && conn.targetId !== comp.id
+        );
+
+        this.detachComponentContext(comp);
+        comp.destroy();
+        unregisterComponentVisual(comp);
+        this.topology.removeComponent(comp);
+
+        this.componentes.forEach((component) => {
+            if (typeof component?.garantirConsistenciaControleNivel === 'function') {
+                component.garantirConsistenciaControleNivel();
+            }
+        });
+
+        if (this.selectedComponent === comp) {
+            this.selectedComponent = null;
+        }
+
+        this.notify(EngineEventPayloads.panelUpdate(0));
+        return;
         // Remove componente da simulação com limpeza apropriada
         if (!comp) return;
         
@@ -262,18 +304,20 @@ export class SistemaSimulacao extends Observable {
 
     clear() {
         this.clearConnectionDynamics();
-        this.conexoes.forEach(c => {
-            c.path.remove();
-            if (c.label) c.label.remove();
-            if (c.labelHeight) c.labelHeight.remove();
+        this.conexoes.forEach((connection) => {
+            removeConnectionVisual(connection);
         });
-        this.componentes.forEach((component) => this.detachComponentContext(component));
+        this.componentes.forEach((component) => {
+            this.detachComponentContext(component);
+            unregisterComponentVisual(component);
+        });
         this.topology.clear();
+        clearComponentVisualRegistry();
         this.connectionStateStore.clear();
         this.isRunning = false;
         this.elapsedTime = 0;
         this.selectionStore.clear();
-        this.notify({ tipo: ENGINE_EVENTS.SELECTION, componente: null, conexao: null });
+        this.notify(EngineEventPayloads.selection(null, null));
         if (portStateUpdater) portStateUpdater();
     }
 
@@ -281,7 +325,7 @@ export class SistemaSimulacao extends Observable {
         this.isRunning = true;
         this.lastTime = performance.now();
         requestAnimationFrame(this.tick.bind(this));
-        this.notify({ tipo: ENGINE_EVENTS.MOTOR_STATE, rodando: true });
+        this.notify(EngineEventPayloads.motorState(true));
     }
 
     stop() {
@@ -289,18 +333,18 @@ export class SistemaSimulacao extends Observable {
         this.clearConnectionDynamics();
         this.resetHydraulicState();
         this.componentes.forEach(c => c.onSimulationStop());
-        this.notify({ tipo: ENGINE_EVENTS.MOTOR_STATE, rodando: false });
+        this.notify(EngineEventPayloads.motorState(false));
         this.updatePipesVisual();
     }
 
     selectComponent(comp) {
         this.selectionStore.selectComponent(comp);
-        this.notify({ tipo: ENGINE_EVENTS.SELECTION, componente: comp, conexao: null });
+        this.notify(EngineEventPayloads.selection(comp, null));
     }
 
     selectConnection(conn) {
         this.selectionStore.selectConnection(conn);
-        this.notify({ tipo: ENGINE_EVENTS.SELECTION, componente: null, conexao: conn });
+        this.notify(EngineEventPayloads.selection(null, conn));
     }
 
     setUsarAlturaRelativa(ativo) {
@@ -308,7 +352,7 @@ export class SistemaSimulacao extends Observable {
         this.clearConnectionDynamics();
         if (!this.isRunning) this.resetHydraulicState();
         this.updatePipesVisual();
-        this.notify({ tipo: ENGINE_EVENTS.SIMULATION_CONFIG, usarAlturaRelativa: this.usarAlturaRelativa });
+        this.notify(EngineEventPayloads.simulationConfig(this.usarAlturaRelativa));
     }
 
     atualizarFluido(dados) {
@@ -318,7 +362,7 @@ export class SistemaSimulacao extends Observable {
         this.fluidoOperante.viscosidadeDinamicaPaS = safeViscosity(dados.viscosidadeDinamicaPaS ?? this.fluidoOperante.viscosidadeDinamicaPaS);
         this.fluidoOperante.pressaoVaporBar = Math.max(0.0001, Number(dados.pressaoVaporBar) || this.fluidoOperante.pressaoVaporBar);
         this.fluidoOperante.pressaoAtmosfericaBar = Math.max(0.5, Number(dados.pressaoAtmosfericaBar) || this.fluidoOperante.pressaoAtmosfericaBar);
-        this.notify({ tipo: ENGINE_EVENTS.FLUID_UPDATE, fluido: this.fluidoOperante });
+        this.notify(EngineEventPayloads.fluidUpdate(this.fluidoOperante));
     }
 
     tick(timestamp) {
@@ -345,7 +389,7 @@ export class SistemaSimulacao extends Observable {
         });
 
         this.updatePipesVisual();
-        this.notify({ tipo: ENGINE_EVENTS.PANEL_UPDATE, dt: dt });
+        this.notify(EngineEventPayloads.panelUpdate(dt));
 
         profiler.endTick(this.getSolverMetrics());
 
@@ -452,6 +496,41 @@ export class SistemaSimulacao extends Observable {
     // Calcula geometria da conexão sem depender de DOM
     // Busca componentes pela topologia e calcula posições dos portos
     getConnectionGeometry(conn) {
+        const sourceComponent = this.topology.getComponentById(conn.sourceId);
+        const targetComponent = this.topology.getComponentById(conn.targetId);
+
+        if (!sourceComponent || !targetComponent) {
+            return { straightLengthM: 1.0, lengthM: 1.0 + (conn.extraLengthM || 0), headGainM: 0 };
+        }
+
+        const resolvedSourceVisualPos = getRegisteredComponentVisualPosition(sourceComponent);
+        const resolvedTargetVisualPos = getRegisteredComponentVisualPosition(targetComponent);
+
+        const resolvedSourcePoint = calculatePortPosition(
+            sourceComponent,
+            conn.sourceEndpoint.portType,
+            {
+                offsetX: conn.sourceEndpoint.offsetX,
+                offsetY: conn.sourceEndpoint.offsetY,
+                floorOffsetY: conn.sourceEndpoint.floorOffsetY || 0
+            },
+            resolvedSourceVisualPos,
+            this.usarAlturaRelativa
+        );
+
+        const resolvedTargetPoint = calculatePortPosition(
+            targetComponent,
+            conn.targetEndpoint.portType,
+            {
+                offsetX: conn.targetEndpoint.offsetX,
+                offsetY: conn.targetEndpoint.offsetY,
+                floorOffsetY: conn.targetEndpoint.floorOffsetY || 0
+            },
+            resolvedTargetVisualPos,
+            this.usarAlturaRelativa
+        );
+
+        return getConnectionGeometryFromPoints(resolvedSourcePoint, resolvedTargetPoint, conn, this.usarAlturaRelativa);
         const sourceComp = this.topology.getComponentById(conn.sourceId);
         const targetComp = this.topology.getComponentById(conn.targetId);
         
@@ -980,35 +1059,19 @@ export class SistemaSimulacao extends Observable {
     }
 
     updatePipesVisual() {
-        this.conexoes.forEach(conn => {
+        this.conexoes.forEach((conn) => {
             const state = this.getConnectionState(conn);
             const flow = this.isRunning ? state.flowLps : 0;
-
-            if (flow > 0.05) {
-                conn.path.classList.add('active');
-                if (!conn.path.classList.contains('selected')) {
-                    conn.path.setAttribute("marker-end", "url(#arrow-active)");
-                }
-            } else {
-                conn.path.classList.remove('active');
-                if (!conn.path.classList.contains('selected')) {
-                    conn.path.setAttribute("marker-end", "url(#arrow)");
-                }
-            }
-
             const labelFlow = connectionFlowGetter ? connectionFlowGetter(conn) : flow;
-            if (conn.label) {
-                if (!this.isRunning || labelFlow === null || labelFlow === undefined || labelFlow <= EPSILON_FLOW) {
-                    conn.label.textContent = '';
-                } else {
-                    conn.label.textContent = `${formatUnitValue('flow', labelFlow, 2)} ${getUnitSymbol('flow')}`;
-                }
-            }
 
-            conn.path.setAttribute(
-                'data-hydraulic-state',
-                `${formatUnitValue('flow', flow, 2)} ${getUnitSymbol('flow')} | ${state.velocityMps.toFixed(2)} m/s | Re ${Math.round(state.reynolds)} | ${state.regime}`
-            );
+            updateConnectionFlowVisual(conn, {
+                active: flow > 0.05,
+                flowLabel: (!this.isRunning || labelFlow === null || labelFlow === undefined || labelFlow <= EPSILON_FLOW)
+                    ? ''
+                    : `${formatUnitValue('flow', labelFlow, 2)} ${getUnitSymbol('flow')}`,
+                markerId: flow > 0.05 ? 'url(#arrow-active)' : 'url(#arrow)',
+                stateText: `${formatUnitValue('flow', flow, 2)} ${getUnitSymbol('flow')} | ${state.velocityMps.toFixed(2)} m/s | Re ${Math.round(state.reynolds)} | ${state.regime}`
+            });
         });
 
         if (this.isRunning) {

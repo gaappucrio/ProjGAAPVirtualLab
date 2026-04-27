@@ -5,6 +5,7 @@
 
 import { ENGINE } from '../../MotorFisico.js';
 import { REGISTRO_COMPONENTES } from '../../RegistroComponentes.js';
+import { registerComponentVisual } from './ComponentVisualRegistry.js';
 export { updatePortStates } from '../../utils/PortStateManager.js';
 
 /* A função obterProximaTag é responsável por gerar uma nova tag única para um componente do mesmo tipo,
@@ -57,6 +58,7 @@ export class FabricaDeEquipamentos {
         if (!isPalette) {
             if (spec.setup) spec.setup(visual, logica, id);
             ENGINE.add(logica);
+            registerComponentVisual(logica, visual);
             visual.addEventListener('mousedown', () => {
                 ENGINE.selectComponent(logica);
                 document.querySelectorAll('.placed-component').forEach(el => el.classList.remove('selected'));

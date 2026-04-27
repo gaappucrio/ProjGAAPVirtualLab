@@ -40,6 +40,23 @@ export function createConnectionVisual(pipeLayer, connection, handlers = {}) {
     return getConnectionVisual(connection);
 }
 
+export function createTransientConnectionVisual(pipeLayer, active = false) {
+    const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    pathEl.setAttribute('class', `pipe-line${active ? ' active' : ''}`);
+    pathEl.setAttribute('marker-end', active ? 'url(#arrow-active)' : 'url(#arrow)');
+    pipeLayer.appendChild(pathEl);
+    return pathEl;
+}
+
+export function updateTransientConnectionVisual(pathEl, sourcePoint, targetPoint) {
+    if (!pathEl || !sourcePoint || !targetPoint) return;
+    pathEl.setAttribute('d', drawConnectionCurve(sourcePoint.x, sourcePoint.y, targetPoint.x, targetPoint.y));
+}
+
+export function removeTransientConnectionVisual(pathEl) {
+    pathEl?.remove();
+}
+
 export function updateConnectionVisualLayout(connection, sourcePoint, targetPoint, geometry, showRelativeHeight) {
     const visual = getConnectionVisual(connection);
     if (!visual) return;

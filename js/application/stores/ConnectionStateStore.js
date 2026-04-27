@@ -20,6 +20,10 @@ export class ConnectionStateStore {
         return state;
     }
 
+    delete(connection) {
+        return this.states.delete(connection);
+    }
+
     getOrCreate(connection, factory) {
         if (!this.states.has(connection)) {
             this.states.set(connection, factory(connection));

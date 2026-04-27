@@ -3,7 +3,12 @@ export const ENGINE_EVENTS = Object.freeze({
     MOTOR_STATE: 'estado_motor',
     SIMULATION_CONFIG: 'config_simulacao',
     FLUID_UPDATE: 'fluido_update',
-    PANEL_UPDATE: 'update_painel'
+    PANEL_UPDATE: 'update_painel',
+    CONNECTION_STARTED: 'conexao_iniciada',
+    CONNECTION_PREVIEW: 'conexao_preview',
+    CONNECTION_COMMITTED: 'conexao_confirmada',
+    CONNECTION_CANCELLED: 'conexao_cancelada',
+    CONNECTION_REMOVED: 'conexao_removida'
 });
 
 export const COMPONENT_EVENTS = Object.freeze({
