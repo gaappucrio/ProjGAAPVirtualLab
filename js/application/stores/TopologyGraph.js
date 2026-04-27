@@ -37,8 +37,9 @@ export class TopologyGraph {
         this.componentById.delete(component.id);
         this.outputConnectionsById.delete(component.id);
         this.inputConnectionsById.delete(component.id);
+        // Remove conexões que envolvem este componente (usando sourceId/targetId em vez de dataset)
         this._connections = this._connections.filter((conn) =>
-            conn.sourceEl?.dataset?.compId !== component.id && conn.targetEl?.dataset?.compId !== component.id
+            conn.sourceId !== component.id && conn.targetId !== component.id
         );
         this.rebuildConnectionIndexes();
     }
@@ -96,8 +97,8 @@ export class TopologyGraph {
     }
 
     indexConnection(connection) {
-        const sourceId = connection.sourceEl?.dataset?.compId;
-        const targetId = connection.targetEl?.dataset?.compId;
+        const sourceId = connection.sourceId;
+        const targetId = connection.targetId;
 
         if (sourceId) {
             const outputConnections = this.outputConnectionsById.get(sourceId) || [];

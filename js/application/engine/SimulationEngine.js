@@ -38,7 +38,8 @@ import {
     pressureFromHeadBar
 } from '../../utils/Units.js';
 import { profiler } from '../../utils/PerformanceProfiler.js';
-import { getConnectionGeometry, getPipeHydraulics } from '../../utils/PipeHydraulics.js';
+import { getConnectionGeometry, getPipeHydraulics, getConnectionGeometryFromPoints } from '../../utils/PipeHydraulics.js';
+import { calculatePortPosition, getComponentVisualPosition } from '../../domain/services/PortPositionCalculator.js';
 import { ENGINE_EVENTS } from '../events/EventTypes.js';
 import { ConnectionStateStore } from '../stores/ConnectionStateStore.js';
 import { SelectionStore } from '../stores/SelectionStore.js';
@@ -218,13 +219,17 @@ export class SistemaSimulacao extends Observable {
         // Desativa o componente se simulação estiver rodando
         if (this.isRunning) comp.onSimulationStop();
         
-        // Remove de conexões
+        // Remove conexões relacionadas a este componente
         this.conexoes = this.conexoes.filter(conn => {
-            if (conn.sourceEl.dataset.compId === comp.id || conn.targetEl.dataset.compId === comp.id) {
+            // Identifica conexões que usam este componente
+            const relatedToComponent = conn.sourceId === comp.id || conn.targetId === comp.id;
+            
+            if (relatedToComponent) {
+                // Limpa elementos visuais se ainda existirem (compatibilidade com renderização legada)
                 if (conn.label) conn.label.remove();
                 if (conn.labelHeight) conn.labelHeight.remove();
-                conn.path.remove();
-                return false;
+                if (conn.path) conn.path.remove();
+                return false; // Remove conexão do array
             }
             return true;
         });
@@ -444,9 +449,58 @@ export class SistemaSimulacao extends Observable {
         };
     }
 
-    // Usa utilitário importado PipeHydraulics.getConnectionGeometry
+    // Calcula geometria da conexão sem depender de DOM
+    // Busca componentes pela topologia e calcula posições dos portos
     getConnectionGeometry(conn) {
-        return getConnectionGeometry(conn, conn.sourceEl, conn.targetEl, this.usarAlturaRelativa);
+        const sourceComp = this.topology.getComponentById(conn.sourceId);
+        const targetComp = this.topology.getComponentById(conn.targetId);
+        
+        if (!sourceComp || !targetComp) {
+            // Fallback: usar compatibilidade com versão antiga se elementos ainda existem
+            if (conn.sourceEl && conn.targetEl) {
+                return getConnectionGeometry(conn, conn.sourceEl, conn.targetEl, this.usarAlturaRelativa);
+            }
+            return { straightLengthM: 1.0, lengthM: 1.0 + (conn.extraLengthM || 0), headGainM: 0 };
+        }
+        
+        // Buscar posição visual do componente (ainda precisa ler do DOM por enquanto)
+        // TODO: Mover para um registry visual quando houver separação completa
+        const sourceVisualEl = document.querySelector(`[data-comp-id="${conn.sourceId}"]`);
+        const targetVisualEl = document.querySelector(`[data-comp-id="${conn.targetId}"]`);
+        
+        const sourceVisualPos = sourceVisualEl 
+            ? getComponentVisualPosition(sourceVisualEl.closest('.placed-component'))
+            : { x: 0, y: 0 };
+        const targetVisualPos = targetVisualEl
+            ? getComponentVisualPosition(targetVisualEl.closest('.placed-component'))
+            : { x: 0, y: 0 };
+        
+        // Calcular posição real dos portos considerando lógica de altura
+        const sourcePoint = calculatePortPosition(
+            sourceComp,
+            conn.sourceEndpoint.portType,
+            { 
+                offsetX: conn.sourceEndpoint.offsetX,
+                offsetY: conn.sourceEndpoint.offsetY,
+                floorOffsetY: conn.sourceEndpoint.floorOffsetY || 0
+            },
+            sourceVisualPos,
+            this.usarAlturaRelativa
+        );
+        
+        const targetPoint = calculatePortPosition(
+            targetComp,
+            conn.targetEndpoint.portType,
+            {
+                offsetX: conn.targetEndpoint.offsetX,
+                offsetY: conn.targetEndpoint.offsetY,
+                floorOffsetY: conn.targetEndpoint.floorOffsetY || 0
+            },
+            targetVisualPos,
+            this.usarAlturaRelativa
+        );
+        
+        return getConnectionGeometryFromPoints(sourcePoint, targetPoint, conn, this.usarAlturaRelativa);
     }
 
     // Usa utilitário importado PipeHydraulics.getPipeHydraulics
@@ -708,7 +762,7 @@ export class SistemaSimulacao extends Observable {
     estimateBranch(comp, conn, supply, dt, visited = new Set()) {
         this.ensureConnectionProperties(conn);
 
-        const target = this.getComponentById(conn.targetEl.dataset.compId);
+        const target = this.getComponentById(conn.targetId);
         const geometry = this.getConnectionGeometry(conn);
         const branchAreaM2 = Math.min(
             conn.areaM2,
@@ -801,7 +855,7 @@ export class SistemaSimulacao extends Observable {
     applyBranchFlow(comp, conn, supply, estimate, flowLps, dt) {
         if (flowLps <= EPSILON_FLOW) return 0;
 
-        const target = this.getComponentById(conn.targetEl.dataset.compId);
+        const target = this.getComponentById(conn.targetId);
         if (!target) return 0;
 
         const isPassThrough = !(comp instanceof FonteLogica || comp instanceof TanqueLogico);
@@ -904,7 +958,7 @@ export class SistemaSimulacao extends Observable {
 
                 const deliveredFlow = this.applyBranchFlow(comp, item.conn, supply, item.estimate, branchFlow, dt);
                 emittedFlowLps += deliveredFlow;
-                const target = this.getComponentById(item.conn.targetEl.dataset.compId);
+                const target = this.getComponentById(item.conn.targetId);
                 if (deliveredFlow > EPSILON_FLOW && (target instanceof BombaLogica || target instanceof ValvulaLogica)) enqueue(target);
             });
 

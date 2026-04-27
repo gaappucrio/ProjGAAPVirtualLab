@@ -84,7 +84,7 @@ export class HydraulicNetworkSolver {
 
                 const deliveredFlow = this.engine.applyBranchFlow(comp, item.conn, supply, item.estimate, branchFlow, dt);
                 emittedFlowLps += deliveredFlow;
-                const target = this.engine.getComponentById(item.conn.targetEl.dataset.compId);
+                const target = this.engine.getComponentById(item.conn.targetId);
                 if (deliveredFlow > EPSILON_FLOW && (target instanceof BombaLogica || target instanceof ValvulaLogica)) {
                     enqueue(target);
                 }

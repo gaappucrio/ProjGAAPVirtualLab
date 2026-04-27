@@ -1199,11 +1199,11 @@ function renderDefaultProperties() {
 }
 
 function getConnectionDisplay(conn) {
-    const source = ENGINE.componentes.find(c => c.id === conn.sourceEl.dataset.compId);
-    const target = ENGINE.componentes.find(c => c.id === conn.targetEl.dataset.compId);
+    const source = ENGINE.componentes.find(c => c.id === conn.sourceId);
+    const target = ENGINE.componentes.find(c => c.id === conn.targetId);
     return {
-        sourceLabel: source ? source.tag : conn.sourceEl.dataset.compId,
-        targetLabel: target ? target.tag : conn.targetEl.dataset.compId
+        sourceLabel: source ? source.tag : conn.sourceId,
+        targetLabel: target ? target.tag : conn.targetId
     };
 }
 

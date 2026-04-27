@@ -46,8 +46,8 @@ document.addEventListener('keydown', (e) => {
             const connIndex = ENGINE.conexoes.findIndex((c) => c.path === selectedPipe);
             if (connIndex !== -1) {
                 const conn = ENGINE.conexoes[connIndex];
-                const src = ENGINE.componentes.find((c) => c.id === conn.sourceEl.dataset.compId);
-                const tgt = ENGINE.componentes.find((c) => c.id === conn.targetEl.dataset.compId);
+                const src = ENGINE.componentes.find((c) => c.id === conn.sourceId);
+                const tgt = ENGINE.componentes.find((c) => c.id === conn.targetId);
                 if (src && tgt) src.desconectarSaida(tgt);
                 if (conn.label) conn.label.remove();
                 if (conn.labelHeight) conn.labelHeight.remove();

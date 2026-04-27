@@ -6,6 +6,7 @@
 import { ENGINE } from '../MotorFisico.js';
 import { camera } from './CameraController.js';
 import { updatePortStates } from '../utils/PortStateManager.js';
+import { ConnectionModel } from '../domain/models/ConnectionModel.js';
 import {
     DEFAULT_PIPE_DIAMETER_M,
     DEFAULT_PIPE_EXTRA_LENGTH_M,
@@ -122,16 +123,34 @@ export function setupPipeControl() {
                     sourceLogic.conectarSaida(targetLogic);
                     validarControleNivelDosComponentes(sourceLogic, targetLogic);
                     const finalPipe = tempPipe;
-                    const connection = {
-                        sourceEl: dragSourcePort,
-                        targetEl: dropTarget,
-                        path: finalPipe,
-                        label: null,
+                    
+                    // Criar conexão usando novo ConnectionModel (puro, sem DOM)
+                    const connection = new ConnectionModel({
+                        sourceId: dragSourcePort.dataset.compId,
+                        targetId: dropTarget.dataset.compId,
+                        sourceEndpoint: {
+                            portType: 'out',
+                            offsetX: 0,
+                            offsetY: 0,
+                            floorOffsetY: 0
+                        },
+                        targetEndpoint: {
+                            portType: 'in',
+                            offsetX: 0,
+                            offsetY: 0,
+                            floorOffsetY: 0
+                        },
                         diameterM: DEFAULT_PIPE_DIAMETER_M,
                         roughnessMm: DEFAULT_PIPE_ROUGHNESS_MM,
                         extraLengthM: DEFAULT_PIPE_EXTRA_LENGTH_M,
                         perdaLocalK: DEFAULT_PIPE_MINOR_LOSS
-                    };
+                    });
+                    
+                    // Adicionar referências visuais (compatibilidade com renderização legada)
+                    connection.sourceEl = dragSourcePort;
+                    connection.targetEl = dropTarget;
+                    connection.path = finalPipe;
+                    connection.label = null;
 
                     const labelEl = document.createElementNS("http://www.w3.org/2000/svg", "text");
                     labelEl.setAttribute("class", "pipe-flow-label");
