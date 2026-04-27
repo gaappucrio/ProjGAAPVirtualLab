@@ -175,7 +175,7 @@ export function setupPipeControl() {
                             if (ENGINE.conexoes[ci].labelHeight) ENGINE.conexoes[ci].labelHeight.remove();
                             
                             // 2. Remove o cano da array UMA ÚNICA VEZ
-                            ENGINE.conexoes.splice(ci, 1);
+                            ENGINE.removeConnection(connection);
                         }
                         
                         if (ENGINE.selectedConnection === connection) ENGINE.selectComponent(null);
@@ -185,7 +185,7 @@ export function setupPipeControl() {
                         ev.stopPropagation();
                     });
 
-                    ENGINE.conexoes.push(connection);
+                    ENGINE.addConnection(connection);
                     updateAllPipes();
                     updatePortStates();
                     ENGINE.notify({ tipo: 'update_painel', dt: 0 });

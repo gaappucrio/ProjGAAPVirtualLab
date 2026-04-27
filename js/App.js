@@ -3,12 +3,13 @@
 // Ficheiro: js/App.js
 // =============================================
 
-import { ENGINE, setPortStateUpdater, setConnectionFlowGetter } from './MotorFisico.js'
-import { updatePortStates } from './FabricaEquipamentos.js'
-import { setupUI } from './controllers/UIController.js'
-import { setupCameraControl } from './controllers/CameraController.js'
-import { setupPipeControl, getConnectionFlow, updateAllPipes} from './controllers/PipeController.js'
-import { setupDragDrop } from './controllers/DragDropController.js'
+import { ENGINE, setPortStateUpdater, setConnectionFlowGetter } from './MotorFisico.js';
+import { updatePortStates } from './FabricaEquipamentos.js';
+import { setupUI } from './controllers/UIController.js';
+import { setupCameraControl } from './controllers/CameraController.js';
+import { setupPipeControl, getConnectionFlow, updateAllPipes } from './controllers/PipeController.js';
+import { setupDragDrop } from './controllers/DragDropController.js';
+import { setupToolbar } from './presentation/controllers/ToolbarController.js';
 
 setupUI();
 setupCameraControl();
@@ -18,70 +19,11 @@ setupDragDrop();
 setPortStateUpdater(() => updatePortStates());
 setConnectionFlowGetter((conn) => getConnectionFlow(conn));
 
-const btnRun = document.getElementById('btn-run');
-const btnClear = document.getElementById('btn-clear');
-const relativeHeightToggle = document.getElementById('toggle-relative-height');
-const relativeHeightNote = document.getElementById('toolbar-height-note');
-
-function updateRunButtonUI(isRunning) {
-    if (isRunning) {
-        btnRun.innerHTML = '&#9208; Pausar Simulação';
-        btnRun.style.background = '#e74c3c';
-        btnRun.style.borderColor = '#c0392b';
-        return;
-    }
-
-    btnRun.innerHTML = '&#9654; Iniciar Simulação Física';
-    btnRun.style.background = '#2ecc71';
-    btnRun.style.borderColor = '#27ae60';
-}
-
-function updateRelativeHeightUI(enabled) {
-    if (enabled) {
-        relativeHeightNote.textContent = 'Desníveis entre componentes afetam a pressão e a vazão.';
-        relativeHeightNote.style.color = '#5f6f7f';
-        relativeHeightNote.style.background = '#f4f7f8';
-        relativeHeightNote.style.borderColor = '#ecf0f1';
-        return;
-    }
-
-    relativeHeightNote.textContent = 'Modo sem altura relativa: a bomba perde utilidade para vencer desníveis.';
-    relativeHeightNote.style.color = '#a84300';
-    relativeHeightNote.style.background = '#fff4e8';
-    relativeHeightNote.style.borderColor = '#f3c89f';
-}
-
-updateRunButtonUI(ENGINE.isRunning);
-relativeHeightToggle.checked = ENGINE.usarAlturaRelativa;
-updateRelativeHeightUI(ENGINE.usarAlturaRelativa);
-
-btnRun.addEventListener('click', () => {
-    if (ENGINE.isRunning) ENGINE.stop();
-    else ENGINE.start();
-
-    updateRunButtonUI(ENGINE.isRunning);
-});
-
-relativeHeightToggle.addEventListener('change', (e) => {
-    ENGINE.setUsarAlturaRelativa(e.target.checked);
-    updateRelativeHeightUI(ENGINE.usarAlturaRelativa);
-    updateAllPipes();
-});
-
-btnClear.addEventListener('click', () => {
-    document.querySelectorAll('#workspace-canvas .placed-component').forEach(item => item.remove());
-    ENGINE.clear();
-});
-
-ENGINE.subscribe((dados) => {
-    if (dados.tipo === 'estado_motor') {
-        updateRunButtonUI(dados.rodando);
-    }
-
-    if (dados.tipo === 'config_simulacao') {
-        relativeHeightToggle.checked = dados.usarAlturaRelativa;
-        updateRelativeHeightUI(dados.usarAlturaRelativa);
-    }
+setupToolbar({
+    onClearCanvas: () => {
+        document.querySelectorAll('#workspace-canvas .placed-component').forEach((item) => item.remove());
+    },
+    onTopologyVisualChange: () => updateAllPipes()
 });
 
 document.addEventListener('keydown', (e) => {
@@ -91,7 +33,7 @@ document.addEventListener('keydown', (e) => {
         const selectedCompDiv = document.querySelector('.placed-component.selected');
         if (selectedCompDiv) {
             const compId = selectedCompDiv.dataset.id;
-            const comp = ENGINE.componentes.find(c => c.id === compId);
+            const comp = ENGINE.componentes.find((c) => c.id === compId);
             if (comp) {
                 ENGINE.removeComponent(comp);
                 selectedCompDiv.remove();
@@ -101,15 +43,15 @@ document.addEventListener('keydown', (e) => {
 
         const selectedPipe = document.querySelector('.pipe-line.selected');
         if (selectedPipe) {
-            const connIndex = ENGINE.conexoes.findIndex(c => c.path === selectedPipe);
+            const connIndex = ENGINE.conexoes.findIndex((c) => c.path === selectedPipe);
             if (connIndex !== -1) {
                 const conn = ENGINE.conexoes[connIndex];
-                const src = ENGINE.componentes.find(c => c.id === conn.sourceEl.dataset.compId);
-                const tgt = ENGINE.componentes.find(c => c.id === conn.targetEl.dataset.compId);
+                const src = ENGINE.componentes.find((c) => c.id === conn.sourceEl.dataset.compId);
+                const tgt = ENGINE.componentes.find((c) => c.id === conn.targetEl.dataset.compId);
                 if (src && tgt) src.desconectarSaida(tgt);
                 if (conn.label) conn.label.remove();
                 if (conn.labelHeight) conn.labelHeight.remove();
-                ENGINE.conexoes.splice(connIndex, 1);
+                ENGINE.removeConnection(conn);
                 selectedPipe.remove();
                 ENGINE.selectComponent(null);
                 updatePortStates();
