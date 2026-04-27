@@ -146,11 +146,20 @@ export class SistemaSimulacao extends Observable {
         
         // Remove do array de componentes
         this.componentes = this.componentes.filter(c => c.id !== comp.id);
+
+        // Revalida controladores dependentes de topologia, como o controle de nível do tanque.
+        this.componentes.forEach((componente) => {
+            if (typeof componente?.garantirConsistenciaControleNivel === 'function') {
+                componente.garantirConsistenciaControleNivel();
+            }
+        });
         
         // Desseleciona se era o componente selecionado
         if (this.selectedComponent === comp) {
             this.selectedComponent = null;
         }
+
+        this.notify({ tipo: 'update_painel', dt: 0 });
     }
 
     getSolverMetrics() {

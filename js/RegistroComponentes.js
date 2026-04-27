@@ -804,6 +804,22 @@ export const REGISTRO_COMPONENTES = {
             atualizarElevacoes();
         },
         propriedadesAdicionais: (comp) => {
+            const diagnosticoControleNivel = comp.getDiagnosticoControleNivel?.() ?? {
+                podeAtivar: true,
+                motivoBloqueio: ''
+            };
+            const controleNivelDisponivel = diagnosticoControleNivel.podeAtivar !== false;
+            const bloqueioControleAttr = controleNivelDisponivel ? '' : 'disabled';
+            const corBordaControle = comp.setpointAtivo
+                ? '#e74c3c'
+                : (controleNivelDisponivel ? '#eee' : '#f39c12');
+            const fundoControle = comp.setpointAtivo
+                ? '#fdf5f4'
+                : (controleNivelDisponivel ? '#f9fbfb' : '#fff8ee');
+            const textoStatusControle = controleNivelDisponivel
+                ? 'O controlador usa a válvula de saída para modular o escoamento e estabilizar o nível.'
+                : diagnosticoControleNivel.motivoBloqueio;
+            const corStatusControle = controleNivelDisponivel ? '#5f6f7f' : '#c0392b';
             const basicContent = `
                     <div class="prop-group">
                         ${makeUnitLabel('Capacidade Total', 'volume', TOOLTIP.tankCapacity)}
@@ -833,14 +849,15 @@ export const REGISTRO_COMPONENTES = {
                         ${makeUnitLabel('Vazão de Saída', 'flow', TOOLTIP.tankOutletFlow)}
                         <input type="text" id="disp-qout-tanque" value="${displayUnitValue('flow', comp.lastQout, 2)}" disabled>
                     </div>
-                    <div class="prop-group" id="grp-sp-main" style="border-color: ${comp.setpointAtivo ? '#e74c3c' : '#eee'}; background: ${comp.setpointAtivo ? '#fdf5f4' : '#f9fbfb'};">
+                    <div class="prop-group" id="grp-sp-main" style="border-color: ${corBordaControle}; background: ${fundoControle};">
                         <label ${hintAttr(TOOLTIP.tankPiController)} style="color: #c0392b; font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">
                             Controlador de Nível (PI)
                         </label>
                         <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
-                            <input type="checkbox" id="input-sp-ativo" ${hintAttr(TOOLTIP.tankSpActive)} ${comp.setpointAtivo ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer;">
+                            <input type="checkbox" id="input-sp-ativo" ${hintAttr(TOOLTIP.tankSpActive)} ${comp.setpointAtivo ? 'checked' : ''} ${bloqueioControleAttr} style="width:16px;height:16px;cursor:pointer;">
                             <span ${hintAttr(TOOLTIP.tankSpActive)} style="font-size:13px; font-weight:bold;">Ativar controle automático</span>
                         </div>
+                        <p id="tank-sp-status-text" style="margin:0 0 10px; font-size:11px; color:${corStatusControle};">${textoStatusControle}</p>
                         <label ${hintAttr(TOOLTIP.tankSetpoint)}>Ponto de ajuste
                             <span style="display:flex; align-items:center; gap:2px;">
                                 <input type="number" id="val-sp" class="val-display-input" ${hintAttr(TOOLTIP.tankSetpoint)} value="${comp.setpoint}" min="0" max="100">%
@@ -883,6 +900,44 @@ export const REGISTRO_COMPONENTES = {
             });
         },
         setupProps: (comp) => {
+            const diagnosticoControleNivel = () => comp.getDiagnosticoControleNivel?.() ?? {
+                podeAtivar: true,
+                motivoBloqueio: ''
+            };
+            const atualizarEstadoControleNivel = () => {
+                const diagnostico = diagnosticoControleNivel();
+                const grp = document.getElementById('grp-sp-main');
+                const statusEl = document.getElementById('tank-sp-status-text');
+                const spAtivoEl = document.getElementById('input-sp-ativo');
+                const mostrarParametros = comp.setpointAtivo ? 'block' : 'none';
+
+                if (spAtivoEl) {
+                    spAtivoEl.disabled = !diagnostico.podeAtivar;
+                    spAtivoEl.checked = comp.setpointAtivo;
+                }
+
+                if (statusEl) {
+                    statusEl.textContent = diagnostico.podeAtivar
+                        ? 'O controlador usa a válvula de saída para modular o escoamento e estabilizar o nível.'
+                        : diagnostico.motivoBloqueio;
+                    statusEl.style.color = diagnostico.podeAtivar ? '#5f6f7f' : '#c0392b';
+                }
+
+                if (grp) {
+                    grp.style.borderColor = comp.setpointAtivo
+                        ? '#e74c3c'
+                        : (diagnostico.podeAtivar ? '#eee' : '#f39c12');
+                    grp.style.background = comp.setpointAtivo
+                        ? '#fdf5f4'
+                        : (diagnostico.podeAtivar ? '#f9fbfb' : '#fff8ee');
+                }
+
+                const kpGroup = document.getElementById('group-ctrl-params');
+                const kiGroup = document.getElementById('group-ctrl-ki');
+                if (kpGroup) kpGroup.style.display = mostrarParametros;
+                if (kiGroup) kiGroup.style.display = mostrarParametros;
+            };
+
             const emitirVolumeAtualizado = () => {
                 comp.notify({
                     tipo: 'volume',
@@ -994,11 +1049,7 @@ export const REGISTRO_COMPONENTES = {
             const spAtivoEl = document.getElementById('input-sp-ativo');
             spAtivoEl.addEventListener('change', e => {
                 comp.setSetpointAtivo(e.target.checked);
-                document.getElementById('group-ctrl-params').style.display = comp.setpointAtivo ? 'block' : 'none';
-                document.getElementById('group-ctrl-ki').style.display = comp.setpointAtivo ? 'block' : 'none';
-                const grp = document.getElementById('grp-sp-main');
-                grp.style.borderColor = comp.setpointAtivo ? '#e74c3c' : '#eee';
-                grp.style.background = comp.setpointAtivo ? '#fdf5f4' : '#f9fbfb';
+                atualizarEstadoControleNivel();
                 notifyPanelRefresh();
             });
 
@@ -1049,6 +1100,14 @@ export const REGISTRO_COMPONENTES = {
                     }
                 );
             });
+
+            comp.subscribe(d => {
+                if (d.tipo === 'sp_update') {
+                    atualizarEstadoControleNivel();
+                }
+            });
+
+            atualizarEstadoControleNivel();
         }
     }
 };

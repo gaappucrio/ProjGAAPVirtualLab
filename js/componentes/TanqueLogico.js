@@ -160,6 +160,24 @@ export class TanqueLogico extends ComponenteFisico {
         };
     }
 
+    getValvulasDiretasSaidaControleNivel() {
+        return this.outputs.filter(componente => componente instanceof ValvulaLogica);
+    }
+
+    getDiagnosticoControleNivel() {
+        const valvulasDiretasSaida = this.getValvulasDiretasSaidaControleNivel();
+        const podeAtivar = valvulasDiretasSaida.length > 0;
+
+        return {
+            podeAtivar,
+            valvulasDiretasSaida,
+            quantidadeValvulasDiretasSaida: valvulasDiretasSaida.length,
+            motivoBloqueio: podeAtivar
+                ? ''
+                : 'Conecte uma válvula diretamente à saída do tanque para habilitar o controlador de nível.'
+        };
+    }
+
     getResumoAjustePressaoSetpoint(
         fluido = ENGINE.fluidoOperante,
         usarAlturaRelativa = ENGINE.usarAlturaRelativa
@@ -312,9 +330,52 @@ export class TanqueLogico extends ComponenteFisico {
         this._valvulasControleNivel.clear();
     }
 
+    _desativarControleNivel(atuadoresAntes = this.getAtuadoresControleNivel(), payload = {}) {
+        this.setpointAtivo = false;
+        this.resetControlador();
+        this._liberarValvulasControleNivel([
+            ...atuadoresAntes.valvulasEntrada,
+            ...atuadoresAntes.valvulasSaida
+        ]);
+
+        this.notify({
+            tipo: 'sp_update',
+            ativo: false,
+            ...payload
+        });
+
+        return {
+            ativado: false,
+            ...payload
+        };
+    }
+
+    garantirConsistenciaControleNivel() {
+        const diagnostico = this.getDiagnosticoControleNivel();
+        if (!this.setpointAtivo || diagnostico.podeAtivar) return diagnostico;
+
+        const atuadoresAntes = this.getAtuadoresControleNivel();
+        this._desativarControleNivel(atuadoresAntes, {
+            bloqueado: true,
+            motivoControle: diagnostico.motivoBloqueio
+        });
+
+        return diagnostico;
+    }
+
     setSetpointAtivo(ativo) {
         const atuadoresAntes = this.getAtuadoresControleNivel();
-        this.setpointAtivo = ativo === true;
+        const desejaAtivar = ativo === true;
+        const diagnostico = this.getDiagnosticoControleNivel();
+
+        if (desejaAtivar && !diagnostico.podeAtivar) {
+            return this._desativarControleNivel(atuadoresAntes, {
+                bloqueado: true,
+                motivoControle: diagnostico.motivoBloqueio
+            });
+        }
+
+        this.setpointAtivo = desejaAtivar;
         this.resetControlador();
 
         if (this.setpointAtivo) {
@@ -326,10 +387,22 @@ export class TanqueLogico extends ComponenteFisico {
             ]);
         }
 
-        this.notify({ tipo: 'sp_update', ativo: this.setpointAtivo });
+        this.notify({
+            tipo: 'sp_update',
+            ativo: this.setpointAtivo,
+            bloqueado: false,
+            motivoControle: ''
+        });
+
+        return {
+            ativado: this.setpointAtivo,
+            bloqueado: false,
+            motivoControle: ''
+        };
     }
 
     _rodarControlador(dt) {
+        this.garantirConsistenciaControleNivel();
         if (!this.setpointAtivo) return;
 
         const erro = (this.setpoint / 100) - this.getNivelNormalizado();

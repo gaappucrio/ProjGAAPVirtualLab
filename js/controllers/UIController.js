@@ -444,6 +444,45 @@ function bindTankSaturationAlertActions(component) {
     updateTankSaturationAlert(component);
 }
 
+function updateTankControlAvailabilityUI(component) {
+    if (!(component instanceof TanqueLogico)) return;
+
+    const diagnostico = component.getDiagnosticoControleNivel?.() ?? {
+        podeAtivar: true,
+        motivoBloqueio: ''
+    };
+    const spAtivoEl = document.getElementById('input-sp-ativo');
+    const statusEl = document.getElementById('tank-sp-status-text');
+    const grp = document.getElementById('grp-sp-main');
+    const kpGroup = document.getElementById('group-ctrl-params');
+    const kiGroup = document.getElementById('group-ctrl-ki');
+
+    if (spAtivoEl) {
+        spAtivoEl.disabled = !diagnostico.podeAtivar;
+        spAtivoEl.checked = component.setpointAtivo;
+    }
+
+    if (statusEl) {
+        statusEl.textContent = diagnostico.podeAtivar
+            ? 'O controlador usa a válvula de saída para modular o escoamento e estabilizar o nível.'
+            : diagnostico.motivoBloqueio;
+        statusEl.style.color = diagnostico.podeAtivar ? '#5f6f7f' : '#c0392b';
+    }
+
+    if (grp) {
+        grp.style.borderColor = component.setpointAtivo
+            ? '#e74c3c'
+            : (diagnostico.podeAtivar ? '#eee' : '#f39c12');
+        grp.style.background = component.setpointAtivo
+            ? '#fdf5f4'
+            : (diagnostico.podeAtivar ? '#f9fbfb' : '#fff8ee');
+    }
+
+    const mostrarParametros = component.setpointAtivo ? 'block' : 'none';
+    if (kpGroup) kpGroup.style.display = mostrarParametros;
+    if (kiGroup) kiGroup.style.display = mostrarParametros;
+}
+
 function renderUnitControls() {
     const prefs = getUnitPreferences();
     const categories = [
@@ -1436,6 +1475,7 @@ function setupSubscriptions() {
                 setFieldValue('disp-qin-tanque', component.lastQin, 'flow', 2);
                 setFieldValue('disp-qout-tanque', component.lastQout, 'flow', 2);
                 updateTankSaturationAlert(component);
+                updateTankControlAvailabilityUI(component);
                 // NOVO: Atualizar o painel de alerta
                 const painelAlerta = document.getElementById('painel-alerta-saturacao');
                 const textoAlerta = document.getElementById('texto-alerta-saturacao');

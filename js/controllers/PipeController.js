@@ -17,6 +17,14 @@ const pipeLayer = document.getElementById('pipe-layer');
 let tempPipe = null;
 let dragSourcePort = null;
 
+function validarControleNivelDosComponentes(...componentes) {
+    componentes.forEach((componente) => {
+        if (typeof componente?.garantirConsistenciaControleNivel === 'function') {
+            componente.garantirConsistenciaControleNivel();
+        }
+    });
+}
+
 export function getPortCoords(portEl) {
     const rect = portEl.getBoundingClientRect();
     const canvasRect = document.getElementById('workspace-canvas').getBoundingClientRect();
@@ -112,6 +120,7 @@ export function setupPipeControl() {
 
                 if (sourceLogic && targetLogic && sourceLogic !== targetLogic) {
                     sourceLogic.conectarSaida(targetLogic);
+                    validarControleNivelDosComponentes(sourceLogic, targetLogic);
                     const finalPipe = tempPipe;
                     const connection = {
                         sourceEl: dragSourcePort,
@@ -157,6 +166,7 @@ export function setupPipeControl() {
 
                     finalPipe.addEventListener('dblclick', function (ev) {
                         sourceLogic.desconectarSaida(targetLogic);
+                        validarControleNivelDosComponentes(sourceLogic, targetLogic);
                         const ci = ENGINE.conexoes.findIndex(c => c === connection);
                         
                         if (ci !== -1) {
@@ -171,12 +181,14 @@ export function setupPipeControl() {
                         if (ENGINE.selectedConnection === connection) ENGINE.selectComponent(null);
                         finalPipe.remove();
                         updatePortStates();
+                        ENGINE.notify({ tipo: 'update_painel', dt: 0 });
                         ev.stopPropagation();
                     });
 
                     ENGINE.conexoes.push(connection);
                     updateAllPipes();
                     updatePortStates();
+                    ENGINE.notify({ tipo: 'update_painel', dt: 0 });
                 } else {
                     tempPipe.remove();
                 }
