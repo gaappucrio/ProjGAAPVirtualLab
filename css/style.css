@@ -388,6 +388,201 @@
       /* Borda sutil para os grupos de propriedades, criando um contraste sutil com o fundo branco do painel de propriedades e ajudando a destacar cada grupo de propriedades para os usuários, além de criar um visual mais organizado e profissional para as propriedades dos componentes selecionados */
   }
 
+  .chart-max-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 10px;
+      border-bottom: 1px solid #edf2f4;
+      padding-bottom: 10px;
+      z-index: 99;
+  }
+
+  .chart-max-title-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+  }
+
+  .chart-max-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #eef6fb;
+      border: 1px solid #d7e8f4;
+      color: #2b6f9b;
+      font-size: 11px;
+      font-weight: 700;
+  }
+
+  .chart-max-resize-tip {
+      font-size: 11px;
+      color: #6c8392;
+      font-weight: 600;
+  }
+
+  .chart-max-controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 10px 14px;
+  }
+
+  .chart-height-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 10px;
+      border: 1px solid #dfe7ec;
+      border-radius: 999px;
+      background: #f7fafc;
+      color: #49606f;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+  }
+
+  .chart-height-control span,
+  .chart-height-control output {
+      font-size: 12px;
+      color: #49606f;
+  }
+
+  .chart-height-control input {
+      width: 150px;
+      accent-color: #3498db;
+  }
+
+  .chart-max-actions .gaap-btn,
+  .chart-compare-card-header .gaap-btn {
+      padding: 5px 10px;
+      font-size: 12px;
+      margin: 0;
+  }
+
+  .chart-compare-grid {
+      gap: 12px !important;
+      align-items: stretch !important;
+  }
+
+  .chart-compare-grid[data-layout="single"] {
+      grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .chart-compare-card {
+      border: 1px solid #dde8ef !important;
+      background: #fbfdff !important;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65) !important;
+  }
+
+  .chart-compare-card[hidden],
+  .chart-compare-empty[hidden],
+  .chart-compare-canvas-wrap[hidden] {
+      display: none !important;
+  }
+
+  .chart-compare-card-header {
+      padding: 12px 14px 8px !important;
+      background: rgba(255, 255, 255, 0.88) !important;
+  }
+
+  .chart-compare-card-body {
+      padding: 10px 12px 12px !important;
+  }
+
+  .chart-compare-canvas-wrap,
+  .chart-compare-empty {
+      min-height: 210px !important;
+  }
+
+  .chart-container.maximized {
+      left: 12px !important;
+      right: 12px !important;
+      bottom: 12px !important;
+      width: auto !important;
+      height: var(--chart-max-height, 44vh) !important;
+      max-height: calc(100vh - 24px) !important;
+      z-index: 20000 !important;
+      padding: 12px 16px 16px !important;
+      background: rgba(255, 255, 255, 0.98) !important;
+      border: 1px solid #d6e5ee !important;
+      border-top: 3px solid #3498db !important;
+      border-radius: 16px !important;
+      box-shadow: 0 18px 48px rgba(20, 50, 80, 0.18) !important;
+      isolation: isolate !important;
+      touch-action: none;
+  }
+
+  .chart-container.maximized .chart-compare-grid {
+      display: grid !important;
+  }
+
+  .chart-container.maximized.is-resize-hover,
+  .chart-container.maximized.is-resizing {
+      cursor: ns-resize !important;
+  }
+
+  .sandbox-container {
+      --monitor-dock-space: 0px;
+  }
+
+  .sandbox-container.monitor-detailed-open {
+      padding-bottom: var(--monitor-dock-space);
+  }
+
+  .sandbox-container.monitor-detailed-open .panel-toggle {
+      top: calc((100% - var(--monitor-dock-space)) / 2);
+  }
+
+  @media (max-width: 960px) {
+      .chart-container.maximized {
+          left: 8px !important;
+          right: 8px !important;
+          bottom: 8px !important;
+          height: min(var(--chart-max-height, 68vh), 72vh) !important;
+          max-height: calc(100vh - 16px) !important;
+          padding: 12px !important;
+      }
+
+      .chart-max-header {
+          flex-direction: column;
+      }
+
+      .chart-max-controls,
+      .chart-max-actions {
+          width: 100%;
+          justify-content: flex-start;
+      }
+
+      .chart-max-resize-tip {
+          width: 100%;
+      }
+
+      .chart-height-control {
+          width: 100%;
+          justify-content: space-between;
+          flex-wrap: wrap;
+      }
+
+      .chart-height-control input {
+          flex: 1 1 180px;
+          width: auto;
+      }
+
+      .chart-compare-grid {
+          grid-template-columns: 1fr !important;
+      }
+
+      .chart-compare-canvas-wrap,
+      .chart-compare-empty {
+          min-height: 180px !important;
+      }
+  }
+
   .prop-tabs {
       display: flex;
       flex-direction: column;
@@ -643,6 +838,123 @@
       /* Direção de layout em coluna para o container do gráfico de monitoramento, organizando o conteúdo dentro do gráfico de forma vertical e permitindo que os elementos do gráfico sejam dispostos de forma clara e legível para os usuários, além de criar um visual mais consistente e profissional para o gráfico de monitoramento, especialmente quando combinado com a largura total e a altura fixa para criar um espaço dedicado para o gráfico dentro do painel de propriedades */
   }
 
+  .chart-compact-stage {
+      flex: 1;
+      position: relative;
+      min-height: 0;
+      height: 100%;
+  }
+
+  .chart-max-header {
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 14px;
+      margin-bottom: 10px;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+  }
+
+  .chart-max-header-copy {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 0;
+  }
+
+  .chart-max-status {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #5f6f7f;
+  }
+
+  .chart-max-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+  }
+
+  .chart-compare-grid {
+      display: none;
+      flex: 1;
+      min-height: 0;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+  }
+
+  .chart-compare-card {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      border: 1px solid #e3ebef;
+      border-radius: 12px;
+      background: linear-gradient(180deg, #fcfdff 0%, #f7fafc 100%);
+      overflow: hidden;
+  }
+
+  .chart-compare-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid #edf2f4;
+      background: rgba(255, 255, 255, 0.78);
+  }
+
+  .chart-compare-card-copy {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+  }
+
+  .chart-compare-card-copy h4 {
+      margin: 0;
+      font-size: 14px;
+      color: #2c3e50;
+  }
+
+  .chart-compare-card-copy p {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #667684;
+  }
+
+  .chart-compare-card-body {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      padding: 14px 16px 16px;
+      display: flex;
+      align-items: stretch;
+  }
+
+  .chart-compare-canvas-wrap {
+      position: relative;
+      flex: 1;
+      min-height: 250px;
+  }
+
+  .chart-compare-empty {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      min-height: 250px;
+      border: 1px dashed #c9d8df;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.72);
+      color: #7b8b99;
+      font-size: 13px;
+      line-height: 1.5;
+      text-align: center;
+      padding: 18px;
+      box-sizing: border-box;
+  }
+
   .chart-container.maximized
 
   /* ESTILO PARA O GRÁFICO QUANDO MAXIMIZADO  */
@@ -657,7 +969,7 @@
       /* Posiciona o gráfico de monitoramento no lado esquerdo da tela quando maximizado, garantindo que ele se encaixe adequadamente dentro dos limites da tela e proporcionando um layout mais organizado e profissional para o gráfico de monitoramento maximizado, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para o gráfico de monitoramento */
       width: 50vw;
       /* Largura total da viewport para o gráfico de monitoramento quando maximizado, garantindo que ele se encaixe adequadamente dentro dos limites da tela e proporcionando um layout mais organizado e profissional para o gráfico de monitoramento maximizado, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para o gráfico de monitoramento */
-      height: 35vh;
+      height: 58vh;
       /* Altura de 35% da viewport para o gráfico de monitoramento quando maximizado, criando um espaço dedicado para o gráfico dentro da tela e garantindo que ele seja exibido de forma clara e legível para os usuários, além de criar um visual mais organizado e profissional para o gráfico de monitoramento maximizado, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para o gráfico de monitoramento */
       z-index: 9999;
       /* Z-index alto para o gráfico de monitoramento quando maximizado, garantindo que ele se sobreponha a todos os outros elementos na tela, incluindo o workspace principal e o painel de propriedades, criando um efeito de maximização para destacar o gráfico e proporcionar uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para o gráfico de monitoramento, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para o gráfico maximizado */
