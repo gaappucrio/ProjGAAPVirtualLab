@@ -6,6 +6,7 @@ import {
     lpsToM3s,
     m3sToLps
 } from '../../utils/Units.js';
+import { ComponentEventPayloads } from '../../application/events/EventPayloads.js';
 import { mergeSimulationContext } from '../context/SimulationContext.js';
 
 export const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -162,7 +163,7 @@ export class ComponenteFisico extends Observable {
         if (!this.outputs.includes(destino)) {
             this.outputs.push(destino);
             destino.inputs.push(this);
-            this.notify({ tipo: 'conexao', source: this, target: destino });
+            this.notify(ComponentEventPayloads.connection(this, destino));
         }
     }
 

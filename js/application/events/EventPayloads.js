@@ -64,8 +64,20 @@ export const ComponentEventPayloads = Object.freeze({
     tagUpdate: () => ({
         tipo: COMPONENT_EVENTS.TAG_UPDATE
     }),
+    pressureUpdate: (payload = {}) => ({
+        tipo: COMPONENT_EVENTS.PRESSURE_UPDATE,
+        ...payload
+    }),
     setpointUpdate: () => ({
         tipo: COMPONENT_EVENTS.SETPOINT_UPDATE
+    }),
+    setpointAutoPressure: (payload = {}) => ({
+        tipo: COMPONENT_EVENTS.SETPOINT_AUTO_PRESSURE,
+        ...payload
+    }),
+    controlUpdate: (payload = {}) => ({
+        tipo: COMPONENT_EVENTS.CONTROL_UPDATE,
+        ...payload
     }),
     volumeUpdate: (payload = {}) => ({
         tipo: COMPONENT_EVENTS.VOLUME_UPDATE,

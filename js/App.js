@@ -3,7 +3,13 @@
 // Ficheiro: js/App.js
 // =============================================
 
-import { ENGINE, setConnectionVisualUpdater, setPortStateUpdater } from './MotorFisico.js';
+import {
+    ENGINE,
+    setComponentVisualCleanupHooks,
+    setComponentVisualPositionResolver,
+    setConnectionVisualUpdater,
+    setPortStateUpdater
+} from './MotorFisico.js';
 import { updatePortStates } from './FabricaEquipamentos.js';
 import { setupUI } from './controllers/UIController.js';
 import { setupCameraControl } from './controllers/CameraController.js';
@@ -12,6 +18,11 @@ import { setupDragDrop } from './controllers/DragDropController.js';
 import { setupToolbar } from './presentation/controllers/ToolbarController.js';
 import { connectionService } from './application/services/ConnectionServiceRuntime.js';
 import { findConnectionByPath } from './infrastructure/rendering/ConnectionVisualRegistry.js';
+import {
+    clearComponentVisualRegistry,
+    getRegisteredComponentVisualPosition,
+    unregisterComponentVisual
+} from './infrastructure/dom/ComponentVisualRegistry.js';
 
 setupUI();
 setupCameraControl();
@@ -20,6 +31,11 @@ setupDragDrop();
 
 setPortStateUpdater(() => updatePortStates());
 setConnectionVisualUpdater(() => updateConnectionVisualStates());
+setComponentVisualPositionResolver((component) => getRegisteredComponentVisualPosition(component));
+setComponentVisualCleanupHooks({
+    unregister: (component) => unregisterComponentVisual(component),
+    clearAll: () => clearComponentVisualRegistry()
+});
 
 setupToolbar({
     onClearCanvas: () => {

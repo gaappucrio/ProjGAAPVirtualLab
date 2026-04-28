@@ -1,4 +1,5 @@
 import { clamp, ComponenteFisico, pressureLossFromFlow, rampToTarget } from './BaseComponente.js';
+import { ComponentEventPayloads } from '../../application/events/EventPayloads.js';
 
 const FATOR_MINIMO_AREA = 0.12;
 const BASE_PERDA_POR_CV = 25;
@@ -24,8 +25,7 @@ export class ValvulaLogica extends ComponenteFisico {
     }
 
     _notificarEstado(extra = {}) {
-        this.notify({
-            tipo: 'estado',
+        this.notify(ComponentEventPayloads.state({
             aberta: this.aberta,
             grau: this.grauAbertura,
             grauEfetivo: this.aberturaEfetiva,
@@ -33,7 +33,7 @@ export class ValvulaLogica extends ComponenteFisico {
             perdaLocalK: this.perdaLocalK,
             controleSetpoint: this.estaControladaPorSetpoint(),
             ...extra
-        });
+        }));
     }
 
     estaControladaPorSetpoint() {

@@ -1,5 +1,5 @@
 import { clamp, ComponenteFisico, rampToTarget } from './BaseComponente.js';
-import { COMPONENT_EVENTS } from '../../application/events/EventTypes.js';
+import { ComponentEventPayloads } from '../../application/events/EventPayloads.js';
 import { EPSILON_FLOW } from '../../utils/Units.js';
 
 export class BombaLogica extends ComponenteFisico {
@@ -96,13 +96,12 @@ export class BombaLogica extends ComponenteFisico {
         this.grauAcionamento = bloqueadaPorSetpoint ? 100 : comandoSolicitado;
         if (!context.isRunning) this.acionamentoEfetivo = 0;
         this.isOn = context.isRunning && this.acionamentoEfetivo > 0.5;
-        this.notify({
-            tipo: COMPONENT_EVENTS.STATE,
+        this.notify(ComponentEventPayloads.state({
             isOn: this.isOn,
             grau: this.grauAcionamento,
             grauEfetivo: this.acionamentoEfetivo,
             bloqueadaPorSetpoint
-        });
+        }));
     }
 
     atualizarDinamica(dt) {
@@ -111,13 +110,12 @@ export class BombaLogica extends ComponenteFisico {
         this.isOn = this.acionamentoEfetivo > 0.5;
 
         if (Math.abs(this.acionamentoEfetivo - previousDrive) > 0.05) {
-            this.notify({
-                tipo: COMPONENT_EVENTS.STATE,
+            this.notify(ComponentEventPayloads.state({
                 isOn: this.isOn,
                 grau: this.grauAcionamento,
                 grauEfetivo: this.acionamentoEfetivo,
                 bloqueadaPorSetpoint: this.getSimulationContext().queries.isBombaBloqueadaPorSetpoint(this) === true
-            });
+            }));
         }
     }
 
@@ -132,13 +130,12 @@ export class BombaLogica extends ComponenteFisico {
         this.npshDisponivelM = 0;
         this.margemNpshM = 0;
         this.fatorCavitacaoAtual = 1;
-        this.notify({
-            tipo: COMPONENT_EVENTS.STATE,
+        this.notify(ComponentEventPayloads.state({
             isOn: false,
             grau: this.grauAcionamento,
             grauEfetivo: 0,
             bloqueadaPorSetpoint: this.getSimulationContext().queries.isBombaBloqueadaPorSetpoint(this) === true
-        });
+        }));
     }
 
     sincronizarMetricasFisicas() {

@@ -1,8 +1,8 @@
 import { BombaLogica } from './BombaLogica.js';
 import { clamp, ComponenteFisico, flowFromBernoulli } from './BaseComponente.js';
+import { ComponentEventPayloads } from '../../application/events/EventPayloads.js';
 import { FonteLogica } from './FonteLogica.js';
 import { ValvulaLogica } from './ValvulaLogica.js';
-import { COMPONENT_EVENTS } from '../../application/events/EventTypes.js';
 import { EPSILON_FLOW, pressureFromHeadBar } from '../../utils/Units.js';
 
 const TOLERANCIA_ERRO_SATURACAO = -0.02;
@@ -261,13 +261,14 @@ export class TanqueLogico extends ComponenteFisico {
 
         resumo.ajustesFonte.forEach(({ fonte, pressaoRecomendadaBar }) => {
             fonte.pressaoFonteBar = pressaoRecomendadaBar;
-            fonte.notify({ tipo: COMPONENT_EVENTS.PRESSURE_UPDATE, pressaoFonteBar: fonte.pressaoFonteBar });
+            fonte.notify(ComponentEventPayloads.pressureUpdate({
+                pressaoFonteBar: fonte.pressaoFonteBar
+            }));
         });
 
-        this.notify({
-            tipo: COMPONENT_EVENTS.SETPOINT_AUTO_PRESSURE,
+        this.notify(ComponentEventPayloads.setpointAutoPressure({
             quantidadeFontes: resumo.ajustesFonte.length
-        });
+        }));
 
         return {
             aplicado: true,
@@ -334,11 +335,10 @@ export class TanqueLogico extends ComponenteFisico {
             ...atuadoresAntes.valvulasSaida
         ]);
 
-        this.notify({
-            tipo: COMPONENT_EVENTS.SETPOINT_UPDATE,
+        this.notify(ComponentEventPayloads.setpointUpdate({
             ativo: false,
             ...payload
-        });
+        }));
 
         return {
             ativado: false,
@@ -383,12 +383,11 @@ export class TanqueLogico extends ComponenteFisico {
             ]);
         }
 
-        this.notify({
-            tipo: COMPONENT_EVENTS.SETPOINT_UPDATE,
+        this.notify(ComponentEventPayloads.setpointUpdate({
             ativo: this.setpointAtivo,
             bloqueado: false,
             motivoControle: ''
-        });
+        }));
 
         return {
             ativado: this.setpointAtivo,
@@ -432,8 +431,7 @@ export class TanqueLogico extends ComponenteFisico {
             ownerId: this.id
         }));
 
-        this.notify({
-            tipo: COMPONENT_EVENTS.CONTROL_UPDATE,
+        this.notify(ComponentEventPayloads.controlUpdate({
             grau: u * 100,
             erro,
             grauEntrada,
@@ -441,7 +439,7 @@ export class TanqueLogico extends ComponenteFisico {
             intensidadeEntrada,
             intensidadeSaida,
             bombasLigadas: atuadores.bombas.length
-        });
+        }));
     }
 
     resetControlador() {
@@ -461,14 +459,13 @@ export class TanqueLogico extends ComponenteFisico {
         this.sincronizarMetricasFisicas(fluido);
         this._atualizarAlertaSaturacao(fluido);
 
-        this.notify({
-            tipo: COMPONENT_EVENTS.VOLUME_UPDATE,
+        this.notify(ComponentEventPayloads.volumeUpdate({
             perc: this.capacidadeMaxima > 0 ? this.volumeAtual / this.capacidadeMaxima : 0,
             abs: this.volumeAtual,
             qIn: this.lastQin,
             qOut: this.lastQout,
             pBottom: this.pressaoFundoBar
-        });
+        }));
     }
 
     sincronizarMetricasFisicas(fluido) {

@@ -1,1 +1,7 @@
-export { setupUI as setupPresentation, updatePipesVisualUI } from './LegacyUIController.js';
+import { setupUI, updatePipesVisualUI } from './LegacyUIController.js';
+
+export function setupPresentation() {
+    return setupUI();
+}
+
+export { updatePipesVisualUI };

@@ -12,6 +12,7 @@ import {
     ENGINE,
     FLUID_PRESETS
 } from '../../MotorFisico.js';
+import { ComponentEventPayloads, EngineEventPayloads } from '../../application/events/EventPayloads.js';
 import { REGISTRO_COMPONENTES } from '../../RegistroComponentes.js';
 
 import { clearInputError, InputValidator, showInputError } from '../../utils/InputValidator.js';
@@ -21,6 +22,9 @@ import {
     renderPropertyTabs,
     restorePropertyTabsState
 } from '../../utils/PropertyTabs.js';
+import { setupLayoutController } from './LayoutController.js';
+import { createPropertyPanelContextStore } from './PropertyPanelContextController.js';
+import { bindUnitsPanel, renderUnitsPanel } from './UnitsController.js';
 import { TOOLTIPS } from '../../utils/Tooltips.js';
 import {
     DEFAULT_PIPE_ROUGHNESS_MM,
@@ -40,61 +44,24 @@ let chartUpdateTimer = 0;
 let chartedTankId = null;
 let chartedPumpId = null;
 let monitorChartMode = 'empty';
-const propertyPanelContextState = new Map();
-let activePropertyContextKey = 'default';
+const propertyPanelContext = createPropertyPanelContextStore({
+    getContentElement: () => document.getElementById('prop-content'),
+    getScrollContainer: () => document.querySelector('#properties .side-panel-content'),
+    getPropertyTabsState,
+    restorePropertyTabsState
+});
 
 export function setupUI() {
-    setupPanelToggles();
-    setupChart();
-    setupSubscriptions();
-}
-
-function setupPanelToggles() {
-    const toggleLeft = document.getElementById('toggle-left');
-    const panelLeft = document.getElementById('palette');
-    toggleLeft.addEventListener('click', () => {
-        const isCollapsed = panelLeft.classList.toggle('collapsed');
-        toggleLeft.classList.toggle('collapsed');
-        toggleLeft.textContent = isCollapsed ? '▶' : '◀';
-    });
-
-    const toggleRight = document.getElementById('toggle-right');
-    const panelRight = document.getElementById('properties');
-    toggleRight.addEventListener('click', () => {
-        const isCollapsed = panelRight.classList.toggle('collapsed');
-        toggleRight.classList.toggle('collapsed');
-        toggleRight.textContent = isCollapsed ? '◀' : '▶';
-    });
-
-    const btnMaxChart = document.getElementById('btn-max-chart');
-    const chartWrapper = document.getElementById('chart-wrapper');
-    const chartMaxHeader = document.getElementById('chart-max-header');
-    const btnCloseMaxChart = document.getElementById('btn-close-max-chart');
-
-    function toggleChartMaximize() {
-        const isMax = chartWrapper.classList.toggle('maximized');
-        btnMaxChart.textContent = isMax ? '✕ Fechar' : '⛶ Expandir';
-        chartMaxHeader.style.display = isMax ? 'flex' : 'none';
-        requestAnimationFrame(() => {
+    setupLayoutController({
+        onChartLayoutChange: () => {
             if (volumeChart) {
                 volumeChart.resize();
                 refreshVolumeChartPresentation();
             }
-        });
-    }
-
-    btnMaxChart.addEventListener('click', toggleChartMaximize);
-    btnCloseMaxChart.addEventListener('click', toggleChartMaximize);
-
-    if (window.innerWidth > 800) {
-        panelLeft.classList.remove('collapsed');
-        toggleLeft.classList.remove('collapsed');
-        toggleLeft.textContent = '◀';
-
-        panelRight.classList.remove('collapsed');
-        toggleRight.classList.remove('collapsed');
-        toggleRight.textContent = '▶';
-    }
+        }
+    });
+    setupChart();
+    setupSubscriptions();
 }
 
 function setupChart() {
@@ -244,44 +211,21 @@ function getPropertyScrollContainer() {
 }
 
 function getConnectionContextKey(connection) {
-    if (!connection) return 'default';
-
-    const sourceId = connection.sourceId || 'source';
-    const targetId = connection.targetId || 'target';
-    return `connection:${sourceId}->${targetId}`;
+    return propertyPanelContext.getConnectionContextKey(connection);
 }
 
 function getPropertyContextKey(component = ENGINE.selectedComponent, connection = ENGINE.selectedConnection) {
-    if (connection) return getConnectionContextKey(connection);
-    if (component) return `component:${component.id}`;
-    return 'default';
+    return propertyPanelContext.getContextKey(component, connection);
 }
 
-function capturePropertyPanelContextState(contextKey = activePropertyContextKey) {
-    if (!contextKey) return;
-
-    const scrollContainer = getPropertyScrollContainer();
-    const propContent = getPropContent();
-    if (!scrollContainer || !propContent) return;
-
-    propertyPanelContextState.set(contextKey, {
-        scrollTop: scrollContainer.scrollTop,
-        tabStates: getPropertyTabsState(propContent)
-    });
+function capturePropertyPanelContextState(contextKey = propertyPanelContext.getActiveContextKey()) {
+    propertyPanelContext.capture(contextKey);
 }
 
 function restorePropertyPanelContextState(contextKey, { onAfterRestore } = {}) {
-    const scrollContainer = getPropertyScrollContainer();
-    const propContent = getPropContent();
-    if (!scrollContainer || !propContent) return;
-
-    const savedState = propertyPanelContextState.get(contextKey);
-    const restoredTabs = restorePropertyTabsState(propContent, savedState?.tabStates);
-
-    requestAnimationFrame(() => {
-        const maxScroll = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
-        scrollContainer.scrollTop = Math.min(savedState?.scrollTop || 0, maxScroll);
-        onAfterRestore?.(restoredTabs, savedState);
+    propertyPanelContext.setActiveContextKey(contextKey);
+    propertyPanelContext.restore(contextKey, {
+        onAfterRestore: (restoredTabs) => onAfterRestore?.(restoredTabs)
     });
 }
 
@@ -438,7 +382,7 @@ function bindTankSaturationAlertActions(component) {
             feedbackAjuste.dataset.state = 'warning';
         }
 
-        ENGINE.notify({ tipo: 'update_painel', dt: 0 });
+        ENGINE.notify(EngineEventPayloads.panelUpdate(0));
     });
 
     updateTankSaturationAlert(component);
@@ -484,49 +428,19 @@ function updateTankControlAvailabilityUI(component) {
 }
 
 function renderUnitControls() {
-    const prefs = getUnitPreferences();
-    const categories = [
-        { id: 'pressure', label: 'Pressão', hint: 'Unidade usada para exibir e editar pressão.' },
-        { id: 'flow', label: 'Vazão', hint: 'Unidade usada para exibir e editar vazão.' },
-        { id: 'length', label: 'Comprimento', hint: 'Unidade usada para exibir e editar comprimentos e cotas.' },
-        { id: 'volume', label: 'Volume', hint: 'Unidade usada para exibir e editar volumes e capacidades.' },
-        { id: 'temperature', label: 'Temperatura', hint: 'Unidade usada para exibir e editar temperatura.' }
-    ];
-
-    const selectors = categories.map(({ id, label, hint }) => {
-        const options = getUnitOptions(id)
-            .map((option) => `<option value="${option.id}" ${prefs[id] === option.id ? 'selected' : ''}>${option.label}</option>`)
-            .join('');
-
-        return `
-            <div>
-                <label title="${hint}" style="font-size:11px; color:#7f8c8d; margin-bottom:4px;">${label}</label>
-                <select id="unit-pref-${id}" title="${hint}">
-                    ${options}
-                </select>
-            </div>
-        `;
-    }).join('');
-
-    return `
-        <div class="prop-group">
-            <label title="${TOOLTIPS.unidades.painel}">Unidades de Exibição</label>
-            <div style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px;">
-                ${selectors}
-            </div>
-            <p style="margin:8px 0 0; font-size:11px; color:#7f8c8d;">${TOOLTIPS.unidades.resumoSi}</p>
-        </div>
-    `;
+    return renderUnitsPanel({
+        getUnitOptions,
+        getUnitPreferences,
+        tooltips: TOOLTIPS
+    });
 }
 
 function bindUnitControls() {
-    ['pressure', 'flow', 'length', 'volume', 'temperature'].forEach((category) => {
-        const select = document.getElementById(`unit-pref-${category}`);
-        if (!select) return;
-        select.addEventListener('change', (e) => {
-            setUnitPreference(category, e.target.value);
+    bindUnitsPanel({
+        setUnitPreference,
+        onChange: () => {
             renderCurrentProperties();
-        });
+        }
     });
 }
 
@@ -548,7 +462,7 @@ function renderCurrentProperties() {
         renderDefaultProperties();
     }
 
-    activePropertyContextKey = nextContextKey;
+    propertyPanelContext.setActiveContextKey(nextContextKey);
     restorePropertyPanelContextState(nextContextKey, {
         onAfterRestore: (restoredTabs) => restorePumpCurveFromSavedContext(component, restoredTabs)
     });
@@ -1086,7 +1000,7 @@ function renderDefaultProperties() {
             <input type="text" id="input-fluid-name" title="${TOOLTIPS.fluido.nome}" value="${ENGINE.fluidoOperante.nome}">
         </div>
         <div class="prop-group">
-            <label title="${TOOLTIPS.fluido.densidade}">Densidade (kg/m³)</label>
+            <label title="${TOOLTIPS.fluido.densidade}">Densidade (kg/m?)</label>
             <input type="number" id="input-fluid-density" title="${TOOLTIPS.fluido.densidade}" value="${ENGINE.fluidoOperante.densidade}" step="1" min="100">
         </div>
         <div class="prop-group">
@@ -1360,7 +1274,7 @@ function renderComponentProperties(component) {
 
     propContent.innerHTML = `
         <div id="painel-alerta-saturacao" style="display: none; background-color: #fdeaea; border-left: 4px solid #e74c3c; padding: 10px; margin-bottom: 15px; border-radius: 4px;">
-            <h4 style="margin: 0 0 5px 0; color: #c0392b; font-size: 13px;">Saída Saturada no Set Point</h4>
+            <h4 style="margin: 0 0 5px 0; color: #c0392b; font-size: 13px;">Sa�da Saturada no Set Point</h4>
             <p id="texto-alerta-saturacao" style="margin: 0; font-size: 11px; color: #333;"></p>
             <button id="btn-aplicar-alerta-saturacao" type="button" style="display:none; margin-top:10px; padding:7px 10px; border:1px solid #c0392b; border-radius:4px; background:#fff; color:#c0392b; font-size:12px; font-weight:600; cursor:pointer;"></button>
             <p id="texto-acao-alerta-saturacao" style="margin:8px 0 0; font-size:11px;"></p>
@@ -1377,7 +1291,7 @@ function renderComponentProperties(component) {
     bindPropertyTabs(propContent);
     document.getElementById('input-tag').addEventListener('input', (e) => {
         component.tag = e.target.value;
-        component.notify({ tipo: 'tag_update' });
+        component.notify(ComponentEventPayloads.tagUpdate());
     });
 
     if (spec.setupProps) spec.setupProps(component);
@@ -1570,3 +1484,5 @@ function setupSubscriptions() {
 export function updatePipesVisualUI() {
     ENGINE.updatePipesVisual();
 }
+
+

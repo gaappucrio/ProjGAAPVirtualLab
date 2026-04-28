@@ -40,16 +40,11 @@ import { profiler } from '../../utils/PerformanceProfiler.js';
 import { getPipeHydraulics, getConnectionGeometryFromPoints } from '../../utils/PipeHydraulics.js';
 import { calculatePortPosition } from '../../domain/services/PortPositionCalculator.js';
 import { ENGINE_EVENTS } from '../events/EventTypes.js';
-import { EngineEventPayloads } from '../events/EventPayloads.js';
+import { ComponentEventPayloads, EngineEventPayloads } from '../events/EventPayloads.js';
 import { ConnectionStateStore } from '../stores/ConnectionStateStore.js';
 import { SelectionStore } from '../stores/SelectionStore.js';
 import { SimulationConfigStore } from '../stores/SimulationConfigStore.js';
 import { TopologyGraph } from '../stores/TopologyGraph.js';
-import {
-    clearComponentVisualRegistry,
-    getRegisteredComponentVisualPosition,
-    unregisterComponentVisual
-} from '../../infrastructure/dom/ComponentVisualRegistry.js';
 
 export {
     clamp,
@@ -66,8 +61,14 @@ export {
 let portStateUpdater = null;
 let connectionVisualUpdater = null;
 let connectionFlowGetter = null;
+let componentVisualPositionResolver = (component) => ({
+    x: typeof component?.x === 'number' ? component.x : 0,
+    y: typeof component?.y === 'number' ? component.y : 0
+});
+let unregisterComponentVisualHandler = null;
+let clearComponentVisualRegistryHandler = null;
 
-// Rastreamento de estabilidade numérica do solver
+// Rastreamento de estabilidade num�rica do solver
 
 const safeViscosity = (value) => Math.max(0.00001, value || DEFAULT_FLUID_VISCOSITY_PA_S);
 
@@ -105,6 +106,20 @@ export function setConnectionVisualUpdater(fn) {
 
 export function setConnectionFlowGetter(fn) {
     connectionFlowGetter = fn;
+}
+
+export function setComponentVisualPositionResolver(fn) {
+    componentVisualPositionResolver = typeof fn === 'function'
+        ? fn
+        : ((component) => ({
+            x: typeof component?.x === 'number' ? component.x : 0,
+            y: typeof component?.y === 'number' ? component.y : 0
+        }));
+}
+
+export function setComponentVisualCleanupHooks({ unregister, clearAll } = {}) {
+    unregisterComponentVisualHandler = typeof unregister === 'function' ? unregister : null;
+    clearComponentVisualRegistryHandler = typeof clearAll === 'function' ? clearAll : null;
 }
 
 export class SistemaSimulacao extends Observable {
@@ -235,7 +250,7 @@ export class SistemaSimulacao extends Observable {
 
         this.detachComponentContext(comp);
         comp.destroy();
-        unregisterComponentVisual(comp);
+        unregisterComponentVisualHandler?.(comp);
         this.topology.removeComponent(comp);
 
         this.componentes.forEach((component) => {
@@ -262,10 +277,10 @@ export class SistemaSimulacao extends Observable {
         });
         this.componentes.forEach((component) => {
             this.detachComponentContext(component);
-            unregisterComponentVisual(component);
+            unregisterComponentVisualHandler?.(component);
         });
         this.topology.clear();
-        clearComponentVisualRegistry();
+        clearComponentVisualRegistryHandler?.();
         this.connectionStateStore.clear();
         this.isRunning = false;
         this.elapsedTime = 0;
@@ -396,17 +411,14 @@ export class SistemaSimulacao extends Observable {
     }
 
     getComponentById(id) {
-        this.topology.rebuildConnectionIndexes();
         return this.topology.getComponentById(id);
     }
 
     getOutputConnections(comp) {
-        this.topology.rebuildConnectionIndexes();
         return this.topology.getOutputConnections(comp);
     }
 
     getInputConnections(comp) {
-        this.topology.rebuildConnectionIndexes();
         return this.topology.getInputConnections(comp);
     }
 
@@ -465,8 +477,8 @@ export class SistemaSimulacao extends Observable {
             return { straightLengthM: 1.0, lengthM: 1.0 + (conn.extraLengthM || 0), headGainM: 0 };
         }
 
-        const resolvedSourceVisualPos = getRegisteredComponentVisualPosition(sourceComponent);
-        const resolvedTargetVisualPos = getRegisteredComponentVisualPosition(targetComponent);
+        const resolvedSourceVisualPos = componentVisualPositionResolver(sourceComponent);
+        const resolvedTargetVisualPos = componentVisualPositionResolver(targetComponent);
 
         const resolvedSourcePoint = calculatePortPosition(
             sourceComponent,
@@ -904,71 +916,6 @@ export class SistemaSimulacao extends Observable {
 
     resolvePushBasedNetwork(dt) {
         return this.hydraulicSolver.resolve(dt);
-
-        this.componentes.forEach(comp => {
-            if (comp instanceof FonteLogica) enqueue(comp);
-            else if (comp instanceof TanqueLogico && comp.volumeAtual > EPSILON_FLOW) enqueue(comp);
-        });
-
-        let steps = 0;
-        if (DEBUG_PHYSICS) console.log(`[Solver] Iniciando com ${this.componentes.length} componentes, máx ${MAX_QUEUE_STEPS} iterações`);
-        
-        while (queue.length > 0 && steps < MAX_QUEUE_STEPS) {
-            steps += 1;
-            const comp = queue.shift();
-            if (!this.hasPendingEmission(comp, dt)) continue;
-
-            const outputs = this.getOutputConnections(comp);
-            if (outputs.length === 0) continue;
-
-            const supply = this.buildSupplyState(comp, dt);
-            if (!supply || supply.availableFlowLps <= EPSILON_FLOW) continue;
-
-            const visited = new Set([comp.id]);
-            const estimates = outputs
-                .map(conn => ({ conn, estimate: this.estimateBranch(comp, conn, supply, dt, visited) }))
-                .filter(item => item.estimate.capacityLps > EPSILON_FLOW);
-
-            if (estimates.length === 0) {
-                if (comp instanceof FonteLogica || comp instanceof TanqueLogico) comp.marcarEmissaoIntrinseca();
-                continue;
-            }
-
-            const totalCapacity = estimates.reduce((sum, item) => sum + item.estimate.capacityLps, 0);
-            const totalFlow = Math.min(supply.availableFlowLps, totalCapacity);
-            if (totalFlow <= EPSILON_FLOW) {
-                if (comp instanceof FonteLogica || comp instanceof TanqueLogico) comp.marcarEmissaoIntrinseca();
-                continue;
-            }
-
-            let emittedFlowLps = 0;
-
-            estimates.forEach(item => {
-                const share = totalCapacity > EPSILON_FLOW ? item.estimate.capacityLps / totalCapacity : 0;
-                const branchFlow = totalFlow * share;
-                if (branchFlow <= EPSILON_FLOW) return;
-
-                const deliveredFlow = this.applyBranchFlow(comp, item.conn, supply, item.estimate, branchFlow, dt);
-                emittedFlowLps += deliveredFlow;
-                const target = this.getComponentById(item.conn.targetId);
-                if (deliveredFlow > EPSILON_FLOW && (target instanceof BombaLogica || target instanceof ValvulaLogica)) enqueue(target);
-            });
-
-            if (comp instanceof FonteLogica || comp instanceof TanqueLogico) comp.marcarEmissaoIntrinseca();
-            else if (emittedFlowLps > EPSILON_FLOW) comp.consumirEntrada(emittedFlowLps);
-        }
-
-        // Rastreamento de convergência do solver
-        solverMetrics.lastIterations = steps;
-        if (steps === MAX_QUEUE_STEPS) {
-            solverMetrics.maxIterationsHit++;
-            if (DEBUG_PHYSICS) console.warn(`[Solver] ⚠️ Limite de iterações atingido (${MAX_QUEUE_STEPS}). Queue final: ${queue.length} componentes pendentes.`);
-        } else {
-            solverMetrics.convergedCount++;
-            if (DEBUG_PHYSICS) console.log(`[Solver] Convergiu em ${steps} iterações com sucesso.`);
-        }
-
-        this.relaxIdleConnections(dt);
     }
 
     updatePipesVisual() {
@@ -979,9 +926,15 @@ export class SistemaSimulacao extends Observable {
                 if (c instanceof TanqueLogico && c.setpointAtivo) {
                     const notificarEstado = (equipamento) => {
                         if (equipamento instanceof ValvulaLogica) {
-                            equipamento.notify({ tipo: 'estado', aberta: equipamento.aberta, grau: equipamento.grauAbertura });
+                            equipamento.notify(ComponentEventPayloads.state({
+                                aberta: equipamento.aberta,
+                                grau: equipamento.grauAbertura
+                            }));
                         } else if (equipamento instanceof BombaLogica) {
-                            equipamento.notify({ tipo: 'estado', isOn: equipamento.isOn, grau: equipamento.grauAcionamento });
+                            equipamento.notify(ComponentEventPayloads.state({
+                                isOn: equipamento.isOn,
+                                grau: equipamento.grauAcionamento
+                            }));
                         }
                     };
                     c.inputs.forEach(notificarEstado);
@@ -993,3 +946,5 @@ export class SistemaSimulacao extends Observable {
 }
 
 export const ENGINE = new SistemaSimulacao();
+
+

@@ -9,6 +9,8 @@ export {
     flowFromBernoulli,
     pressureFromHeadBar,
     pressureLossFromFlow,
+    setComponentVisualCleanupHooks,
+    setComponentVisualPositionResolver,
     smoothFirstOrder,
     setConnectionFlowGetter,
     setConnectionVisualUpdater,

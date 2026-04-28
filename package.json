@@ -1,0 +1,8 @@
+{
+  "name": "proj-gaap-virtual-lab",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test --test-concurrency=1 --test-isolation=none Testes/validar-calculos.mjs Testes/topologia-e-solver.test.mjs"
+  }
+}
