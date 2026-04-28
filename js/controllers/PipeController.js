@@ -12,10 +12,12 @@ import { camera } from './CameraController.js';
 import { formatUnitValue, getUnitSymbol } from '../utils/Units.js';
 import { updatePortStates } from '../utils/PortStateManager.js';
 import {
-    createConnectionEndpointDefinition,
     getComponentPortElement
 } from '../infrastructure/dom/ComponentVisualRegistry.js';
-import { getConnectionVisual } from '../infrastructure/rendering/ConnectionVisualRegistry.js';
+import {
+    createConnectionEndpointDefinition,
+    getConnectionVisual
+} from '../infrastructure/rendering/ConnectionVisualRegistry.js';
 import {
     createConnectionVisual,
     createTransientConnectionVisual,

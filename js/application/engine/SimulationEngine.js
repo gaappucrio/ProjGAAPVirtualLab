@@ -249,48 +249,6 @@ export class SistemaSimulacao extends Observable {
         }
 
         this.notify(EngineEventPayloads.panelUpdate(0));
-        return;
-        // Remove componente da simulação com limpeza apropriada
-        if (!comp) return;
-        
-        // Desativa o componente se simulação estiver rodando
-        if (this.isRunning) comp.onSimulationStop();
-        
-        // Remove conexões relacionadas a este componente
-        this.conexoes = this.conexoes.filter(conn => {
-            // Identifica conexões que usam este componente
-            const relatedToComponent = conn.sourceId === comp.id || conn.targetId === comp.id;
-            
-            if (relatedToComponent) {
-                // Limpa elementos visuais se ainda existirem (compatibilidade com renderização legada)
-                if (conn.label) conn.label.remove();
-                if (conn.labelHeight) conn.labelHeight.remove();
-                if (conn.path) conn.path.remove();
-                return false; // Remove conexão do array
-            }
-            return true;
-        });
-        
-        // Limpa estado e listeners
-        this.detachComponentContext(comp);
-        comp.destroy();
-        
-        // Remove do array de componentes
-        this.topology.removeComponent(comp);
-
-        // Revalida controladores dependentes de topologia, como o controle de nível do tanque.
-        this.componentes.forEach((componente) => {
-            if (typeof componente?.garantirConsistenciaControleNivel === 'function') {
-                componente.garantirConsistenciaControleNivel();
-            }
-        });
-        
-        // Desseleciona se era o componente selecionado
-        if (this.selectedComponent === comp) {
-            this.selectedComponent = null;
-        }
-
-        this.notify({ tipo: ENGINE_EVENTS.PANEL_UPDATE, dt: 0 });
     }
 
     getSolverMetrics() {
@@ -535,55 +493,6 @@ export class SistemaSimulacao extends Observable {
         );
 
         return getConnectionGeometryFromPoints(resolvedSourcePoint, resolvedTargetPoint, conn, this.usarAlturaRelativa);
-        const sourceComp = this.topology.getComponentById(conn.sourceId);
-        const targetComp = this.topology.getComponentById(conn.targetId);
-        
-        if (!sourceComp || !targetComp) {
-            // Fallback: usar compatibilidade com versão antiga se elementos ainda existem
-            if (conn.sourceEl && conn.targetEl) {
-                return getConnectionGeometry(conn, conn.sourceEl, conn.targetEl, this.usarAlturaRelativa);
-            }
-            return { straightLengthM: 1.0, lengthM: 1.0 + (conn.extraLengthM || 0), headGainM: 0 };
-        }
-        
-        // Buscar posição visual do componente (ainda precisa ler do DOM por enquanto)
-        // TODO: Mover para um registry visual quando houver separação completa
-        const sourceVisualEl = document.querySelector(`[data-comp-id="${conn.sourceId}"]`);
-        const targetVisualEl = document.querySelector(`[data-comp-id="${conn.targetId}"]`);
-        
-        const sourceVisualPos = sourceVisualEl 
-            ? getComponentVisualPosition(sourceVisualEl.closest('.placed-component'))
-            : { x: 0, y: 0 };
-        const targetVisualPos = targetVisualEl
-            ? getComponentVisualPosition(targetVisualEl.closest('.placed-component'))
-            : { x: 0, y: 0 };
-        
-        // Calcular posição real dos portos considerando lógica de altura
-        const sourcePoint = calculatePortPosition(
-            sourceComp,
-            conn.sourceEndpoint.portType,
-            { 
-                offsetX: conn.sourceEndpoint.offsetX,
-                offsetY: conn.sourceEndpoint.offsetY,
-                floorOffsetY: conn.sourceEndpoint.floorOffsetY || 0
-            },
-            sourceVisualPos,
-            this.usarAlturaRelativa
-        );
-        
-        const targetPoint = calculatePortPosition(
-            targetComp,
-            conn.targetEndpoint.portType,
-            {
-                offsetX: conn.targetEndpoint.offsetX,
-                offsetY: conn.targetEndpoint.offsetY,
-                floorOffsetY: conn.targetEndpoint.floorOffsetY || 0
-            },
-            targetVisualPos,
-            this.usarAlturaRelativa
-        );
-        
-        return getConnectionGeometryFromPoints(sourcePoint, targetPoint, conn, this.usarAlturaRelativa);
     }
 
     // Usa utilitário importado PipeHydraulics.getPipeHydraulics

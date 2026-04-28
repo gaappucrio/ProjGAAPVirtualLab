@@ -1,6 +1,6 @@
 import { ENGINE } from '../../MotorFisico.js';
 import { ConnectionService } from './ConnectionService.js';
-import { createConnectionEndpointDefinition } from '../../infrastructure/dom/ComponentVisualRegistry.js';
+import { createConnectionEndpointDefinition } from '../../infrastructure/rendering/ConnectionVisualRegistry.js';
 
 export class ConnectionServiceRuntimeAdapter {
     constructor(engine, service = new ConnectionService(engine)) {
