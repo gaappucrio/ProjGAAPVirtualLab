@@ -3,16 +3,15 @@
 // Ficheiro: js/App.js
 // =============================================
 
-import { ENGINE, setPortStateUpdater, setConnectionFlowGetter } from './MotorFisico.js';
+import { ENGINE, setConnectionVisualUpdater, setPortStateUpdater } from './MotorFisico.js';
 import { updatePortStates } from './FabricaEquipamentos.js';
 import { setupUI } from './controllers/UIController.js';
 import { setupCameraControl } from './controllers/CameraController.js';
-import { setupPipeControl, getConnectionFlow, updateAllPipes } from './controllers/PipeController.js';
+import { setupPipeControl, updateAllPipes, updateConnectionVisualStates } from './controllers/PipeController.js';
 import { setupDragDrop } from './controllers/DragDropController.js';
 import { setupToolbar } from './presentation/controllers/ToolbarController.js';
 import { connectionService } from './application/services/ConnectionServiceRuntime.js';
 import { findConnectionByPath } from './infrastructure/rendering/ConnectionVisualRegistry.js';
-import { removeConnectionVisual } from './infrastructure/rendering/PipeRenderer.js';
 
 setupUI();
 setupCameraControl();
@@ -20,7 +19,7 @@ setupPipeControl();
 setupDragDrop();
 
 setPortStateUpdater(() => updatePortStates());
-setConnectionFlowGetter((conn) => getConnectionFlow(conn));
+setConnectionVisualUpdater(() => updateConnectionVisualStates());
 
 setupToolbar({
     onClearCanvas: () => {
@@ -49,7 +48,6 @@ document.addEventListener('keydown', (e) => {
             const conn = findConnectionByPath(selectedPipe);
             if (conn) {
                 connectionService.remove(conn);
-                removeConnectionVisual(conn);
                 ENGINE.selectComponent(null);
                 updatePortStates();
             }

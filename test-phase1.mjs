@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 
 import { ConnectionService } from './js/application/services/ConnectionService.js';
+import { ConnectionServiceRuntimeAdapter } from './js/application/services/ConnectionServiceRuntime.js';
 import { EngineEventPayloads } from './js/application/events/EventPayloads.js';
 import { TransientConnectionStore } from './js/application/stores/TransientConnectionStore.js';
 import { ConnectionModel } from './js/domain/models/ConnectionModel.js';
@@ -45,7 +46,7 @@ runTest('ConnectionModel stays logical and computes derived area', () => {
     assert.equal('targetEl' in connection, false);
 });
 
-runTest('TransientConnectionStore models start, preview and cancel', () => {
+runTest('TransientConnectionStore models start, preview, confirm and cancel', () => {
     const store = new TransientConnectionStore();
     const started = store.begin({
         sourceComponentId: 'pump-1',
@@ -62,6 +63,17 @@ runTest('TransientConnectionStore models start, preview and cancel', () => {
 
     const cancelled = store.cancel();
     assert.equal(cancelled.active, true);
+    assert.equal(store.snapshot().active, false);
+
+    store.begin({
+        sourceComponentId: 'pump-2',
+        sourcePortType: 'out',
+        sourceEndpoint: { portType: 'out', offsetX: 60, offsetY: 30, floorOffsetY: 0 },
+        sourcePoint: { x: 40, y: 50 }
+    });
+
+    const confirmed = store.confirm();
+    assert.equal(confirmed.active, true);
     assert.equal(store.snapshot().active, false);
 });
 
@@ -112,13 +124,25 @@ runTest('ConnectionService creates logical connections and emits engine events',
     ]);
 
     const service = new ConnectionService(engine);
-    const sourcePort = createPort({ compId: sourceComponent.id, type: 'out', cx: 80, cy: 40 });
-    const targetPort = createPort({ compId: targetComponent.id, type: 'in', cx: 0, cy: 80, svgTop: 20 });
+    const sourceEndpoint = { portType: 'out', offsetX: 80, offsetY: 40, floorOffsetY: 0 };
+    const targetEndpoint = { portType: 'in', offsetX: 0, offsetY: 80, floorOffsetY: 20 };
 
-    const connection = service.connect(sourceComponent, sourcePort, targetComponent, targetPort);
+    const connection = service.connect({
+        sourceComponent,
+        targetComponent,
+        sourceEndpoint,
+        targetEndpoint
+    });
     assert.ok(connection);
     assert.equal(connection.sourceId, sourceComponent.id);
     assert.equal(connection.targetId, targetComponent.id);
+    assert.deepEqual(connection.sourceEndpoint, {
+        portType: 'out',
+        offsetX: 80,
+        offsetY: 40,
+        floorOffsetY: 0,
+        dynamicHeight: null
+    });
     assert.equal(engine._connections.length, 1);
     assert.equal(events.some((event) => event.tipo === 'conexao_confirmada'), true);
     assert.equal(events.some((event) => event.tipo === 'update_painel'), true);
@@ -127,6 +151,48 @@ runTest('ConnectionService creates logical connections and emits engine events',
     service.remove(connection);
     assert.equal(engine._connections.length, 0);
     assert.equal(events.some((event) => event.tipo === 'conexao_removida'), true);
+});
+
+runTest('ConnectionServiceRuntimeAdapter keeps DOM parsing at the application edge', () => {
+    const engine = {
+        selectedConnection: null,
+        _connections: [],
+        addConnection(connection) {
+            this._connections.push(connection);
+        },
+        removeConnection(connection) {
+            this._connections = this._connections.filter((entry) => entry !== connection);
+        },
+        notify() {},
+        getComponentById() {
+            return null;
+        },
+        selectConnection() {},
+        selectComponent() {}
+    };
+
+    const adapter = new ConnectionServiceRuntimeAdapter(engine);
+    const sourceComponent = { id: 'pump-1', conectarSaida() {}, desconectarSaida() {} };
+    const targetComponent = { id: 'tank-1' };
+    const sourcePort = createPort({ compId: sourceComponent.id, type: 'out', cx: 80, cy: 40, svgLeft: 10, svgTop: 20 });
+    const targetPort = createPort({ compId: targetComponent.id, type: 'in', cx: 0, cy: 80, svgTop: 20 });
+
+    const connection = adapter.buildConnection(sourceComponent, sourcePort, targetComponent, targetPort);
+
+    assert.deepEqual(connection.sourceEndpoint, {
+        portType: 'out',
+        offsetX: 90,
+        offsetY: 60,
+        floorOffsetY: 0,
+        dynamicHeight: null
+    });
+    assert.deepEqual(connection.targetEndpoint, {
+        portType: 'in',
+        offsetX: 0,
+        offsetY: 100,
+        floorOffsetY: 0,
+        dynamicHeight: null
+    });
 });
 
 runTest('Engine event payloads formalize transient connection contract', () => {

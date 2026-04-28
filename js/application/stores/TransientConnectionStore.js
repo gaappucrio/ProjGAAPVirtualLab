@@ -39,6 +39,12 @@ export class TransientConnectionStore {
         return previous;
     }
 
+    confirm() {
+        const previous = this.snapshot();
+        this.clear();
+        return previous;
+    }
+
     clear() {
         this.state = createDefaultDraft();
         return this.snapshot();

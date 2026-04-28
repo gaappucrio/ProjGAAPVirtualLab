@@ -34,8 +34,6 @@ import {
     GRAVITY,
     lpsToM3s,
     MAX_NETWORK_FLOW_LPS,
-    formatUnitValue,
-    getUnitSymbol,
     pressureFromHeadBar
 } from '../../utils/Units.js';
 import { profiler } from '../../utils/PerformanceProfiler.js';
@@ -52,7 +50,6 @@ import {
     getRegisteredComponentVisualPosition,
     unregisterComponentVisual
 } from '../../infrastructure/dom/ComponentVisualRegistry.js';
-import { removeConnectionVisual, updateConnectionFlowVisual } from '../../infrastructure/rendering/PipeRenderer.js';
 
 export {
     clamp,
@@ -67,9 +64,8 @@ export {
 };
 
 let portStateUpdater = null;
+let connectionVisualUpdater = null;
 let connectionFlowGetter = null;
-
-const PIXELS_PER_METER = 80;
 
 // Rastreamento de estabilidade numérica do solver
 
@@ -101,6 +97,10 @@ export const FLUID_PRESETS = {
 
 export function setPortStateUpdater(fn) {
     portStateUpdater = fn;
+}
+
+export function setConnectionVisualUpdater(fn) {
+    connectionVisualUpdater = fn;
 }
 
 export function setConnectionFlowGetter(fn) {
@@ -230,13 +230,8 @@ export class SistemaSimulacao extends Observable {
         );
 
         relatedConnections.forEach((connection) => {
-            removeConnectionVisual(connection);
             this.removeConnection(connection);
         });
-
-        this.conexoes = this.conexoes.filter((conn) =>
-            conn.sourceId !== comp.id && conn.targetId !== comp.id
-        );
 
         this.detachComponentContext(comp);
         comp.destroy();
@@ -304,8 +299,8 @@ export class SistemaSimulacao extends Observable {
 
     clear() {
         this.clearConnectionDynamics();
-        this.conexoes.forEach((connection) => {
-            removeConnectionVisual(connection);
+        [...this.conexoes].forEach((connection) => {
+            this.removeConnection(connection);
         });
         this.componentes.forEach((component) => {
             this.detachComponentContext(component);
@@ -431,6 +426,15 @@ export class SistemaSimulacao extends Observable {
                 relativeRoughness: 0,
                 regime: 'sem fluxo'
             }));
+    }
+
+    resolveConnectionDisplayFlow(conn) {
+        if (typeof connectionFlowGetter === 'function') {
+            return connectionFlowGetter(conn);
+        }
+
+        const state = this.getConnectionState(conn);
+        return this.isRunning ? state.flowLps : null;
     }
 
     getComponentById(id) {
@@ -1059,20 +1063,7 @@ export class SistemaSimulacao extends Observable {
     }
 
     updatePipesVisual() {
-        this.conexoes.forEach((conn) => {
-            const state = this.getConnectionState(conn);
-            const flow = this.isRunning ? state.flowLps : 0;
-            const labelFlow = connectionFlowGetter ? connectionFlowGetter(conn) : flow;
-
-            updateConnectionFlowVisual(conn, {
-                active: flow > 0.05,
-                flowLabel: (!this.isRunning || labelFlow === null || labelFlow === undefined || labelFlow <= EPSILON_FLOW)
-                    ? ''
-                    : `${formatUnitValue('flow', labelFlow, 2)} ${getUnitSymbol('flow')}`,
-                markerId: flow > 0.05 ? 'url(#arrow-active)' : 'url(#arrow)',
-                stateText: `${formatUnitValue('flow', flow, 2)} ${getUnitSymbol('flow')} | ${state.velocityMps.toFixed(2)} m/s | Re ${Math.round(state.reynolds)} | ${state.regime}`
-            });
-        });
+        connectionVisualUpdater?.();
 
         if (this.isRunning) {
             this.componentes.forEach(c => {

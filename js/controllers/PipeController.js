@@ -3,21 +3,26 @@
 // Ficheiro: js/controllers/PipeController.js
 // =========================================
 
-import { ENGINE } from '../MotorFisico.js';
+import { ENGINE, EPSILON_FLOW } from '../MotorFisico.js';
 import { connectionService } from '../application/services/ConnectionServiceRuntime.js';
 import { EngineEventPayloads } from '../application/events/EventPayloads.js';
+import { ENGINE_EVENTS } from '../application/events/EventTypes.js';
 import { TransientConnectionStore } from '../application/stores/TransientConnectionStore.js';
 import { camera } from './CameraController.js';
+import { formatUnitValue, getUnitSymbol } from '../utils/Units.js';
 import { updatePortStates } from '../utils/PortStateManager.js';
 import {
     createConnectionEndpointDefinition,
     getComponentPortElement
 } from '../infrastructure/dom/ComponentVisualRegistry.js';
+import { getConnectionVisual } from '../infrastructure/rendering/ConnectionVisualRegistry.js';
 import {
     createConnectionVisual,
     createTransientConnectionVisual,
+    drawConnectionCurve,
     removeConnectionVisual,
     removeTransientConnectionVisual,
+    updateConnectionFlowVisual,
     updateConnectionVisualLayout,
     updateTransientConnectionVisual
 } from '../infrastructure/rendering/PipeRenderer.js';
@@ -25,6 +30,8 @@ import {
 const pipeLayer = document.getElementById('pipe-layer');
 const transientConnection = new TransientConnectionStore();
 let transientPath = null;
+let pipeControlInitialized = false;
+let connectionEventAdapterInitialized = false;
 
 export function getPortCoords(portEl) {
     const rect = portEl.getBoundingClientRect();
@@ -54,25 +61,44 @@ function selectConnectionPath(connection, pathEl) {
     pathEl.setAttribute('marker-end', 'url(#arrow-selected)');
 }
 
-function clearTransientConnection() {
-    transientConnection.clear();
+function clearTransientVisual() {
     removeTransientConnectionVisual(transientPath);
     transientPath = null;
+}
+
+function applyTransientVisualState() {
+    if (!transientPath) return;
+
+    transientPath.setAttribute('class', `pipe-line${ENGINE.isRunning ? ' active' : ''}`);
+    transientPath.setAttribute('marker-end', ENGINE.isRunning ? 'url(#arrow-active)' : 'url(#arrow)');
+}
+
+function renderTransientConnection(draft = transientConnection.snapshot()) {
+    if (!draft.active || !draft.sourcePoint || !draft.previewPoint) {
+        clearTransientVisual();
+        return;
+    }
+
+    if (!transientPath) {
+        transientPath = createTransientConnectionVisual(pipeLayer, ENGINE.isRunning);
+    }
+
+    applyTransientVisualState();
+    updateTransientConnectionVisual(transientPath, draft.sourcePoint, draft.previewPoint);
 }
 
 function cancelTransientConnection() {
     const draft = transientConnection.cancel();
-    removeTransientConnectionVisual(transientPath);
-    transientPath = null;
+    if (!draft.active) return;
 
-    if (draft.active) {
-        ENGINE.notify(EngineEventPayloads.connectionCancelled({
-            sourceComponentId: draft.sourceComponentId
-        }));
-    }
+    ENGINE.notify(EngineEventPayloads.connectionCancelled({
+        sourceComponentId: draft.sourceComponentId
+    }));
 }
 
 function bindConnectionVisual(connection) {
+    if (getConnectionVisual(connection)) return;
+
     createConnectionVisual(pipeLayer, connection, {
         onMouseDown: (currentConnection, event, pathEl) => {
             selectConnectionPath(currentConnection, pathEl);
@@ -80,8 +106,6 @@ function bindConnectionVisual(connection) {
         },
         onDoubleClick: (currentConnection, event) => {
             connectionService.remove(currentConnection);
-            removeConnectionVisual(currentConnection);
-            updatePortStates();
             event.stopPropagation();
         }
     });
@@ -99,30 +123,98 @@ function getConnectionRenderPoints(connection) {
     };
 }
 
-export function getConnectionFlow(conn) {
-    if (!ENGINE.isRunning) return null;
+function syncConnectionLayout(connection) {
+    const renderPoints = getConnectionRenderPoints(connection);
+    if (!renderPoints) return;
 
-    const state = ENGINE.getConnectionState(conn);
-    if (!state || state.flowLps <= 0.0001) return 0;
-    return state.flowLps;
+    updateConnectionVisualLayout(
+        connection,
+        renderPoints.sourcePoint,
+        renderPoints.targetPoint,
+        ENGINE.getConnectionGeometry(connection),
+        ENGINE.usarAlturaRelativa
+    );
+}
+
+export function getConnectionFlow(connection) {
+    const flow = ENGINE.resolveConnectionDisplayFlow(connection);
+    if (flow === null || flow === undefined) return flow;
+    if (flow <= EPSILON_FLOW) return 0;
+    return flow;
+}
+
+function updateConnectionVisualState(connection) {
+    const state = ENGINE.getConnectionState(connection);
+    const flow = ENGINE.isRunning ? state.flowLps : 0;
+    const labelFlow = getConnectionFlow(connection);
+
+    updateConnectionFlowVisual(connection, {
+        active: flow > 0.05,
+        flowLabel: (!ENGINE.isRunning || labelFlow === null || labelFlow === undefined || labelFlow <= EPSILON_FLOW)
+            ? ''
+            : `${formatUnitValue('flow', labelFlow, 2)} ${getUnitSymbol('flow')}`,
+        markerId: flow > 0.05 ? 'url(#arrow-active)' : 'url(#arrow)',
+        stateText: `${formatUnitValue('flow', flow, 2)} ${getUnitSymbol('flow')} | ${state.velocityMps.toFixed(2)} m/s | Re ${Math.round(state.reynolds)} | ${state.regime}`
+    });
+}
+
+export function updateConnectionVisualStates() {
+    ENGINE.conexoes.forEach((connection) => {
+        updateConnectionVisualState(connection);
+    });
 }
 
 export function updateAllPipes() {
     ENGINE.conexoes.forEach((connection) => {
-        const renderPoints = getConnectionRenderPoints(connection);
-        if (!renderPoints) return;
+        syncConnectionLayout(connection);
+    });
 
-        updateConnectionVisualLayout(
-            connection,
-            renderPoints.sourcePoint,
-            renderPoints.targetPoint,
-            ENGINE.getConnectionGeometry(connection),
-            ENGINE.usarAlturaRelativa
-        );
+    updateConnectionVisualStates();
+}
+
+export function drawCurve(x1, y1, x2, y2) {
+    return drawConnectionCurve(x1, y1, x2, y2);
+}
+
+function setupConnectionEventAdapter() {
+    if (connectionEventAdapterInitialized) return;
+    connectionEventAdapterInitialized = true;
+
+    ENGINE.subscribe((payload) => {
+        switch (payload.tipo) {
+            case ENGINE_EVENTS.CONNECTION_STARTED:
+            case ENGINE_EVENTS.CONNECTION_PREVIEW:
+                renderTransientConnection();
+                return;
+            case ENGINE_EVENTS.CONNECTION_CANCELLED:
+                clearTransientVisual();
+                return;
+            case ENGINE_EVENTS.CONNECTION_COMMITTED:
+                clearTransientVisual();
+                bindConnectionVisual(payload.conexao);
+                syncConnectionLayout(payload.conexao);
+                updateConnectionVisualState(payload.conexao);
+                updatePortStates();
+                return;
+            case ENGINE_EVENTS.CONNECTION_REMOVED:
+                removeConnectionVisual(payload.conexao);
+                updatePortStates();
+                return;
+            case ENGINE_EVENTS.MOTOR_STATE:
+                applyTransientVisualState();
+                updateConnectionVisualStates();
+                return;
+            default:
+                return;
+        }
     });
 }
 
 export function setupPipeControl() {
+    if (pipeControlInitialized) return;
+    pipeControlInitialized = true;
+    setupConnectionEventAdapter();
+
     const workspaceContainer = document.getElementById('workspace');
     const workspaceCanvas = document.getElementById('workspace-canvas');
 
@@ -144,9 +236,6 @@ export function setupPipeControl() {
             sourcePoint
         });
 
-        transientPath = createTransientConnectionVisual(pipeLayer, ENGINE.isRunning);
-        updateTransientConnectionVisual(transientPath, sourcePoint, sourcePoint);
-
         ENGINE.notify(EngineEventPayloads.connectionStarted({
             sourceComponentId: sourceComponent.id,
             sourceEndpoint,
@@ -158,7 +247,7 @@ export function setupPipeControl() {
 
     workspaceContainer.addEventListener('mousemove', (event) => {
         const draft = transientConnection.snapshot();
-        if (!draft.active || !transientPath || !draft.sourcePoint) return;
+        if (!draft.active || !draft.sourcePoint) return;
 
         const canvasRect = workspaceCanvas.getBoundingClientRect();
         const previewPoint = {
@@ -167,7 +256,6 @@ export function setupPipeControl() {
         };
 
         transientConnection.updatePreview(previewPoint);
-        updateTransientConnectionVisual(transientPath, draft.sourcePoint, previewPoint);
 
         ENGINE.notify(EngineEventPayloads.connectionPreview({
             sourceComponentId: draft.sourceComponentId,
@@ -197,16 +285,13 @@ export function setupPipeControl() {
             return;
         }
 
+        const confirmedDraft = transientConnection.confirm();
         const connection = connectionService.connect(sourceComponent, sourcePort, targetComponent, dropTarget);
-        clearTransientConnection();
 
-        if (!connection) {
-            updatePortStates();
-            return;
+        if (!connection && confirmedDraft.active) {
+            ENGINE.notify(EngineEventPayloads.connectionCancelled({
+                sourceComponentId: confirmedDraft.sourceComponentId
+            }));
         }
-
-        bindConnectionVisual(connection);
-        updateAllPipes();
-        updatePortStates();
     });
 }

@@ -11,6 +11,7 @@ export {
     pressureLossFromFlow,
     smoothFirstOrder,
     setConnectionFlowGetter,
+    setConnectionVisualUpdater,
     setPortStateUpdater,
     SistemaSimulacao
 } from './application/engine/SimulationEngine.js';
