@@ -14,6 +14,7 @@ import {
     areaFromDiameter
 } from './Units.js';
 import { clamp } from '../componentes/BaseComponente.js';
+import { calculateConnectionGeometry } from '../domain/services/PortPositionCalculator.js';
 
 const PIXELS_PER_METER = 80;
 
@@ -89,9 +90,9 @@ export function getConnectionGeometry(conn, sourceEl, targetEl, usarAlturaRelati
 
             // Subimos a partir do chão calculando (Altura Lógica * 80 pixels)
             if (tipoPorta === 'out') {
-                logicalY = chaoGeometricoY - (logicComp.alturaBocalSaidaM * PIXELS_PER_METER);
+                logicalY = chaoGeometricoY - (logicComp.alturaBocalSaidaM * 80);
             } else if (tipoPorta === 'in') {
-                logicalY = chaoGeometricoY - (logicComp.alturaBocalEntradaM * PIXELS_PER_METER);
+                logicalY = chaoGeometricoY - (logicComp.alturaBocalEntradaM * 80);
             }
         }
 
@@ -100,22 +101,22 @@ export function getConnectionGeometry(conn, sourceEl, targetEl, usarAlturaRelati
 
     const p1 = getLogicalPortPosition(sourceEl);
     const p2 = getLogicalPortPosition(targetEl);
-    const dx = p2.x - p1.x;
-    const dy = p2.y - p1.y;
+    
+    return calculateConnectionGeometry(p1, p2, conn, usarAlturaRelativa);
+}
 
-    // Se a altura relativa estiver desligada, tratamos o diagrama como um esquemático lógico
-    // e o comprimento visual não deve afetar a perda de carga. Fixamos um comprimento padrão (ex: 1 metro).
-    const straightLengthM = usarAlturaRelativa
-        ? Math.max(0.35, Math.sqrt(dx * dx + dy * dy) / PIXELS_PER_METER)
-        : 1.0;
-
-    const extraLengthM = Math.max(0, conn.extraLengthM || 0);
-
-    return {
-        straightLengthM,
-        lengthM: straightLengthM + extraLengthM,
-        headGainM: usarAlturaRelativa ? (p2.y - p1.y) / PIXELS_PER_METER : 0
-    };
+/**
+ * Calcula geometria da conexão usando pontos pré-calculados (versão pura)
+ * Esta é a versão que não depende de DOM.
+ * 
+ * @param {Object} sourcePoint - {x, y} posição do porto de saída
+ * @param {Object} targetPoint - {x, y} posição do porto de entrada
+ * @param {Object} conn - ConnectionModel
+ * @param {boolean} usarAlturaRelativa - Se deve usar altura visual
+ * @returns {Object} { straightLengthM, lengthM, headGainM }
+ */
+export function getConnectionGeometryFromPoints(sourcePoint, targetPoint, conn, usarAlturaRelativa) {
+    return calculateConnectionGeometry(sourcePoint, targetPoint, conn, usarAlturaRelativa);
 }
 
 /**

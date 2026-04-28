@@ -5,6 +5,7 @@
 
 import { REGISTRO_COMPONENTES } from '../RegistroComponentes.js';
 import { FabricaDeEquipamentos, updatePortStates } from '../FabricaEquipamentos.js';
+import { ComponentEventPayloads } from '../application/events/EventPayloads.js';
 import { camera } from './CameraController.js';
 import { updateAllPipes } from './PipeController.js';
 import { GRID_SIZE } from '../Config.js';
@@ -74,7 +75,7 @@ export function setupDragDrop() {
             element.style.top = `${snappedY}px`;
             element.logica.x = snappedX;
             element.logica.y = snappedY;
-            element.logica.notify({ tipo: 'pos_update' });
+            element.logica.notify(ComponentEventPayloads.positionUpdate());
             updateAllPipes();
         });
 
@@ -83,7 +84,7 @@ export function setupDragDrop() {
                 isDragging = false;
                 element.logica.x = parseInt(element.style.left);
                 element.logica.y = parseInt(element.style.top);
-                element.logica.notify({ tipo: 'pos_update' });
+                element.logica.notify(ComponentEventPayloads.positionUpdate());
                 updateAllPipes();
             }
         });

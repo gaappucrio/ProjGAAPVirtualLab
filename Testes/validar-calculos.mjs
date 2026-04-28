@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import test from 'node:test';
 
 import { ENGINE } from '../js/MotorFisico.js';
 import { BombaLogica } from '../js/componentes/BombaLogica.js';
@@ -22,7 +23,7 @@ function resetEngine() {
     ENGINE.fluidoOperante.densidade = 1000;
 }
 
-function validarTemposDeCurso() {
+test('tempo de curso e rampa aceitam zero e respeitam a escala configurada', () => {
     resetEngine();
     ENGINE.isRunning = true;
 
@@ -47,9 +48,9 @@ function validarTemposDeCurso() {
     bomba.tempoRampaSegundos = 0;
     bomba.atualizarDinamica(0.2);
     approx(bomba.acionamentoEfetivo, 100, 1e-9, 'Tempo de rampa zero da bomba');
-}
+});
 
-function validarAjusteDePressaoDoSetpoint() {
+test('resumo de ajuste de pressão no set point considera altura relativa ligada e desligada', () => {
     resetEngine();
 
     const fonte = new FonteLogica('F-01', 'Entrada-01', 0, 0);
@@ -98,9 +99,4 @@ function validarAjusteDePressaoDoSetpoint() {
     const resultado = tanque.aplicarAjustePressaoSetpoint();
     assert.equal(resultado.aplicado, true, 'O ajuste automático deveria ser aplicado');
     approx(fonte.pressaoFonteBar, pressaoFonteSemAlturaEsperada, 1e-9, 'Aplicação automática da pressão recomendada');
-}
-
-validarTemposDeCurso();
-validarAjusteDePressaoDoSetpoint();
-
-console.log('Validações concluídas com sucesso.');
+});

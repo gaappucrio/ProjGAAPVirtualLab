@@ -3,19 +3,37 @@
 // Ficheiro: js/controllers/PipeController.js
 // =========================================
 
-import { ENGINE } from '../MotorFisico.js';
+import { ENGINE, EPSILON_FLOW } from '../MotorFisico.js';
+import { connectionService } from '../application/services/ConnectionServiceRuntime.js';
+import { EngineEventPayloads } from '../application/events/EventPayloads.js';
+import { ENGINE_EVENTS } from '../application/events/EventTypes.js';
+import { TransientConnectionStore } from '../application/stores/TransientConnectionStore.js';
 import { camera } from './CameraController.js';
+import { formatUnitValue, getUnitSymbol } from '../utils/Units.js';
 import { updatePortStates } from '../utils/PortStateManager.js';
 import {
-    DEFAULT_PIPE_DIAMETER_M,
-    DEFAULT_PIPE_EXTRA_LENGTH_M,
-    DEFAULT_PIPE_MINOR_LOSS,
-    DEFAULT_PIPE_ROUGHNESS_MM
-} from '../utils/Units.js';
+    getComponentPortElement
+} from '../infrastructure/dom/ComponentVisualRegistry.js';
+import {
+    createConnectionEndpointDefinition,
+    getConnectionVisual
+} from '../infrastructure/rendering/ConnectionVisualRegistry.js';
+import {
+    createConnectionVisual,
+    createTransientConnectionVisual,
+    drawConnectionCurve,
+    removeConnectionVisual,
+    removeTransientConnectionVisual,
+    updateConnectionFlowVisual,
+    updateConnectionVisualLayout,
+    updateTransientConnectionVisual
+} from '../infrastructure/rendering/PipeRenderer.js';
 
 const pipeLayer = document.getElementById('pipe-layer');
-let tempPipe = null;
-let dragSourcePort = null;
+const transientConnection = new TransientConnectionStore();
+let transientPath = null;
+let pipeControlInitialized = false;
+let connectionEventAdapterInitialized = false;
 
 export function getPortCoords(portEl) {
     const rect = portEl.getBoundingClientRect();
@@ -26,165 +44,256 @@ export function getPortCoords(portEl) {
     };
 }
 
-export function drawCurve(x1, y1, x2, y2) {
-    const dx = Math.abs(x2 - x1) * 0.5;
-    return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+function resetPipeSelection() {
+    document.querySelectorAll('.pipe-line').forEach((element) => {
+        element.classList.remove('selected');
+        if (element.classList.contains('active')) {
+            element.setAttribute('marker-end', 'url(#arrow-active)');
+        } else {
+            element.setAttribute('marker-end', 'url(#arrow)');
+        }
+    });
 }
 
-export function getConnectionFlow(conn) {
-    if (!ENGINE.isRunning) return null;
+function selectConnectionPath(connection, pathEl) {
+    ENGINE.selectConnection(connection);
+    document.querySelectorAll('.placed-component').forEach((element) => element.classList.remove('selected'));
+    resetPipeSelection();
+    pathEl.classList.add('selected');
+    pathEl.setAttribute('marker-end', 'url(#arrow-selected)');
+}
 
-    const state = ENGINE.getConnectionState(conn);
-    if (!state || state.flowLps <= 0.0001) return 0;
-    return state.flowLps;
+function clearTransientVisual() {
+    removeTransientConnectionVisual(transientPath);
+    transientPath = null;
+}
+
+function applyTransientVisualState() {
+    if (!transientPath) return;
+
+    transientPath.setAttribute('class', `pipe-line${ENGINE.isRunning ? ' active' : ''}`);
+    transientPath.setAttribute('marker-end', ENGINE.isRunning ? 'url(#arrow-active)' : 'url(#arrow)');
+}
+
+function renderTransientConnection(draft = transientConnection.snapshot()) {
+    if (!draft.active || !draft.sourcePoint || !draft.previewPoint) {
+        clearTransientVisual();
+        return;
+    }
+
+    if (!transientPath) {
+        transientPath = createTransientConnectionVisual(pipeLayer, ENGINE.isRunning);
+    }
+
+    applyTransientVisualState();
+    updateTransientConnectionVisual(transientPath, draft.sourcePoint, draft.previewPoint);
+}
+
+function cancelTransientConnection() {
+    const draft = transientConnection.cancel();
+    if (!draft.active) return;
+
+    ENGINE.notify(EngineEventPayloads.connectionCancelled({
+        sourceComponentId: draft.sourceComponentId
+    }));
+}
+
+function bindConnectionVisual(connection) {
+    if (getConnectionVisual(connection)) return;
+
+    createConnectionVisual(pipeLayer, connection, {
+        onMouseDown: (currentConnection, event, pathEl) => {
+            selectConnectionPath(currentConnection, pathEl);
+            event.stopPropagation();
+        },
+        onDoubleClick: (currentConnection, event) => {
+            connectionService.remove(currentConnection);
+            event.stopPropagation();
+        }
+    });
+}
+
+function getConnectionRenderPoints(connection) {
+    const sourcePort = getComponentPortElement(connection.sourceId, connection.sourceEndpoint?.portType || 'out');
+    const targetPort = getComponentPortElement(connection.targetId, connection.targetEndpoint?.portType || 'in');
+
+    if (!sourcePort || !targetPort) return null;
+
+    return {
+        sourcePoint: getPortCoords(sourcePort),
+        targetPoint: getPortCoords(targetPort)
+    };
+}
+
+function syncConnectionLayout(connection) {
+    const renderPoints = getConnectionRenderPoints(connection);
+    if (!renderPoints) return;
+
+    updateConnectionVisualLayout(
+        connection,
+        renderPoints.sourcePoint,
+        renderPoints.targetPoint,
+        ENGINE.getConnectionGeometry(connection),
+        ENGINE.usarAlturaRelativa
+    );
+}
+
+export function getConnectionFlow(connection) {
+    const flow = ENGINE.resolveConnectionDisplayFlow(connection);
+    if (flow === null || flow === undefined) return flow;
+    if (flow <= EPSILON_FLOW) return 0;
+    return flow;
+}
+
+function updateConnectionVisualState(connection) {
+    const state = ENGINE.getConnectionState(connection);
+    const flow = ENGINE.isRunning ? state.flowLps : 0;
+    const labelFlow = getConnectionFlow(connection);
+
+    updateConnectionFlowVisual(connection, {
+        active: flow > 0.05,
+        flowLabel: (!ENGINE.isRunning || labelFlow === null || labelFlow === undefined || labelFlow <= EPSILON_FLOW)
+            ? ''
+            : `${formatUnitValue('flow', labelFlow, 2)} ${getUnitSymbol('flow')}`,
+        markerId: flow > 0.05 ? 'url(#arrow-active)' : 'url(#arrow)',
+        stateText: `${formatUnitValue('flow', flow, 2)} ${getUnitSymbol('flow')} | ${state.velocityMps.toFixed(2)} m/s | Re ${Math.round(state.reynolds)} | ${state.regime}`
+    });
+}
+
+export function updateConnectionVisualStates() {
+    ENGINE.conexoes.forEach((connection) => {
+        updateConnectionVisualState(connection);
+    });
 }
 
 export function updateAllPipes() {
-    ENGINE.conexoes.forEach(conn => {
-        const p1 = getPortCoords(conn.sourceEl);
-        const p2 = getPortCoords(conn.targetEl);
-        conn.path.setAttribute('d', drawCurve(p1.x, p1.y, p2.x, p2.y));
+    ENGINE.conexoes.forEach((connection) => {
+        syncConnectionLayout(connection);
+    });
 
-        if (conn.label) {
-            conn.label.setAttribute('x', (p1.x + p2.x) / 2);
-            conn.label.setAttribute('y', (p1.y + p2.y) / 2 - 10);
-        }
+    updateConnectionVisualStates();
+}
 
-        // Atualiza a posição e o texto da diferença de cota.
-        if (conn.labelHeight) {
-            conn.labelHeight.setAttribute('x', (p1.x + p2.x) / 2);
-            conn.labelHeight.setAttribute('y', (p1.y + p2.y) / 2 + 15); // 15px abaixo do meio
+export function drawCurve(x1, y1, x2, y2) {
+    return drawConnectionCurve(x1, y1, x2, y2);
+}
 
-            if (ENGINE.usarAlturaRelativa) {
-                const geom = ENGINE.getConnectionGeometry(conn);
-                const dy = geom.headGainM;
+function setupConnectionEventAdapter() {
+    if (connectionEventAdapterInitialized) return;
+    connectionEventAdapterInitialized = true;
 
-                // Exibir apenas se houver desnível significativo
-                if (Math.abs(dy) > 0.01) {
-                    const signal = dy > 0 ? '+' : '';
-                    conn.labelHeight.textContent = `Δy: ${signal}${dy.toFixed(2)} m`;
-                } else {
-                    conn.labelHeight.textContent = '';
-                }
-            } else {
-                conn.labelHeight.textContent = '';
-            }
+    ENGINE.subscribe((payload) => {
+        switch (payload.tipo) {
+            case ENGINE_EVENTS.CONNECTION_STARTED:
+            case ENGINE_EVENTS.CONNECTION_PREVIEW:
+                renderTransientConnection();
+                return;
+            case ENGINE_EVENTS.CONNECTION_CANCELLED:
+                clearTransientVisual();
+                return;
+            case ENGINE_EVENTS.CONNECTION_COMMITTED:
+                clearTransientVisual();
+                bindConnectionVisual(payload.conexao);
+                syncConnectionLayout(payload.conexao);
+                updateConnectionVisualState(payload.conexao);
+                updatePortStates();
+                return;
+            case ENGINE_EVENTS.CONNECTION_REMOVED:
+                removeConnectionVisual(payload.conexao);
+                updatePortStates();
+                return;
+            case ENGINE_EVENTS.MOTOR_STATE:
+                applyTransientVisualState();
+                updateConnectionVisualStates();
+                return;
+            default:
+                return;
         }
     });
 }
 
 export function setupPipeControl() {
+    if (pipeControlInitialized) return;
+    pipeControlInitialized = true;
+    setupConnectionEventAdapter();
+
     const workspaceContainer = document.getElementById('workspace');
     const workspaceCanvas = document.getElementById('workspace-canvas');
 
-    // Mouse down para iniciar pipe
-    workspaceContainer.addEventListener('mousedown', (e) => {
-        if (e.target.classList.contains('port-node') && e.target.dataset.type === 'out') {
-            dragSourcePort = e.target;
-            const p1 = getPortCoords(dragSourcePort);
-            tempPipe = document.createElementNS("http://www.w3.org/2000/svg", "path");
-            tempPipe.setAttribute("class", "pipe-line " + (ENGINE.isRunning ? "active" : ""));
-            tempPipe.setAttribute("marker-end", "url(#arrow)");
-            tempPipe.setAttribute("d", drawCurve(p1.x, p1.y, p1.x, p1.y));
-            pipeLayer.appendChild(tempPipe);
-            e.stopPropagation();
-        }
+    workspaceContainer.addEventListener('mousedown', (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        if (!target.classList.contains('port-node') || target.dataset.type !== 'out') return;
+
+        const sourceComponent = ENGINE.getComponentById(target.dataset.compId);
+        if (!sourceComponent) return;
+
+        const sourcePoint = getPortCoords(target);
+        const sourceEndpoint = createConnectionEndpointDefinition(sourceComponent, target);
+
+        transientConnection.begin({
+            sourceComponentId: sourceComponent.id,
+            sourcePortType: 'out',
+            sourceEndpoint,
+            sourcePoint
+        });
+
+        ENGINE.notify(EngineEventPayloads.connectionStarted({
+            sourceComponentId: sourceComponent.id,
+            sourceEndpoint,
+            sourcePoint
+        }));
+
+        event.stopPropagation();
     });
 
-    // Mouse move para atualizar pipe temporário
-    workspaceContainer.addEventListener('mousemove', (e) => {
-        if (tempPipe && dragSourcePort) {
-            const p1 = getPortCoords(dragSourcePort);
-            const canvasRect = workspaceCanvas.getBoundingClientRect();
-            const mouseX = (e.clientX - canvasRect.left) / camera.scale;
-            const mouseY = (e.clientY - canvasRect.top) / camera.scale;
-            tempPipe.setAttribute("d", drawCurve(p1.x, p1.y, mouseX, mouseY));
-        }
+    workspaceContainer.addEventListener('mousemove', (event) => {
+        const draft = transientConnection.snapshot();
+        if (!draft.active || !draft.sourcePoint) return;
+
+        const canvasRect = workspaceCanvas.getBoundingClientRect();
+        const previewPoint = {
+            x: (event.clientX - canvasRect.left) / camera.scale,
+            y: (event.clientY - canvasRect.top) / camera.scale
+        };
+
+        transientConnection.updatePreview(previewPoint);
+
+        ENGINE.notify(EngineEventPayloads.connectionPreview({
+            sourceComponentId: draft.sourceComponentId,
+            sourcePoint: draft.sourcePoint,
+            previewPoint
+        }));
     });
 
-    // Mouse up para finalizar conexão
-    window.addEventListener('mouseup', (e) => {
-        if (tempPipe) {
-            let dropTarget = e.target;
-            if (dropTarget.classList.contains('port-node') && dropTarget.dataset.type === 'in') {
-                const sourceLogic = ENGINE.componentes.find(c => c.id === dragSourcePort.dataset.compId);
-                const targetLogic = ENGINE.componentes.find(c => c.id === dropTarget.dataset.compId);
+    window.addEventListener('mouseup', (event) => {
+        const draft = transientConnection.snapshot();
+        if (!draft.active) return;
 
-                if (sourceLogic && targetLogic && sourceLogic !== targetLogic) {
-                    sourceLogic.conectarSaida(targetLogic);
-                    const finalPipe = tempPipe;
-                    const connection = {
-                        sourceEl: dragSourcePort,
-                        targetEl: dropTarget,
-                        path: finalPipe,
-                        label: null,
-                        diameterM: DEFAULT_PIPE_DIAMETER_M,
-                        roughnessMm: DEFAULT_PIPE_ROUGHNESS_MM,
-                        extraLengthM: DEFAULT_PIPE_EXTRA_LENGTH_M,
-                        perdaLocalK: DEFAULT_PIPE_MINOR_LOSS
-                    };
+        const dropTarget = event.target instanceof Element ? event.target : null;
+        const isInputPort = dropTarget?.classList.contains('port-node') && dropTarget.dataset.type === 'in';
 
-                    const labelEl = document.createElementNS("http://www.w3.org/2000/svg", "text");
-                    labelEl.setAttribute("class", "pipe-flow-label");
-                    labelEl.setAttribute("text-anchor", "middle");
-                    pipeLayer.appendChild(labelEl);
-                    connection.label = labelEl;
-                    const labelHeightEl = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        if (!isInputPort) {
+            cancelTransientConnection();
+            return;
+        }
 
-                    //Altura do grafo
-                    labelHeightEl.setAttribute("class", "pipe-flow-label");
-                    labelHeightEl.setAttribute("fill", "#e67e22");
-                    labelHeightEl.setAttribute("text-anchor", "middle");
-                    pipeLayer.appendChild(labelHeightEl);
-                    connection.labelHeight = labelHeightEl;
+        const sourceComponent = ENGINE.getComponentById(draft.sourceComponentId);
+        const targetComponent = ENGINE.getComponentById(dropTarget.dataset.compId);
+        const sourcePort = getComponentPortElement(draft.sourceComponentId, draft.sourcePortType || 'out');
 
-                    finalPipe.addEventListener('mousedown', function (ev) {
-                        ENGINE.selectConnection(connection);
-                        document.querySelectorAll('.placed-component').forEach(el => el.classList.remove('selected'));
-                        document.querySelectorAll('.pipe-line').forEach(el => {
-                            el.classList.remove('selected');
-                            // Restaurar marker para o estado anterior (cinza ou azul dependendo do fluxo)
-                            if (el.classList.contains('active')) {
-                                el.setAttribute("marker-end", "url(#arrow-active)");
-                            } else {
-                                el.setAttribute("marker-end", "url(#arrow)");
-                            }
-                        });
-                        this.classList.add('selected');
-                        this.setAttribute("marker-end", "url(#arrow-selected)");
-                        ev.stopPropagation();
-                    });
+        if (!sourceComponent || !targetComponent || !sourcePort || sourceComponent === targetComponent) {
+            cancelTransientConnection();
+            return;
+        }
 
-                    finalPipe.addEventListener('dblclick', function (ev) {
-                        sourceLogic.desconectarSaida(targetLogic);
-                        const ci = ENGINE.conexoes.findIndex(c => c === connection);
-                        
-                        if (ci !== -1) {
-                            // 1. Remove os dois textos do SVG PRIMEIRO
-                            if (ENGINE.conexoes[ci].label) ENGINE.conexoes[ci].label.remove();
-                            if (ENGINE.conexoes[ci].labelHeight) ENGINE.conexoes[ci].labelHeight.remove();
-                            
-                            // 2. Remove o cano da array UMA ÚNICA VEZ
-                            ENGINE.conexoes.splice(ci, 1);
-                        }
-                        
-                        if (ENGINE.selectedConnection === connection) ENGINE.selectComponent(null);
-                        finalPipe.remove();
-                        updatePortStates();
-                        ev.stopPropagation();
-                    });
+        const confirmedDraft = transientConnection.confirm();
+        const connection = connectionService.connect(sourceComponent, sourcePort, targetComponent, dropTarget);
 
-                    ENGINE.conexoes.push(connection);
-                    updateAllPipes();
-                    updatePortStates();
-                } else {
-                    tempPipe.remove();
-                }
-            } else {
-                tempPipe.remove();
-            }
-            tempPipe = null;
-            dragSourcePort = null;
+        if (!connection && confirmedDraft.active) {
+            ENGINE.notify(EngineEventPayloads.connectionCancelled({
+                sourceComponentId: confirmedDraft.sourceComponentId
+            }));
         }
     });
 }
