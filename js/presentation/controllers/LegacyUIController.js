@@ -575,7 +575,9 @@ function volumeTickLabel(value) {
 
 function getCurrentFluidPresetId() {
     const match = Object.entries(FLUID_PRESETS).find(([, preset]) =>
+        String(preset.nome || '').trim() === String(ENGINE.fluidoOperante.nome || '').trim() &&
         Math.abs(preset.densidade - ENGINE.fluidoOperante.densidade) < 0.5 &&
+        Math.abs(preset.temperatura - ENGINE.fluidoOperante.temperatura) < 0.05 &&
         Math.abs(preset.viscosidadeDinamicaPaS - ENGINE.fluidoOperante.viscosidadeDinamicaPaS) < 0.00001 &&
         Math.abs(preset.pressaoVaporBar - ENGINE.fluidoOperante.pressaoVaporBar) < 0.0001
     );
@@ -1124,7 +1126,7 @@ function renderDefaultProperties() {
         ENGINE.velocidade = parseFloat(e.target.value);
     });
 
-    const applyFluidFromInputs = () => {
+    const applyFluidFromInputs = ({ preferredPresetId = null } = {}) => {
         const fluidData = {};
         const inputDensity = document.getElementById('input-fluid-density');
         const inputViscosity = document.getElementById('input-fluid-viscosity');
@@ -1172,7 +1174,11 @@ function renderDefaultProperties() {
         fluidData.temperatura = temperatureInputValue('input-fluid-temp', ENGINE.fluidoOperante.temperatura);
 
         ENGINE.atualizarFluido(fluidData);
-        document.getElementById('sel-fluid-preset').value = 'custom';
+
+        const presetSelect = document.getElementById('sel-fluid-preset');
+        if (presetSelect) {
+            presetSelect.value = preferredPresetId || getCurrentFluidPresetId();
+        }
     };
 
     document.getElementById('sel-fluid-preset').addEventListener('change', (e) => {
@@ -1183,7 +1189,7 @@ function renderDefaultProperties() {
         document.getElementById('input-fluid-viscosity').value = preset.viscosidadeDinamicaPaS;
         document.getElementById('input-fluid-temp').value = toDisplayValue('temperature', preset.temperatura).toFixed(1);
         document.getElementById('input-fluid-vapor').value = formatUnitValue('pressure', preset.pressaoVaporBar, 3);
-        applyFluidFromInputs();
+        applyFluidFromInputs({ preferredPresetId: e.target.value });
     });
 
     [
