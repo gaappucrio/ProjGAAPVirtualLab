@@ -44,6 +44,10 @@ let chartUpdateTimer = 0;
 let chartedTankId = null;
 let chartedPumpId = null;
 let monitorChartMode = 'empty';
+const MAX_MONITOR_CHART_HISTORY = 2;
+const monitorChartHistory = [];
+const monitorTankSeries = new Map();
+let expandedMonitorCharts = [null, null];
 const propertyPanelContext = createPropertyPanelContextStore({
     getContentElement: () => document.getElementById('prop-content'),
     getScrollContainer: () => document.querySelector('#properties .side-panel-content'),
@@ -54,10 +58,7 @@ const propertyPanelContext = createPropertyPanelContextStore({
 export function setupUI() {
     setupLayoutController({
         onChartLayoutChange: () => {
-            if (volumeChart) {
-                volumeChart.resize();
-                refreshVolumeChartPresentation();
-            }
+            updateMonitorChartLayout();
         }
     });
     setupChart();
@@ -82,6 +83,91 @@ function destroyMonitorChart() {
 
 function isMonitorChartExpanded() {
     return document.getElementById('chart-wrapper')?.classList.contains('maximized') === true;
+}
+
+function getMonitorChartKind(component) {
+    if (component instanceof TanqueLogico) return 'tank';
+    if (component instanceof BombaLogica) return 'pump';
+    return null;
+}
+
+function getMonitorChartKindLabel(kind) {
+    if (kind === 'tank') return 'Tanque';
+    if (kind === 'pump') return 'Bomba';
+    return 'Componente';
+}
+
+function getMonitorChartComponent(entry) {
+    const component = ENGINE.componentes.find((candidate) => candidate.id === entry.id);
+    return getMonitorChartKind(component) === entry.kind ? component : null;
+}
+
+function pruneMonitorChartHistory() {
+    for (let i = monitorChartHistory.length - 1; i >= 0; i -= 1) {
+        const component = getMonitorChartComponent(monitorChartHistory[i]);
+        if (!component) {
+            monitorTankSeries.delete(monitorChartHistory[i].id);
+            monitorChartHistory.splice(i, 1);
+        }
+    }
+}
+
+function getMonitorChartEntries() {
+    pruneMonitorChartHistory();
+    return monitorChartHistory
+        .map((entry) => ({
+            ...entry,
+            component: getMonitorChartComponent(entry)
+        }))
+        .filter((entry) => entry.component);
+}
+
+function ensureTankMonitorSeries(component) {
+    let series = monitorTankSeries.get(component.id);
+    if (!series) {
+        series = resetTankMonitorSeries(component);
+    }
+    return series;
+}
+
+function resetTankMonitorSeries(component) {
+    const series = {
+        labels: [Math.round(ENGINE.elapsedTime)],
+        values: [component.volumeAtual]
+    };
+    monitorTankSeries.set(component.id, series);
+    return series;
+}
+
+function appendTankMonitorSample(component) {
+    const series = ensureTankMonitorSeries(component);
+    series.labels.push(Math.round(ENGINE.elapsedTime));
+    series.values.push(component.volumeAtual);
+    if (series.labels.length > 60) {
+        series.labels.shift();
+        series.values.shift();
+    }
+    return series;
+}
+
+function rememberMonitorChartComponent(component) {
+    const kind = getMonitorChartKind(component);
+    if (!kind) return false;
+
+    const existingIndex = monitorChartHistory.findIndex((entry) => entry.id === component.id);
+    if (existingIndex >= 0) {
+        monitorChartHistory.splice(existingIndex, 1);
+    }
+
+    monitorChartHistory.push({ id: component.id, kind });
+
+    while (monitorChartHistory.length > MAX_MONITOR_CHART_HISTORY) {
+        const removed = monitorChartHistory.shift();
+        if (removed?.kind === 'tank') monitorTankSeries.delete(removed.id);
+    }
+
+    if (kind === 'tank') ensureTankMonitorSeries(component);
+    return true;
 }
 
 function createEmptyMonitorChart() {
@@ -143,19 +229,18 @@ function createEmptyMonitorChart() {
     chartedPumpId = null;
 }
 
-function createTankMonitorChart(component) {
-    const ctx = getMonitorChartContext();
-    if (!ctx) return;
+function createTankMonitorChartInstance(ctx, component, { resetSeries = false } = {}) {
+    const series = resetSeries
+        ? resetTankMonitorSeries(component)
+        : ensureTankMonitorSeries(component);
 
-    destroyMonitorChart();
-
-    volumeChart = new Chart(ctx, {
+    return new Chart(ctx, {
         type: 'line',
         data: {
-            labels: [Math.round(ENGINE.elapsedTime)],
+            labels: [...series.labels],
             datasets: [{
                 label: `Volume: ${component.tag}`,
-                data: [component.volumeAtual],
+                data: [...series.values],
                 borderColor: '#3498db',
                 backgroundColor: 'rgba(52, 152, 219, 0.2)',
                 borderWidth: 2,
@@ -196,6 +281,14 @@ function createTankMonitorChart(component) {
             }
         }
     });
+}
+
+function createTankMonitorChart(component) {
+    const ctx = getMonitorChartContext();
+    if (!ctx) return;
+
+    destroyMonitorChart();
+    volumeChart = createTankMonitorChartInstance(ctx, component, { resetSeries: true });
 
     monitorChartMode = 'tank';
     chartedTankId = component.id;
@@ -520,10 +613,25 @@ function refreshVolumeChartPresentation() {
 
     if (monitorChartMode === 'tank' && chartedTankId) {
         const tank = ENGINE.componentes.find((component) => component.id === chartedTankId);
-        if (tank) volumeChart.options.scales.y.max = tank.capacidadeMaxima;
+        if (tank) syncTankMonitorChart(volumeChart, tank, { update: false });
     }
 
     volumeChart.update();
+}
+
+function syncTankMonitorChart(chart, component, { update = true } = {}) {
+    if (!(component instanceof TanqueLogico) || !chart) return;
+
+    const series = ensureTankMonitorSeries(component);
+    chart.data.labels = [...series.labels];
+    chart.data.datasets[0].label = `Volume: ${component.tag}`;
+    chart.data.datasets[0].data = [...series.values];
+    chart.options.scales.y.max = component.capacidadeMaxima;
+    chart.options.scales.y.title.text = `Volume (${getUnitSymbol('volume')})`;
+    chart.options.plugins.tooltip.callbacks.label = (ctx) => `Volume: ${toDisplayValue('volume', ctx.parsed.y).toFixed(1)} ${getUnitSymbol('volume')}`;
+    chart.options.scales.y.ticks.callback = (value) => volumeTickLabel(value);
+
+    if (update) chart.update();
 }
 
 function buildPumpCurveDatasets(component) {
@@ -614,14 +722,10 @@ function applyPumpMonitorChartPresentation(chart, datasets) {
     chart.data.datasets[3].pointHoverRadius = profile.pointHoverRadius;
 }
 
-function createPumpMonitorChart(component) {
-    const ctx = getMonitorChartContext();
-    if (!ctx) return;
-
+function createPumpMonitorChartInstance(ctx, component) {
     const datasets = buildPumpCurveDatasets(component);
-    destroyMonitorChart();
 
-    volumeChart = new Chart(ctx, {
+    const chart = new Chart(ctx, {
         type: 'line',
         data: {
             datasets: [
@@ -743,12 +847,51 @@ function createPumpMonitorChart(component) {
         }
     });
 
-    applyPumpMonitorChartPresentation(volumeChart, datasets);
-    volumeChart.update();
+    applyPumpMonitorChartPresentation(chart, datasets);
+    chart.update();
+    return chart;
+}
+
+function createPumpMonitorChart(component) {
+    const ctx = getMonitorChartContext();
+    if (!ctx) return;
+
+    destroyMonitorChart();
+    volumeChart = createPumpMonitorChartInstance(ctx, component);
 
     monitorChartMode = 'pump';
     chartedPumpId = component.id;
     chartedTankId = null;
+}
+
+function refreshPumpMonitorChartInstance(chart, component) {
+    if (!(component instanceof BombaLogica) || !chart) return;
+
+    const datasets = buildPumpCurveDatasets(component);
+    chart.data.datasets[0].label = 'Carga';
+    chart.data.datasets[0].data = datasets.headPoints;
+    chart.data.datasets[1].label = 'EficiÃªncia';
+    chart.data.datasets[1].data = datasets.efficiencyPoints;
+    chart.data.datasets[2].label = 'NPSHr';
+    chart.data.datasets[2].data = datasets.npshPoints;
+    chart.data.datasets[3].label = 'OperaÃ§Ã£o';
+    chart.data.datasets[3].data = [{ x: datasets.currentFlow, y: datasets.currentHead }];
+    chart.options.plugins.tooltip.callbacks.title = (ctx) => `VazÃ£o: ${Number(ctx[0].parsed.x).toFixed(2)} ${datasets.flowUnit}`;
+    chart.options.plugins.tooltip.callbacks.label = (ctx) => {
+        if (ctx.dataset.yAxisID === 'yHead') {
+            return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.pressureUnit}`;
+        }
+        if (ctx.dataset.yAxisID === 'yEff') {
+            return `EficiÃªncia: ${Number(ctx.parsed.y).toFixed(1)} %`;
+        }
+        if (ctx.dataset.yAxisID === 'yNpsh') {
+            return `NPSHr: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.lengthUnit}`;
+        }
+        return `Ponto atual: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.pressureUnit}`;
+    };
+
+    applyPumpMonitorChartPresentation(chart, datasets);
+    chart.update();
 }
 
 function refreshMonitorPumpChart(component) {
@@ -781,6 +924,202 @@ function refreshMonitorPumpChart(component) {
 
     applyPumpMonitorChartPresentation(volumeChart, datasets);
     volumeChart.update();
+}
+
+function getExpandedChartElements(index) {
+    const slot = index + 1;
+    return {
+        card: document.getElementById(`chart-compare-card-${slot}`),
+        title: document.getElementById(`chart-compare-title-${slot}`),
+        subtitle: document.getElementById(`chart-compare-subtitle-${slot}`),
+        canvas: document.getElementById(`gaap-compare-chart-${slot}`),
+        canvasWrap: document.getElementById(`chart-compare-wrap-${slot}`),
+        empty: document.getElementById(`chart-compare-empty-${slot}`)
+    };
+}
+
+function destroyExpandedMonitorCharts() {
+    expandedMonitorCharts.forEach((chart) => {
+        if (chart) chart.destroy();
+    });
+    expandedMonitorCharts = [null, null];
+}
+
+function getExpandedChartSubtitle(entry) {
+    if (entry.kind === 'tank') {
+        return `Volume (${getUnitSymbol('volume')})`;
+    }
+    if (entry.kind === 'pump') {
+        return `Curva: carga, eficiencia e NPSHr`;
+    }
+    return '';
+}
+
+function updateExpandedMonitorHeader(entries) {
+    const badge = document.getElementById('chart-max-badge');
+    const status = document.getElementById('chart-max-status');
+
+    if (badge) {
+        const count = entries.length;
+        badge.textContent = `${count} grafico${count === 1 ? '' : 's'}`;
+    }
+
+    if (!status) return;
+
+    if (entries.length >= 2) {
+        status.textContent = 'Comparando os dois ultimos componentes com grafico clicados.';
+    } else if (entries.length === 1) {
+        status.textContent = 'Clique em outro tanque ou bomba para dividir a visualizacao expandida.';
+    } else {
+        status.textContent = 'Clique em um tanque ou bomba para exibir um grafico aqui.';
+    }
+}
+
+function createExpandedMonitorChart(canvas, component) {
+    const ctx = canvas?.getContext('2d');
+    if (!ctx) return null;
+
+    if (component instanceof TanqueLogico) {
+        return createTankMonitorChartInstance(ctx, component);
+    }
+
+    if (component instanceof BombaLogica) {
+        return createPumpMonitorChartInstance(ctx, component);
+    }
+
+    return null;
+}
+
+function renderExpandedMonitorCharts() {
+    const expanded = isMonitorChartExpanded();
+    const compactStage = document.getElementById('chart-compact-stage');
+    const compareGrid = document.getElementById('chart-compare-grid');
+
+    if (!expanded) {
+        if (compactStage) compactStage.hidden = false;
+        if (compareGrid) compareGrid.hidden = true;
+        destroyExpandedMonitorCharts();
+        return;
+    }
+
+    const entries = getMonitorChartEntries();
+    updateExpandedMonitorHeader(entries);
+
+    if (compactStage) compactStage.hidden = true;
+    if (compareGrid) compareGrid.hidden = false;
+
+    destroyExpandedMonitorCharts();
+
+    for (let index = 0; index < MAX_MONITOR_CHART_HISTORY; index += 1) {
+        const elements = getExpandedChartElements(index);
+        const entry = entries[index];
+
+        if (!elements.card) continue;
+
+        if (!entry) {
+            elements.card.hidden = index > 0;
+            if (elements.title) elements.title.textContent = 'Aguardando grafico';
+            if (elements.subtitle) elements.subtitle.textContent = '';
+            if (elements.canvasWrap) elements.canvasWrap.hidden = true;
+            if (elements.empty) {
+                elements.empty.hidden = false;
+                elements.empty.textContent = index === 0
+                    ? 'Clique em um tanque ou bomba para exibir um grafico.'
+                    : 'Clique em outro tanque ou bomba para comparar.';
+            }
+            continue;
+        }
+
+        elements.card.hidden = false;
+        if (elements.title) elements.title.textContent = entry.component.tag || getMonitorChartKindLabel(entry.kind);
+        if (elements.subtitle) elements.subtitle.textContent = getExpandedChartSubtitle(entry);
+        if (elements.canvasWrap) elements.canvasWrap.hidden = false;
+        if (elements.empty) elements.empty.hidden = true;
+        if (elements.canvas) {
+            elements.canvas.dataset.monitorEntryId = String(entry.id);
+            elements.canvas.dataset.monitorEntryKind = entry.kind;
+        }
+
+        expandedMonitorCharts[index] = createExpandedMonitorChart(elements.canvas, entry.component);
+    }
+
+    requestAnimationFrame(() => {
+        expandedMonitorCharts.forEach((chart) => chart?.resize());
+    });
+}
+
+function refreshExpandedMonitorCharts() {
+    if (!isMonitorChartExpanded()) return;
+
+    const entries = getMonitorChartEntries();
+    const activeCharts = expandedMonitorCharts.filter(Boolean).length;
+    const shouldRebuild = entries.length !== activeCharts || entries.some((entry, index) => {
+        const elements = getExpandedChartElements(index);
+        return !expandedMonitorCharts[index]
+            || elements.canvas?.dataset.monitorEntryId !== String(entry.id)
+            || elements.canvas?.dataset.monitorEntryKind !== entry.kind;
+    });
+
+    if (shouldRebuild) {
+        renderExpandedMonitorCharts();
+        return;
+    }
+
+    updateExpandedMonitorHeader(entries);
+
+    entries.forEach((entry, index) => {
+        const chart = expandedMonitorCharts[index];
+        const elements = getExpandedChartElements(index);
+
+        if (elements.title) elements.title.textContent = entry.component.tag || getMonitorChartKindLabel(entry.kind);
+        if (elements.subtitle) elements.subtitle.textContent = getExpandedChartSubtitle(entry);
+
+        if (entry.component instanceof TanqueLogico) {
+            syncTankMonitorChart(chart, entry.component);
+        } else if (entry.component instanceof BombaLogica) {
+            refreshPumpMonitorChartInstance(chart, entry.component);
+        }
+    });
+}
+
+function updateMonitorChartLayout() {
+    renderExpandedMonitorCharts();
+
+    requestAnimationFrame(() => {
+        if (volumeChart) {
+            volumeChart.resize();
+            refreshVolumeChartPresentation();
+        }
+        refreshExpandedMonitorCharts();
+    });
+}
+
+function updateTrackedTankMonitorSeries() {
+    const tankIds = new Set();
+
+    if (monitorChartMode === 'tank' && chartedTankId) {
+        tankIds.add(chartedTankId);
+    }
+
+    getMonitorChartEntries().forEach((entry) => {
+        if (entry.kind === 'tank') tankIds.add(entry.id);
+    });
+
+    tankIds.forEach((tankId) => {
+        const tank = ENGINE.componentes.find((component) => component.id === tankId);
+        if (tank instanceof TanqueLogico) {
+            appendTankMonitorSample(tank);
+        }
+    });
+}
+
+function refreshCompactTankMonitorChart() {
+    if (monitorChartMode !== 'tank' || !chartedTankId || !volumeChart) return;
+
+    const tank = ENGINE.componentes.find((component) => component.id === chartedTankId);
+    if (tank instanceof TanqueLogico) {
+        syncTankMonitorChart(volumeChart, tank);
+    }
 }
 
 function renderPumpCurveChart(component) {
@@ -1312,18 +1651,22 @@ function renderComponentProperties(component) {
 
 function refreshChartSelection(component, connection) {
     if (component instanceof TanqueLogico) {
+        rememberMonitorChartComponent(component);
         if (monitorChartMode !== 'tank' || chartedTankId !== component.id) {
             createTankMonitorChart(component);
         }
+        if (isMonitorChartExpanded()) renderExpandedMonitorCharts();
         return;
     }
 
     if (component instanceof BombaLogica) {
+        rememberMonitorChartComponent(component);
         if (monitorChartMode !== 'pump' || chartedPumpId !== component.id) {
             createPumpMonitorChart(component);
         } else {
             refreshMonitorPumpChart(component);
         }
+        if (isMonitorChartExpanded()) renderExpandedMonitorCharts();
         return;
     }
 
@@ -1331,6 +1674,7 @@ function refreshChartSelection(component, connection) {
         if (monitorChartMode !== 'empty') {
             createEmptyMonitorChart();
         }
+        if (isMonitorChartExpanded()) refreshExpandedMonitorCharts();
     }
 }
 
@@ -1462,18 +1806,9 @@ function setupSubscriptions() {
             chartUpdateTimer += dados.dt;
             if (chartUpdateTimer >= 1.0) {
                 chartUpdateTimer = 0;
-                if (monitorChartMode === 'tank' && chartedTankId) {
-                    const tank = ENGINE.componentes.find(c => c.id === chartedTankId);
-                    if (tank) {
-                        volumeChart.data.labels.push(Math.round(ENGINE.elapsedTime));
-                        volumeChart.data.datasets[0].data.push(tank.volumeAtual);
-                        if (volumeChart.data.labels.length > 60) {
-                            volumeChart.data.labels.shift();
-                            volumeChart.data.datasets[0].data.shift();
-                        }
-                        volumeChart.update();
-                    }
-                }
+                updateTrackedTankMonitorSeries();
+                refreshCompactTankMonitorChart();
+                refreshExpandedMonitorCharts();
             }
         }
     });

@@ -945,6 +945,11 @@
       display: none;
   }
 
+  .chart-compare-grid[hidden],
+  .chart-compact-stage[hidden] {
+      display: none !important;
+  }
+
   /* Quebra para coluna em telas menores para não esmagar os gráficos */
   @media (max-width: 960px) {
       .chart-container.maximized .chart-compare-grid {
