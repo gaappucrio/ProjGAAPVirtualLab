@@ -1,6 +1,6 @@
 // =============================================
 // CONFIG: Constantes Compartilhadas
-// Ficheiro: js/Config.js
+// Arquivo: js/Config.js
 // =============================================
 
 /* Tamanho da grade de fundo para alinhamento dos componentes */

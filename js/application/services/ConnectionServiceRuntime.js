@@ -1,4 +1,4 @@
-import { ENGINE } from '../../MotorFisico.js';
+import { ENGINE } from '../engine/SimulationEngine.js';
 import { ConnectionService } from './ConnectionService.js';
 import { createConnectionEndpointDefinition } from '../../infrastructure/rendering/ConnectionVisualRegistry.js';
 

@@ -13,7 +13,7 @@ import {
     lpsToM3s,
     areaFromDiameter
 } from './Units.js';
-import { clamp } from '../componentes/BaseComponente.js';
+import { clamp } from '../domain/components/BaseComponente.js';
 import { calculateConnectionGeometry } from '../domain/services/PortPositionCalculator.js';
 
 const PIXELS_PER_METER = 80;

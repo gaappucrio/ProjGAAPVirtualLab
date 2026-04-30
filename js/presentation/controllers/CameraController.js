@@ -1,6 +1,6 @@
 // ========================================
-// CONTROLLER: Navegação Espacial (Câmera)
-// Ficheiro: js/controllers/CameraController.js
+// CONTROLADOR: Navegação espacial (câmera)
+// Arquivo: js/presentation/controllers/CameraController.js
 // ========================================
 
 export const camera = {

@@ -1,0 +1,44 @@
+import {
+    formatUnitValue,
+    getUnitSymbol,
+    toBaseValue,
+    toDisplayValue
+} from '../../utils/Units.js';
+
+export function setFieldValue(id, value, category = null, digits = 2, suffix = '') {
+    const element = document.getElementById(id);
+    if (!element) return;
+    element.value = category ? `${formatUnitValue(category, value, digits)}${suffix}` : value;
+}
+
+export function displayUnitValue(category, baseValue, digits = null) {
+    return formatUnitValue(category, baseValue, digits);
+}
+
+export function displayEditableUnitValue(category, baseValue, digits = 3) {
+    const displayValue = toDisplayValue(category, baseValue);
+    if (!Number.isFinite(displayValue)) return '';
+    return Number(displayValue.toFixed(digits));
+}
+
+export function displayBound(category, baseValue, digits = 3) {
+    return Number(toDisplayValue(category, baseValue).toFixed(digits));
+}
+
+export function displayStep(category, baseStep, digits = 6) {
+    return Math.max(Number(toDisplayValue(category, baseStep).toFixed(digits)), Number.EPSILON);
+}
+
+export function inputBaseValue(category, id, fallback) {
+    const value = toBaseValue(category, parseFloat(document.getElementById(id).value));
+    return Number.isFinite(value) ? value : fallback;
+}
+
+export function rawBaseValue(category, rawValue, fallback = NaN) {
+    const value = toBaseValue(category, parseFloat(rawValue));
+    return Number.isFinite(value) ? value : fallback;
+}
+
+export function formatMeasuredValue(category, baseValue, digits = 2) {
+    return `${formatUnitValue(category, baseValue, digits)} ${getUnitSymbol(category)}`;
+}

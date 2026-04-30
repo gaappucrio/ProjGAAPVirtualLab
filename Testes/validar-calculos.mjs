@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { ENGINE } from '../js/MotorFisico.js';
-import { BombaLogica } from '../js/componentes/BombaLogica.js';
-import { FonteLogica } from '../js/componentes/FonteLogica.js';
-import { TanqueLogico } from '../js/componentes/TanqueLogico.js';
-import { ValvulaLogica } from '../js/componentes/ValvulaLogica.js';
+import { ENGINE } from '../js/application/engine/SimulationEngine.js';
+import { BombaLogica } from '../js/domain/components/BombaLogica.js';
+import { FonteLogica } from '../js/domain/components/FonteLogica.js';
+import { TanqueLogico } from '../js/domain/components/TanqueLogico.js';
+import { ValvulaLogica } from '../js/domain/components/ValvulaLogica.js';
 import { pressureFromHeadBar } from '../js/utils/Units.js';
 
 function approx(actual, expected, tolerance, label) {
