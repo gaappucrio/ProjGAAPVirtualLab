@@ -117,50 +117,103 @@ js/utils/FlowSolver.js (110 linhas, NOVO)
 │
 VERTESTE/PerformanceBenchmark.html (300+ linhas, NOVO)
 └─ Teste interativo com 50+ componentes
+---
+
+## ✅ Fase 5: Refatoração para Arquitetura Limpa (Clean Architecture)
+
+### Estrutura Modular Implementada
+**Pastas Principais:**
+- `application/engine/`: Lógica central de simulação (SimulationEngine.js).
+- `domain/components/`: Componentes lógicos (BombaLogica.js, TanqueLogico.js, etc.).
+- `domain/models/`: Modelos de dados (ConnectionModel.js).
+- `domain/services/`: Serviços de domínio (HydraulicNetworkSolver.js, PortPositionCalculator.js).
+- `domain/context/`: Contexto de simulação (SimulationContext.js).
+- `infrastructure/charts/`: Adaptadores para gráficos (PumpChartAdapter.js, TankChartAdapter.js).
+- `infrastructure/dom/`: Fábricas visuais (ComponentVisualFactory.js, ComponentVisualRegistry.js).
+- `infrastructure/rendering/`: Renderização (PipeRenderer.js, ConnectionVisualRegistry.js).
+- `presentation/controllers/`: Controladores de UI (CameraController.js, DragDropController.js, etc.).
+- `presentation/monitoring/`: Monitoramento (MonitorSlotHistory.js).
+- `presentation/properties/`: Apresentadores de propriedades (ComponentPropertiesPresenter.js, etc.).
+- `presentation/registry/`: Registros (ComponentDefinitionRegistry.js).
+
+**Re-exports Simplificados:**
+- `js/MotorFisico.js`: Agora re-export de SimulationEngine.js (19 linhas).
+- `js/RegistroComponentes.js`: Re-export de ComponentDefinitionRegistry.js (6 linhas).
+
+**Benefícios:**
+- Separação clara de responsabilidades (domínio, infraestrutura, apresentação).
+- Facilita testes unitários e manutenção.
+- Redução de acoplamento; arquivos principais reduzidos a re-exports.
+
+**Mudanças Recentes (Commits):**
+- Integração de gráficos simultâneos.
+- Adição de TankComponentSpec.
+- Refatoração de imports visuais de conexões.
+- Correções em fluidos e gráficos.
+
+---
+
+## 📊 Comparação de Estrutura Atualizada
+
+### Antes (Pós-Fase 4):
+```
+MotorFisico.js (850+ linhas)
+├─ 13 importações
+js/utils/PipeHydraulics.js (145 linhas)
+js/utils/FlowSolver.js (110 linhas)
+VERTESTE/PerformanceBenchmark.html (300+ linhas)
+```
+
+### Depois (Pós-Fase 5):
+```
+application/
+├─ engine/SimulationEngine.js
+domain/
+├─ components/ (BombaLogica.js, etc.)
+├─ models/ConnectionModel.js
+├─ services/HydraulicNetworkSolver.js
+├─ context/SimulationContext.js
+infrastructure/
+├─ charts/ (PumpChartAdapter.js, etc.)
+├─ dom/ComponentVisualFactory.js
+├─ rendering/PipeRenderer.js
+presentation/
+├─ controllers/ (CameraController.js, etc.)
+├─ monitoring/MonitorSlotHistory.js
+├─ properties/ComponentPropertiesPresenter.js
+├─ registry/ComponentDefinitionRegistry.js
+js/
+├─ MotorFisico.js (re-export, 19 linhas)
+├─ RegistroComponentes.js (re-export, 6 linhas)
+js/utils/
+├─ PipeHydraulics.js
+├─ FlowSolver.js
+Testes/VERTESTE/PerformanceBenchmark.html
 ```
 
 ---
 
-## 🎯 Resultados
+## 🎯 Resultados Atualizados
 
-| Métrica | Antes | Depois | Melhoria |
-|---------|-------|--------|----------|
-| Import statements em MotorFisico | 24 | 13 | ✅ 45% redução |
-| Linhas de MotorFisico | 900+ | 850+ | ✅ 6% redução |
-| Código reutilizável | 0 | 150+ | ✅ 100% novo |
-| Teste de desempenho | ❌ Não | ✅ Sim | ✅ Novo |
-| Documentação hidráulica | Inline | Modular | ✅ Melhor |
-
----
-
-## 🔧 Como Usar o Benchmark
-
-1. Abra `VERTESTE/PerformanceBenchmark.html` no navegador
-2. Clique em **▶️ Iniciar** para criar cenário e iniciar simulação
-3. Observe métricas em tempo real no painel direito
-4. Clique em **⏹️ Parar** para finalizar e gerar relatório
-5. Abra console (F12) para ver relatório detalhado
+| Métrica | Antes (Inicial) | Pós-Fase 4 | Pós-Fase 5 | Melhoria Total |
+|---------|-----------------|------------|------------|---------------|
+| Import statements em MotorFisico | 24 | 13 | Re-export | ✅ 100% simplificado |
+| Linhas de MotorFisico | 900+ | 850+ | 19 | ✅ 98% redução |
+| Código reutilizável | 0 | 150+ | Modular | ✅ Arquitetura limpa |
+| Teste de desempenho | ❌ Não | ✅ Sim | ✅ Mantido | ✅ Estável |
+| Separação de camadas | ❌ Não | Parcial | ✅ Completa | ✅ Novo |
 
 ---
 
-## 📝 Próximos Passos (Opcional)
+## 📝 Próximos Passos (Atualizados)
 
-- [ ] Integrar FlowSolver.resolvePushBasedNetwork() em MotorFisico.js
-- [ ] Criar testes unitários para PipeHydraulics
-- [ ] Refatorar RegistroComponentes.js por tipo de componente (se >1200 linhas)
-- [ ] Profiler contínuo: ativar DEBUG_PHYSICS em desenvolvimento
-- [ ] Análise de gargalo: executar benchmark com 100+ componentes
-
----
-
-## 🔗 Dependências Importadas
-
-- js/componentes/BaseComponente.js (constantes, tipos base)
-- js/utils/Units.js (formatação)
-- js/utils/PerformanceProfiler.js (métricas)
-- Nenhuma dependência externa
+- [ ] Integrar FlowSolver.resolvePushBasedNetwork() em SimulationEngine.js (se compatível).
+- [ ] Criar testes unitários para módulos em domain/ e infrastructure/.
+- [ ] Expandir benchmark para 100+ componentes.
+- [ ] Documentar dependências entre camadas.
+- [ ] Ativar profiler contínuo (DEBUG_PHYSICS) em desenvolvimento.
 
 ---
 
-**Data:** 2024-11-21  
-**Status:** ✅ Refatoração Completa - Pronto para Benchmark
+**Data:** 2024-11-21 (Refatoração Inicial) / 2026-04-30 (Atualização para Arquitetura Limpa)  
+**Status:** ✅ Refatoração Estendida - Arquitetura Modular Completa

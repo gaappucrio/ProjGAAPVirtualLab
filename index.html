@@ -102,12 +102,48 @@
                 </h3>
 
                 <div class="chart-container" id="chart-wrapper">
-                    <div id="chart-max-header" style="display: none; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
-                        <h3 style="margin: 0; color: #2c3e50; font-size: 16px;">Monitoramento Detalhado</h3>
+                    <div id="chart-max-header" class="chart-max-header" style="display: none;">
+                        <div class="chart-max-header-copy">
+                            <div class="chart-max-title-row">
+                                <h3 style="margin: 0; color: #2c3e50; font-size: 16px;">Monitoramento Detalhado</h3>
+                                <span id="chart-max-badge" class="chart-max-badge">1 grafico</span>
+                            </div>
+                            <p id="chart-max-status" class="chart-max-status">Clique em outro tanque ou bomba para comparar os dois ultimos graficos.</p>
+                        </div>
                         <button id="btn-close-max-chart" class="gaap-btn danger" style="padding: 5px 15px; font-size: 12px; margin: 0;">&#10006; Fechar Gráfico</button>
                     </div>
-                    <div style="flex: 1; position: relative; min-height: 0; height: 100%;">
+                    <div id="chart-compact-stage" class="chart-compact-stage">
                         <canvas id="gaap-volume-chart"></canvas>
+                    </div>
+                    <div id="chart-compare-grid" class="chart-compare-grid" hidden>
+                        <div class="chart-compare-card" id="chart-compare-card-1">
+                            <div class="chart-compare-card-header">
+                                <div class="chart-compare-card-copy">
+                                    <h4 id="chart-compare-title-1">Grafico 1</h4>
+                                    <p id="chart-compare-subtitle-1"></p>
+                                </div>
+                            </div>
+                            <div class="chart-compare-card-body">
+                                <div class="chart-compare-canvas-wrap" id="chart-compare-wrap-1">
+                                    <canvas id="gaap-compare-chart-1"></canvas>
+                                </div>
+                                <div class="chart-compare-empty" id="chart-compare-empty-1" hidden>Nenhum componente com grafico selecionado.</div>
+                            </div>
+                        </div>
+                        <div class="chart-compare-card" id="chart-compare-card-2" hidden>
+                            <div class="chart-compare-card-header">
+                                <div class="chart-compare-card-copy">
+                                    <h4 id="chart-compare-title-2">Grafico 2</h4>
+                                    <p id="chart-compare-subtitle-2"></p>
+                                </div>
+                            </div>
+                            <div class="chart-compare-card-body">
+                                <div class="chart-compare-canvas-wrap" id="chart-compare-wrap-2">
+                                    <canvas id="gaap-compare-chart-2"></canvas>
+                                </div>
+                                <div class="chart-compare-empty" id="chart-compare-empty-2" hidden>Clique em outro tanque ou bomba para comparar.</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

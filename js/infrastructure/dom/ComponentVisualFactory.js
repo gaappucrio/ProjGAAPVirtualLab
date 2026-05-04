@@ -1,10 +1,10 @@
 // ===========================================
-// CONTROLLER: Fábrica de Equipamentos Visuais
-// Ficheiro: js/FabricaEquipamentos.js
+// INFRAESTRUTURA: Fábrica visual de equipamentos
+// Arquivo: js/infrastructure/dom/ComponentVisualFactory.js
 // ===========================================
 
-import { ENGINE } from '../../MotorFisico.js';
-import { REGISTRO_COMPONENTES } from '../../RegistroComponentes.js';
+import { ENGINE } from '../../application/engine/SimulationEngine.js';
+import { REGISTRO_COMPONENTES } from '../../presentation/registry/ComponentDefinitionRegistry.js';
 import { registerComponentVisual } from './ComponentVisualRegistry.js';
 export { updatePortStates } from '../../utils/PortStateManager.js';
 

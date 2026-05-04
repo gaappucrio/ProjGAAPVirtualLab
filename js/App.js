@@ -1,6 +1,6 @@
 // =============================================
-// CONTROLLER MAIN: Orquestrador da Aplicacao
-// Ficheiro: js/App.js
+// COMPOSITION ROOT: Orquestrador da aplicação
+// Arquivo: js/App.js
 // =============================================
 
 import {
@@ -9,12 +9,12 @@ import {
     setComponentVisualPositionResolver,
     setConnectionVisualUpdater,
     setPortStateUpdater
-} from './MotorFisico.js';
-import { updatePortStates } from './FabricaEquipamentos.js';
-import { setupUI } from './controllers/UIController.js';
-import { setupCameraControl } from './controllers/CameraController.js';
-import { setupPipeControl, updateAllPipes, updateConnectionVisualStates } from './controllers/PipeController.js';
-import { setupDragDrop } from './controllers/DragDropController.js';
+} from './application/engine/SimulationEngine.js';
+import { updatePortStates } from './utils/PortStateManager.js';
+import { setupPresentation as setupUI } from './presentation/controllers/PresentationController.js';
+import { setupCameraControl } from './presentation/controllers/CameraController.js';
+import { setupPipeControl, updateAllPipes, updateConnectionVisualStates } from './presentation/controllers/PipeController.js';
+import { setupDragDrop } from './presentation/controllers/DragDropController.js';
 import { setupToolbar } from './presentation/controllers/ToolbarController.js';
 import { connectionService } from './application/services/ConnectionServiceRuntime.js';
 import { findConnectionByPath } from './infrastructure/rendering/ConnectionVisualRegistry.js';

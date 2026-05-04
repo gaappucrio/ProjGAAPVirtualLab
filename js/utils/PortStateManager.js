@@ -1,9 +1,9 @@
 // ===================================
 // UTILS: Gerenciador de Estado de Portas
-// Ficheiro: js/utils/PortStateManager.js
+// Arquivo: js/utils/PortStateManager.js
 // ===================================
 
-import { ENGINE } from '../MotorFisico.js';
+import { ENGINE } from '../application/engine/SimulationEngine.js';
 import { getComponentPortElement } from '../infrastructure/dom/ComponentVisualRegistry.js';
 
 /**

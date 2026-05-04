@@ -1,4 +1,4 @@
-import { ENGINE } from '../../MotorFisico.js';
+import { ENGINE } from '../../application/engine/SimulationEngine.js';
 import { ENGINE_EVENTS } from '../../application/events/EventTypes.js';
 
 export function setupToolbar({ onClearCanvas, onTopologyVisualChange } = {}) {

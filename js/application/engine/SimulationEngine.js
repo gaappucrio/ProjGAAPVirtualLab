@@ -1,6 +1,6 @@
 // ==================================
 // APPLICATION: Motor de Simulacao
-// Ficheiro: js/application/engine/SimulationEngine.js
+// Arquivo: js/application/engine/SimulationEngine.js
 // ==================================
 
 import {
@@ -68,7 +68,7 @@ let componentVisualPositionResolver = (component) => ({
 let unregisterComponentVisualHandler = null;
 let clearComponentVisualRegistryHandler = null;
 
-// Rastreamento de estabilidade num�rica do solver
+// Rastreamento de estabilidade numérica do solver
 
 const safeViscosity = (value) => Math.max(0.00001, value || DEFAULT_FLUID_VISCOSITY_PA_S);
 

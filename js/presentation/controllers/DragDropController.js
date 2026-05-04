@@ -1,14 +1,14 @@
 // =========================================
-// CONTROLLER: Drag & Drop de Componentes
-// Ficheiro: js/controllers/DragDropController.js
+// CONTROLADOR: Arrastar e soltar componentes
+// Arquivo: js/presentation/controllers/DragDropController.js
 // =========================================
 
-import { REGISTRO_COMPONENTES } from '../RegistroComponentes.js';
-import { FabricaDeEquipamentos, updatePortStates } from '../FabricaEquipamentos.js';
-import { ComponentEventPayloads } from '../application/events/EventPayloads.js';
+import { FabricaDeEquipamentos, updatePortStates } from '../../infrastructure/dom/ComponentVisualFactory.js';
+import { REGISTRO_COMPONENTES } from '../registry/ComponentDefinitionRegistry.js';
+import { ComponentEventPayloads } from '../../application/events/EventPayloads.js';
 import { camera } from './CameraController.js';
 import { updateAllPipes } from './PipeController.js';
-import { GRID_SIZE } from '../Config.js';
+import { GRID_SIZE } from '../../Config.js';
 
 export function setupDragDrop() {
     const workspaceContainer = document.getElementById('workspace');

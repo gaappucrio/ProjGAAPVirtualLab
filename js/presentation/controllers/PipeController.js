@@ -1,23 +1,23 @@
 // =========================================
-// CONTROLLER: Motor Vetorial de Tubos
-// Ficheiro: js/controllers/PipeController.js
+// CONTROLADOR: Interação visual de tubos
+// Arquivo: js/presentation/controllers/PipeController.js
 // =========================================
 
-import { ENGINE, EPSILON_FLOW } from '../MotorFisico.js';
-import { connectionService } from '../application/services/ConnectionServiceRuntime.js';
-import { EngineEventPayloads } from '../application/events/EventPayloads.js';
-import { ENGINE_EVENTS } from '../application/events/EventTypes.js';
-import { TransientConnectionStore } from '../application/stores/TransientConnectionStore.js';
+import { ENGINE, EPSILON_FLOW } from '../../application/engine/SimulationEngine.js';
+import { connectionService } from '../../application/services/ConnectionServiceRuntime.js';
+import { EngineEventPayloads } from '../../application/events/EventPayloads.js';
+import { ENGINE_EVENTS } from '../../application/events/EventTypes.js';
+import { TransientConnectionStore } from '../../application/stores/TransientConnectionStore.js';
 import { camera } from './CameraController.js';
-import { formatUnitValue, getUnitSymbol } from '../utils/Units.js';
-import { updatePortStates } from '../utils/PortStateManager.js';
+import { formatUnitValue, getUnitSymbol } from '../../utils/Units.js';
+import { updatePortStates } from '../../utils/PortStateManager.js';
 import {
     getComponentPortElement
-} from '../infrastructure/dom/ComponentVisualRegistry.js';
+} from '../../infrastructure/dom/ComponentVisualRegistry.js';
 import {
     createConnectionEndpointDefinition,
     getConnectionVisual
-} from '../infrastructure/rendering/ConnectionVisualRegistry.js';
+} from '../../infrastructure/rendering/ConnectionVisualRegistry.js';
 import {
     createConnectionVisual,
     createTransientConnectionVisual,
@@ -27,7 +27,7 @@ import {
     updateConnectionFlowVisual,
     updateConnectionVisualLayout,
     updateTransientConnectionVisual
-} from '../infrastructure/rendering/PipeRenderer.js';
+} from '../../infrastructure/rendering/PipeRenderer.js';
 
 const pipeLayer = document.getElementById('pipe-layer');
 const transientConnection = new TransientConnectionStore();

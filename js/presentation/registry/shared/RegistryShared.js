@@ -1,11 +1,11 @@
-import { ENGINE } from '../../../MotorFisico.js';
+import { ENGINE } from '../../../application/engine/SimulationEngine.js';
 import { ComponentEventPayloads, EngineEventPayloads } from '../../../application/events/EventPayloads.js';
 import { COMPONENT_EVENTS, ENGINE_EVENTS } from '../../../application/events/EventTypes.js';
-import { BombaLogica } from '../../../componentes/BombaLogica.js';
-import { DrenoLogico } from '../../../componentes/DrenoLogico.js';
-import { FonteLogica } from '../../../componentes/FonteLogica.js';
-import { TanqueLogico } from '../../../componentes/TanqueLogico.js';
-import { ValvulaLogica } from '../../../componentes/ValvulaLogica.js';
+import { BombaLogica } from '../../../domain/components/BombaLogica.js';
+import { DrenoLogico } from '../../../domain/components/DrenoLogico.js';
+import { FonteLogica } from '../../../domain/components/FonteLogica.js';
+import { TanqueLogico } from '../../../domain/components/TanqueLogico.js';
+import { ValvulaLogica } from '../../../domain/components/ValvulaLogica.js';
 import { colorPort, labelStyle } from '../../../Config.js';
 import { InputValidator, clearInputError, showInputError } from '../../../utils/InputValidator.js';
 import { renderPropertyTabs } from '../../../utils/PropertyTabs.js';
