@@ -1,22 +1,16 @@
-import { ENGINE } from '../../../application/engine/SimulationEngine.js';
-import { ComponentEventPayloads, EngineEventPayloads } from '../../../application/events/EventPayloads.js';
-import { COMPONENT_EVENTS, ENGINE_EVENTS } from '../../../application/events/EventTypes.js';
-import { BombaLogica } from '../../../domain/components/BombaLogica.js';
-import { DrenoLogico } from '../../../domain/components/DrenoLogico.js';
-import { FonteLogica } from '../../../domain/components/FonteLogica.js';
-import { TanqueLogico } from '../../../domain/components/TanqueLogico.js';
-import { ValvulaLogica } from '../../../domain/components/ValvulaLogica.js';
-import { colorPort, labelStyle } from '../../../Config.js';
-import { InputValidator, clearInputError, showInputError } from '../../../utils/InputValidator.js';
-import { renderPropertyTabs } from '../../../utils/PropertyTabs.js';
-import { TOOLTIPS } from '../../../utils/Tooltips.js';
+import { ENGINE } from '../../application/engine/SimulationEngine.js';
+import { ComponentEventPayloads, EngineEventPayloads } from '../../application/events/EventPayloads.js';
+import { COMPONENT_EVENTS, ENGINE_EVENTS } from '../../application/events/EventTypes.js';
+import { InputValidator, clearInputError, showInputError } from '../validation/InputValidator.js';
+import { renderPropertyTabs } from '../../utils/PropertyTabs.js';
+import { TOOLTIPS } from '../../utils/Tooltips.js';
 import {
     formatUnitValue,
     getUnitSymbol,
     subscribeUnitPreferences,
     toBaseValue,
     toDisplayValue
-} from '../../../utils/Units.js';
+} from '../../utils/Units.js';
 
 export {
     ENGINE,
@@ -24,52 +18,16 @@ export {
     EngineEventPayloads,
     COMPONENT_EVENTS,
     ENGINE_EVENTS,
-    BombaLogica,
-    DrenoLogico,
-    FonteLogica,
-    TanqueLogico,
-    ValvulaLogica,
     InputValidator,
     clearInputError,
     showInputError,
     renderPropertyTabs,
     subscribeUnitPreferences,
     getUnitSymbol,
-    labelStyle,
     TOOLTIPS
 };
 
 export const TOOLTIP = TOOLTIPS.componentes;
-
-export const makePort = (id, cx, cy, inOut) => {
-    const isInput = inOut === 'in';
-    const textX = isInput ? cx - 10 : cx + 10;
-    const anchor = isInput ? 'end' : 'start';
-
-    return `
-        <circle class="port-node unconnected" data-type="${inOut}" data-comp-id="${id}" cx="${cx}" cy="${cy}" r="5" fill="#fff" stroke="${colorPort}" stroke-width="2"/>
-        <text id="elev-${inOut}-${id}" x="${textX}" y="${cy + 3}" font-size="10" font-family="monospace" fill="#e67e22" font-weight="bold" text-anchor="${anchor}" opacity="0" data-cy="${cy}" pointer-events="none"></text>
-    `;
-};
-
-export function createElevationUpdater({ visual, logica, id, offsetY }) {
-    return () => {
-        ['in', 'out'].forEach((tipo) => {
-            const el = visual.querySelector(`#elev-${tipo}-${id}`);
-            if (!el) return;
-
-            if (ENGINE.usarAlturaRelativa) {
-                const cy = parseFloat(el.getAttribute('data-cy'));
-                const logicalY = logica.y + offsetY + cy;
-                const elevM = (logicalY / 80).toFixed(2);
-                el.textContent = `Elev.: ${elevM} m`;
-                el.setAttribute('opacity', '1');
-            } else {
-                el.setAttribute('opacity', '0');
-            }
-        });
-    };
-}
 
 const escapeAttr = (value) => String(value)
     .replace(/&/g, '&amp;')

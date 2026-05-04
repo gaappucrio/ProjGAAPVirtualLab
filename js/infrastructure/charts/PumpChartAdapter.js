@@ -1,5 +1,8 @@
 import { getUnitSymbol, toDisplayValue } from '../../utils/Units.js';
 
+const DEFAULT_PRESSURE_AXIS_MAX_BAR = 10;
+const DEFAULT_NPSH_AXIS_MAX_M = 5;
+
 export function buildPumpCurveDatasets(component) {
     const qMax = Math.max(1, component.vazaoNominal);
     const pressureUnit = getUnitSymbol('pressure');
@@ -25,7 +28,9 @@ export function buildPumpCurveDatasets(component) {
         currentHead: toDisplayValue('pressure', component.cargaGeradaBar || 0),
         flowUnit,
         pressureUnit,
-        lengthUnit
+        lengthUnit,
+        pressureAxisMax: toDisplayValue('pressure', Math.max(DEFAULT_PRESSURE_AXIS_MAX_BAR, component.pressaoMaxima || 0)),
+        npshAxisMax: toDisplayValue('length', Math.max(DEFAULT_NPSH_AXIS_MAX_M, component.npshRequeridoM || 0))
     };
 }
 
@@ -69,6 +74,8 @@ export function applyPumpChartPresentation(chart, datasets, { expanded = false }
     chart.options.scales.yHead.title.font = { size: profile.titleFontSize };
     chart.options.scales.yHead.ticks.font = { size: profile.tickFontSize };
     chart.options.scales.yHead.ticks.maxTicksLimit = profile.maxTicksY;
+    chart.options.scales.yHead.min = 0;
+    chart.options.scales.yHead.suggestedMax = datasets.pressureAxisMax;
 
     chart.options.scales.yEff.title.display = profile.showSecondaryTitles;
     chart.options.scales.yEff.title.text = 'Eficiência (%)';
@@ -81,6 +88,8 @@ export function applyPumpChartPresentation(chart, datasets, { expanded = false }
     chart.options.scales.yNpsh.title.font = { size: profile.titleFontSize };
     chart.options.scales.yNpsh.ticks.font = { size: profile.secondaryTickFontSize };
     chart.options.scales.yNpsh.ticks.maxTicksLimit = profile.maxTicksY;
+    chart.options.scales.yNpsh.min = 0;
+    chart.options.scales.yNpsh.suggestedMax = datasets.npshAxisMax;
 
     chart.data.datasets[3].pointRadius = profile.pointRadius;
     chart.data.datasets[3].pointHoverRadius = profile.pointHoverRadius;
@@ -212,7 +221,7 @@ export function createPumpChart(ctx, component, { expanded = false } = {}) {
     });
 
     applyPumpChartPresentation(chart, datasets, { expanded });
-    chart.update();
+    chart.update('none');
     return chart;
 }
 
@@ -243,5 +252,5 @@ export function refreshPumpChart(chart, component, { expanded = false } = {}) {
     };
 
     applyPumpChartPresentation(chart, datasets, { expanded });
-    chart.update();
+    chart.update('none');
 }

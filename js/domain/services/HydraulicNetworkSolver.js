@@ -21,10 +21,11 @@ export class HydraulicNetworkSolver {
     }
 
     resolve(dt) {
+        const hydraulicModel = this.engine.hydraulicBranchModel || this.engine;
         this.metrics.totalSolverCalls++;
         this.engine.resetHydraulicState();
         this.engine.conexoes.forEach((conn) => {
-            this.engine.ensureConnectionProperties(conn);
+            hydraulicModel.ensureConnectionProperties(conn);
             conn._activeTick = false;
         });
 
@@ -50,17 +51,17 @@ export class HydraulicNetworkSolver {
         while (queueIndex < queue.length && steps < MAX_QUEUE_STEPS) {
             steps += 1;
             const comp = queue[queueIndex++];
-            if (!this.engine.hasPendingEmission(comp, dt)) continue;
+            if (!hydraulicModel.hasPendingEmission(comp, dt)) continue;
 
             const outputs = this.engine.getOutputConnections(comp);
             if (outputs.length === 0) continue;
 
-            const supply = this.engine.buildSupplyState(comp, dt);
+            const supply = hydraulicModel.buildSupplyState(comp, dt);
             if (!supply || supply.availableFlowLps <= EPSILON_FLOW) continue;
 
             const visited = new Set([comp.id]);
             const estimates = outputs
-                .map((conn) => ({ conn, estimate: this.engine.estimateBranch(comp, conn, supply, dt, visited) }))
+                .map((conn) => ({ conn, estimate: hydraulicModel.estimateBranch(comp, conn, supply, dt, visited) }))
                 .filter((item) => item.estimate.capacityLps > EPSILON_FLOW);
 
             if (estimates.length === 0) {
@@ -82,7 +83,7 @@ export class HydraulicNetworkSolver {
                 const branchFlow = totalFlow * share;
                 if (branchFlow <= EPSILON_FLOW) return;
 
-                const deliveredFlow = this.engine.applyBranchFlow(comp, item.conn, supply, item.estimate, branchFlow, dt);
+                const deliveredFlow = hydraulicModel.applyBranchFlow(comp, item.conn, supply, item.estimate, branchFlow, dt);
                 emittedFlowLps += deliveredFlow;
                 const target = this.engine.getComponentById(item.conn.targetId);
                 if (deliveredFlow > EPSILON_FLOW && (target instanceof BombaLogica || target instanceof ValvulaLogica)) {
@@ -103,7 +104,7 @@ export class HydraulicNetworkSolver {
             if (DEBUG_PHYSICS) console.log(`[Solver] Convergiu em ${steps} iterações com sucesso.`);
         }
 
-        this.engine.relaxIdleConnections(dt);
+        hydraulicModel.relaxIdleConnections(dt);
     }
 
     getMetrics() {

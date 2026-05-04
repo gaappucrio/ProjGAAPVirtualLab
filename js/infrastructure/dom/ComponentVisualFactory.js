@@ -4,7 +4,8 @@
 // ===========================================
 
 import { ENGINE } from '../../application/engine/SimulationEngine.js';
-import { REGISTRO_COMPONENTES } from '../../presentation/registry/ComponentDefinitionRegistry.js';
+import { getComponentDefinition } from '../../presentation/registry/ComponentDefinitionRegistry.js';
+import { getComponentVisualSpec } from './ComponentVisualSpecs.js';
 import { registerComponentVisual } from './ComponentVisualRegistry.js';
 export { updatePortStates } from '../../utils/PortStateManager.js';
 
@@ -25,20 +26,21 @@ export function obterProximaTag(prefixo) {
 // Essa função deve ser chamada sempre que uma nova conexão for feita ou removida para manter a interface atualizada.
 
 /* A classe FabricaDeEquipamentos é uma fábrica centralizada para criar os elementos visuais dos componentes.
-Ela utiliza as especificações definidas no REGISTRO_COMPONENTES para construir o SVG correspondente*/
+Ela combina os metadados estáveis do registry com as specs visuais da infraestrutura DOM. */
 export class FabricaDeEquipamentos {
     /* O método criar é responsável por criar o elemento visual de um componente com base no tipo,
     posição e se é para a paleta.
-    Ele consulta o REGISTRO_COMPONENTES para obter as especificações do componente,
+    Ele consulta o registry para obter as especificações do componente,
     cria o elemento div que conterá o SVG, e instancia a lógica do componente.
-    O SVG é construído usando a função definida no registro
+    O SVG é construído usando a spec visual do componente
     e os eventos de interação são configurados de acordo com as necessidades do componente
     (por exemplo, seleção, duplo clique para alternar estado, etc.).
     O método também define os atributos de dados necessários para a lógica do componente
     e retorna o elemento visual completo para ser adicionado ao workspace ou à paleta. */
     static criar(tipo, x, y, isPalette = false) {
-        const spec = REGISTRO_COMPONENTES[tipo];
-        if (!spec) return console.error("Componente não registrado:", tipo);
+        const spec = getComponentDefinition(tipo);
+        const visualSpec = getComponentVisualSpec(tipo);
+        if (!spec || !visualSpec) return console.error("Componente não registrado:", tipo);
 
         const id = tipo + '-' + Date.now();
         const visual = document.createElement('div');
@@ -52,11 +54,11 @@ export class FabricaDeEquipamentos {
 
         visual.innerHTML = `
                     <svg viewBox="0 0 ${spec.w + 40} ${spec.h + 80}" width="${spec.w + 40}" height="${spec.h + 80}" style="left:${spec.offX}px; top:${spec.offY}px; position:absolute;">
-                        ${spec.svg(id, tag)}
+                        ${visualSpec.svg(id, tag)}
                     </svg>`;
 
         if (!isPalette) {
-            if (spec.setup) spec.setup(visual, logica, id);
+            if (visualSpec.setup) visualSpec.setup(visual, logica, id);
             ENGINE.add(logica);
             registerComponentVisual(logica, visual);
             visual.addEventListener('mousedown', () => {

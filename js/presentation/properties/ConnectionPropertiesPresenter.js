@@ -1,5 +1,6 @@
 import { ENGINE } from '../../application/engine/SimulationEngine.js';
-import { clearInputError, InputValidator, showInputError } from '../../utils/InputValidator.js';
+import { EngineEventPayloads } from '../../application/events/EventPayloads.js';
+import { clearInputError, InputValidator, showInputError } from '../validation/InputValidator.js';
 import { bindPropertyTabs, renderPropertyTabs } from '../../utils/PropertyTabs.js';
 import { TOOLTIPS } from '../../utils/Tooltips.js';
 import {
@@ -126,6 +127,11 @@ export function renderConnectionProperties({
             }
             clearInputError(element);
             setter(result.value);
+            ENGINE.ensureConnectionProperties(connection);
+            ENGINE.clearConnectionDynamics?.();
+            if (!ENGINE.isRunning) ENGINE.resetHydraulicState?.();
+            ENGINE.updatePipesVisual?.();
+            ENGINE.notify(EngineEventPayloads.panelUpdate(0));
         } catch (error) {
             console.error(`Erro ao validar ${fieldName}:`, error);
             showInputError(element, `Erro: ${error.message}`);

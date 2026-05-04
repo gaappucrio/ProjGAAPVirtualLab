@@ -1,5 +1,5 @@
 import { ENGINE, FLUID_PRESETS } from '../../application/engine/SimulationEngine.js';
-import { clearInputError, InputValidator, showInputError } from '../../utils/InputValidator.js';
+import { clearInputError, InputValidator, showInputError } from '../validation/InputValidator.js';
 import { bindPropertyTabs, renderPropertyTabs } from '../../utils/PropertyTabs.js';
 import { TOOLTIPS } from '../../utils/Tooltips.js';
 import {

@@ -6,6 +6,7 @@ import { BombaLogica } from '../js/domain/components/BombaLogica.js';
 import { FonteLogica } from '../js/domain/components/FonteLogica.js';
 import { TanqueLogico } from '../js/domain/components/TanqueLogico.js';
 import { ValvulaLogica } from '../js/domain/components/ValvulaLogica.js';
+import { buildPumpCurveDatasets } from '../js/infrastructure/charts/PumpChartAdapter.js';
 import { pressureFromHeadBar } from '../js/utils/Units.js';
 
 function approx(actual, expected, tolerance, label) {
@@ -48,6 +49,22 @@ test('tempo de curso e rampa aceitam zero e respeitam a escala configurada', () 
     bomba.tempoRampaSegundos = 0;
     bomba.atualizarDinamica(0.2);
     approx(bomba.acionamentoEfetivo, 100, 1e-9, 'Tempo de rampa zero da bomba');
+});
+
+test('curva da bomba reflete alteração de NPSHr sem esconder a mudança pela escala', () => {
+    const bomba = new BombaLogica('B-02', 'B-02', 0, 0);
+
+    bomba.npshRequeridoM = 2.5;
+    bomba.recalcularMetricasDerivadasCurva();
+    const curvaBase = buildPumpCurveDatasets(bomba);
+
+    bomba.npshRequeridoM = 5;
+    bomba.recalcularMetricasDerivadasCurva();
+    const curvaAjustada = buildPumpCurveDatasets(bomba);
+
+    assert.equal(bomba.npshRequeridoAtualM, 5);
+    assert.ok(curvaAjustada.npshPoints.at(-1).y > curvaBase.npshPoints.at(-1).y);
+    assert.equal(curvaBase.npshAxisMax, curvaAjustada.npshAxisMax);
 });
 
 test('resumo de ajuste de pressão no set point considera altura relativa ligada e desligada', () => {

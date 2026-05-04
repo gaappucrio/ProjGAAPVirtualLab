@@ -10,7 +10,7 @@ export function createSimulationContext(overrides = {}) {
     return {
         isRunning: false,
         fluidoOperante: null,
-        usarAlturaRelativa: true,
+        usarAlturaRelativa: false,
         elapsedTime: 0,
         queries,
         ...overrides,
