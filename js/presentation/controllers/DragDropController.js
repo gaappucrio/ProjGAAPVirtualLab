@@ -4,7 +4,7 @@
 // =========================================
 
 import { FabricaDeEquipamentos, updatePortStates } from '../../infrastructure/dom/ComponentVisualFactory.js';
-import { REGISTRO_COMPONENTES } from '../registry/ComponentDefinitionRegistry.js';
+import { getComponentDefinition } from '../registry/ComponentDefinitionRegistry.js';
 import { ComponentEventPayloads } from '../../application/events/EventPayloads.js';
 import { camera } from './CameraController.js';
 import { updateAllPipes } from './PipeController.js';
@@ -34,7 +34,7 @@ export function setupDragDrop() {
         const t = e.dataTransfer.getData('text/plain');
         if (!t) return;
 
-        const spec = REGISTRO_COMPONENTES[t];
+        const spec = getComponentDefinition(t);
         if (!spec) return;
 
         const canvasRect = workspaceCanvas.getBoundingClientRect();

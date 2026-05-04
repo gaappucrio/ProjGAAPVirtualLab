@@ -63,10 +63,10 @@
 
                 <div class="toolbar-config" style="display:flex; align-items:center; gap:10px; margin-left:auto; flex-wrap:wrap; justify-content:flex-end;">
                     <label class="toolbar-toggle" for="toggle-relative-height" style="display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid #dfe6e9; border-radius:999px; background:#f8fbfc; color:#2c3e50; font-size:13px; font-weight:700; cursor:pointer; user-select:none;">
-                        <input type="checkbox" id="toggle-relative-height" checked>
+                        <input type="checkbox" id="toggle-relative-height">
                         <span>Altura relativa</span>
                     </label>
-                    <span class="toolbar-note" id="toolbar-height-note" style="font-size:12px; color:#5f6f7f; padding:8px 10px; border-radius:8px; background:#f4f7f8; border:1px solid #ecf0f1;">Desníveis entre componentes afetam a pressão e a vazão.</span>
+                    <span class="toolbar-note" id="toolbar-height-note" style="font-size:12px; color:#a84300; padding:8px 10px; border-radius:8px; background:#fff4e8; border:1px solid #f3c89f;">Modo sem altura relativa: a bomba perde utilidade para vencer desníveis.</span>
                 </div>
             </div>
 
@@ -98,7 +98,7 @@
 
                 <h3 class="panel-title" style="margin-top: 10px;">
                     Monitoramento
-                    <button id="btn-max-chart" class="btn-maximize-chart">&#9974; Expandir</button>
+                    <button id="btn-max-chart" class="btn-maximize-chart" title="Abre o monitoramento detalhado para comparar até dois gráficos lado a lado.">&#9974; Expandir</button>
                 </h3>
 
                 <div class="chart-container" id="chart-wrapper">
@@ -110,7 +110,7 @@
                             </div>
                             <p id="chart-max-status" class="chart-max-status">Clique em outro tanque ou bomba para comparar os dois ultimos graficos.</p>
                         </div>
-                        <button id="btn-close-max-chart" class="gaap-btn danger" style="padding: 5px 15px; font-size: 12px; margin: 0;">&#10006; Fechar Gráfico</button>
+                        <button id="btn-close-max-chart" class="gaap-btn danger" title="Fecha o monitoramento detalhado e retorna ao gráfico compacto da barra de propriedades." style="padding: 5px 15px; font-size: 12px; margin: 0;">&#10006; Fechar Gráfico</button>
                     </div>
                     <div id="chart-compact-stage" class="chart-compact-stage">
                         <canvas id="gaap-volume-chart"></canvas>

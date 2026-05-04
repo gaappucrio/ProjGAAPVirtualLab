@@ -88,6 +88,24 @@ export class BombaLogica extends ComponenteFisico {
         return 'Com folga';
     }
 
+    recalcularMetricasDerivadasCurva() {
+        const drive = this.getDriveAtual();
+        const qMax = this.vazaoNominal * drive;
+        const curveFrac = qMax > EPSILON_FLOW ? 1 - Math.pow(clamp(this.fluxoReal / qMax, 0, 1), 2) : 0;
+        const semBombeamento = drive <= 0.01 && Math.abs(this.fluxoReal) <= EPSILON_FLOW;
+
+        this.eficienciaAtual = this.getEficienciaInstantanea(this.fluxoReal);
+        this.npshRequeridoAtualM = semBombeamento
+            ? this.npshRequeridoM
+            : this.getCurvaNpshRequeridoM(this.fluxoReal, drive);
+        this.margemNpshM = this.npshDisponivelM - this.npshRequeridoAtualM;
+        this.cargaGeradaBar = drive > 0
+            ? this.pressaoMaxima * drive * drive * Math.max(0.05, curveFrac) * this.fatorCavitacaoAtual
+            : 0;
+        this.pressaoDescargaAtualBar = this.pressaoSucaoAtualBar + this.cargaGeradaBar;
+        this.pressaoSaidaAtualBar = this.pressaoDescargaAtualBar;
+    }
+
     setAcionamento(valor) {
         const context = this.getSimulationContext();
         const comandoSolicitado = clamp(Number(valor) || 0, 0, 100);
@@ -142,15 +160,7 @@ export class BombaLogica extends ComponenteFisico {
         super.sincronizarMetricasFisicas();
         this.fluxoReal = this.estadoHidraulico.saidaVazaoLps;
         this.pressaoSucaoAtualBar = this.getPressaoEntradaBar();
-        const drive = this.getDriveAtual();
-        const qMax = this.vazaoNominal * drive;
-        const curveFrac = qMax > EPSILON_FLOW ? 1 - Math.pow(clamp(this.fluxoReal / qMax, 0, 1), 2) : 0;
-        this.eficienciaAtual = this.getEficienciaInstantanea(this.fluxoReal);
-        this.npshRequeridoAtualM = this.getCurvaNpshRequeridoM(this.fluxoReal, drive);
-        this.margemNpshM = this.npshDisponivelM - this.npshRequeridoAtualM;
-        this.cargaGeradaBar = drive > 0 ? this.pressaoMaxima * drive * drive * Math.max(0.05, curveFrac) * this.fatorCavitacaoAtual : 0;
-        this.pressaoDescargaAtualBar = this.pressaoSucaoAtualBar + this.cargaGeradaBar;
-        this.pressaoSaidaAtualBar = this.pressaoDescargaAtualBar;
+        this.recalcularMetricasDerivadasCurva();
     }
 
     getFluxoSaidaFromTank() {

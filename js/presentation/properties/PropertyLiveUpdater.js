@@ -53,29 +53,40 @@ function updateValveValues(engine, component) {
     const numInput = document.getElementById('val-abertura');
     const cvInput = document.getElementById('input-cv');
     const perdaInput = document.getElementById('input-perda-k');
+    const perfilInput = document.getElementById('input-perfil-valvula');
     const caracteristicaInput = document.getElementById('input-caracteristica-valvula');
     const rangeabilidadeInput = document.getElementById('input-rangeabilidade-valvula');
     const cursoInput = document.getElementById('input-curso-valvula');
     const bloqueadaPorSetpoint = engine.isValvulaBloqueadaPorSetpoint?.(component) === true
         || component.estaControladaPorSetpoint?.() === true;
+    const perfilAtual = component.perfilCaracteristica ?? 'custom';
+    const bloqueioParametros = bloqueadaPorSetpoint || perfilAtual !== 'custom';
 
-    [abEl, numInput, cvInput, perdaInput, caracteristicaInput, rangeabilidadeInput, cursoInput]
+    [abEl, numInput, perfilInput]
         .forEach((input) => {
             if (input) input.disabled = bloqueadaPorSetpoint;
+        });
+    [cvInput, perdaInput, caracteristicaInput, rangeabilidadeInput, cursoInput]
+        .forEach((input) => {
+            if (input) input.disabled = bloqueioParametros;
         });
 
     if (abEl && document.activeElement !== numInput && document.activeElement !== abEl) {
         abEl.value = Math.round(component.grauAbertura);
         if (numInput) numInput.value = Math.round(component.grauAbertura);
     }
+    if (perfilInput && document.activeElement !== perfilInput) perfilInput.value = perfilAtual;
+    if (caracteristicaInput && document.activeElement !== caracteristicaInput) caracteristicaInput.value = component.tipoCaracteristica;
     if (cvInput && document.activeElement !== cvInput) cvInput.value = component.cv.toFixed(2);
     if (perdaInput && document.activeElement !== perdaInput) perdaInput.value = component.perdaLocalK.toFixed(3);
+    if (rangeabilidadeInput && document.activeElement !== rangeabilidadeInput) rangeabilidadeInput.value = component.rangeabilidade;
+    if (cursoInput && document.activeElement !== cursoInput) cursoInput.value = component.tempoCursoSegundos;
     if (document.getElementById('disp-abertura-efetiva-valvula')) document.getElementById('disp-abertura-efetiva-valvula').value = component.aberturaEfetiva.toFixed(1);
     setFieldValue('disp-vazao-valvula', component.fluxoReal, 'flow', 2);
     setFieldValue('disp-deltap-valvula', component.deltaPAtualBar, 'pressure', 2);
 }
 
-function updatePumpValues(component, { onRefreshPumpCurve, monitorController } = {}) {
+function updatePumpValues(component, { monitorController } = {}) {
     const acEl = document.getElementById('input-acionamento');
     const numInput = document.getElementById('val-acionamento');
     if (acEl && document.activeElement !== numInput && document.activeElement !== acEl) {
@@ -92,7 +103,6 @@ function updatePumpValues(component, { onRefreshPumpCurve, monitorController } =
     setFieldValue('disp-margem-npsh-bomba', getPumpNpshMargin(component), 'length', 2);
     if (document.getElementById('disp-condicao-npsh-bomba')) document.getElementById('disp-condicao-npsh-bomba').value = getPumpNpshCondition(component);
     if (document.getElementById('disp-eficiencia-bomba')) document.getElementById('disp-eficiencia-bomba').value = `${(component.eficienciaAtual * 100).toFixed(0)}%`;
-    onRefreshPumpCurve?.(component);
     monitorController?.refreshPump(component);
 }
 
@@ -100,8 +110,7 @@ export function updatePropertyPanelValues({
     engine,
     component,
     connection,
-    monitorController,
-    onRefreshPumpCurve
+    monitorController
 }) {
     updateConnectionValues(engine, connection);
 
@@ -122,6 +131,6 @@ export function updatePropertyPanelValues({
     }
 
     if (component instanceof BombaLogica) {
-        updatePumpValues(component, { onRefreshPumpCurve, monitorController });
+        updatePumpValues(component, { monitorController });
     }
 }

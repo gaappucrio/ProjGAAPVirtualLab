@@ -1,10 +1,10 @@
 // ===================================
-// UTILIDADE: Validação de Entradas
-// Arquivo: js/utils/InputValidator.js
+// PRESENTATION: Validação de Entradas
+// Arquivo: js/presentation/validation/InputValidator.js
 // ===================================
 
 /**
- * Validador centralizado para entradas de usuário
+ * Validador centralizado para entradas editadas pelo usuário.
  */
 export class InputValidator {
     constructor() {
@@ -13,150 +13,150 @@ export class InputValidator {
     }
 
     /**
-     * Valida valor numérico dentro de limites
+     * Valida valor numerico dentro de limites.
      */
     static validateNumber(value, min = -Infinity, max = Infinity, fieldName = 'valor') {
         const num = parseFloat(value);
-        
-        if (isNaN(num)) {
+
+        if (Number.isNaN(num)) {
             return { valid: false, error: `${fieldName} deve ser um número válido` };
         }
-        
+
         if (num < min) {
             return { valid: false, error: `${fieldName} não pode ser menor que ${min}` };
         }
-        
+
         if (num > max) {
             return { valid: false, error: `${fieldName} não pode ser maior que ${max}` };
         }
-        
+
         return { valid: true, value: num };
     }
 
     /**
-     * Valida vazão em litros por segundo
+     * Valida vazão em litros por segundo.
      */
     static validateFlow(value, maxFlow = 500, fieldName = 'Vazão') {
         const result = this.validateNumber(value, 0, maxFlow, fieldName);
         if (!result.valid) return result;
-        
+
         if (result.value > maxFlow) {
             return { valid: false, error: `${fieldName} não pode exceder ${maxFlow} l/s` };
         }
-        
+
         return result;
     }
 
     /**
-     * Valida pressão em bar
+     * Valida pressão em bar.
      */
     static validatePressure(value, maxPressure = 100, fieldName = 'Pressão') {
         return this.validateNumber(value, 0, maxPressure, fieldName);
     }
 
     /**
-     * Valida altura em metros
+     * Valida altura em metros.
      */
     static validateHeight(value, maxHeight = 100, fieldName = 'Altura') {
         return this.validateNumber(value, -maxHeight, maxHeight, fieldName);
     }
 
     /**
-     * Valida volume em litros
+     * Valida volume em litros.
      */
     static validateVolume(value, maxVolume = 10000, fieldName = 'Volume') {
         return this.validateNumber(value, 0.1, maxVolume, fieldName);
     }
 
     /**
-     * Valida abertura de válvula (0 a 100%)
+     * Valida abertura de válvula (0 a 100%).
      */
     static validateOpening(value, fieldName = 'Abertura') {
         return this.validateNumber(value, 0, 100, fieldName);
     }
 
     /**
-     * Valida grau de acionamento (0 a 100%)
+     * Valida grau de acionamento (0 a 100%).
      */
     static validateDrive(value, fieldName = 'Comando de Acionamento') {
         return this.validateNumber(value, 0, 100, fieldName);
     }
 
     /**
-     * Valida diâmetro em milímetros
+     * Valida diametro em milimetros.
      */
     static validateDiameter(value, fieldName = 'Diâmetro') {
         const result = this.validateNumber(value, 1, 300, fieldName);
         if (!result.valid) return result;
-        
+
         if (result.value < 1 || result.value > 300) {
             return { valid: false, error: `${fieldName} deve estar entre 1mm e 300mm` };
         }
-        
+
         return result;
     }
 
     /**
-     * Valida eficiência (0 a 100%)
+     * Valida eficiencia (0 a 100%).
      */
     static validateEfficiency(value, fieldName = 'Eficiência') {
         return this.validateNumber(value, 0, 100, fieldName);
     }
 
     /**
-     * Valida NPSH em metros
+     * Valida NPSH em metros.
      */
     static validateNPSH(value, fieldName = 'NPSH') {
         return this.validateNumber(value, 0, 50, fieldName);
     }
 
     /**
-     * Valida viscosidade dinâmica em Pa·s
+     * Valida viscosidade dinâmica em Pa.s.
      */
     static validateViscosity(value, fieldName = 'Viscosidade') {
         const result = this.validateNumber(value, 0.0001, 10, fieldName);
         if (!result.valid) return result;
-        
+
         if (result.value <= 0) {
             return { valid: false, error: `${fieldName} deve ser maior que 0` };
         }
-        
+
         return result;
     }
 
     /**
-     * Valida densidade em kg/m³
+     * Valida densidade em kg/m3.
      */
     static validateDensity(value, fieldName = 'Densidade') {
         return this.validateNumber(value, 100, 2000, fieldName);
     }
 
     /**
-     * Sanitiza entrada de texto remov endo caracteres perigosos
+     * Sanitiza entrada de texto removendo caracteres perigosos.
      */
     static sanitizeText(value, maxLength = 100) {
         return String(value)
             .trim()
             .substring(0, maxLength)
-            .replace(/[<>]/g, ''); // Remove < e > para evitar injeção
+            .replace(/[<>]/g, '');
     }
 
     /**
-     * Valida entrada com tratamento de erro automático
+     * Valida entrada com tratamento de erro automatico.
      */
     static validateAndAlert(value, validator, fieldName = 'Campo') {
         const result = validator(value, fieldName);
-        
+
         if (!result.valid) {
             alert(`❌ Erro: ${result.error}`);
             return null;
         }
-        
+
         return result.value;
     }
 
     /**
-     * Cria validador customizado com min/max
+     * Cria validador customizado com min/max.
      */
     static createRangeValidator(min, max, fieldName = 'Valor') {
         return (value) => this.validateNumber(value, min, max, fieldName);
@@ -164,7 +164,7 @@ export class InputValidator {
 }
 
 /**
- * Decorator para validar inputs de eventos
+ * Decorator para validar inputs de eventos.
  */
 export function validateInput(validator, fieldName = 'Campo') {
     return function(target, propertyKey, descriptor) {
@@ -172,14 +172,14 @@ export function validateInput(validator, fieldName = 'Campo') {
         descriptor.value = function(event) {
             const value = event.target.value;
             const result = validator(value, fieldName);
-            
+
             if (!result.valid) {
                 event.target.style.borderColor = '#e74c3c';
                 event.target.title = result.error;
                 console.warn(`Validação falhou para ${fieldName}: ${result.error}`);
-                return;
+                return undefined;
             }
-            
+
             event.target.style.borderColor = '';
             event.target.title = '';
             return originalMethod.call(this, result.value);
@@ -189,19 +189,18 @@ export function validateInput(validator, fieldName = 'Campo') {
 }
 
 /**
- * Função auxiliar para mostrar erro em campo de entrada
+ * Mostra erro visual em campo de entrada.
  */
 export function showInputError(inputElement, error) {
     inputElement.style.borderColor = '#e74c3c';
     inputElement.style.backgroundColor = '#fff0f0';
     inputElement.title = error;
-    
-    // Remove erros após 3 segundos ou quando usuário edita
+
     const timeout = setTimeout(() => {
         inputElement.style.borderColor = '';
         inputElement.style.backgroundColor = '';
     }, 3000);
-    
+
     inputElement.addEventListener('input', () => {
         clearTimeout(timeout);
         inputElement.style.borderColor = '';
@@ -210,7 +209,7 @@ export function showInputError(inputElement, error) {
 }
 
 /**
- * Função auxiliar para limpar erros de entrada
+ * Limpa erro visual de campo de entrada.
  */
 export function clearInputError(inputElement) {
     inputElement.style.borderColor = '';

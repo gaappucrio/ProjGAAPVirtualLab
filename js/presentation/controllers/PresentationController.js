@@ -3,7 +3,6 @@
 // Arquivo: js/presentation/controllers/PresentationController.js
 // ====================================
 
-import { BombaLogica } from '../../domain/components/BombaLogica.js';
 import { ENGINE } from '../../application/engine/SimulationEngine.js';
 import { EngineEventPayloads } from '../../application/events/EventPayloads.js';
 
@@ -15,13 +14,11 @@ import { setupLayoutController } from './LayoutController.js';
 import { createMonitorController } from './MonitorController.js';
 import { createPropertyPanelContextStore } from './PropertyPanelContextController.js';
 import { setupWorkspaceSelectionController } from './WorkspaceSelectionController.js';
-import { createPumpChart, refreshPumpChart } from '../../infrastructure/charts/PumpChartAdapter.js';
 import { renderConnectionProperties as renderConnectionPropertiesPresenter } from '../properties/ConnectionPropertiesPresenter.js';
 import { renderComponentProperties as renderComponentPropertiesPresenter } from '../properties/ComponentPropertiesPresenter.js';
 import { renderDefaultProperties as renderDefaultPropertiesPresenter } from '../properties/DefaultPropertiesPresenter.js';
 import { updatePropertyPanelValues } from '../properties/PropertyLiveUpdater.js';
 
-let pumpCurveChart = null;
 const monitorController = createMonitorController({ engine: ENGINE });
 const propertyPanelContext = createPropertyPanelContextStore({
     getContentElement: () => document.getElementById('prop-content'),
@@ -63,30 +60,6 @@ function restorePropertyPanelContextState(contextKey, { onAfterRestore } = {}) {
     });
 }
 
-function restorePumpCurveFromSavedContext(component, restoredTabs = []) {
-    if (!(component instanceof BombaLogica)) return;
-
-    const advancedActive = restoredTabs.some((tabState) => tabState.activeTab === 'advanced');
-    if (!advancedActive) return;
-
-    requestAnimationFrame(() => {
-        if (!pumpCurveChart) {
-            renderPumpCurveChart(component);
-        }
-        if (pumpCurveChart) {
-            pumpCurveChart.resize();
-            refreshPumpCurveChart(component);
-        }
-    });
-}
-
-function destroyPumpCurveChart() {
-    if (pumpCurveChart) {
-        pumpCurveChart.destroy();
-        pumpCurveChart = null;
-    }
-}
-
 function renderCurrentProperties() {
     capturePropertyPanelContextState();
 
@@ -106,40 +79,13 @@ function renderCurrentProperties() {
     }
 
     propertyPanelContext.setActiveContextKey(nextContextKey);
-    restorePropertyPanelContextState(nextContextKey, {
-        onAfterRestore: (restoredTabs) => restorePumpCurveFromSavedContext(component, restoredTabs)
-    });
-}
-
-function renderPumpCurveChart(component) {
-    const canvas = document.getElementById('pump-curve-chart');
-    if (!canvas) {
-        destroyPumpCurveChart();
-        return;
-    }
-
-    destroyPumpCurveChart();
-    pumpCurveChart = createPumpChart(canvas.getContext('2d'), component, { expanded: false });
-}
-
-function refreshPumpCurveChart(component) {
-    if (!(component instanceof BombaLogica) || !pumpCurveChart) return;
-    refreshPumpChart(pumpCurveChart, component, { expanded: false });
-}
-
-function ensurePumpCurveChart(component) {
-    if (!pumpCurveChart) renderPumpCurveChart(component);
-    if (!pumpCurveChart) return;
-
-    pumpCurveChart.resize();
-    refreshPumpCurveChart(component);
+    restorePropertyPanelContextState(nextContextKey);
 }
 
 function renderDefaultProperties() {
     renderDefaultPropertiesPresenter({
         propContent: getPropContent(),
-        onRerender: renderCurrentProperties,
-        onDestroyPumpCurve: destroyPumpCurveChart
+        onRerender: renderCurrentProperties
     });
 }
 
@@ -147,8 +93,7 @@ function renderConnectionProperties(connection) {
     renderConnectionPropertiesPresenter({
         propContent: getPropContent(),
         connection,
-        onRerender: renderCurrentProperties,
-        onDestroyPumpCurve: destroyPumpCurveChart
+        onRerender: renderCurrentProperties
     });
 }
 
@@ -156,10 +101,6 @@ function renderComponentProperties(component) {
     renderComponentPropertiesPresenter({
         propContent: getPropContent(),
         component,
-        onDestroyPumpCurve: destroyPumpCurveChart,
-        onRenderPumpCurve: renderPumpCurveChart,
-        onRefreshPumpCurve: refreshPumpCurveChart,
-        onEnsurePumpCurve: ensurePumpCurveChart,
         onTankAdjustmentApplied: () => ENGINE.notify(EngineEventPayloads.panelUpdate(0))
     });
 }
@@ -183,8 +124,7 @@ function setupSubscriptions() {
                 engine: ENGINE,
                 component: ENGINE.selectedComponent,
                 connection: ENGINE.selectedConnection,
-                monitorController,
-                onRefreshPumpCurve: refreshPumpCurveChart
+                monitorController
             });
 
             monitorController.handleSimulationUpdate(dados);

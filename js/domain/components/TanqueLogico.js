@@ -449,6 +449,16 @@ export class TanqueLogico extends ComponenteFisico {
         this.alertaSaturacao = null;
     }
 
+    _notificarVolume() {
+        this.notify(ComponentEventPayloads.volumeUpdate({
+            perc: this.capacidadeMaxima > 0 ? this.volumeAtual / this.capacidadeMaxima : 0,
+            abs: this.volumeAtual,
+            qIn: this.lastQin,
+            qOut: this.lastQout,
+            pBottom: this.pressaoFundoBar
+        }));
+    }
+
     atualizarFisica(dt, fluido) {
         this.normalizarAlturasBocais();
         this.lastQin = this.estadoHidraulico.entradaVazaoLps;
@@ -459,13 +469,14 @@ export class TanqueLogico extends ComponenteFisico {
         this.sincronizarMetricasFisicas(fluido);
         this._atualizarAlertaSaturacao(fluido);
 
-        this.notify(ComponentEventPayloads.volumeUpdate({
-            perc: this.capacidadeMaxima > 0 ? this.volumeAtual / this.capacidadeMaxima : 0,
-            abs: this.volumeAtual,
-            qIn: this.lastQin,
-            qOut: this.lastQout,
-            pBottom: this.pressaoFundoBar
-        }));
+        this._notificarVolume();
+    }
+
+    onSimulationStop() {
+        this.lastQin = 0;
+        this.lastQout = 0;
+        this.resetEstadoHidraulico();
+        this._notificarVolume();
     }
 
     sincronizarMetricasFisicas(fluido) {

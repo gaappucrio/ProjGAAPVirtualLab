@@ -11,10 +11,13 @@ import { createMonitorSlotHistory } from '../monitoring/MonitorSlotHistory.js';
 import { getUnitSymbol } from '../../utils/Units.js';
 
 const MAX_MONITOR_CHART_HISTORY = 2;
+const MONITOR_LIVE_REFRESH_INTERVAL_S = 0.1;
+const MONITOR_TANK_SAMPLE_INTERVAL_S = 0.25;
 
 export function createMonitorController({ engine }) {
     let compactChart = null;
-    let chartUpdateTimer = 0;
+    let liveRefreshTimer = 0;
+    let tankSampleTimer = 0;
     let chartedTankId = null;
     let chartedPumpId = null;
     let monitorChartMode = 'empty';
@@ -41,6 +44,12 @@ export function createMonitorController({ engine }) {
 
     function isExpanded() {
         return document.getElementById('chart-wrapper')?.classList.contains('maximized') === true;
+    }
+
+    function setCompactMonitorMode(mode) {
+        monitorChartMode = mode;
+        const chartWrapper = document.getElementById('chart-wrapper');
+        if (chartWrapper) chartWrapper.dataset.monitorMode = mode;
     }
 
     function getMonitorChartKind(component) {
@@ -118,7 +127,7 @@ export function createMonitorController({ engine }) {
         destroyCompactChart();
         compactChart = createEmptyMonitorChart(ctx);
 
-        monitorChartMode = 'empty';
+        setCompactMonitorMode('empty');
         chartedTankId = null;
         chartedPumpId = null;
     }
@@ -138,7 +147,7 @@ export function createMonitorController({ engine }) {
         destroyCompactChart();
         compactChart = createTankMonitorChartInstance(ctx, component, { resetSeries: true });
 
-        monitorChartMode = 'tank';
+        setCompactMonitorMode('tank');
         chartedTankId = component.id;
         chartedPumpId = null;
     }
@@ -159,7 +168,7 @@ export function createMonitorController({ engine }) {
         destroyCompactChart();
         compactChart = createPumpMonitorChartInstance(ctx, component);
 
-        monitorChartMode = 'pump';
+        setCompactMonitorMode('pump');
         chartedPumpId = component.id;
         chartedTankId = null;
     }
@@ -175,6 +184,15 @@ export function createMonitorController({ engine }) {
         }
 
         refreshPumpChart(compactChart, component, { expanded: isExpanded() });
+    }
+
+    function refreshCompactPumpMonitorChart() {
+        if (monitorChartMode !== 'pump' || !chartedPumpId || !compactChart) return;
+
+        const pump = engine.componentes.find((component) => component.id === chartedPumpId);
+        if (pump instanceof BombaLogica) {
+            refreshPumpCompactChart(pump);
+        }
     }
 
     function refreshPresentation() {
@@ -397,6 +415,21 @@ export function createMonitorController({ engine }) {
         }
     }
 
+    function refreshMonitorCharts({ appendTankSamples = false } = {}) {
+        if (appendTankSamples) updateTrackedTankMonitorSeries();
+
+        refreshCompactTankMonitorChart();
+        refreshCompactPumpMonitorChart();
+        refreshExpandedMonitorCharts();
+    }
+
+    function refreshPumpMonitorCharts(component) {
+        if (!(component instanceof BombaLogica)) return;
+
+        refreshPumpCompactChart(component);
+        if (isExpanded()) refreshExpandedMonitorCharts();
+    }
+
     function refreshSelection(component, connection) {
         if (component instanceof TanqueLogico) {
             rememberMonitorChartComponent(component);
@@ -427,13 +460,22 @@ export function createMonitorController({ engine }) {
     }
 
     function handleSimulationUpdate(data) {
-        chartUpdateTimer += data.dt;
-        if (chartUpdateTimer < 1.0) return;
+        const dt = Math.max(0, Number(data.dt) || 0);
 
-        chartUpdateTimer = 0;
-        updateTrackedTankMonitorSeries();
-        refreshCompactTankMonitorChart();
-        refreshExpandedMonitorCharts();
+        if (dt <= 0) {
+            refreshMonitorCharts();
+            return;
+        }
+
+        liveRefreshTimer += dt;
+        tankSampleTimer += dt;
+
+        if (liveRefreshTimer < MONITOR_LIVE_REFRESH_INTERVAL_S) return;
+
+        liveRefreshTimer = 0;
+        const appendTankSamples = tankSampleTimer >= MONITOR_TANK_SAMPLE_INTERVAL_S;
+        if (appendTankSamples) tankSampleTimer = 0;
+        refreshMonitorCharts({ appendTankSamples });
     }
 
     return {
@@ -441,7 +483,7 @@ export function createMonitorController({ engine }) {
         updateLayout,
         refreshSelection,
         refreshPresentation,
-        refreshPump: refreshPumpCompactChart,
+        refreshPump: refreshPumpMonitorCharts,
         handleSimulationUpdate
     };
 }
