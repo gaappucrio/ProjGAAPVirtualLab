@@ -37,11 +37,8 @@ function pressureInputValue(id, fallback) {
 
 export function renderDefaultProperties({
     propContent,
-    onRerender,
-    onDestroyPumpCurve
+    onRerender
 }) {
-    onDestroyPumpCurve?.();
-
     const currentPreset = getCurrentFluidPresetId();
     const fluidOptions = Object.entries(FLUID_PRESETS)
         .map(([id, preset]) => `<option value="${id}" ${currentPreset === id ? 'selected' : ''}>${preset.nome}</option>`)
@@ -50,7 +47,7 @@ export function renderDefaultProperties({
     const basicContent = `
         <div class="prop-group">
             <label title="${TOOLTIPS.fluido.velocidadeSimulacao}">Velocidade da Simulação</label>
-            <select id="sel-vel">
+            <select id="sel-vel" title="${TOOLTIPS.fluido.velocidadeSimulacao}">
                 <option value="1">1x (Tempo real)</option>
                 <option value="2">2x (Acelerado)</option>
                 <option value="5">5x (Rápido)</option>
@@ -75,7 +72,7 @@ export function renderDefaultProperties({
             <label title="${TOOLTIPS.fluido.temperatura}">Temperatura (${getUnitSymbol('temperature')})</label>
             <input type="number" id="input-fluid-temp" title="${TOOLTIPS.fluido.temperatura}" value="${toDisplayValue('temperature', ENGINE.fluidoOperante.temperatura).toFixed(1)}" step="${getUnitStep('temperature')}" min="${toDisplayValue('temperature', -20).toFixed(1)}" max="${toDisplayValue('temperature', 200).toFixed(1)}">
         </div>
-        <p style="font-size: 12px; color:#95a5a6; text-align:center;">${TOOLTIPS.painel.estadoVazio}</p>
+        <p title="${TOOLTIPS.painel.estadoVazio}" style="font-size: 12px; color:#95a5a6; text-align:center;">${TOOLTIPS.painel.estadoVazio}</p>
     `;
 
     const advancedContent = `

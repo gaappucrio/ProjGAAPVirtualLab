@@ -5,7 +5,7 @@ import { ENGINE } from '../js/application/engine/SimulationEngine.js';
 import { BombaLogica } from '../js/domain/components/BombaLogica.js';
 import { FonteLogica } from '../js/domain/components/FonteLogica.js';
 import { TanqueLogico } from '../js/domain/components/TanqueLogico.js';
-import { ValvulaLogica } from '../js/domain/components/ValvulaLogica.js';
+import { VALVE_PROFILE_DEFINITIONS, ValvulaLogica } from '../js/domain/components/ValvulaLogica.js';
 import { buildPumpCurveDatasets } from '../js/infrastructure/charts/PumpChartAdapter.js';
 import { pressureFromHeadBar } from '../js/utils/Units.js';
 
@@ -35,9 +35,19 @@ test('tempo de curso e rampa aceitam zero e respeitam a escala configurada', () 
     valvula.atualizarDinamica(1);
     approx(valvula.aberturaEfetiva, 10, 1e-9, 'Tempo de curso da válvula');
 
+    valvula.aberturaEfetiva = 20;
+    valvula.grauAbertura = 70;
+    valvula.tempoCursoSegundos = 10;
+    valvula.atualizarDinamica(2);
+    approx(valvula.aberturaEfetiva, 40, 1e-9, 'Tempo de curso em deslocamento parcial da válvula');
+
+    valvula.grauAbertura = 0;
+    valvula.atualizarDinamica(3);
+    approx(valvula.aberturaEfetiva, 10, 1e-9, 'Tempo de curso no fechamento parcial da válvula');
+
     valvula.tempoCursoSegundos = 0;
     valvula.atualizarDinamica(0.5);
-    approx(valvula.aberturaEfetiva, 100, 1e-9, 'Tempo de curso zero da válvula');
+    approx(valvula.aberturaEfetiva, 0, 1e-9, 'Tempo de curso zero da válvula');
 
     const bomba = new BombaLogica('B-01', 'B-01', 0, 0);
     bomba.acionamentoEfetivo = 0;
@@ -49,6 +59,154 @@ test('tempo de curso e rampa aceitam zero e respeitam a escala configurada', () 
     bomba.tempoRampaSegundos = 0;
     bomba.atualizarDinamica(0.2);
     approx(bomba.acionamentoEfetivo, 100, 1e-9, 'Tempo de rampa zero da bomba');
+});
+
+test('característica da válvula altera capacidade hidráulica na mesma abertura', () => {
+    const valvula = new ValvulaLogica('V-02', 'V-02', 0, 0);
+    valvula.aberturaEfetiva = 50;
+    valvula.cv = 10;
+    valvula.perdaLocalK = 1;
+    valvula.rangeabilidade = 30;
+
+    const parametrosPorTipo = (tipo) => {
+        valvula.tipoCaracteristica = tipo;
+        return valvula.getParametrosHidraulicos();
+    };
+
+    const igualPorcentagem = parametrosPorTipo('equal_percentage');
+    const linear = parametrosPorTipo('linear');
+    const aberturaRapida = parametrosPorTipo('quick_opening');
+
+    assert.ok(
+        igualPorcentagem.characteristicFactor < linear.characteristicFactor
+            && linear.characteristicFactor < aberturaRapida.characteristicFactor,
+        'As características devem gerar fatores de abertura diferentes'
+    );
+    assert.ok(
+        igualPorcentagem.effectiveCv < linear.effectiveCv
+            && linear.effectiveCv < aberturaRapida.effectiveCv,
+        'A característica deve alterar o Cv efetivo usado pela simulação'
+    );
+    assert.ok(
+        igualPorcentagem.hydraulicAreaM2 < linear.hydraulicAreaM2
+            && linear.hydraulicAreaM2 < aberturaRapida.hydraulicAreaM2,
+        'A característica deve alterar a área hidráulica efetiva'
+    );
+    assert.ok(
+        igualPorcentagem.localLossCoeff > linear.localLossCoeff
+            && linear.localLossCoeff > aberturaRapida.localLossCoeff,
+        'A característica deve alterar a perda local efetiva'
+    );
+});
+
+test('perfis da válvula aplicam propriedades e modo personalizado libera edição fina', () => {
+    const valvula = new ValvulaLogica('V-03', 'V-03', 0, 0);
+    const perfilRapido = VALVE_PROFILE_DEFINITIONS.quick_opening;
+
+    assert.equal(valvula.aplicarPerfilCaracteristica('quick_opening'), true);
+    assert.equal(valvula.perfilCaracteristica, 'quick_opening');
+    assert.equal(valvula.tipoCaracteristica, perfilRapido.tipoCaracteristica);
+    approx(valvula.cv, perfilRapido.cv, 1e-12, 'Cv do perfil de abertura rápida');
+    approx(valvula.perdaLocalK, perfilRapido.perdaLocalK, 1e-12, 'K do perfil de abertura rápida');
+    assert.equal(valvula.rangeabilidade, perfilRapido.rangeabilidade);
+    assert.equal(valvula.tempoCursoSegundos, perfilRapido.tempoCursoSegundos);
+
+    valvula.aberturaEfetiva = 0;
+    valvula.grauAbertura = 100;
+    valvula.atualizarDinamica(1);
+    approx(
+        valvula.aberturaEfetiva,
+        100 / perfilRapido.tempoCursoSegundos,
+        1e-9,
+        'Perfil de abertura rápida deve influenciar o tempo de curso'
+    );
+
+    assert.equal(valvula.aplicarPerfilCaracteristica('custom'), true);
+    assert.equal(valvula.perfilCaracteristica, 'custom');
+    assert.equal(valvula.setCoeficienteVazao(12), true);
+    assert.equal(valvula.setCoeficientePerda(0.6), true);
+    assert.equal(valvula.setTipoCaracteristica('linear'), true);
+    assert.equal(valvula.setRangeabilidade(80), true);
+    assert.equal(valvula.setTempoCurso(2), true);
+
+    assert.equal(valvula.perfilCaracteristica, 'custom');
+    approx(valvula.cv, 12, 1e-12, 'Cv personalizado');
+    approx(valvula.perdaLocalK, 0.6, 1e-12, 'K personalizado');
+    assert.equal(valvula.tipoCaracteristica, 'linear');
+    assert.equal(valvula.rangeabilidade, 80);
+    assert.equal(valvula.tempoCursoSegundos, 2);
+});
+
+test('controle de nível escolhe perfil automaticamente e restaura perfil manual ao liberar', () => {
+    const valvula = new ValvulaLogica('V-04', 'V-04', 0, 0);
+
+    valvula.aplicarPerfilCaracteristica('custom');
+    valvula.setCoeficienteVazao(7);
+    valvula.setCoeficientePerda(1.3);
+    valvula.setTipoCaracteristica('equal_percentage');
+    valvula.setRangeabilidade(120);
+    valvula.setTempoCurso(1.5);
+
+    valvula.aplicarControleNivel({
+        abertura: 20,
+        intensidade: 0.2,
+        ownerId: 'T-01'
+    });
+    assert.equal(valvula.perfilCaracteristica, 'equal_percentage');
+    assert.equal(valvula.tempoCursoSegundos, VALVE_PROFILE_DEFINITIONS.equal_percentage.tempoCursoSegundos);
+    approx(valvula.cv, VALVE_PROFILE_DEFINITIONS.equal_percentage.cv, 1e-12, 'Cv deve ficar no perfil enquanto a abertura controla a vazão');
+
+    valvula.aplicarControleNivel({
+        abertura: 50,
+        intensidade: 0.5,
+        ownerId: 'T-01'
+    });
+    assert.equal(valvula.perfilCaracteristica, 'equal_percentage');
+    approx(valvula.cv, VALVE_PROFILE_DEFINITIONS.equal_percentage.cv, 1e-12, 'Perfil não deve trocar em ajuste moderado');
+
+    valvula.aplicarControleNivel({
+        abertura: 75,
+        intensidade: 0.75,
+        ownerId: 'T-01'
+    });
+    assert.equal(valvula.perfilCaracteristica, 'linear');
+    assert.equal(valvula.tempoCursoSegundos, VALVE_PROFILE_DEFINITIONS.linear.tempoCursoSegundos);
+    approx(valvula.cv, VALVE_PROFILE_DEFINITIONS.linear.cv, 1e-12, 'Cv deve seguir o perfil linear antes do reforço de alta demanda');
+
+    valvula.aplicarControleNivel({
+        abertura: 90,
+        intensidade: 0.9,
+        ownerId: 'T-01'
+    });
+
+    assert.equal(valvula.perfilCaracteristica, 'quick_opening');
+    assert.equal(valvula.tipoCaracteristica, 'quick_opening');
+    assert.equal(valvula.tempoCursoSegundos, VALVE_PROFILE_DEFINITIONS.quick_opening.tempoCursoSegundos);
+    assert.ok(valvula.cv > VALVE_PROFILE_DEFINITIONS.quick_opening.cv, 'Controle de nível deve reforçar o Cv do perfil escolhido');
+    assert.ok(valvula.perdaLocalK < VALVE_PROFILE_DEFINITIONS.quick_opening.perdaLocalK, 'Controle de nível deve reduzir K para atender alta demanda');
+
+    valvula.aplicarControleNivel({
+        abertura: 50,
+        intensidade: 0.5,
+        ownerId: 'T-01'
+    });
+    assert.equal(valvula.perfilCaracteristica, 'quick_opening', 'Histerese deve evitar troca de perfil por ajuste intermediário');
+
+    valvula.aplicarControleNivel({
+        abertura: 40,
+        intensidade: 0.4,
+        ownerId: 'T-01'
+    });
+    assert.equal(valvula.perfilCaracteristica, 'linear', 'Perfil só deve descer faixa após redução maior de abertura');
+
+    valvula.liberarControleNivel('T-01');
+
+    assert.equal(valvula.perfilCaracteristica, 'custom');
+    approx(valvula.cv, 7, 1e-12, 'Cv restaurado após liberar controle de nível');
+    approx(valvula.perdaLocalK, 1.3, 1e-12, 'K restaurado após liberar controle de nível');
+    assert.equal(valvula.tipoCaracteristica, 'equal_percentage');
+    assert.equal(valvula.rangeabilidade, 120);
+    assert.equal(valvula.tempoCursoSegundos, 1.5);
 });
 
 test('curva da bomba reflete alteração de NPSHr sem esconder a mudança pela escala', () => {

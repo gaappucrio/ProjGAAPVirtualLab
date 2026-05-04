@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { SistemaSimulacao } from '../js/application/engine/SimulationEngine.js';
+import { FLUID_PRESETS, SistemaSimulacao } from '../js/application/engine/SimulationEngine.js';
 import { createSimulationContext } from '../js/domain/context/SimulationContext.js';
 import { ConnectionModel } from '../js/domain/models/ConnectionModel.js';
 import { DrenoLogico } from '../js/domain/components/DrenoLogico.js';
@@ -21,6 +21,17 @@ test('altura relativa vem desligada por padrão', () => {
 
     assert.equal(engine.usarAlturaRelativa, false);
     assert.equal(context.usarAlturaRelativa, false);
+});
+
+test('fluido inicial corresponde visualmente ao preset Água', () => {
+    const engine = new SistemaSimulacao();
+    const agua = FLUID_PRESETS.agua;
+
+    assert.equal(engine.fluidoOperante.nome, agua.nome);
+    assert.equal(engine.fluidoOperante.densidade, agua.densidade);
+    assert.equal(engine.fluidoOperante.temperatura, agua.temperatura);
+    assert.equal(engine.fluidoOperante.viscosidadeDinamicaPaS, agua.viscosidadeDinamicaPaS);
+    assert.equal(engine.fluidoOperante.pressaoVaporBar, agua.pressaoVaporBar);
 });
 
 test('remoção de conexão limpa estado hidráulico e índices de topologia', () => {
@@ -93,4 +104,31 @@ test('geometria de conexão considera altura relativa somente quando habilitada'
     assert.equal(schematicGeometry.headGainM, 0);
     assert.notEqual(relativeGeometry.straightLengthM, schematicGeometry.straightLengthM);
     assert.notEqual(relativeGeometry.headGainM, 0);
+});
+
+test('pausa da simulação zera vazões atuais do tanque sem alterar volume', () => {
+    const tanque = new TanqueLogico('T-02', 'Tanque-02', 0, 0);
+    const volumeAntesDaPausa = 420;
+
+    tanque.volumeAtual = volumeAntesDaPausa;
+    tanque.capacidadeMaxima = 1000;
+    tanque.lastQin = 12;
+    tanque.lastQout = 4;
+    tanque.registrarEntrada(12, 1.2);
+    tanque.registrarSaida(4, 1.1);
+
+    let ultimoEventoVolume = null;
+    tanque.subscribe((dados) => {
+        if (dados.tipo === 'volume') ultimoEventoVolume = dados;
+    });
+
+    tanque.onSimulationStop();
+
+    assert.equal(tanque.volumeAtual, volumeAntesDaPausa);
+    assert.equal(tanque.lastQin, 0);
+    assert.equal(tanque.lastQout, 0);
+    assert.equal(tanque.estadoHidraulico.entradaVazaoLps, 0);
+    assert.equal(tanque.estadoHidraulico.saidaVazaoLps, 0);
+    assert.equal(ultimoEventoVolume.qIn, 0);
+    assert.equal(ultimoEventoVolume.qOut, 0);
 });

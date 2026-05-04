@@ -46,6 +46,12 @@ export function createMonitorController({ engine }) {
         return document.getElementById('chart-wrapper')?.classList.contains('maximized') === true;
     }
 
+    function setCompactMonitorMode(mode) {
+        monitorChartMode = mode;
+        const chartWrapper = document.getElementById('chart-wrapper');
+        if (chartWrapper) chartWrapper.dataset.monitorMode = mode;
+    }
+
     function getMonitorChartKind(component) {
         if (component instanceof TanqueLogico) return 'tank';
         if (component instanceof BombaLogica) return 'pump';
@@ -121,7 +127,7 @@ export function createMonitorController({ engine }) {
         destroyCompactChart();
         compactChart = createEmptyMonitorChart(ctx);
 
-        monitorChartMode = 'empty';
+        setCompactMonitorMode('empty');
         chartedTankId = null;
         chartedPumpId = null;
     }
@@ -141,7 +147,7 @@ export function createMonitorController({ engine }) {
         destroyCompactChart();
         compactChart = createTankMonitorChartInstance(ctx, component, { resetSeries: true });
 
-        monitorChartMode = 'tank';
+        setCompactMonitorMode('tank');
         chartedTankId = component.id;
         chartedPumpId = null;
     }
@@ -162,7 +168,7 @@ export function createMonitorController({ engine }) {
         destroyCompactChart();
         compactChart = createPumpMonitorChartInstance(ctx, component);
 
-        monitorChartMode = 'pump';
+        setCompactMonitorMode('pump');
         chartedPumpId = component.id;
         chartedTankId = null;
     }

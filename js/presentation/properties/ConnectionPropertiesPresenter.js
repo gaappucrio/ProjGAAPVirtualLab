@@ -32,11 +32,8 @@ function lengthInputValue(rawValue, fallback = NaN) {
 export function renderConnectionProperties({
     propContent,
     connection,
-    onRerender,
-    onDestroyPumpCurve
+    onRerender
 }) {
-    onDestroyPumpCurve?.();
-
     ENGINE.ensureConnectionProperties(connection);
     const state = ENGINE.getConnectionState(connection);
     const labels = getConnectionDisplay(connection);
@@ -44,28 +41,28 @@ export function renderConnectionProperties({
 
     const basicContent = `
         <div class="prop-group">
-            <label>${TOOLTIPS.conexao.titulo}</label>
-            <input type="text" value="${labels.sourceLabel} -> ${labels.targetLabel}" disabled>
+            <label title="${TOOLTIPS.conexao.trecho}">${TOOLTIPS.conexao.titulo}</label>
+            <input type="text" title="${TOOLTIPS.conexao.trecho}" value="${labels.sourceLabel} -> ${labels.targetLabel}" disabled>
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.diametro}">Diâmetro Interno (${getUnitSymbol('length')})</label>
             <input type="number" id="input-pipe-diameter" title="${TOOLTIPS.conexao.diametro}" value="${displayEditableUnitValue('length', connection.diameterM, 4)}" step="${displayStep('length', 0.005)}" min="${displayBound('length', 0.01)}" max="${displayBound('length', 0.3)}">
         </div>
         <div class="prop-group">
-            <label>Vazão Atual (${getUnitSymbol('flow')})</label>
-            <input type="text" id="disp-pipe-flow" value="${displayUnitValue('flow', state.flowLps, 2)}" disabled>
+            <label title="${TOOLTIPS.conexao.vazaoAtual}">Vazão Atual (${getUnitSymbol('flow')})</label>
+            <input type="text" id="disp-pipe-flow" title="${TOOLTIPS.conexao.vazaoAtual}" value="${displayUnitValue('flow', state.flowLps, 2)}" disabled>
         </div>
         <div class="prop-group">
-            <label>Vazão Alvo (${getUnitSymbol('flow')})</label>
-            <input type="text" id="disp-pipe-target-flow" value="${displayUnitValue('flow', state.targetFlowLps, 2)}" disabled>
+            <label title="${TOOLTIPS.conexao.vazaoAlvo}">Vazão Alvo (${getUnitSymbol('flow')})</label>
+            <input type="text" id="disp-pipe-target-flow" title="${TOOLTIPS.conexao.vazaoAlvo}" value="${displayUnitValue('flow', state.targetFlowLps, 2)}" disabled>
         </div>
         <div class="prop-group">
-            <label>Queda de Pressão no Trecho (${getUnitSymbol('pressure')})</label>
-            <input type="text" id="disp-pipe-deltap" value="${displayUnitValue('pressure', state.deltaPBar, 3)}" disabled>
+            <label title="${TOOLTIPS.conexao.deltaPTrecho}">Queda de Pressão no Trecho (${getUnitSymbol('pressure')})</label>
+            <input type="text" id="disp-pipe-deltap" title="${TOOLTIPS.conexao.deltaPTrecho}" value="${displayUnitValue('pressure', state.deltaPBar, 3)}" disabled>
         </div>
         <div class="prop-group">
-            <label>Comprimento Total (${getUnitSymbol('length')})</label>
-            <input type="text" id="disp-pipe-length" value="${displayUnitValue('length', state.lengthM || geometry.lengthM, 2)}" disabled>
+            <label title="${TOOLTIPS.conexao.comprimentoTotal}">Comprimento Total (${getUnitSymbol('length')})</label>
+            <input type="text" id="disp-pipe-length" title="${TOOLTIPS.conexao.comprimentoTotal}" value="${displayUnitValue('length', state.lengthM || geometry.lengthM, 2)}" disabled>
         </div>
     `;
 
@@ -83,24 +80,24 @@ export function renderConnectionProperties({
             <input type="number" id="input-pipe-loss-k" title="${TOOLTIPS.conexao.perdaLocal}" value="${connection.perdaLocalK}" step="0.1" min="0" max="100">
         </div>
         <div class="prop-group">
-            <label>Velocidade (m/s)</label>
-            <input type="text" id="disp-pipe-velocity" value="${state.velocityMps.toFixed(2)}" disabled>
+            <label title="${TOOLTIPS.conexao.velocidade}">Velocidade (m/s)</label>
+            <input type="text" id="disp-pipe-velocity" title="${TOOLTIPS.conexao.velocidade}" value="${state.velocityMps.toFixed(2)}" disabled>
         </div>
         <div class="prop-group">
-            <label>Reynolds</label>
-            <input type="text" id="disp-pipe-reynolds" value="${Math.round(state.reynolds)}" disabled>
+            <label title="${TOOLTIPS.conexao.reynolds}">Reynolds</label>
+            <input type="text" id="disp-pipe-reynolds" title="${TOOLTIPS.conexao.reynolds}" value="${Math.round(state.reynolds)}" disabled>
         </div>
         <div class="prop-group">
-            <label>Fator de Atrito Darcy</label>
-            <input type="text" id="disp-pipe-friction" value="${state.frictionFactor.toFixed(4)}" disabled>
+            <label title="${TOOLTIPS.conexao.fatorAtritoDarcy}">Fator de Atrito Darcy</label>
+            <input type="text" id="disp-pipe-friction" title="${TOOLTIPS.conexao.fatorAtritoDarcy}" value="${state.frictionFactor.toFixed(4)}" disabled>
         </div>
         <div class="prop-group">
-            <label>Regime</label>
-            <input type="text" id="disp-pipe-regime" value="${state.regime}" disabled>
+            <label title="${TOOLTIPS.conexao.regime}">Regime</label>
+            <input type="text" id="disp-pipe-regime" title="${TOOLTIPS.conexao.regime}" value="${state.regime}" disabled>
         </div>
         <div class="prop-group">
-            <label>Resposta Hidráulica (s)</label>
-            <input type="text" id="disp-pipe-response" value="${state.responseTimeS.toFixed(2)}" disabled>
+            <label title="${TOOLTIPS.conexao.respostaHidraulica}">Resposta Hidráulica (s)</label>
+            <input type="text" id="disp-pipe-response" title="${TOOLTIPS.conexao.respostaHidraulica}" value="${state.responseTimeS.toFixed(2)}" disabled>
         </div>
     `;
 

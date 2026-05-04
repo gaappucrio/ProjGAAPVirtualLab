@@ -173,6 +173,11 @@ export const TANK_COMPONENT_VISUAL = {
             visual.querySelector(`#sp-badge-${id}`).setAttribute('opacity', vis);
             visual.querySelector(`#sp-badge-txt-${id}`).setAttribute('opacity', vis);
         };
+        const atualizarFluxoEntrada = (qIn = logica.lastQin) => {
+            const stream = visual.querySelector(`#stream-${id}`);
+            if (!stream) return;
+            stream.style.opacity = ENGINE.isRunning && qIn > 0.1 ? '0.7' : '0';
+        };
 
         logica.subscribe((dados) => {
             if (dados.tipo === COMPONENT_EVENTS.POSITION_UPDATE) atualizarElevacoes();
@@ -180,7 +185,7 @@ export const TANK_COMPONENT_VISUAL = {
                 visual.querySelector(`#agua-${id}`).setAttribute('height', dados.perc * 240);
                 visual.querySelector(`#agua-${id}`).setAttribute('y', 240 - (dados.perc * 240));
                 atualizarRotulosTanque();
-                visual.querySelector(`#stream-${id}`).style.opacity = dados.qIn > 0.1 ? '0.7' : '0';
+                atualizarFluxoEntrada(dados.qIn);
             } else if (dados.tipo === COMPONENT_EVENTS.TAG_UPDATE) {
                 visual.querySelector(`#tag-${id}`).textContent = logica.tag;
             } else if (dados.tipo === COMPONENT_EVENTS.SETPOINT_UPDATE) {
@@ -190,6 +195,7 @@ export const TANK_COMPONENT_VISUAL = {
 
         ENGINE.subscribe((dados) => {
             if (dados.tipo === ENGINE_EVENTS.SIMULATION_CONFIG) atualizarElevacoes();
+            if (dados.tipo === ENGINE_EVENTS.MOTOR_STATE) atualizarFluxoEntrada(dados.rodando ? logica.lastQin : 0);
         });
 
         const unsubscribeUnits = subscribeUnitPreferences(() => {

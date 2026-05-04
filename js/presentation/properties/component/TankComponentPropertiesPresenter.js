@@ -46,19 +46,19 @@ export const TANK_PROPERTIES_PRESENTER = {
             </div>
             <div class="prop-group">
                 ${makeUnitLabel('Pressão no fundo', 'pressure', TOOLTIP.tankBottomPressure)}
-                <input type="text" id="disp-pressao-tanque" value="${displayUnitValue('pressure', comp.pressaoFundoBar, 2)}" disabled>
+                <input type="text" id="disp-pressao-tanque" ${hintAttr(TOOLTIP.tankBottomPressure)} value="${displayUnitValue('pressure', comp.pressaoFundoBar, 2)}" disabled>
             </div>
             <div class="prop-group">
                 ${makeUnitLabel('Nível líquido', 'length', TOOLTIP.tankLiquidLevel)}
-                <input type="text" id="disp-nível-tanque" value="${displayUnitValue('length', comp.getAlturaLiquidoM(), 2)}" disabled>
+                <input type="text" id="disp-nível-tanque" ${hintAttr(TOOLTIP.tankLiquidLevel)} value="${displayUnitValue('length', comp.getAlturaLiquidoM(), 2)}" disabled>
             </div>
             <div class="prop-group">
                 ${makeUnitLabel('Vazão de entrada', 'flow', TOOLTIP.tankInletFlow)}
-                <input type="text" id="disp-qin-tanque" value="${displayUnitValue('flow', comp.lastQin, 2)}" disabled>
+                <input type="text" id="disp-qin-tanque" ${hintAttr(TOOLTIP.tankInletFlow)} value="${displayUnitValue('flow', comp.lastQin, 2)}" disabled>
             </div>
             <div class="prop-group">
                 ${makeUnitLabel('Vazão de saída', 'flow', TOOLTIP.tankOutletFlow)}
-                <input type="text" id="disp-qout-tanque" value="${displayUnitValue('flow', comp.lastQout, 2)}" disabled>
+                <input type="text" id="disp-qout-tanque" ${hintAttr(TOOLTIP.tankOutletFlow)} value="${displayUnitValue('flow', comp.lastQout, 2)}" disabled>
             </div>
             <div class="prop-group" id="grp-sp-main" style="border-color:${corBordaControle}; background:${fundoControle};">
                 <label ${hintAttr(TOOLTIP.tankPiController)} style="color:#c0392b; font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">
@@ -68,7 +68,7 @@ export const TANK_PROPERTIES_PRESENTER = {
                     <input type="checkbox" id="input-sp-ativo" ${hintAttr(TOOLTIP.tankSpActive)} ${comp.setpointAtivo ? 'checked' : ''} ${bloqueioControleAttr} style="width:16px; height:16px; cursor:pointer;">
                     <span ${hintAttr(TOOLTIP.tankSpActive)} style="font-size:13px; font-weight:bold;">Ativar controle automático</span>
                 </div>
-                <p id="tank-sp-status-text" style="margin:0 0 10px; font-size:11px; color:${corStatusControle};">${textoStatusControle}</p>
+                <p id="tank-sp-status-text" ${hintAttr(TOOLTIP.tankSpActive)} style="margin:0 0 10px; font-size:11px; color:${corStatusControle};">${textoStatusControle}</p>
                 <label ${hintAttr(TOOLTIP.tankSetpoint)}>Ponto de ajuste
                     <span style="display:flex; align-items:center; gap:2px;">
                         <input type="number" id="val-sp" class="val-display-input" ${hintAttr(TOOLTIP.tankSetpoint)} value="${comp.setpoint}" min="0" max="100">%

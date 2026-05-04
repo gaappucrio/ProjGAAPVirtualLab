@@ -120,7 +120,15 @@ export class SistemaSimulacao extends Observable {
     constructor() {
         super();
         this.configStore = new SimulationConfigStore();
-        this.fluidoOperante = new Fluido("Água", 997.0, 1.0, 25.0);
+        const fluidoPadrao = FLUID_PRESETS.agua;
+        this.fluidoOperante = new Fluido(
+            fluidoPadrao.nome,
+            fluidoPadrao.densidade,
+            fluidoPadrao.viscosidadeDinamicaPaS,
+            fluidoPadrao.temperatura
+        );
+        this.fluidoOperante.viscosidadeDinamicaPaS = fluidoPadrao.viscosidadeDinamicaPaS;
+        this.fluidoOperante.pressaoVaporBar = fluidoPadrao.pressaoVaporBar;
         this.selectionStore = new SelectionStore();
         this.topology = new TopologyGraph();
         this.connectionStateStore = new ConnectionStateStore();

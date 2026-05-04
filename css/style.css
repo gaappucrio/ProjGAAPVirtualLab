@@ -785,8 +785,8 @@
       {
       width: 100%;
       /* Largura total para o container do gráfico de monitoramento, garantindo que ele se encaixe adequadamente dentro dos limites do painel de propriedades e proporcionando um layout mais organizado e profissional para o gráfico de monitoramento, especialmente quando combinado com a altura fixa para criar um espaço dedicado para o gráfico dentro do painel de propriedades */
-      height: 220px;
-      /* Altura fixa para o container do gráfico de monitoramento, criando um espaço dedicado para o gráfico dentro do painel de propriedades e garantindo que ele seja exibido de forma clara e legível para os usuários, além de criar um visual mais organizado e profissional para o gráfico de monitoramento, especialmente quando combinado com a largura total para se encaixar adequadamente dentro dos limites do painel de propriedades */
+      height: 300px;
+      /* Altura ampliada para o monitoramento compacto, aproximando a leitura dos gráficos do espaço usado anteriormente pela curva da bomba na aba avançada. */
       background: #fff;
       /* Fundo branco para o container do gráfico de monitoramento, criando um contraste limpo e profissional com o painel de propriedades e o workspace principal, além de melhorar a legibilidade e a identificação do gráfico para os usuários, especialmente quando combinados com as bordas sutis e as sombras para destacar o gráfico de monitoramento */
       border: 1px solid #eee;
@@ -810,6 +810,18 @@
       position: relative;
       min-height: 0;
       height: 100%;
+  }
+
+  #properties .chart-container:not(.maximized) {
+      /* O monitor compacto fica dentro de uma coluna flexível; fixar a base
+         impede que a barra de propriedades achate o canvas do Chart.js. */
+      flex: 0 0 320px;
+      height: 320px;
+      min-height: 320px;
+  }
+
+  #properties .chart-container:not(.maximized) .chart-compact-stage {
+      min-height: 280px;
   }
 
   .chart-max-header {

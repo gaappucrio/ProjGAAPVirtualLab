@@ -24,7 +24,7 @@ export const SOURCE_PROPERTIES_PRESENTER = {
         </div>
         <div class="prop-group">
             ${makeUnitLabel('Vazão atual', 'flow', TOOLTIP.sourceCurrentFlow)}
-            <input type="text" id="disp-vazao-fonte" value="${displayUnitValue('flow', comp.fluxoReal, 2)}" disabled>
+            <input type="text" id="disp-vazao-fonte" ${hintAttr(TOOLTIP.sourceCurrentFlow)} value="${displayUnitValue('flow', comp.fluxoReal, 2)}" disabled>
         </div>
     `,
     bind: (comp) => {
@@ -59,7 +59,7 @@ export const SINK_PROPERTIES_PRESENTER = {
         </div>
         <div class="prop-group">
             ${makeUnitLabel('Vazão recebida', 'flow', TOOLTIP.sinkCurrentFlow)}
-            <input type="text" id="disp-vazao-dreno" value="${displayUnitValue('flow', comp.vazaoRecebidaLps, 2)}" disabled>
+            <input type="text" id="disp-vazao-dreno" ${hintAttr(TOOLTIP.sinkCurrentFlow)} value="${displayUnitValue('flow', comp.vazaoRecebidaLps, 2)}" disabled>
         </div>
     `,
     bind: (comp) => {
