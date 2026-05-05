@@ -1,4 +1,5 @@
-import { ENGINE, FLUID_PRESETS } from '../../application/engine/SimulationEngine.js';
+import { FLUID_PRESETS } from '../../application/config/FluidPresets.js';
+import { getPresentationEngine } from '../context/PresentationEngineContext.js';
 import { clearInputError, InputValidator, showInputError } from '../validation/InputValidator.js';
 import { bindPropertyTabs, renderPropertyTabs } from '../../utils/PropertyTabs.js';
 import { TOOLTIPS } from '../../utils/Tooltips.js';
@@ -14,15 +15,21 @@ import {
     displayUnitValue,
     inputBaseValue
 } from './PropertyValueFormatters.js';
+import {
+    bind,
+    byId,
+    setValue,
+    valueOf
+} from './PropertyDomAdapter.js';
 import { bindUnitControls, renderUnitControls } from './PropertyUnitsPresenter.js';
 
-function getCurrentFluidPresetId() {
+function getCurrentFluidPresetId(engine) {
     const match = Object.entries(FLUID_PRESETS).find(([, preset]) =>
-        String(preset.nome || '').trim() === String(ENGINE.fluidoOperante.nome || '').trim() &&
-        Math.abs(preset.densidade - ENGINE.fluidoOperante.densidade) < 0.5 &&
-        Math.abs(preset.temperatura - ENGINE.fluidoOperante.temperatura) < 0.05 &&
-        Math.abs(preset.viscosidadeDinamicaPaS - ENGINE.fluidoOperante.viscosidadeDinamicaPaS) < 0.00001 &&
-        Math.abs(preset.pressaoVaporBar - ENGINE.fluidoOperante.pressaoVaporBar) < 0.0001
+        String(preset.nome || '').trim() === String(engine.fluidoOperante.nome || '').trim() &&
+        Math.abs(preset.densidade - engine.fluidoOperante.densidade) < 0.5 &&
+        Math.abs(preset.temperatura - engine.fluidoOperante.temperatura) < 0.05 &&
+        Math.abs(preset.viscosidadeDinamicaPaS - engine.fluidoOperante.viscosidadeDinamicaPaS) < 0.00001 &&
+        Math.abs(preset.pressaoVaporBar - engine.fluidoOperante.pressaoVaporBar) < 0.0001
     );
     return match ? match[0] : 'custom';
 }
@@ -39,7 +46,8 @@ export function renderDefaultProperties({
     propContent,
     onRerender
 }) {
-    const currentPreset = getCurrentFluidPresetId();
+    const engine = getPresentationEngine();
+    const currentPreset = getCurrentFluidPresetId(engine);
     const fluidOptions = Object.entries(FLUID_PRESETS)
         .map(([id, preset]) => `<option value="${id}" ${currentPreset === id ? 'selected' : ''}>${preset.nome}</option>`)
         .join('');
@@ -62,15 +70,15 @@ export function renderDefaultProperties({
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.fluido.nome}">Nome do Fluido</label>
-            <input type="text" id="input-fluid-name" title="${TOOLTIPS.fluido.nome}" value="${ENGINE.fluidoOperante.nome}">
+            <input type="text" id="input-fluid-name" title="${TOOLTIPS.fluido.nome}" value="${engine.fluidoOperante.nome}">
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.fluido.densidade}">Densidade (kg/m³)</label>
-            <input type="number" id="input-fluid-density" title="${TOOLTIPS.fluido.densidade}" value="${ENGINE.fluidoOperante.densidade}" step="1" min="100">
+            <input type="number" id="input-fluid-density" title="${TOOLTIPS.fluido.densidade}" value="${engine.fluidoOperante.densidade}" step="1" min="100">
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.fluido.temperatura}">Temperatura (${getUnitSymbol('temperature')})</label>
-            <input type="number" id="input-fluid-temp" title="${TOOLTIPS.fluido.temperatura}" value="${toDisplayValue('temperature', ENGINE.fluidoOperante.temperatura).toFixed(1)}" step="${getUnitStep('temperature')}" min="${toDisplayValue('temperature', -20).toFixed(1)}" max="${toDisplayValue('temperature', 200).toFixed(1)}">
+            <input type="number" id="input-fluid-temp" title="${TOOLTIPS.fluido.temperatura}" value="${toDisplayValue('temperature', engine.fluidoOperante.temperatura).toFixed(1)}" step="${getUnitStep('temperature')}" min="${toDisplayValue('temperature', -20).toFixed(1)}" max="${toDisplayValue('temperature', 200).toFixed(1)}">
         </div>
         <p title="${TOOLTIPS.painel.estadoVazio}" style="font-size: 12px; color:#95a5a6; text-align:center;">${TOOLTIPS.painel.estadoVazio}</p>
     `;
@@ -78,15 +86,15 @@ export function renderDefaultProperties({
     const advancedContent = `
         <div class="prop-group">
             <label title="${TOOLTIPS.fluido.viscosidade}">Viscosidade Dinâmica (Pa.s)</label>
-            <input type="number" id="input-fluid-viscosity" title="${TOOLTIPS.fluido.viscosidade}" value="${ENGINE.fluidoOperante.viscosidadeDinamicaPaS}" step="0.0001" min="0.0001">
+            <input type="number" id="input-fluid-viscosity" title="${TOOLTIPS.fluido.viscosidade}" value="${engine.fluidoOperante.viscosidadeDinamicaPaS}" step="0.0001" min="0.0001">
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.fluido.pressaoVapor}">Pressão de Vapor (${getUnitSymbol('pressure')} absoluta)</label>
-            <input type="number" id="input-fluid-vapor" title="${TOOLTIPS.fluido.pressaoVapor}" value="${displayUnitValue('pressure', ENGINE.fluidoOperante.pressaoVaporBar, 3)}" step="${displayStep('pressure', 0.001)}" min="${displayBound('pressure', 0.0001)}" max="${displayBound('pressure', 5)}">
+            <input type="number" id="input-fluid-vapor" title="${TOOLTIPS.fluido.pressaoVapor}" value="${displayUnitValue('pressure', engine.fluidoOperante.pressaoVaporBar, 3)}" step="${displayStep('pressure', 0.001)}" min="${displayBound('pressure', 0.0001)}" max="${displayBound('pressure', 5)}">
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.fluido.pressaoAtmosferica}">Pressão Atmosférica (${getUnitSymbol('pressure')} absoluta)</label>
-            <input type="number" id="input-fluid-atm" title="${TOOLTIPS.fluido.pressaoAtmosferica}" value="${displayUnitValue('pressure', ENGINE.fluidoOperante.pressaoAtmosfericaBar, 3)}" step="${displayStep('pressure', 0.001)}" min="${displayBound('pressure', 0.5)}" max="${displayBound('pressure', 2)}">
+            <input type="number" id="input-fluid-atm" title="${TOOLTIPS.fluido.pressaoAtmosferica}" value="${displayUnitValue('pressure', engine.fluidoOperante.pressaoAtmosfericaBar, 3)}" step="${displayStep('pressure', 0.001)}" min="${displayBound('pressure', 0.5)}" max="${displayBound('pressure', 2)}">
         </div>
     `;
 
@@ -101,17 +109,17 @@ export function renderDefaultProperties({
 
     bindUnitControls({ onChange: onRerender });
     bindPropertyTabs(propContent);
-    document.getElementById('sel-vel').value = ENGINE.velocidade;
-    document.getElementById('sel-vel').addEventListener('change', (event) => {
-        ENGINE.velocidade = parseFloat(event.target.value);
+    setValue('sel-vel', engine.velocidade);
+    bind('sel-vel', 'change', (event) => {
+        engine.velocidade = parseFloat(event.target.value);
     });
 
     const applyFluidFromInputs = ({ preferredPresetId = null } = {}) => {
         const fluidData = {};
-        const inputDensity = document.getElementById('input-fluid-density');
-        const inputViscosity = document.getElementById('input-fluid-viscosity');
-        const inputVapor = document.getElementById('input-fluid-vapor');
-        const inputAtm = document.getElementById('input-fluid-atm');
+        const inputDensity = byId('input-fluid-density');
+        const inputViscosity = byId('input-fluid-viscosity');
+        const inputVapor = byId('input-fluid-vapor');
+        const inputAtm = byId('input-fluid-atm');
 
         const densityResult = InputValidator.validateDensity(inputDensity.value, 'Densidade');
         if (!densityResult.valid) {
@@ -129,7 +137,7 @@ export function renderDefaultProperties({
         fluidData.viscosidadeDinamicaPaS = viscosityResult.value;
         clearInputError(inputViscosity);
 
-        const vaporResult = InputValidator.validatePressure(pressureInputValue('input-fluid-vapor', ENGINE.fluidoOperante.pressaoVaporBar), 5, 'Pressão de Vapor');
+        const vaporResult = InputValidator.validatePressure(pressureInputValue('input-fluid-vapor', engine.fluidoOperante.pressaoVaporBar), 5, 'Pressão de Vapor');
         if (!vaporResult.valid) {
             showInputError(inputVapor, vaporResult.error);
             return;
@@ -137,7 +145,7 @@ export function renderDefaultProperties({
         fluidData.pressaoVaporBar = vaporResult.value;
         clearInputError(inputVapor);
 
-        const atmResult = InputValidator.validatePressure(pressureInputValue('input-fluid-atm', ENGINE.fluidoOperante.pressaoAtmosfericaBar), 2, 'Pressão Atmosférica');
+        const atmResult = InputValidator.validatePressure(pressureInputValue('input-fluid-atm', engine.fluidoOperante.pressaoAtmosfericaBar), 2, 'Pressão Atmosférica');
         if (!atmResult.valid) {
             showInputError(inputAtm, atmResult.error);
             return;
@@ -145,26 +153,26 @@ export function renderDefaultProperties({
         fluidData.pressaoAtmosfericaBar = atmResult.value;
         clearInputError(inputAtm);
 
-        fluidData.nome = InputValidator.sanitizeText(document.getElementById('input-fluid-name').value, 50);
-        fluidData.temperatura = temperatureInputValue('input-fluid-temp', ENGINE.fluidoOperante.temperatura);
+        fluidData.nome = InputValidator.sanitizeText(valueOf('input-fluid-name'), 50);
+        fluidData.temperatura = temperatureInputValue('input-fluid-temp', engine.fluidoOperante.temperatura);
 
-        ENGINE.atualizarFluido(fluidData);
+        engine.atualizarFluido(fluidData);
 
-        const presetSelect = document.getElementById('sel-fluid-preset');
+        const presetSelect = byId('sel-fluid-preset');
         if (presetSelect) {
-            presetSelect.value = preferredPresetId || getCurrentFluidPresetId();
+            presetSelect.value = preferredPresetId || getCurrentFluidPresetId(engine);
         }
     };
 
-    document.getElementById('sel-fluid-preset').addEventListener('change', (event) => {
+    bind('sel-fluid-preset', 'change', (event) => {
         const preset = FLUID_PRESETS[event.target.value];
         if (!preset) return;
 
-        document.getElementById('input-fluid-name').value = preset.nome;
-        document.getElementById('input-fluid-density').value = preset.densidade;
-        document.getElementById('input-fluid-viscosity').value = preset.viscosidadeDinamicaPaS;
-        document.getElementById('input-fluid-temp').value = toDisplayValue('temperature', preset.temperatura).toFixed(1);
-        document.getElementById('input-fluid-vapor').value = formatUnitValue('pressure', preset.pressaoVaporBar, 3);
+        setValue('input-fluid-name', preset.nome);
+        setValue('input-fluid-density', preset.densidade);
+        setValue('input-fluid-viscosity', preset.viscosidadeDinamicaPaS);
+        setValue('input-fluid-temp', toDisplayValue('temperature', preset.temperatura).toFixed(1));
+        setValue('input-fluid-vapor', formatUnitValue('pressure', preset.pressaoVaporBar, 3));
         applyFluidFromInputs({ preferredPresetId: event.target.value });
     });
 
@@ -176,6 +184,6 @@ export function renderDefaultProperties({
         'input-fluid-vapor',
         'input-fluid-atm'
     ].forEach((id) => {
-        document.getElementById(id).addEventListener(id === 'input-fluid-name' ? 'input' : 'change', applyFluidFromInputs);
+        bind(id, id === 'input-fluid-name' ? 'input' : 'change', applyFluidFromInputs);
     });
 }

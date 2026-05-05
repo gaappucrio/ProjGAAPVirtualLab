@@ -15,6 +15,8 @@ import { InputValidator } from '../js/presentation/validation/InputValidator.js'
 
 const REGISTRY_ROOT = path.resolve('js/presentation/registry');
 const REGISTRY_SPECS_ROOT = path.resolve('js/presentation/registry/specs');
+const PRESENTATION_ROOT = path.resolve('js/presentation');
+const DOMAIN_SERVICES_ROOT = path.resolve('js/domain/services');
 const additionalPropsHook = ['propriedades', 'Adicionais'].join('');
 const setupPropsHook = ['setup', 'Props'].join('');
 const removedFiles = [
@@ -23,13 +25,22 @@ const removedFiles = [
     ['js', ['Fabrica', 'Equipamentos.js'].join('')],
     ['js', 'utils', ['Flow', 'Solver.js'].join('')],
     ['js', 'utils', 'InputValidator.js'],
-    ['js', 'utils', 'PipeHydraulics.js']
+    ['js', 'utils', 'PipeHydraulics.js'],
+    ['js', 'presentation', 'properties', 'component', 'PumpValveComponentPropertiesPresenter.js']
 ];
 
 function listSpecFiles(dirPath) {
     return fs.readdirSync(dirPath, { withFileTypes: true }).flatMap((entry) => {
         const fullPath = path.join(dirPath, entry.name);
         if (entry.isDirectory()) return listSpecFiles(fullPath);
+        return entry.isFile() && fullPath.endsWith('.js') ? [fullPath] : [];
+    });
+}
+
+function listJsFiles(dirPath) {
+    return fs.readdirSync(dirPath, { withFileTypes: true }).flatMap((entry) => {
+        const fullPath = path.join(dirPath, entry.name);
+        if (entry.isDirectory()) return listJsFiles(fullPath);
         return entry.isFile() && fullPath.endsWith('.js') ? [fullPath] : [];
     });
 }
@@ -91,6 +102,33 @@ test('registry de apresentação não depende de helpers do painel de propriedad
         assert.ok(!content.includes('InputValidator'), `${filePath} não deve importar validadores de painel`);
         assert.ok(!content.includes('renderPropertyTabs'), `${filePath} não deve importar abas de propriedades`);
         assert.ok(!content.includes('PropertyPresenterShared'), `${filePath} não deve depender de helpers de presenters`);
+    });
+});
+
+test('apresentação recebe engine por injeção, não por singleton global', () => {
+    listJsFiles(PRESENTATION_ROOT).forEach((filePath) => {
+        const content = fs.readFileSync(filePath, 'utf8');
+
+        assert.ok(
+            !content.includes('application/engine/SimulationEngine'),
+            `${filePath} não deve importar o singleton do motor diretamente`
+        );
+        assert.ok(
+            !/import\s*\{\s*ENGINE(?:\s|,|\})/.test(content),
+            `${filePath} deve receber o engine por injeção/contexto de apresentação`
+        );
+    });
+});
+
+test('solver de domínio depende de contexto hidráulico estreito', () => {
+    [
+        path.join(DOMAIN_SERVICES_ROOT, 'HydraulicNetworkSolver.js'),
+        path.join(DOMAIN_SERVICES_ROOT, 'HydraulicBranchModel.js')
+    ].forEach((filePath) => {
+        const content = fs.readFileSync(filePath, 'utf8');
+
+        assert.ok(!content.includes('this.engine'), `${filePath} não deve depender do objeto engine inteiro`);
+        assert.ok(!content.includes('constructor(engine)'), `${filePath} não deve receber engine cru no construtor`);
     });
 });
 

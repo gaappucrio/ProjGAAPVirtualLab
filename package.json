@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test --test-concurrency=1 --test-isolation=none Testes/validar-calculos.mjs Testes/topologia-e-solver.test.mjs Testes/monitor-slot-history.test.mjs Testes/camadas-compat.test.mjs Testes/cenarios-aplicacao.test.mjs"
+    "test": "node --test --test-concurrency=1 --test-isolation=none Testes/validar-calculos.mjs Testes/topologia-e-solver.test.mjs Testes/monitor-slot-history.test.mjs Testes/camadas-compat.test.mjs Testes/cenarios-aplicacao.test.mjs Testes/presentation-imports.test.mjs"
   }
 }

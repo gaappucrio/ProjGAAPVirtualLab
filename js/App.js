@@ -16,7 +16,7 @@ import { setupCameraControl } from './presentation/controllers/CameraController.
 import { setupPipeControl, updateAllPipes, updateConnectionVisualStates } from './presentation/controllers/PipeController.js';
 import { setupDragDrop } from './presentation/controllers/DragDropController.js';
 import { setupToolbar } from './presentation/controllers/ToolbarController.js';
-import { connectionService } from './application/services/ConnectionServiceRuntime.js';
+import { createConnectionServiceRuntime } from './application/services/ConnectionServiceRuntime.js';
 import { findConnectionByPath } from './infrastructure/rendering/ConnectionVisualRegistry.js';
 import {
     clearComponentVisualRegistry,
@@ -24,9 +24,11 @@ import {
     unregisterComponentVisual
 } from './infrastructure/dom/ComponentVisualRegistry.js';
 
-setupUI();
+const connectionService = createConnectionServiceRuntime(ENGINE);
+
+setupUI({ engine: ENGINE });
 setupCameraControl();
-setupPipeControl();
+setupPipeControl({ engine: ENGINE, connectionService });
 setupDragDrop();
 
 setPortStateUpdater(() => updatePortStates());
@@ -38,6 +40,7 @@ setComponentVisualCleanupHooks({
 });
 
 setupToolbar({
+    engine: ENGINE,
     onClearCanvas: () => {
         document.querySelectorAll('#workspace-canvas .placed-component').forEach((item) => item.remove());
     },

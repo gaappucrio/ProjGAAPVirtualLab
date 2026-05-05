@@ -1,7 +1,6 @@
-import { ENGINE } from '../../application/engine/SimulationEngine.js';
 import { ENGINE_EVENTS } from '../../application/events/EventTypes.js';
 
-export function setupToolbar({ onClearCanvas, onTopologyVisualChange } = {}) {
+export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange } = {}) {
     const btnRun = document.getElementById('btn-run');
     const btnClear = document.getElementById('btn-clear');
     const relativeHeightToggle = document.getElementById('toggle-relative-height');
@@ -35,29 +34,29 @@ export function setupToolbar({ onClearCanvas, onTopologyVisualChange } = {}) {
         relativeHeightNote.style.borderColor = '#f3c89f';
     }
 
-    updateRunButtonUI(ENGINE.isRunning);
-    relativeHeightToggle.checked = ENGINE.usarAlturaRelativa;
-    updateRelativeHeightUI(ENGINE.usarAlturaRelativa);
+    updateRunButtonUI(engine.isRunning);
+    relativeHeightToggle.checked = engine.usarAlturaRelativa;
+    updateRelativeHeightUI(engine.usarAlturaRelativa);
 
     btnRun.addEventListener('click', () => {
-        if (ENGINE.isRunning) ENGINE.stop();
-        else ENGINE.start();
+        if (engine.isRunning) engine.stop();
+        else engine.start();
 
-        updateRunButtonUI(ENGINE.isRunning);
+        updateRunButtonUI(engine.isRunning);
     });
 
     relativeHeightToggle.addEventListener('change', (e) => {
-        ENGINE.setUsarAlturaRelativa(e.target.checked);
-        updateRelativeHeightUI(ENGINE.usarAlturaRelativa);
+        engine.setUsarAlturaRelativa(e.target.checked);
+        updateRelativeHeightUI(engine.usarAlturaRelativa);
         onTopologyVisualChange?.();
     });
 
     btnClear.addEventListener('click', () => {
         onClearCanvas?.();
-        ENGINE.clear();
+        engine.clear();
     });
 
-    return ENGINE.subscribe((dados) => {
+    return engine.subscribe((dados) => {
         if (dados.tipo === ENGINE_EVENTS.MOTOR_STATE) {
             updateRunButtonUI(dados.rodando);
         }

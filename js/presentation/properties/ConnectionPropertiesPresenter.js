@@ -1,12 +1,14 @@
-import { ENGINE } from '../../application/engine/SimulationEngine.js';
 import { EngineEventPayloads } from '../../application/events/EventPayloads.js';
+import { getPresentationEngine } from '../context/PresentationEngineContext.js';
 import { clearInputError, InputValidator, showInputError } from '../validation/InputValidator.js';
 import { bindPropertyTabs, renderPropertyTabs } from '../../utils/PropertyTabs.js';
 import { TOOLTIPS } from '../../utils/Tooltips.js';
 import {
+    DEFAULT_DESIGN_VELOCITY_MPS,
     DEFAULT_PIPE_ROUGHNESS_MM,
     getUnitSymbol
 } from '../../utils/Units.js';
+import { getSuggestedDiameterForConnection } from '../../domain/services/PipeHydraulics.js';
 import {
     displayBound,
     displayEditableUnitValue,
@@ -14,11 +16,12 @@ import {
     displayUnitValue,
     rawBaseValue
 } from './PropertyValueFormatters.js';
+import { bind, setValue } from './PropertyDomAdapter.js';
 import { bindUnitControls, renderUnitControls } from './PropertyUnitsPresenter.js';
 
-function getConnectionDisplay(connection) {
-    const source = ENGINE.componentes.find((component) => component.id === connection.sourceId);
-    const target = ENGINE.componentes.find((component) => component.id === connection.targetId);
+function getConnectionDisplay(engine, connection) {
+    const source = engine.componentes.find((component) => component.id === connection.sourceId);
+    const target = engine.componentes.find((component) => component.id === connection.targetId);
     return {
         sourceLabel: source ? source.tag : connection.sourceId,
         targetLabel: target ? target.tag : connection.targetId
@@ -29,15 +32,21 @@ function lengthInputValue(rawValue, fallback = NaN) {
     return rawBaseValue('length', rawValue, fallback);
 }
 
+function getSuggestedDiameterM(connection, state) {
+    return getSuggestedDiameterForConnection(connection, state);
+}
+
 export function renderConnectionProperties({
     propContent,
     connection,
     onRerender
 }) {
-    ENGINE.ensureConnectionProperties(connection);
-    const state = ENGINE.getConnectionState(connection);
-    const labels = getConnectionDisplay(connection);
-    const geometry = ENGINE.getConnectionGeometry(connection);
+    const engine = getPresentationEngine();
+    engine.ensureConnectionProperties(connection);
+    const state = engine.getConnectionState(connection);
+    const labels = getConnectionDisplay(engine, connection);
+    const geometry = engine.getConnectionGeometry(connection);
+    const suggestedDiameterM = getSuggestedDiameterM(connection, state);
 
     const basicContent = `
         <div class="prop-group">
@@ -47,6 +56,15 @@ export function renderConnectionProperties({
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.diametro}">Diâmetro Interno (${getUnitSymbol('length')})</label>
             <input type="number" id="input-pipe-diameter" title="${TOOLTIPS.conexao.diametro}" value="${displayEditableUnitValue('length', connection.diameterM, 4)}" step="${displayStep('length', 0.005)}" min="${displayBound('length', 0.01)}" max="${displayBound('length', 0.3)}">
+        </div>
+        <div class="prop-group">
+            <label title="${TOOLTIPS.conexao.velocidadeProjeto}">Velocidade de Projeto (m/s)</label>
+            <input type="number" id="input-pipe-design-velocity" title="${TOOLTIPS.conexao.velocidadeProjeto}" value="${connection.designVelocityMps || DEFAULT_DESIGN_VELOCITY_MPS}" step="0.1" min="0.1" max="8">
+        </div>
+        <div class="prop-group">
+            <label title="${TOOLTIPS.conexao.diametroSugerido}">Diâmetro Sugerido (${getUnitSymbol('length')})</label>
+            <input type="text" id="disp-pipe-suggested-diameter" title="${TOOLTIPS.conexao.diametroSugerido}" value="${displayUnitValue('length', suggestedDiameterM, 4)}" disabled>
+            <button id="btn-apply-pipe-suggested-diameter" type="button" title="${TOOLTIPS.conexao.aplicarDiametroSugerido}" ${suggestedDiameterM > 0 ? '' : 'disabled'} style="margin-top:6px; padding:6px 8px; border:1px solid #bdc3c7; border-radius:4px; background:#fff; font-size:11px; cursor:pointer;">Aplicar diâmetro sugerido</button>
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.vazaoAtual}">Vazão Atual (${getUnitSymbol('flow')})</label>
@@ -124,18 +142,18 @@ export function renderConnectionProperties({
             }
             clearInputError(element);
             setter(result.value);
-            ENGINE.ensureConnectionProperties(connection);
-            ENGINE.clearConnectionDynamics?.();
-            if (!ENGINE.isRunning) ENGINE.resetHydraulicState?.();
-            ENGINE.updatePipesVisual?.();
-            ENGINE.notify(EngineEventPayloads.panelUpdate(0));
+            engine.ensureConnectionProperties(connection);
+            engine.clearConnectionDynamics?.();
+            if (!engine.isRunning) engine.resetHydraulicState?.();
+            engine.updatePipesVisual?.();
+            engine.notify(EngineEventPayloads.panelUpdate(0));
         } catch (error) {
             console.error(`Erro ao validar ${fieldName}:`, error);
             showInputError(element, `Erro: ${error.message}`);
         }
     };
 
-    document.getElementById('input-pipe-diameter').addEventListener('change', (event) => {
+    bind('input-pipe-diameter', 'change', (event) => {
         validatePipeInput(
             event.target,
             (value, name) => InputValidator.validateNumber(lengthInputValue(value), 0.01, 0.3, name),
@@ -144,7 +162,7 @@ export function renderConnectionProperties({
         );
     });
 
-    document.getElementById('input-pipe-extra-length').addEventListener('change', (event) => {
+    bind('input-pipe-extra-length', 'change', (event) => {
         validatePipeInput(
             event.target,
             (value, name) => InputValidator.validateNumber(lengthInputValue(value), 0, 500, name),
@@ -153,7 +171,7 @@ export function renderConnectionProperties({
         );
     });
 
-    document.getElementById('input-pipe-roughness').addEventListener('change', (event) => {
+    bind('input-pipe-roughness', 'change', (event) => {
         validatePipeInput(
             event.target,
             (value, name) => InputValidator.validateNumber(lengthInputValue(value), 0.000001, 0.005, name),
@@ -162,12 +180,39 @@ export function renderConnectionProperties({
         );
     });
 
-    document.getElementById('input-pipe-loss-k').addEventListener('change', (event) => {
+    bind('input-pipe-loss-k', 'change', (event) => {
         validatePipeInput(
             event.target,
             (value, name) => InputValidator.validateNumber(value, 0, 100, name),
             'Coeficiente Perda',
             (value) => { connection.perdaLocalK = value; }
         );
+    });
+
+    bind('input-pipe-design-velocity', 'change', (event) => {
+        validatePipeInput(
+            event.target,
+            (value, name) => InputValidator.validateNumber(value, 0.1, 8, name),
+            'Velocidade de projeto',
+            (value) => {
+                connection.designVelocityMps = value;
+                const suggested = getSuggestedDiameterM(connection, engine.getConnectionState(connection));
+                setValue('disp-pipe-suggested-diameter', displayUnitValue('length', suggested, 4));
+            }
+        );
+    });
+
+    bind('btn-apply-pipe-suggested-diameter', 'click', () => {
+        const suggested = getSuggestedDiameterM(connection, engine.getConnectionState(connection));
+        if (suggested <= 0) return;
+
+        connection.diameterM = suggested;
+        engine.ensureConnectionProperties(connection);
+        setValue('input-pipe-diameter', displayEditableUnitValue('length', connection.diameterM, 4));
+        setValue('disp-pipe-suggested-diameter', displayUnitValue('length', suggested, 4));
+        engine.clearConnectionDynamics?.();
+        if (!engine.isRunning) engine.resetHydraulicState?.();
+        engine.updatePipesVisual?.();
+        engine.notify(EngineEventPayloads.panelUpdate(0));
     });
 }

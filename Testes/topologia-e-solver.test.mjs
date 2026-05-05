@@ -24,6 +24,12 @@ function runSinglePhysicsStep(engine, dt = 0.1) {
     engine.componentes.forEach((component) => component.sincronizarMetricasFisicas(engine.fluidoOperante));
 }
 
+function runPhysicsSteps(engine, steps = 120, dt = 0.1) {
+    for (let i = 0; i < steps; i += 1) {
+        runSinglePhysicsStep(engine, dt);
+    }
+}
+
 function listDomainFiles(dirPath) {
     return fs.readdirSync(dirPath, { withFileTypes: true }).flatMap((entry) => {
         const fullPath = path.join(dirPath, entry.name);
@@ -134,4 +140,69 @@ test('solver distribui fluxo em bifurcação simples', () => {
     assert.ok(drenoA.vazaoRecebidaLps > 0, 'O primeiro ramo da bifurcação deve receber fluxo');
     assert.ok(drenoB.vazaoRecebidaLps > 0, 'O segundo ramo da bifurcação deve receber fluxo');
     assert.ok(fonte.fluxoReal >= drenoA.vazaoRecebidaLps + drenoB.vazaoRecebidaLps - 1e-9, 'A fonte deve suprir a soma dos ramos');
+});
+
+test('solver conserva massa em cadeia longa de componentes passantes', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-01', 'Fonte-01', 0, 0);
+    const dreno = new DrenoLogico('D-01', 'Dreno-01', 600, 0);
+    const valvulas = Array.from({ length: 5 }, (_, index) => {
+        const valvula = new ValvulaLogica(`V-${index + 1}`, `Válvula-${index + 1}`, 80 * (index + 1), 0);
+        valvula.aplicarPerfilCaracteristica('quick_opening');
+        valvula.setCoeficienteVazao(60);
+        valvula.setCoeficientePerda(0.1);
+        valvula.setAbertura(100);
+        return valvula;
+    });
+
+    fonte.pressaoFonteBar = 2.0;
+    fonte.vazaoMaxima = 150;
+
+    [fonte, ...valvulas, dreno].forEach((component) => engine.add(component));
+    [fonte, ...valvulas].forEach((source, index, chain) => {
+        const target = index === chain.length - 1 ? dreno : chain[index + 1];
+        source.conectarSaida(target);
+        engine.addConnection(new ConnectionModel({ sourceId: source.id, targetId: target.id }));
+    });
+
+    runPhysicsSteps(engine, 180);
+
+    assert.ok(dreno.vazaoRecebidaLps > 0, 'A cadeia longa ainda deve entregar alguma vazão com válvulas abertas');
+    assert.ok(
+        Math.abs(fonte.fluxoReal - dreno.vazaoRecebidaLps) < 1e-6,
+        'A vazão da fonte deve ser igual à vazão recebida no final da cadeia'
+    );
+    valvulas.forEach((valvula) => {
+        assert.ok(
+            Math.abs(valvula.estadoHidraulico.entradaVazaoLps - valvula.estadoHidraulico.saidaVazaoLps) < 1e-6,
+            `${valvula.id} deve conservar massa entre entrada e saída`
+        );
+    });
+});
+
+test('solver conserva massa em rede com 30 componentes e múltiplas saídas', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-30', 'Fonte-30', 0, 0);
+    const drenos = Array.from({ length: 29 }, (_, index) =>
+        new DrenoLogico(`D-${index + 1}`, `Saída-${index + 1}`, 120, index * 20)
+    );
+
+    fonte.pressaoFonteBar = 2.0;
+    fonte.vazaoMaxima = 500;
+
+    [fonte, ...drenos].forEach((component) => engine.add(component));
+    drenos.forEach((dreno) => {
+        fonte.conectarSaida(dreno);
+        engine.addConnection(new ConnectionModel({ sourceId: fonte.id, targetId: dreno.id }));
+    });
+
+    runPhysicsSteps(engine, 180);
+
+    const totalSaidasLps = drenos.reduce((sum, dreno) => sum + dreno.vazaoRecebidaLps, 0);
+    assert.equal(engine.componentes.length, 30);
+    assert.ok(totalSaidasLps > 0, 'A rede de 30 componentes deve manter escoamento');
+    assert.ok(
+        Math.abs(fonte.fluxoReal - totalSaidasLps) < 1e-6,
+        'A vazão da fonte deve bater com a soma das múltiplas saídas'
+    );
 });

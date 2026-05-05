@@ -284,14 +284,20 @@ export class TanqueLogico extends ComponenteFisico {
         }
 
         const { u, erro } = this._ultimoEstadoControle;
+        const resumo = this.getResumoAjustePressaoSetpoint(
+            fluido,
+            this.getSimulationContext().usarAlturaRelativa
+        );
+        const entradaExcedeCapacidadeNoSetpoint = resumo.vazaoEntradaAtualLps
+            > (resumo.vazaoSaidaLimiteSetpointLps * FATOR_EXCESSO_ENTRADA);
         const saturado = u <= U_SAIDA_TOTALMENTE_ABERTA
             && erro < TOLERANCIA_ERRO_SATURACAO
-            && this.lastQin > (this.lastQout * FATOR_EXCESSO_ENTRADA);
+            && entradaExcedeCapacidadeNoSetpoint;
 
         this.alertaSaturacao = saturado
             ? {
                 ativo: true,
-                ...this.getResumoAjustePressaoSetpoint(fluido, this.getSimulationContext().usarAlturaRelativa)
+                ...resumo
             }
             : null;
     }

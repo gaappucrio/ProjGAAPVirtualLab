@@ -1,9 +1,21 @@
-import { ENGINE } from '../../application/engine/SimulationEngine.js';
 import { ComponentEventPayloads, EngineEventPayloads } from '../../application/events/EventPayloads.js';
 import { COMPONENT_EVENTS, ENGINE_EVENTS } from '../../application/events/EventTypes.js';
 import { InputValidator, clearInputError, showInputError } from '../validation/InputValidator.js';
+import { getPresentationEngine } from '../context/PresentationEngineContext.js';
 import { renderPropertyTabs } from '../../utils/PropertyTabs.js';
 import { TOOLTIPS } from '../../utils/Tooltips.js';
+import {
+    bind,
+    byId,
+    isActive,
+    setDisabled,
+    setDisplay,
+    setHtml,
+    setText,
+    setValue,
+    setValueWhenBlurred,
+    valueOf
+} from './PropertyDomAdapter.js';
 import {
     formatUnitValue,
     getUnitSymbol,
@@ -13,7 +25,7 @@ import {
 } from '../../utils/Units.js';
 
 export {
-    ENGINE,
+    getPresentationEngine,
     ComponentEventPayloads,
     EngineEventPayloads,
     COMPONENT_EVENTS,
@@ -24,7 +36,17 @@ export {
     renderPropertyTabs,
     subscribeUnitPreferences,
     getUnitSymbol,
-    TOOLTIPS
+    TOOLTIPS,
+    bind,
+    byId,
+    isActive,
+    setDisabled,
+    setDisplay,
+    setHtml,
+    setText,
+    setValue,
+    setValueWhenBlurred,
+    valueOf
 };
 
 export const TOOLTIP = TOOLTIPS.componentes;
@@ -50,7 +72,7 @@ export const baseFromDisplay = (category, rawValue, fallback) => {
     const converted = toBaseValue(category, parseFloat(rawValue));
     return Number.isFinite(converted) ? converted : fallback;
 };
-export const notifyPanelRefresh = () => ENGINE.notify(EngineEventPayloads.panelUpdate(0));
+export const notifyPanelRefresh = () => getPresentationEngine().notify(EngineEventPayloads.panelUpdate(0));
 export const volumeText = (baseValue, digits = null) => `${displayUnitValue('volume', baseValue, digits)} ${getUnitSymbol('volume')}`;
 
 export const validateInputWithFeedback = (inputElement, validatorFn, fieldName, onSuccess, fallback) => {

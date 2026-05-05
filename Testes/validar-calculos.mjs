@@ -6,6 +6,12 @@ import { BombaLogica } from '../js/domain/components/BombaLogica.js';
 import { FonteLogica } from '../js/domain/components/FonteLogica.js';
 import { TanqueLogico } from '../js/domain/components/TanqueLogico.js';
 import { VALVE_PROFILE_DEFINITIONS, ValvulaLogica } from '../js/domain/components/ValvulaLogica.js';
+import { ConnectionModel } from '../js/domain/models/ConnectionModel.js';
+import {
+    diameterFromFlowVelocity,
+    diameterFromM3sVelocity,
+    getSuggestedDiameterForConnection
+} from '../js/domain/services/PipeHydraulics.js';
 import { buildPumpCurveDatasets } from '../js/infrastructure/charts/PumpChartAdapter.js';
 import { pressureFromHeadBar } from '../js/utils/Units.js';
 
@@ -23,6 +29,49 @@ function resetEngine() {
     ENGINE.usarAlturaRelativa = true;
     ENGINE.fluidoOperante.densidade = 1000;
 }
+
+test('dimensionamento por continuidade calcula diâmetro a partir de vazão e velocidade', () => {
+    const flowM3s = 0.026995881908059335;
+    const velocityMps = 5.370660060990888;
+
+    approx(
+        diameterFromM3sVelocity(flowM3s, velocityMps),
+        0.08,
+        1e-12,
+        'Diâmetro por Q em m³/s e V em m/s'
+    );
+    approx(
+        diameterFromFlowVelocity(flowM3s * 1000, velocityMps),
+        0.08,
+        1e-12,
+        'Diâmetro por vazão interna em L/s e V em m/s'
+    );
+});
+
+test('diâmetro sugerido usa vazão de projeto estável ao aplicar repetidas vezes', () => {
+    const connection = new ConnectionModel({
+        sourceId: 'F-01',
+        targetId: 'D-01',
+        designVelocityMps: 2
+    });
+    const initialState = {
+        flowLps: 20,
+        targetFlowLps: 20
+    };
+
+    const firstSuggestion = getSuggestedDiameterForConnection(connection, initialState);
+    connection.diameterM = firstSuggestion;
+    connection.refreshDerivedState();
+
+    const recalculatedStateAfterApply = {
+        flowLps: 12,
+        targetFlowLps: 12
+    };
+    const secondSuggestion = getSuggestedDiameterForConnection(connection, recalculatedStateAfterApply);
+
+    approx(connection.designFlowLps, 20, 1e-12, 'Vazão de projeto preservada');
+    approx(secondSuggestion, firstSuggestion, 1e-12, 'Diâmetro sugerido deve permanecer estável');
+});
 
 test('tempo de curso e rampa aceitam zero e respeitam a escala configurada', () => {
     resetEngine();
@@ -258,6 +307,8 @@ test('resumo de ajuste de pressão no set point considera altura relativa ligada
     const resumoAtivo = tanque.getResumoAjustePressaoSetpoint(ENGINE.fluidoOperante, true);
     approx(resumoAtivo.vazaoSaidaLimiteSetpointLps, vazaoSetpointAtiva, 1e-9, 'Vazão limite no set point com altura relativa');
     approx(resumoAtivo.ajustesFonte[0].pressaoRecomendadaBar, pressaoFonteAtivaEsperada, 1e-9, 'Pressão recomendada com altura relativa');
+    tanque._atualizarAlertaSaturacao(ENGINE.fluidoOperante);
+    assert.equal(tanque.alertaSaturacao?.ativo, true, 'Alerta deve usar a capacidade de saída estimada no nível do set point');
 
     const pressaoSaidaAtualSemAltura = pressureFromHeadBar(1.92, densidade);
     const pressaoSaidaSetpointSemAltura = pressureFromHeadBar(1.2, densidade);

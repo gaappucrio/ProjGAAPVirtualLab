@@ -10,11 +10,53 @@ import {
     DEFAULT_PIPE_FRICTION,
     DEFAULT_PIPE_MINOR_LOSS,
     DEFAULT_PIPE_ROUGHNESS_MM,
+    DEFAULT_DESIGN_VELOCITY_MPS,
     areaFromDiameter,
     lpsToM3s
 } from '../../utils/Units.js';
 import { clamp } from '../components/BaseComponente.js';
 import { calculateConnectionGeometry } from './PortPositionCalculator.js';
+
+/**
+ * Calcula o diâmetro interno sugerido a partir da vazão em m³/s e da
+ * velocidade média desejada. É a forma direta de d = sqrt(4Q / piV).
+ */
+export function diameterFromM3sVelocity(flowM3s, velocityMps) {
+    if (flowM3s <= 0 || velocityMps <= 0) return 0;
+    return Math.sqrt((4 * flowM3s) / (Math.PI * velocityMps));
+}
+
+/**
+ * Versão compatível com a base interna do simulador, onde vazão é L/s.
+ */
+export function diameterFromFlowVelocity(flowLps, velocityMps = DEFAULT_DESIGN_VELOCITY_MPS) {
+    return diameterFromM3sVelocity(lpsToM3s(flowLps), velocityMps);
+}
+
+export function getCurrentDesignFlowCandidateLps(conn, state = {}) {
+    return Math.max(
+        0,
+        state.targetFlowLps || 0,
+        state.flowLps || 0,
+        conn?.lastResolvedFlowLps || 0
+    );
+}
+
+export function ensureConnectionDesignFlowLps(conn, state = {}) {
+    if (!conn) return 0;
+
+    const currentCandidateLps = getCurrentDesignFlowCandidateLps(conn, state);
+    if (!Number.isFinite(conn.designFlowLps) || conn.designFlowLps <= 0) {
+        conn.designFlowLps = currentCandidateLps;
+    }
+
+    return Math.max(0, conn.designFlowLps || 0);
+}
+
+export function getSuggestedDiameterForConnection(conn, state = {}) {
+    const designVelocityMps = conn?.designVelocityMps || DEFAULT_DESIGN_VELOCITY_MPS;
+    return diameterFromFlowVelocity(ensureConnectionDesignFlowLps(conn, state), designVelocityMps);
+}
 
 /**
  * Classifica o regime de escoamento pelo número de Reynolds.
@@ -106,6 +148,10 @@ export function ensureConnectionProperties(conn) {
     if (typeof conn.roughnessMm !== 'number') conn.roughnessMm = DEFAULT_PIPE_ROUGHNESS_MM;
     if (typeof conn.extraLengthM !== 'number') conn.extraLengthM = DEFAULT_PIPE_EXTRA_LENGTH_M;
     if (typeof conn.perdaLocalK !== 'number') conn.perdaLocalK = DEFAULT_PIPE_MINOR_LOSS;
+    if (typeof conn.designVelocityMps !== 'number' || conn.designVelocityMps <= 0) {
+        conn.designVelocityMps = DEFAULT_DESIGN_VELOCITY_MPS;
+    }
+    if (typeof conn.designFlowLps !== 'number' || conn.designFlowLps < 0) conn.designFlowLps = 0;
     if (typeof conn.transientFlowLps !== 'number') conn.transientFlowLps = 0;
     if (typeof conn.lastResolvedFlowLps !== 'number') conn.lastResolvedFlowLps = 0;
 

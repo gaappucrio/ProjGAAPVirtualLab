@@ -2,11 +2,9 @@ import {
     SINK_PROPERTIES_PRESENTER,
     SOURCE_PROPERTIES_PRESENTER
 } from './BoundaryComponentPropertiesPresenter.js';
-import {
-    PUMP_PROPERTIES_PRESENTER,
-    VALVE_PROPERTIES_PRESENTER
-} from './PumpValveComponentPropertiesPresenter.js';
+import { PUMP_PROPERTIES_PRESENTER } from './PumpComponentPropertiesPresenter.js';
 import { TANK_PROPERTIES_PRESENTER } from './TankComponentPropertiesPresenter.js';
+import { VALVE_PROPERTIES_PRESENTER } from './ValveComponentPropertiesPresenter.js';
 
 const COMPONENT_PROPERTY_PRESENTERS = {
     source: SOURCE_PROPERTIES_PRESENTER,

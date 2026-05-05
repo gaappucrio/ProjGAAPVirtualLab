@@ -6,6 +6,7 @@ import { ComponentEventPayloads } from '../../application/events/EventPayloads.j
 import { bindPropertyTabs } from '../../utils/PropertyTabs.js';
 import { TOOLTIPS } from '../../utils/Tooltips.js';
 import { getComponentPropertyPresenter } from './component/ComponentPropertyPresenterRegistry.js';
+import { bind } from './PropertyDomAdapter.js';
 import { bindUnitControls, renderUnitControls } from './PropertyUnitsPresenter.js';
 import { bindTankSaturationAlertActions } from './TankSaturationAlertPresenter.js';
 
@@ -42,7 +43,7 @@ export function renderComponentProperties({
 
     bindUnitControls();
     bindPropertyTabs(propContent);
-    document.getElementById('input-tag')?.addEventListener('input', (event) => {
+    bind('input-tag', 'input', (event) => {
         component.tag = event.target.value;
         component.notify(ComponentEventPayloads.tagUpdate());
     });

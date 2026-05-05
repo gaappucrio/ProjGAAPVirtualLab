@@ -4,9 +4,10 @@ import {
     toBaseValue,
     toDisplayValue
 } from '../../utils/Units.js';
+import { byId, valueOf } from './PropertyDomAdapter.js';
 
 export function setFieldValue(id, value, category = null, digits = 2, suffix = '') {
-    const element = document.getElementById(id);
+    const element = byId(id);
     if (!element) return;
     element.value = category ? `${formatUnitValue(category, value, digits)}${suffix}` : value;
 }
@@ -30,7 +31,7 @@ export function displayStep(category, baseStep, digits = 6) {
 }
 
 export function inputBaseValue(category, id, fallback) {
-    const value = toBaseValue(category, parseFloat(document.getElementById(id).value));
+    const value = toBaseValue(category, parseFloat(valueOf(id)));
     return Number.isFinite(value) ? value : fallback;
 }
 

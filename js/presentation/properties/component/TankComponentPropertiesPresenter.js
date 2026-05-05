@@ -4,6 +4,8 @@ import {
     InputValidator,
     TOOLTIP,
     baseFromDisplay,
+    bind,
+    byId,
     displayBound,
     displayEditableUnitValue,
     displayStep,
@@ -13,6 +15,7 @@ import {
     makeUnitLabel,
     notifyPanelRefresh,
     renderPropertyTabs,
+    setValue,
     validateInputWithFeedback
 } from '../PropertyPresenterShared.js';
 
@@ -118,9 +121,9 @@ export const TANK_PROPERTIES_PRESENTER = {
         };
         const atualizarEstadoControleNivel = () => {
             const diagnostico = diagnosticoControleNivel();
-            const grp = document.getElementById('grp-sp-main');
-            const statusEl = document.getElementById('tank-sp-status-text');
-            const spAtivoEl = document.getElementById('input-sp-ativo');
+            const grp = byId('grp-sp-main');
+            const statusEl = byId('tank-sp-status-text');
+            const spAtivoEl = byId('input-sp-ativo');
             const mostrarParametros = comp.setpointAtivo ? 'block' : 'none';
 
             if (spAtivoEl) {
@@ -140,8 +143,8 @@ export const TANK_PROPERTIES_PRESENTER = {
                 grp.style.background = comp.setpointAtivo ? '#fdf5f4' : (diagnostico.podeAtivar ? '#f9fbfb' : '#fff8ee');
             }
 
-            const kpGroup = document.getElementById('group-ctrl-params');
-            const kiGroup = document.getElementById('group-ctrl-ki');
+            const kpGroup = byId('group-ctrl-params');
+            const kiGroup = byId('group-ctrl-ki');
             if (kpGroup) kpGroup.style.display = mostrarParametros;
             if (kiGroup) kiGroup.style.display = mostrarParametros;
         };
@@ -155,14 +158,12 @@ export const TANK_PROPERTIES_PRESENTER = {
                 pBottom: comp.pressaoFundoBar
             }));
 
-            const pressureDisplay = document.getElementById('disp-pressao-tanque');
-            if (pressureDisplay) pressureDisplay.value = displayUnitValue('pressure', comp.pressaoFundoBar, 2);
-            const levelDisplay = document.getElementById('disp-nível-tanque');
-            if (levelDisplay) levelDisplay.value = displayUnitValue('length', comp.getAlturaLiquidoM(), 2);
+            setValue('disp-pressao-tanque', displayUnitValue('pressure', comp.pressaoFundoBar, 2));
+            setValue('disp-nível-tanque', displayUnitValue('length', comp.getAlturaLiquidoM(), 2));
             notifyPanelRefresh();
         };
 
-        document.getElementById('input-cap').addEventListener('change', (event) => {
+        bind('input-cap', 'change', (event) => {
             validateInputWithFeedback(
                 event.target,
                 (value, name) => InputValidator.validateVolume(baseFromDisplay('volume', value, 0), 10000, name),
@@ -170,14 +171,15 @@ export const TANK_PROPERTIES_PRESENTER = {
                 (validated) => {
                     comp.capacidadeMaxima = validated;
                     comp.volumeAtual = Math.min(comp.volumeAtual, comp.capacidadeMaxima);
-                    document.getElementById('input-volume-tanque').max = displayBound('volume', comp.capacidadeMaxima);
+                    const volumeInput = byId('input-volume-tanque');
+                    if (volumeInput) volumeInput.max = displayBound('volume', comp.capacidadeMaxima);
                     comp.sincronizarMetricasFisicas();
                     emitirVolumeAtualizado();
                 }
             );
         });
 
-        document.getElementById('input-volume-tanque').addEventListener('change', (event) => {
+        bind('input-volume-tanque', 'change', (event) => {
             validateInputWithFeedback(
                 event.target,
                 (value, name) => InputValidator.validateNumber(baseFromDisplay('volume', value, 0), 0, comp.capacidadeMaxima, name),
@@ -191,7 +193,7 @@ export const TANK_PROPERTIES_PRESENTER = {
             );
         });
 
-        document.getElementById('input-altura-tanque').addEventListener('change', (event) => {
+        bind('input-altura-tanque', 'change', (event) => {
             validateInputWithFeedback(
                 event.target,
                 (value, name) => InputValidator.validateHeight(baseFromDisplay('length', value, 0), 100, name),
@@ -200,17 +202,19 @@ export const TANK_PROPERTIES_PRESENTER = {
                     comp.alturaUtilMetros = validated;
                     comp.alturaBocalEntradaM = Math.min(comp.alturaBocalEntradaM, comp.alturaUtilMetros);
                     comp.alturaBocalSaidaM = Math.min(comp.alturaBocalSaidaM, comp.alturaUtilMetros);
-                    document.getElementById('input-altura-entrada-tanque').max = displayBound('length', comp.alturaUtilMetros);
-                    document.getElementById('input-altura-saída-tanque').max = displayBound('length', comp.alturaUtilMetros);
-                    document.getElementById('input-altura-entrada-tanque').value = displayEditableUnitValue('length', comp.alturaBocalEntradaM, 3);
-                    document.getElementById('input-altura-saída-tanque').value = displayEditableUnitValue('length', comp.alturaBocalSaidaM, 3);
+                    const inletHeight = byId('input-altura-entrada-tanque');
+                    const outletHeight = byId('input-altura-saída-tanque');
+                    if (inletHeight) inletHeight.max = displayBound('length', comp.alturaUtilMetros);
+                    if (outletHeight) outletHeight.max = displayBound('length', comp.alturaUtilMetros);
+                    setValue('input-altura-entrada-tanque', displayEditableUnitValue('length', comp.alturaBocalEntradaM, 3));
+                    setValue('input-altura-saída-tanque', displayEditableUnitValue('length', comp.alturaBocalSaidaM, 3));
                     comp.sincronizarMetricasFisicas();
                     emitirVolumeAtualizado();
                 }
             );
         });
 
-        document.getElementById('input-altura-entrada-tanque').addEventListener('change', (event) => {
+        bind('input-altura-entrada-tanque', 'change', (event) => {
             validateInputWithFeedback(
                 event.target,
                 (value, name) => InputValidator.validateHeight(baseFromDisplay('length', value, 0), comp.alturaUtilMetros, name),
@@ -223,7 +227,7 @@ export const TANK_PROPERTIES_PRESENTER = {
             );
         });
 
-        document.getElementById('input-altura-saída-tanque').addEventListener('change', (event) => {
+        bind('input-altura-saída-tanque', 'change', (event) => {
             validateInputWithFeedback(
                 event.target,
                 (value, name) => InputValidator.validateHeight(baseFromDisplay('length', value, 0), comp.alturaUtilMetros, name),
@@ -236,7 +240,7 @@ export const TANK_PROPERTIES_PRESENTER = {
             );
         });
 
-        document.getElementById('input-cd-tanque').addEventListener('change', (event) => {
+        bind('input-cd-tanque', 'change', (event) => {
             validateInputWithFeedback(
                 event.target,
                 (value, name) => InputValidator.validateNumber(value, 0.05, 1, name),
@@ -245,7 +249,7 @@ export const TANK_PROPERTIES_PRESENTER = {
             );
         });
 
-        document.getElementById('input-k-entrada-tanque').addEventListener('change', (event) => {
+        bind('input-k-entrada-tanque', 'change', (event) => {
             validateInputWithFeedback(
                 event.target,
                 (value, name) => InputValidator.validateNumber(value, 0, 50, name),
@@ -254,15 +258,14 @@ export const TANK_PROPERTIES_PRESENTER = {
             );
         });
 
-        const spAtivoEl = document.getElementById('input-sp-ativo');
-        spAtivoEl.addEventListener('change', (event) => {
+        bind('input-sp-ativo', 'change', (event) => {
             comp.setSetpointAtivo(event.target.checked);
             atualizarEstadoControleNivel();
             notifyPanelRefresh();
         });
 
-        const spSlider = document.getElementById('input-sp');
-        const spNum = document.getElementById('val-sp');
+        const spSlider = byId('input-sp');
+        const spNum = byId('val-sp');
 
         const updateFromSlider = (value) => {
             spNum.value = value;
@@ -284,9 +287,9 @@ export const TANK_PROPERTIES_PRESENTER = {
             notifyPanelRefresh();
         };
 
-        spSlider.addEventListener('input', (event) => updateFromSlider(event.target.value));
-        spNum.addEventListener('change', (event) => updateFromInput(event.target.value));
-        document.getElementById('input-kp').addEventListener('change', (event) => {
+        bind('input-sp', 'input', (event) => updateFromSlider(event.target.value));
+        bind('val-sp', 'change', (event) => updateFromInput(event.target.value));
+        bind('input-kp', 'change', (event) => {
             validateInputWithFeedback(
                 event.target,
                 (value, name) => InputValidator.validateNumber(value, 1, 500, name),
@@ -297,7 +300,7 @@ export const TANK_PROPERTIES_PRESENTER = {
                 }
             );
         });
-        document.getElementById('input-ki').addEventListener('change', (event) => {
+        bind('input-ki', 'change', (event) => {
             validateInputWithFeedback(
                 event.target,
                 (value, name) => InputValidator.validateNumber(value, 0, 100, name),

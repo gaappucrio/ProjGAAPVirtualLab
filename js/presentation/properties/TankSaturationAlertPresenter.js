@@ -1,4 +1,11 @@
 import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
+import {
+    bind,
+    byId,
+    setDisplay,
+    setHtml,
+    setText
+} from './PropertyDomAdapter.js';
 import { formatMeasuredValue } from './PropertyValueFormatters.js';
 
 function getRecommendedSourcePressureText(alerta) {
@@ -18,16 +25,16 @@ function getRecommendedSourcePressureText(alerta) {
 }
 
 export function updateTankSaturationAlert(component) {
-    const painelAlerta = document.getElementById('painel-alerta-saturacao');
-    const textoAlerta = document.getElementById('texto-alerta-saturacao');
-    const btnAjuste = document.getElementById('btn-aplicar-alerta-saturacao');
-    const feedbackAjuste = document.getElementById('texto-acao-alerta-saturacao');
+    const painelAlerta = byId('painel-alerta-saturacao');
+    const textoAlerta = byId('texto-alerta-saturacao');
+    const btnAjuste = byId('btn-aplicar-alerta-saturacao');
+    const feedbackAjuste = byId('texto-acao-alerta-saturacao');
 
     if (!painelAlerta || !textoAlerta || !(component instanceof TanqueLogico)) return;
 
     const alerta = component.alertaSaturacao;
     if (!alerta?.ativo) {
-        painelAlerta.style.display = 'none';
+        setDisplay('painel-alerta-saturacao', 'none');
         if (feedbackAjuste) {
             feedbackAjuste.textContent = '';
             feedbackAjuste.dataset.state = '';
@@ -46,13 +53,13 @@ export function updateTankSaturationAlert(component) {
         ? ` Há ${alerta.quantidadeBombasMontante} bomba(s) no trecho de entrada; o ajuste automático atua apenas nas fontes de alimentação.`
         : '';
 
-    painelAlerta.style.display = 'block';
-    textoAlerta.innerHTML = `
+    setDisplay('painel-alerta-saturacao', 'block');
+    setHtml('texto-alerta-saturacao', `
         A saída do tanque atingiu o limite físico para o controle de nível.
         ${textoPressao}
         A vazão máxima estimada de saída no set point é <b>${formatMeasuredValue('flow', alerta.vazaoSaidaLimiteSetpointLps, 2)}</b>.
         ${textoModoAltura}${textoBombas}
-    `;
+    `);
 
     if (btnAjuste) {
         btnAjuste.style.display = 'inline-flex';
@@ -65,21 +72,21 @@ export function updateTankSaturationAlert(component) {
     }
 
     if (feedbackAjuste && !alerta.autoAjustavel && !feedbackAjuste.dataset.state) {
-        feedbackAjuste.textContent = 'Conecte uma fonte de entrada para permitir o ajuste automático.';
+        setText('texto-acao-alerta-saturacao', 'Conecte uma fonte de entrada para permitir o ajuste automático.');
         feedbackAjuste.style.color = '#a84300';
     } else if (feedbackAjuste && alerta.autoAjustavel && !feedbackAjuste.dataset.state) {
-        feedbackAjuste.textContent = '';
+        setText('texto-acao-alerta-saturacao', '');
     }
 }
 
 export function bindTankSaturationAlertActions(component, { onAdjustmentApplied } = {}) {
     if (!(component instanceof TanqueLogico)) return;
 
-    const btnAjuste = document.getElementById('btn-aplicar-alerta-saturacao');
-    const feedbackAjuste = document.getElementById('texto-acao-alerta-saturacao');
+    const btnAjuste = byId('btn-aplicar-alerta-saturacao');
+    const feedbackAjuste = byId('texto-acao-alerta-saturacao');
     if (!btnAjuste || !feedbackAjuste) return;
 
-    btnAjuste.addEventListener('click', () => {
+    bind('btn-aplicar-alerta-saturacao', 'click', () => {
         const resultado = component.aplicarAjustePressaoSetpoint();
         if (resultado.aplicado) {
             feedbackAjuste.textContent = resultado.quantidadeFontes === 1
@@ -106,11 +113,11 @@ export function updateTankControlAvailabilityUI(component) {
         podeAtivar: true,
         motivoBloqueio: ''
     };
-    const spAtivoEl = document.getElementById('input-sp-ativo');
-    const statusEl = document.getElementById('tank-sp-status-text');
-    const grp = document.getElementById('grp-sp-main');
-    const kpGroup = document.getElementById('group-ctrl-params');
-    const kiGroup = document.getElementById('group-ctrl-ki');
+    const spAtivoEl = byId('input-sp-ativo');
+    const statusEl = byId('tank-sp-status-text');
+    const grp = byId('grp-sp-main');
+    const kpGroup = byId('group-ctrl-params');
+    const kiGroup = byId('group-ctrl-ki');
 
     if (spAtivoEl) {
         spAtivoEl.disabled = !diagnostico.podeAtivar;

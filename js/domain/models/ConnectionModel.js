@@ -3,6 +3,7 @@ import {
     DEFAULT_PIPE_EXTRA_LENGTH_M,
     DEFAULT_PIPE_MINOR_LOSS,
     DEFAULT_PIPE_ROUGHNESS_MM,
+    DEFAULT_DESIGN_VELOCITY_MPS,
     areaFromDiameter
 } from '../../utils/Units.js';
 
@@ -36,6 +37,8 @@ export class ConnectionModel {
         roughnessMm = DEFAULT_PIPE_ROUGHNESS_MM,
         extraLengthM = DEFAULT_PIPE_EXTRA_LENGTH_M,
         perdaLocalK = DEFAULT_PIPE_MINOR_LOSS,
+        designVelocityMps = DEFAULT_DESIGN_VELOCITY_MPS,
+        designFlowLps = 0,
         transientFlowLps = 0,
         lastResolvedFlowLps = 0
     }) {
@@ -48,6 +51,8 @@ export class ConnectionModel {
         this.roughnessMm = Number(roughnessMm) || DEFAULT_PIPE_ROUGHNESS_MM;
         this.extraLengthM = Number(extraLengthM) || DEFAULT_PIPE_EXTRA_LENGTH_M;
         this.perdaLocalK = Number(perdaLocalK) || DEFAULT_PIPE_MINOR_LOSS;
+        this.designVelocityMps = Number(designVelocityMps) || DEFAULT_DESIGN_VELOCITY_MPS;
+        this.designFlowLps = Number(designFlowLps) || 0;
         this.transientFlowLps = Number(transientFlowLps) || 0;
         this.lastResolvedFlowLps = Number(lastResolvedFlowLps) || 0;
         this.areaM2 = areaFromDiameter(this.diameterM);
@@ -58,4 +63,3 @@ export class ConnectionModel {
         return this;
     }
 }
-

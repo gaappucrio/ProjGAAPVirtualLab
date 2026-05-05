@@ -3,13 +3,11 @@
 // Arquivo: js/presentation/controllers/PipeController.js
 // =========================================
 
-import { ENGINE, EPSILON_FLOW } from '../../application/engine/SimulationEngine.js';
-import { connectionService } from '../../application/services/ConnectionServiceRuntime.js';
 import { EngineEventPayloads } from '../../application/events/EventPayloads.js';
 import { ENGINE_EVENTS } from '../../application/events/EventTypes.js';
 import { TransientConnectionStore } from '../../application/stores/TransientConnectionStore.js';
 import { camera } from './CameraController.js';
-import { formatUnitValue, getUnitSymbol } from '../../utils/Units.js';
+import { EPSILON_FLOW, formatUnitValue, getUnitSymbol } from '../../utils/Units.js';
 import { updatePortStates } from '../../utils/PortStateManager.js';
 import {
     getComponentPortElement
@@ -29,11 +27,21 @@ import {
     updateTransientConnectionVisual
 } from '../../infrastructure/rendering/PipeRenderer.js';
 
-const pipeLayer = document.getElementById('pipe-layer');
 const transientConnection = new TransientConnectionStore();
 let transientPath = null;
 let pipeControlInitialized = false;
 let connectionEventAdapterInitialized = false;
+let engine = null;
+let connectionService = null;
+
+function getEngine() {
+    if (!engine) throw new Error('Engine não foi injetado no controlador de tubos.');
+    return engine;
+}
+
+function getPipeLayer() {
+    return document.getElementById('pipe-layer');
+}
 
 export function getPortCoords(portEl) {
     const rect = portEl.getBoundingClientRect();
@@ -56,7 +64,7 @@ function resetPipeSelection() {
 }
 
 function selectConnectionPath(connection, pathEl) {
-    ENGINE.selectConnection(connection);
+    getEngine().selectConnection(connection);
     document.querySelectorAll('.placed-component').forEach((element) => element.classList.remove('selected'));
     resetPipeSelection();
     pathEl.classList.add('selected');
@@ -71,8 +79,9 @@ function clearTransientVisual() {
 function applyTransientVisualState() {
     if (!transientPath) return;
 
-    transientPath.setAttribute('class', `pipe-line${ENGINE.isRunning ? ' active' : ''}`);
-    transientPath.setAttribute('marker-end', ENGINE.isRunning ? 'url(#arrow-active)' : 'url(#arrow)');
+    const currentEngine = getEngine();
+    transientPath.setAttribute('class', `pipe-line${currentEngine.isRunning ? ' active' : ''}`);
+    transientPath.setAttribute('marker-end', currentEngine.isRunning ? 'url(#arrow-active)' : 'url(#arrow)');
 }
 
 function renderTransientConnection(draft = transientConnection.snapshot()) {
@@ -82,7 +91,7 @@ function renderTransientConnection(draft = transientConnection.snapshot()) {
     }
 
     if (!transientPath) {
-        transientPath = createTransientConnectionVisual(pipeLayer, ENGINE.isRunning);
+        transientPath = createTransientConnectionVisual(getPipeLayer(), getEngine().isRunning);
     }
 
     applyTransientVisualState();
@@ -93,7 +102,7 @@ function cancelTransientConnection() {
     const draft = transientConnection.cancel();
     if (!draft.active) return;
 
-    ENGINE.notify(EngineEventPayloads.connectionCancelled({
+    getEngine().notify(EngineEventPayloads.connectionCancelled({
         sourceComponentId: draft.sourceComponentId
     }));
 }
@@ -101,7 +110,7 @@ function cancelTransientConnection() {
 function bindConnectionVisual(connection) {
     if (getConnectionVisual(connection)) return;
 
-    createConnectionVisual(pipeLayer, connection, {
+    createConnectionVisual(getPipeLayer(), connection, {
         onMouseDown: (currentConnection, event, pathEl) => {
             selectConnectionPath(currentConnection, pathEl);
             event.stopPropagation();
@@ -133,26 +142,27 @@ function syncConnectionLayout(connection) {
         connection,
         renderPoints.sourcePoint,
         renderPoints.targetPoint,
-        ENGINE.getConnectionGeometry(connection),
-        ENGINE.usarAlturaRelativa
+        getEngine().getConnectionGeometry(connection),
+        getEngine().usarAlturaRelativa
     );
 }
 
 export function getConnectionFlow(connection) {
-    const flow = ENGINE.resolveConnectionDisplayFlow(connection);
+    const flow = getEngine().resolveConnectionDisplayFlow(connection);
     if (flow === null || flow === undefined) return flow;
     if (flow <= EPSILON_FLOW) return 0;
     return flow;
 }
 
 function updateConnectionVisualState(connection) {
-    const state = ENGINE.getConnectionState(connection);
-    const flow = ENGINE.isRunning ? state.flowLps : 0;
+    const currentEngine = getEngine();
+    const state = currentEngine.getConnectionState(connection);
+    const flow = currentEngine.isRunning ? state.flowLps : 0;
     const labelFlow = getConnectionFlow(connection);
 
     updateConnectionFlowVisual(connection, {
         active: flow > 0.05,
-        flowLabel: (!ENGINE.isRunning || labelFlow === null || labelFlow === undefined || labelFlow <= EPSILON_FLOW)
+        flowLabel: (!currentEngine.isRunning || labelFlow === null || labelFlow === undefined || labelFlow <= EPSILON_FLOW)
             ? ''
             : `${formatUnitValue('flow', labelFlow, 2)} ${getUnitSymbol('flow')}`,
         markerId: flow > 0.05 ? 'url(#arrow-active)' : 'url(#arrow)',
@@ -161,13 +171,13 @@ function updateConnectionVisualState(connection) {
 }
 
 export function updateConnectionVisualStates() {
-    ENGINE.conexoes.forEach((connection) => {
+    getEngine().conexoes.forEach((connection) => {
         updateConnectionVisualState(connection);
     });
 }
 
 export function updateAllPipes() {
-    ENGINE.conexoes.forEach((connection) => {
+    getEngine().conexoes.forEach((connection) => {
         syncConnectionLayout(connection);
     });
 
@@ -182,7 +192,7 @@ function setupConnectionEventAdapter() {
     if (connectionEventAdapterInitialized) return;
     connectionEventAdapterInitialized = true;
 
-    ENGINE.subscribe((payload) => {
+    getEngine().subscribe((payload) => {
         switch (payload.tipo) {
             case ENGINE_EVENTS.CONNECTION_STARTED:
             case ENGINE_EVENTS.CONNECTION_PREVIEW:
@@ -212,8 +222,10 @@ function setupConnectionEventAdapter() {
     });
 }
 
-export function setupPipeControl() {
+export function setupPipeControl({ engine: injectedEngine, connectionService: injectedConnectionService } = {}) {
     if (pipeControlInitialized) return;
+    engine = injectedEngine;
+    connectionService = injectedConnectionService;
     pipeControlInitialized = true;
     setupConnectionEventAdapter();
 
@@ -225,7 +237,7 @@ export function setupPipeControl() {
         if (!(target instanceof Element)) return;
         if (!target.classList.contains('port-node') || target.dataset.type !== 'out') return;
 
-        const sourceComponent = ENGINE.getComponentById(target.dataset.compId);
+        const sourceComponent = getEngine().getComponentById(target.dataset.compId);
         if (!sourceComponent) return;
 
         const sourcePoint = getPortCoords(target);
@@ -238,7 +250,7 @@ export function setupPipeControl() {
             sourcePoint
         });
 
-        ENGINE.notify(EngineEventPayloads.connectionStarted({
+        getEngine().notify(EngineEventPayloads.connectionStarted({
             sourceComponentId: sourceComponent.id,
             sourceEndpoint,
             sourcePoint
@@ -259,7 +271,7 @@ export function setupPipeControl() {
 
         transientConnection.updatePreview(previewPoint);
 
-        ENGINE.notify(EngineEventPayloads.connectionPreview({
+        getEngine().notify(EngineEventPayloads.connectionPreview({
             sourceComponentId: draft.sourceComponentId,
             sourcePoint: draft.sourcePoint,
             previewPoint
@@ -278,8 +290,8 @@ export function setupPipeControl() {
             return;
         }
 
-        const sourceComponent = ENGINE.getComponentById(draft.sourceComponentId);
-        const targetComponent = ENGINE.getComponentById(dropTarget.dataset.compId);
+        const sourceComponent = getEngine().getComponentById(draft.sourceComponentId);
+        const targetComponent = getEngine().getComponentById(dropTarget.dataset.compId);
         const sourcePort = getComponentPortElement(draft.sourceComponentId, draft.sourcePortType || 'out');
 
         if (!sourceComponent || !targetComponent || !sourcePort || sourceComponent === targetComponent) {
@@ -291,7 +303,7 @@ export function setupPipeControl() {
         const connection = connectionService.connect(sourceComponent, sourcePort, targetComponent, dropTarget);
 
         if (!connection && confirmedDraft.active) {
-            ENGINE.notify(EngineEventPayloads.connectionCancelled({
+            getEngine().notify(EngineEventPayloads.connectionCancelled({
                 sourceComponentId: confirmedDraft.sourceComponentId
             }));
         }

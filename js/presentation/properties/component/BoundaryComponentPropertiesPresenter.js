@@ -1,8 +1,9 @@
 import {
-    ENGINE,
     InputValidator,
     TOOLTIP,
     baseFromDisplay,
+    bind,
+    byId,
     displayBound,
     displayEditableUnitValue,
     displayStep,
@@ -28,10 +29,10 @@ export const SOURCE_PROPERTIES_PRESENTER = {
         </div>
     `,
     bind: (comp) => {
-        const inputPressure = document.getElementById('input-pressao-fonte');
-        const inputFlow = document.getElementById('input-vazao-fonte-max');
+        const inputPressure = byId('input-pressao-fonte');
+        const inputFlow = byId('input-vazao-fonte-max');
 
-        inputPressure?.addEventListener('change', () => {
+        bind('input-pressao-fonte', 'change', () => {
             validateInputWithFeedback(
                 inputPressure,
                 (value, name) => InputValidator.validatePressure(baseFromDisplay('pressure', value, 0), 20, name),
@@ -40,7 +41,7 @@ export const SOURCE_PROPERTIES_PRESENTER = {
             );
         });
 
-        inputFlow?.addEventListener('change', () => {
+        bind('input-vazao-fonte-max', 'change', () => {
             validateInputWithFeedback(
                 inputFlow,
                 (value, name) => InputValidator.validateFlow(baseFromDisplay('flow', value, 0), 500, name),
@@ -63,9 +64,9 @@ export const SINK_PROPERTIES_PRESENTER = {
         </div>
     `,
     bind: (comp) => {
-        const inputPressure = document.getElementById('input-pressao-dreno');
+        const inputPressure = byId('input-pressao-dreno');
 
-        inputPressure?.addEventListener('change', () => {
+        bind('input-pressao-dreno', 'change', () => {
             validateInputWithFeedback(
                 inputPressure,
                 (value, name) => InputValidator.validatePressure(baseFromDisplay('pressure', value, 0), 10, name),

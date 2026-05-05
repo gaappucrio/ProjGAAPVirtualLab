@@ -1,4 +1,3 @@
-import { ENGINE } from '../engine/SimulationEngine.js';
 import { ConnectionService } from './ConnectionService.js';
 import { createConnectionEndpointDefinition } from '../../infrastructure/rendering/ConnectionVisualRegistry.js';
 
@@ -31,4 +30,6 @@ export class ConnectionServiceRuntimeAdapter {
     }
 }
 
-export const connectionService = new ConnectionServiceRuntimeAdapter(ENGINE);
+export function createConnectionServiceRuntime(engine) {
+    return new ConnectionServiceRuntimeAdapter(engine);
+}

@@ -3,7 +3,6 @@
 // Arquivo: js/presentation/controllers/PresentationController.js
 // ====================================
 
-import { ENGINE } from '../../application/engine/SimulationEngine.js';
 import { EngineEventPayloads } from '../../application/events/EventPayloads.js';
 
 import {
@@ -18,8 +17,8 @@ import { renderConnectionProperties as renderConnectionPropertiesPresenter } fro
 import { renderComponentProperties as renderComponentPropertiesPresenter } from '../properties/ComponentPropertiesPresenter.js';
 import { renderDefaultProperties as renderDefaultPropertiesPresenter } from '../properties/DefaultPropertiesPresenter.js';
 import { updatePropertyPanelValues } from '../properties/PropertyLiveUpdater.js';
+import { setPresentationEngine } from '../context/PresentationEngineContext.js';
 
-const monitorController = createMonitorController({ engine: ENGINE });
 const propertyPanelContext = createPropertyPanelContextStore({
     getContentElement: () => document.getElementById('prop-content'),
     getScrollContainer: () => document.querySelector('#properties .side-panel-content'),
@@ -27,7 +26,19 @@ const propertyPanelContext = createPropertyPanelContextStore({
     restorePropertyTabsState
 });
 
-export function setupPresentation() {
+let presentationEngine = null;
+let monitorController = null;
+
+function getEngine() {
+    if (!presentationEngine) throw new Error('Engine não foi injetado no coordenador de apresentação.');
+    return presentationEngine;
+}
+
+export function setupPresentation({ engine } = {}) {
+    presentationEngine = engine;
+    setPresentationEngine(engine);
+    monitorController = createMonitorController({ engine });
+
     setupLayoutController({
         onChartLayoutChange: () => {
             monitorController.updateLayout();
@@ -45,7 +56,7 @@ function getConnectionContextKey(connection) {
     return propertyPanelContext.getConnectionContextKey(connection);
 }
 
-function getPropertyContextKey(component = ENGINE.selectedComponent, connection = ENGINE.selectedConnection) {
+function getPropertyContextKey(component = getEngine().selectedComponent, connection = getEngine().selectedConnection) {
     return propertyPanelContext.getContextKey(component, connection);
 }
 
@@ -63,8 +74,9 @@ function restorePropertyPanelContextState(contextKey, { onAfterRestore } = {}) {
 function renderCurrentProperties() {
     capturePropertyPanelContextState();
 
-    const component = ENGINE.selectedComponent;
-    const connection = ENGINE.selectedConnection;
+    const engine = getEngine();
+    const component = engine.selectedComponent;
+    const connection = engine.selectedConnection;
     const nextContextKey = getPropertyContextKey(component, connection);
 
     monitorController.refreshSelection(component, connection);
@@ -101,14 +113,15 @@ function renderComponentProperties(component) {
     renderComponentPropertiesPresenter({
         propContent: getPropContent(),
         component,
-        onTankAdjustmentApplied: () => ENGINE.notify(EngineEventPayloads.panelUpdate(0))
+        onTankAdjustmentApplied: () => getEngine().notify(EngineEventPayloads.panelUpdate(0))
     });
 }
 
 function setupSubscriptions() {
-    setupWorkspaceSelectionController({ engine: ENGINE });
+    const engine = getEngine();
+    setupWorkspaceSelectionController({ engine });
 
-    ENGINE.subscribe((dados) => {
+    engine.subscribe((dados) => {
         if (dados.tipo === 'selecao') {
             renderCurrentProperties();
             return;
@@ -121,9 +134,9 @@ function setupSubscriptions() {
 
         if (dados.tipo === 'update_painel') {
             updatePropertyPanelValues({
-                engine: ENGINE,
-                component: ENGINE.selectedComponent,
-                connection: ENGINE.selectedConnection,
+                engine,
+                component: engine.selectedComponent,
+                connection: engine.selectedConnection,
                 monitorController
             });
 
@@ -135,7 +148,7 @@ function setupSubscriptions() {
 }
 
 export function updatePipesVisualUI() {
-    ENGINE.updatePipesVisual();
+    getEngine().updatePipesVisual();
 }
 
 

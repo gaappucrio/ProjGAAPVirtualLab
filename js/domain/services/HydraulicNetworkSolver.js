@@ -9,8 +9,9 @@ const MAX_COMPONENT_VISITS = 8;
 const DEBUG_PHYSICS = false;
 
 export class HydraulicNetworkSolver {
-    constructor(engine) {
-        this.engine = engine;
+    constructor(hydraulicContext, hydraulicModel) {
+        this.context = hydraulicContext;
+        this.hydraulicModel = hydraulicModel;
         this.metrics = {
             lastIterations: 0,
             lastError: 0,
@@ -21,10 +22,11 @@ export class HydraulicNetworkSolver {
     }
 
     resolve(dt) {
-        const hydraulicModel = this.engine.hydraulicBranchModel || this.engine;
+        const hydraulicModel = this.hydraulicModel;
+        const network = this.context;
         this.metrics.totalSolverCalls++;
-        this.engine.resetHydraulicState();
-        this.engine.conexoes.forEach((conn) => {
+        network.resetHydraulicState();
+        network.conexoes.forEach((conn) => {
             hydraulicModel.ensureConnectionProperties(conn);
             conn._activeTick = false;
         });
@@ -40,20 +42,20 @@ export class HydraulicNetworkSolver {
             queue.push(comp);
         };
 
-        this.engine.componentes.forEach((comp) => {
+        network.componentes.forEach((comp) => {
             if (comp instanceof FonteLogica) enqueue(comp);
             else if (comp instanceof TanqueLogico && comp.volumeAtual > EPSILON_FLOW) enqueue(comp);
         });
 
         let steps = 0;
-        if (DEBUG_PHYSICS) console.log(`[Solver] Iniciando com ${this.engine.componentes.length} componentes, máx ${MAX_QUEUE_STEPS} iterações`);
+        if (DEBUG_PHYSICS) console.log(`[Solver] Iniciando com ${network.componentes.length} componentes, máx ${MAX_QUEUE_STEPS} iterações`);
 
         while (queueIndex < queue.length && steps < MAX_QUEUE_STEPS) {
             steps += 1;
             const comp = queue[queueIndex++];
             if (!hydraulicModel.hasPendingEmission(comp, dt)) continue;
 
-            const outputs = this.engine.getOutputConnections(comp);
+            const outputs = network.getOutputConnections(comp);
             if (outputs.length === 0) continue;
 
             const supply = hydraulicModel.buildSupplyState(comp, dt);
@@ -85,7 +87,7 @@ export class HydraulicNetworkSolver {
 
                 const deliveredFlow = hydraulicModel.applyBranchFlow(comp, item.conn, supply, item.estimate, branchFlow, dt);
                 emittedFlowLps += deliveredFlow;
-                const target = this.engine.getComponentById(item.conn.targetId);
+                const target = network.getComponentById(item.conn.targetId);
                 if (deliveredFlow > EPSILON_FLOW && (target instanceof BombaLogica || target instanceof ValvulaLogica)) {
                     enqueue(target);
                 }
@@ -105,6 +107,7 @@ export class HydraulicNetworkSolver {
         }
 
         hydraulicModel.relaxIdleConnections(dt);
+        this.metrics.lastError = hydraulicModel.balancePassThroughMass();
     }
 
     getMetrics() {

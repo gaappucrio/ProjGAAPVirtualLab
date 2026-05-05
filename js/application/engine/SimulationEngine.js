@@ -11,20 +11,13 @@ import {
     pressureLossFromFlow,
     smoothFirstOrder
 } from '../../domain/components/BaseComponente.js';
-import { BombaLogica } from '../../domain/components/BombaLogica.js';
 import { Fluido } from '../../domain/components/Fluido.js';
 import { HydraulicBranchModel } from '../../domain/services/HydraulicBranchModel.js';
 import { HydraulicNetworkSolver } from '../../domain/services/HydraulicNetworkSolver.js';
-import {
-    ensureConnectionProperties as ensurePipeConnectionProperties,
-    getConnectionGeometryFromPoints,
-    getPipeHydraulics as calculatePipeHydraulics
-} from '../../domain/services/PipeHydraulics.js';
+import { ensureConnectionProperties as ensurePipeConnectionProperties } from '../../domain/services/PipeHydraulics.js';
 import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
-import { ValvulaLogica } from '../../domain/components/ValvulaLogica.js';
 import { createSimulationContext } from '../../domain/context/SimulationContext.js';
 import {
-    DEFAULT_FLUID_VAPOR_PRESSURE_BAR,
     DEFAULT_FLUID_VISCOSITY_PA_S,
     DEFAULT_PIPE_FRICTION,
     EPSILON_FLOW,
@@ -32,9 +25,11 @@ import {
     pressureFromHeadBar
 } from '../../utils/Units.js';
 import { profiler } from '../../utils/PerformanceProfiler.js';
-import { calculatePortPosition } from '../../domain/services/PortPositionCalculator.js';
-import { ENGINE_EVENTS } from '../events/EventTypes.js';
-import { ComponentEventPayloads, EngineEventPayloads } from '../events/EventPayloads.js';
+import { FLUID_PRESETS } from '../config/FluidPresets.js';
+import { EngineEventPayloads } from '../events/EventPayloads.js';
+import { HydraulicNetworkContext } from './HydraulicNetworkContext.js';
+import { SimulationTickPipeline } from './SimulationTickPipeline.js';
+import { ConnectionGeometryService } from '../services/ConnectionGeometryService.js';
 import { ConnectionStateStore } from '../stores/ConnectionStateStore.js';
 import { SelectionStore } from '../stores/SelectionStore.js';
 import { SimulationConfigStore } from '../stores/SimulationConfigStore.js';
@@ -66,29 +61,7 @@ let clearComponentVisualRegistryHandler = null;
 
 const safeViscosity = (value) => Math.max(0.00001, value || DEFAULT_FLUID_VISCOSITY_PA_S);
 
-export const FLUID_PRESETS = {
-    agua: {
-        nome: 'Água',
-        densidade: 997,
-        temperatura: 25,
-        viscosidadeDinamicaPaS: DEFAULT_FLUID_VISCOSITY_PA_S,
-        pressaoVaporBar: DEFAULT_FLUID_VAPOR_PRESSURE_BAR
-    },
-    oleo_leve: {
-        nome: 'Óleo leve',
-        densidade: 860,
-        temperatura: 25,
-        viscosidadeDinamicaPaS: 0.035,
-        pressaoVaporBar: 0.003
-    },
-    glicol_30: {
-        nome: 'Glicol 30%',
-        densidade: 1045,
-        temperatura: 25,
-        viscosidadeDinamicaPaS: 0.0035,
-        pressaoVaporBar: 0.02
-    }
-};
+export { FLUID_PRESETS };
 
 export function setPortStateUpdater(fn) {
     portStateUpdater = fn;
@@ -132,8 +105,15 @@ export class SistemaSimulacao extends Observable {
         this.selectionStore = new SelectionStore();
         this.topology = new TopologyGraph();
         this.connectionStateStore = new ConnectionStateStore();
-        this.hydraulicBranchModel = new HydraulicBranchModel(this);
-        this.hydraulicSolver = new HydraulicNetworkSolver(this);
+        this.connectionGeometryService = new ConnectionGeometryService({
+            topology: this.topology,
+            getUsarAlturaRelativa: () => this.usarAlturaRelativa,
+            getComponentVisualPosition: (component) => componentVisualPositionResolver(component)
+        });
+        this.hydraulicContext = new HydraulicNetworkContext(this);
+        this.hydraulicBranchModel = new HydraulicBranchModel(this.hydraulicContext);
+        this.hydraulicSolver = new HydraulicNetworkSolver(this.hydraulicContext, this.hydraulicBranchModel);
+        this.tickPipeline = new SimulationTickPipeline({ engine: this, profiler });
         this.isRunning = false;
         this.lastTime = 0;
         this.elapsedTime = 0;
@@ -339,31 +319,7 @@ export class SistemaSimulacao extends Observable {
     tick(timestamp) {
         if (!this.isRunning) return;
 
-        profiler.startTick();
-
-        let dt = ((timestamp - this.lastTime) / 1000.0) * this.velocidade;
-        this.lastTime = timestamp;
-        if (dt > 0.1) dt = 0.1;
-
-        this.elapsedTime += dt;
-
-        this.componentes.forEach(c => {
-            if (c instanceof TanqueLogico) c._rodarControlador(dt);
-        });
-
-        this.componentes.forEach(c => c.atualizarDinamica(dt, this.fluidoOperante));
-        this.resolvePushBasedNetwork(dt);
-
-        this.componentes.forEach(c => {
-            if (c instanceof TanqueLogico) c.atualizarFisica(dt, this.fluidoOperante);
-            else c.sincronizarMetricasFisicas(this.fluidoOperante);
-        });
-
-        this.updatePipesVisual();
-        this.notify(EngineEventPayloads.panelUpdate(dt));
-
-        profiler.endTick(this.getSolverMetrics());
-
+        this.tickPipeline.run(timestamp);
         requestAnimationFrame(this.tick.bind(this));
     }
 
@@ -445,69 +401,9 @@ export class SistemaSimulacao extends Observable {
         return ensurePipeConnectionProperties(conn);
     }
 
-    getLogicalPortPosition(portEl) {
-        if (!portEl) return { x: 0, y: 0 };
-
-        const parentComponent = portEl.closest('.placed-component');
-        const svgEl = portEl.ownerSVGElement;
-        const compX = parentComponent ? parseFloat(parentComponent.style.left || '0') : 0;
-        const compY = parentComponent ? parseFloat(parentComponent.style.top || '0') : 0;
-        const svgX = svgEl ? parseFloat(svgEl.style.left || '0') : 0;
-        const svgY = svgEl ? parseFloat(svgEl.style.top || '0') : 0;
-        const localX = parseFloat(portEl.getAttribute('cx') || '0');
-        const localY = parseFloat(portEl.getAttribute('cy') || '0');
-
-        return {
-            x: compX + svgX + localX,
-            y: compY + svgY + localY
-        };
-    }
-
-    // Calcula a geometria da conexão sem depender de DOM.
-    // Busca componentes pela topologia e calcula as posições dos portos.
+    // Mantém o contrato público do motor e delega a geometria para um serviço dedicado.
     getConnectionGeometry(conn) {
-        const sourceComponent = this.topology.getComponentById(conn.sourceId);
-        const targetComponent = this.topology.getComponentById(conn.targetId);
-
-        if (!sourceComponent || !targetComponent) {
-            return { straightLengthM: 1.0, lengthM: 1.0 + (conn.extraLengthM || 0), headGainM: 0 };
-        }
-
-        const resolvedSourceVisualPos = componentVisualPositionResolver(sourceComponent);
-        const resolvedTargetVisualPos = componentVisualPositionResolver(targetComponent);
-
-        const resolvedSourcePoint = calculatePortPosition(
-            sourceComponent,
-            conn.sourceEndpoint.portType,
-            {
-                offsetX: conn.sourceEndpoint.offsetX,
-                offsetY: conn.sourceEndpoint.offsetY,
-                floorOffsetY: conn.sourceEndpoint.floorOffsetY || 0
-            },
-            resolvedSourceVisualPos,
-            this.usarAlturaRelativa
-        );
-
-        const resolvedTargetPoint = calculatePortPosition(
-            targetComponent,
-            conn.targetEndpoint.portType,
-            {
-                offsetX: conn.targetEndpoint.offsetX,
-                offsetY: conn.targetEndpoint.offsetY,
-                floorOffsetY: conn.targetEndpoint.floorOffsetY || 0
-            },
-            resolvedTargetVisualPos,
-            this.usarAlturaRelativa
-        );
-
-        return getConnectionGeometryFromPoints(resolvedSourcePoint, resolvedTargetPoint, conn, this.usarAlturaRelativa);
-    }
-
-    // Usa PipeHydraulics.getPipeHydraulics
-    getPipeHydraulics(conn, geometry, areaM2, flowLps) {
-        const density = this.fluidoOperante.densidade;
-        const viscosityPaS = this.fluidoOperante.viscosidadeDinamicaPaS;
-        return calculatePipeHydraulics(conn, geometry, areaM2, flowLps, density, viscosityPaS);
+        return this.connectionGeometryService.getConnectionGeometry(conn);
     }
 
     resolvePushBasedNetwork(dt) {
@@ -516,28 +412,7 @@ export class SistemaSimulacao extends Observable {
 
     updatePipesVisual() {
         connectionVisualUpdater?.();
-
-        if (this.isRunning) {
-            this.componentes.forEach(c => {
-                if (c instanceof TanqueLogico && c.setpointAtivo) {
-                    const notificarEstado = (equipamento) => {
-                        if (equipamento instanceof ValvulaLogica) {
-                            equipamento.notify(ComponentEventPayloads.state({
-                                aberta: equipamento.aberta,
-                                grau: equipamento.grauAbertura
-                            }));
-                        } else if (equipamento instanceof BombaLogica) {
-                            equipamento.notify(ComponentEventPayloads.state({
-                                isOn: equipamento.isOn,
-                                grau: equipamento.grauAcionamento
-                            }));
-                        }
-                    };
-                    c.inputs.forEach(notificarEstado);
-                    c.outputs.forEach(notificarEstado);
-                }
-            });
-        }
+        this.tickPipeline.notifySetpointActuators();
     }
 }
 
