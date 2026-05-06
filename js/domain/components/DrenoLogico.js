@@ -15,8 +15,9 @@ export class DrenoLogico extends ComponenteFisico {
     }
 
     getFluxoSaidaFromTank(nivelNormalizado) {
-        const { fluidoOperante } = this.getSimulationContext();
-        const densidade = fluidoOperante?.densidade || 1000;
+        const context = this.getSimulationContext();
+        const fluid = context.queries.getComponentFluid?.(this) || context.fluidoOperante;
+        const densidade = fluid?.densidade || 1000;
         const headBar = pressureFromHeadBar(Math.max(0, nivelNormalizado) * 2.4, densidade);
         return flowFromBernoulli(headBar, this.getAreaConexaoM2(), densidade, 1 + this.perdaEntradaK);
     }

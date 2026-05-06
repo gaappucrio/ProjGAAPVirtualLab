@@ -19,6 +19,7 @@ import {
 } from './utils/I18n.js';
 import { setupPresentation as setupUI } from './presentation/controllers/PresentationController.js';
 import { setupCameraControl } from './presentation/controllers/CameraController.js';
+import { setupHelpController } from './presentation/controllers/HelpController.js';
 import { setupPipeControl, updateAllPipes, updateConnectionVisualStates } from './presentation/controllers/PipeController.js';
 import { setupDragDrop } from './presentation/controllers/DragDropController.js';
 import { setupToolbar } from './presentation/controllers/ToolbarController.js';
@@ -45,6 +46,7 @@ function translateDefaultTagsForCurrentLanguage() {
 applyLanguageToDocument();
 
 setupUI({ engine: ENGINE });
+setupHelpController();
 setupCameraControl();
 setupPipeControl({ engine: ENGINE, connectionService });
 setupDragDrop();

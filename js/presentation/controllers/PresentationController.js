@@ -133,7 +133,7 @@ function setupSubscriptions() {
             return;
         }
 
-        if (dados.tipo === 'config_simulacao' || dados.tipo === 'fluido_update') {
+        if (dados.tipo === 'config_simulacao') {
             renderCurrentProperties();
             return;
         }

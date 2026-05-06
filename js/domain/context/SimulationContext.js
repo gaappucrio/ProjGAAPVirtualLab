@@ -4,6 +4,7 @@ export function createSimulationContext(overrides = {}) {
     const queries = {
         isBombaBloqueadaPorSetpoint: noop,
         isValvulaBloqueadaPorSetpoint: noop,
+        getComponentFluid: () => overrides.fluidoOperante || null,
         ...overrides.queries
     };
 

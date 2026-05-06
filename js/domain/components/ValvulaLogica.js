@@ -320,9 +320,10 @@ export class ValvulaLogica extends ComponenteFisico {
         super.sincronizarMetricasFisicas();
         this.fluxoReal = this.estadoHidraulico.saidaVazaoLps;
         const parametros = this.getParametrosHidraulicos();
-        const { fluidoOperante } = this.getSimulationContext();
-        this.deltaPAtualBar = parametros.opening > 0 && fluidoOperante
-            ? pressureLossFromFlow(this.fluxoReal, parametros.hydraulicAreaM2, fluidoOperante.densidade, parametros.localLossCoeff)
+        const context = this.getSimulationContext();
+        const fluid = context.queries.getComponentFluid?.(this) || context.fluidoOperante;
+        this.deltaPAtualBar = parametros.opening > 0 && fluid
+            ? pressureLossFromFlow(this.fluxoReal, parametros.hydraulicAreaM2, fluid.densidade, parametros.localLossCoeff)
             : 0;
 
         this.pressaoSaidaAtualBar = Math.max(0, this.pressaoEntradaAtualBar - this.deltaPAtualBar);

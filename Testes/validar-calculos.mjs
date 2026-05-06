@@ -48,6 +48,45 @@ test('dimensionamento por continuidade calcula diâmetro a partir de vazão e ve
     );
 });
 
+test('fonte mantem propriedades de fluido de entrada independentes do fluido operante', () => {
+    const fonte = new FonteLogica('F-01', 'inlet-01', 0, 0);
+
+    assert.equal(fonte.fluidoEntrada.nome, '\u00c1gua');
+    approx(fonte.fluidoEntrada.densidade, 997, 1e-12, 'densidade padrao do fluido de entrada');
+    approx(fonte.fluidoEntrada.viscosidadeDinamicaPaS, 0.00089, 1e-12, 'viscosidade padrao do fluido de entrada');
+    approx(fonte.fluidoEntrada.pressaoVaporBar, 0.0317, 1e-12, 'pressao de vapor padrao do fluido de entrada');
+
+    fonte.atualizarFluidoEntrada({
+        nome: 'Oleo teste',
+        densidade: 850,
+        temperatura: 40,
+        viscosidadeDinamicaPaS: 0.02,
+        pressaoVaporBar: 0.004,
+        pressaoAtmosfericaBar: 1.02
+    });
+
+    assert.equal(fonte.fluidoEntrada.nome, 'Oleo teste');
+    approx(fonte.fluidoEntrada.densidade, 850, 1e-12, 'densidade customizada do fluido de entrada');
+    approx(fonte.fluidoEntrada.temperatura, 40, 1e-12, 'temperatura customizada do fluido de entrada');
+    approx(fonte.fluidoEntrada.viscosidadeDinamicaPaS, 0.02, 1e-12, 'viscosidade customizada do fluido de entrada');
+    approx(fonte.fluidoEntrada.pressaoVaporBar, 0.004, 1e-12, 'pressao de vapor customizada do fluido de entrada');
+    approx(fonte.fluidoEntrada.pressaoAtmosfericaBar, 1.02, 1e-12, 'pressao atmosferica customizada do fluido de entrada');
+});
+
+test('fonte preserva preset custom mesmo com propriedades iguais a um preset', () => {
+    const fonte = new FonteLogica('F-02', 'inlet-02', 0, 0);
+
+    fonte.atualizarFluidoEntrada({
+        nome: '\u00c1gua',
+        densidade: 997,
+        temperatura: 25,
+        viscosidadeDinamicaPaS: 0.00089,
+        pressaoVaporBar: 0.0317
+    }, { presetId: 'custom' });
+
+    assert.equal(fonte.fluidoEntradaPresetId, 'custom');
+});
+
 test('diâmetro sugerido usa vazão de projeto estável ao aplicar repetidas vezes', () => {
     const connection = new ConnectionModel({
         sourceId: 'F-01',

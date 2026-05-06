@@ -300,8 +300,8 @@ const TEXTS = {
             spActive: 'PA ativo'
         },
         componentPrefixes: {
-            source: 'Entrada',
-            sink: 'Saída',
+            source: 'inlet',
+            sink: 'outlet',
             pump: 'P',
             valve: 'V',
             tank: 'T'
@@ -339,7 +339,7 @@ const TEXTS = {
             language: 'English',
             languageTitle: 'Switches the lab text between Portuguese and English.',
             heightEnabled: 'Height differences between components affect pressure and flow.',
-            heightDisabled: 'Mode without relative height: the pump is less useful for overcoming elevation changes.'
+            heightDisabled: 'Without relative height: the pump is less useful for overcoming elevation changes.'
         },
         chart: {
             expand: '⛶ Expand',
@@ -373,8 +373,8 @@ const TEXTS = {
             spActive: 'SP active'
         },
         componentPrefixes: {
-            source: 'Source',
-            sink: 'Sink',
+            source: 'inlet',
+            sink: 'outlet',
             pump: 'P',
             valve: 'V',
             tank: 'T'
@@ -407,6 +407,21 @@ const TEXTS = {
 const LEGACY_PT_TO_EN = {
     'Sandbox GAAP - Fronteiras e Fluxo Visual': 'GAAP Sandbox - Boundaries and Visual Flow',
     'Sandbox Modular GAAP - Fronteiras de Controle': 'GAAP Modular Sandbox - Control Boundaries',
+    'Abrir tutorial do simulador': 'Open simulator tutorial',
+    'Fechar tutorial': 'Close tutorial',
+    'Tutorial do Simulador': 'Simulator Tutorial',
+    'Adicionar componentes': 'Add components',
+    'Abra a paleta lateral, arraste uma entrada, saida, tanque, bomba ou valvula para a area de trabalho.': 'Open the side palette and drag an inlet, outlet, tank, pump, or valve into the workspace.',
+    'Conectar componentes': 'Connect components',
+    'Clique em uma porta de saida e depois em uma porta de entrada para criar o trecho.': 'Click an output port and then an input port to create the line.',
+    'Navegar no canvas': 'Navigate the canvas',
+    'Use a rolagem do mouse para aproximar ou afastar. Segure Espaco e arraste para mover a visao.': 'Use the mouse wheel to zoom in or out. Hold Space and drag to pan the view.',
+    'Editar propriedades': 'Edit properties',
+    'Clique em um componente ou trecho para abrir as propriedades no painel lateral.': 'Click a component or line to open its properties in the side panel.',
+    'Comandos rapidos': 'Quick commands',
+    'DEL ou Backspace remove o item selecionado. Clique duplo edita componentes e desconecta trechos.': 'DEL or Backspace removes the selected item. Double click edits components and disconnects lines.',
+    'Simular': 'Simulate',
+    'Use Iniciar Simulacao Fisica para rodar ou pausar o comportamento hidraulico.': 'Use Start Physical Simulation to run or pause the hydraulic behavior.',
     'Use a': 'Use the',
     'rolagem do mouse para aproximar ou afastar': 'mouse wheel to zoom in or out',
     'e arraste segurando': 'and drag while holding',
@@ -432,7 +447,7 @@ const LEGACY_PT_TO_EN = {
     'Altura relativa': 'Relative height',
     'Inglês': 'English',
     'Desníveis entre componentes afetam a pressão e a vazão.': 'Height differences between components affect pressure and flow.',
-    'Modo sem altura relativa: a bomba perde utilidade para vencer desníveis.': 'Mode without relative height: the pump is less useful for overcoming elevation changes.',
+    'Modo sem altura relativa: a bomba perde utilidade para vencer desníveis.': 'Without relative height: the pump is less useful for overcoming elevation changes.',
     'Propriedades': 'Properties',
     'Para ver as propriedades de um componente, clique nele.': "To view a component's properties, click it.",
     'Monitoramento': 'Monitoring',
@@ -460,6 +475,8 @@ const LEGACY_PT_TO_EN = {
     '5x (Rápido)': '5x (Fast)',
     'Predefinição do Fluido': 'Fluid Preset',
     'Nome do Fluido': 'Fluid Name',
+    'Fluido': 'Fluid',
+    'Propriedades registradas nesta fronteira de entrada para suportar futuras misturas de fluidos.': 'Properties recorded at this inlet boundary to support future fluid mixtures.',
     'Densidade': 'Density',
     'Densidade (kg/m³)': 'Density (kg/m³)',
     'Viscosidade Dinâmica (Pa.s)': 'Dynamic Viscosity (Pa.s)',
@@ -847,9 +864,12 @@ export function getComponentTagPrefix(type) {
 
 export function translateDefaultComponentTag(tag) {
     const text = String(tag ?? '');
-    const pairs = currentLanguage === 'en'
-        ? [['Entrada', 'Source'], ['Saída', 'Sink']]
-        : [['Source', 'Entrada'], ['Sink', 'Saída']];
+    const pairs = [
+        ['Entrada', 'inlet'],
+        ['Source', 'inlet'],
+        ['Saída', 'outlet'],
+        ['Sink', 'outlet']
+    ];
 
     for (const [from, to] of pairs) {
         const match = text.match(new RegExp(`^${from}-(\\d+)$`));

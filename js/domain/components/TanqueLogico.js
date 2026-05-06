@@ -175,7 +175,7 @@ export class TanqueLogico extends ComponenteFisico {
     }
 
     getResumoAjustePressaoSetpoint(
-        fluido = this.getSimulationContext().fluidoOperante,
+        fluido = this.getSimulationContext().queries.getComponentFluid?.(this) || this.getSimulationContext().fluidoOperante,
         usarAlturaRelativa = this.getSimulationContext().usarAlturaRelativa
     ) {
         const nivelAtual = this.getNivelNormalizado();
@@ -488,7 +488,8 @@ export class TanqueLogico extends ComponenteFisico {
     sincronizarMetricasFisicas(fluido) {
         this.normalizarAlturasBocais();
         super.sincronizarMetricasFisicas(fluido);
-        const fluidoAtual = fluido || this.getSimulationContext().fluidoOperante;
+        const context = this.getSimulationContext();
+        const fluidoAtual = fluido || context.queries.getComponentFluid?.(this) || context.fluidoOperante;
         this.pressaoFundoBar = this.getPressaoHidrostaticaBar(fluidoAtual);
     }
 
@@ -498,7 +499,7 @@ export class TanqueLogico extends ComponenteFisico {
 
     getFluxoSaidaFromTank(
         nivelMontante,
-        fluido = this.getSimulationContext().fluidoOperante,
+        fluido = this.getSimulationContext().queries.getComponentFluid?.(this) || this.getSimulationContext().fluidoOperante,
         usarAlturaRelativa = this.getSimulationContext().usarAlturaRelativa
     ) {
         const headBar = this.getPressaoDisponivelSaidaParaNivelBar(

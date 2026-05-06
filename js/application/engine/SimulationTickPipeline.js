@@ -26,7 +26,7 @@ export class SimulationTickPipeline {
 
     updateComponentDynamics(dt) {
         this.engine.componentes.forEach((component) => {
-            component.atualizarDinamica(dt, this.engine.fluidoOperante);
+            component.atualizarDinamica(dt, this.engine.hydraulicContext.getComponentFluid(component));
         });
     }
 
@@ -36,8 +36,9 @@ export class SimulationTickPipeline {
 
     syncPhysicalMetrics(dt) {
         this.engine.componentes.forEach((component) => {
-            if (component instanceof TanqueLogico) component.atualizarFisica(dt, this.engine.fluidoOperante);
-            else component.sincronizarMetricasFisicas(this.engine.fluidoOperante);
+            const fluid = this.engine.hydraulicContext.getComponentFluid(component);
+            if (component instanceof TanqueLogico) component.atualizarFisica(dt, fluid);
+            else component.sincronizarMetricasFisicas(fluid);
         });
     }
 

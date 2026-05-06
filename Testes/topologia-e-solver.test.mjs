@@ -61,6 +61,35 @@ test('módulos de domínio não importam engine global, DOM, Chart ou controller
     });
 });
 
+test('trecho que sai da fonte usa o fluido definido na entrada', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-01', 'inlet-01', 0, 0);
+    const dreno = new DrenoLogico('D-01', 'outlet-01', 160, 0);
+
+    fonte.pressaoFonteBar = 2;
+    fonte.vazaoMaxima = 40;
+    fonte.atualizarFluidoEntrada({
+        nome: 'Fluido viscoso',
+        densidade: 1200,
+        viscosidadeDinamicaPaS: 2,
+        pressaoVaporBar: 0.002
+    });
+    dreno.pressaoSaidaBar = 0;
+    fonte.conectarSaida(dreno);
+
+    const connection = new ConnectionModel({ sourceId: fonte.id, targetId: dreno.id });
+    engine.add(fonte);
+    engine.add(dreno);
+    engine.addConnection(connection);
+
+    runSinglePhysicsStep(engine);
+
+    const state = engine.getConnectionState(connection);
+    assert.equal(engine.hydraulicContext.getConnectionFluid(connection), fonte.fluidoEntrada);
+    assert.ok(state.flowLps > 0, 'A fonte deve fornecer vazao com o fluido de entrada');
+    assert.ok(state.reynolds < 1000, 'Reynolds deve refletir a viscosidade configurada na entrada');
+});
+
 test('topologia indexa componentes e conexões sem depender de DOM', () => {
     const engine = createEngine();
     const fonte = new FonteLogica('F-01', 'Fonte-01', 0, 0);
