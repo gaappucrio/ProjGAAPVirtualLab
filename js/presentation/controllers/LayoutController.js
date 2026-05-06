@@ -1,3 +1,5 @@
+import { subscribeLanguageChanges, t } from '../../utils/I18n.js';
+
 export function setupLayoutController({ onChartLayoutChange } = {}) {
     const toggleLeft = document.getElementById('toggle-left');
     const panelLeft = document.getElementById('palette');
@@ -20,9 +22,15 @@ export function setupLayoutController({ onChartLayoutChange } = {}) {
     const chartMaxHeader = document.getElementById('chart-max-header');
     const btnCloseMaxChart = document.getElementById('btn-close-max-chart');
 
+    const updateChartButtonLabels = () => {
+        const isMax = chartWrapper?.classList.contains('maximized') === true;
+        if (btnMaxChart) btnMaxChart.textContent = isMax ? t('chart.close') : t('chart.expand');
+        if (btnCloseMaxChart) btnCloseMaxChart.textContent = t('chart.closeChart');
+    };
+
     const toggleChartMaximize = () => {
         const isMax = chartWrapper?.classList.toggle('maximized') === true;
-        if (btnMaxChart) btnMaxChart.textContent = isMax ? '✕ Fechar' : '⛶ Expandir';
+        updateChartButtonLabels();
         if (chartMaxHeader) chartMaxHeader.style.display = isMax ? 'flex' : 'none';
         requestAnimationFrame(() => {
             onChartLayoutChange?.();
@@ -41,4 +49,7 @@ export function setupLayoutController({ onChartLayoutChange } = {}) {
         toggleRight?.classList.remove('collapsed');
         if (toggleRight) toggleRight.textContent = '▶';
     }
+
+    updateChartButtonLabels();
+    subscribeLanguageChanges(updateChartButtonLabels);
 }

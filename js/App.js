@@ -10,7 +10,13 @@ import {
     setConnectionVisualUpdater,
     setPortStateUpdater
 } from './application/engine/SimulationEngine.js';
+import { ComponentEventPayloads } from './application/events/EventPayloads.js';
 import { updatePortStates } from './utils/PortStateManager.js';
+import {
+    applyLanguageToDocument,
+    subscribeLanguageChanges,
+    translateDefaultComponentTag
+} from './utils/I18n.js';
 import { setupPresentation as setupUI } from './presentation/controllers/PresentationController.js';
 import { setupCameraControl } from './presentation/controllers/CameraController.js';
 import { setupPipeControl, updateAllPipes, updateConnectionVisualStates } from './presentation/controllers/PipeController.js';
@@ -25,6 +31,18 @@ import {
 } from './infrastructure/dom/ComponentVisualRegistry.js';
 
 const connectionService = createConnectionServiceRuntime(ENGINE);
+
+function translateDefaultTagsForCurrentLanguage() {
+    ENGINE.componentes.forEach((component) => {
+        const translatedTag = translateDefaultComponentTag(component.tag);
+        if (translatedTag === component.tag) return;
+
+        component.tag = translatedTag;
+        component.notify(ComponentEventPayloads.tagUpdate());
+    });
+}
+
+applyLanguageToDocument();
 
 setupUI({ engine: ENGINE });
 setupCameraControl();
@@ -45,6 +63,13 @@ setupToolbar({
         document.querySelectorAll('#workspace-canvas .placed-component').forEach((item) => item.remove());
     },
     onTopologyVisualChange: () => updateAllPipes()
+});
+
+subscribeLanguageChanges(() => {
+    applyLanguageToDocument();
+    translateDefaultTagsForCurrentLanguage();
+    updatePortStates();
+    updateAllPipes();
 });
 
 document.addEventListener('keydown', (e) => {

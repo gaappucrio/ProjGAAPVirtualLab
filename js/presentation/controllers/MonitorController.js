@@ -9,6 +9,7 @@ import {
 } from '../../infrastructure/charts/TankChartAdapter.js';
 import { createMonitorSlotHistory } from '../monitoring/MonitorSlotHistory.js';
 import { getUnitSymbol } from '../../utils/Units.js';
+import { t } from '../../utils/I18n.js';
 
 const MAX_MONITOR_CHART_HISTORY = 2;
 const MONITOR_LIVE_REFRESH_INTERVAL_S = 0.1;
@@ -59,9 +60,9 @@ export function createMonitorController({ engine }) {
     }
 
     function getMonitorChartKindLabel(kind) {
-        if (kind === 'tank') return 'Tanque';
-        if (kind === 'pump') return 'Bomba';
-        return 'Componente';
+        if (kind === 'tank') return t('chart.tank');
+        if (kind === 'pump') return t('chart.pump');
+        return t('chart.component');
     }
 
     function getMonitorChartComponent(entry) {
@@ -240,10 +241,10 @@ export function createMonitorController({ engine }) {
 
     function getExpandedChartSubtitle(entry) {
         if (entry.kind === 'tank') {
-            return `Volume (${getUnitSymbol('volume')})`;
+            return `${t('chart.volume')} (${getUnitSymbol('volume')})`;
         }
         if (entry.kind === 'pump') {
-            return 'Curva: carga, eficiência e NPSHr';
+            return t('chart.pumpSubtitle');
         }
         return '';
     }
@@ -254,17 +255,17 @@ export function createMonitorController({ engine }) {
 
         if (badge) {
             const count = entries.length;
-            badge.textContent = `${count} gráfico${count === 1 ? '' : 's'}`;
+            badge.textContent = t('chart.badge', { count });
         }
 
         if (!status) return;
 
         if (entries.length >= 2) {
-            status.textContent = 'Comparando os dois últimos componentes monitoráveis selecionados.';
+            status.textContent = t('chart.statusCompare');
         } else if (entries.length === 1) {
-            status.textContent = 'Clique em outro tanque ou bomba para dividir a visualização expandida.';
+            status.textContent = t('chart.statusOne');
         } else {
-            status.textContent = 'Clique em um tanque ou bomba para exibir um gráfico aqui.';
+            status.textContent = t('chart.statusEmpty');
         }
     }
 
@@ -311,14 +312,14 @@ export function createMonitorController({ engine }) {
 
             if (!entry) {
                 elements.card.hidden = index > 0;
-                if (elements.title) elements.title.textContent = 'Aguardando gráfico';
+                if (elements.title) elements.title.textContent = t('chart.waiting');
                 if (elements.subtitle) elements.subtitle.textContent = '';
                 if (elements.canvasWrap) elements.canvasWrap.hidden = true;
                 if (elements.empty) {
                     elements.empty.hidden = false;
                     elements.empty.textContent = index === 0
-                        ? 'Clique em um tanque ou bomba para exibir um gráfico.'
-                        : 'Clique em outro tanque ou bomba para comparar.';
+                        ? t('chart.emptyPrimary')
+                        : t('chart.emptySecondary');
                 }
                 continue;
             }

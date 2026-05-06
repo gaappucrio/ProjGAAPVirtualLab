@@ -5,6 +5,7 @@ import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
 import { ValvulaLogica } from '../../domain/components/ValvulaLogica.js';
 import { getSuggestedDiameterForConnection } from '../../domain/services/PipeHydraulics.js';
 import { toDisplayValue } from '../../utils/Units.js';
+import { localizeElement, translateLiteral } from '../../utils/I18n.js';
 import { byId, isActive, setValue } from './PropertyDomAdapter.js';
 import { setFieldValue } from './PropertyValueFormatters.js';
 import {
@@ -30,7 +31,7 @@ function updateConnectionValues(engine, connection) {
     setValue('disp-pipe-velocity', state.velocityMps.toFixed(2));
     setValue('disp-pipe-reynolds', Math.round(state.reynolds));
     setValue('disp-pipe-friction', state.frictionFactor.toFixed(4));
-    setValue('disp-pipe-regime', state.regime);
+    setValue('disp-pipe-regime', translateLiteral(state.regime));
     setFieldValue('disp-pipe-deltap', state.deltaPBar, 'pressure', 3);
     setFieldValue('disp-pipe-length', state.lengthM, 'length', 2);
     setValue('disp-pipe-response', state.responseTimeS.toFixed(2));
@@ -108,7 +109,7 @@ function updatePumpValues(component, { monitorController } = {}) {
     setFieldValue('disp-npsha-bomba', component.npshDisponivelM, 'length', 2);
     setFieldValue('disp-npshr-atual-bomba', component.npshRequeridoAtualM ?? component.npshRequeridoM, 'length', 2);
     setFieldValue('disp-margem-npsh-bomba', getPumpNpshMargin(component), 'length', 2);
-    setValue('disp-condicao-npsh-bomba', getPumpNpshCondition(component));
+    setValue('disp-condicao-npsh-bomba', translateLiteral(getPumpNpshCondition(component)));
     setValue('disp-eficiencia-bomba', `${(component.eficienciaAtual * 100).toFixed(0)}%`);
     monitorController?.refreshPump(component);
 }
@@ -139,5 +140,9 @@ export function updatePropertyPanelValues({
 
     if (component instanceof BombaLogica) {
         updatePumpValues(component, { monitorController });
+    }
+
+    if (typeof document !== 'undefined') {
+        localizeElement(document.getElementById('prop-content'));
     }
 }

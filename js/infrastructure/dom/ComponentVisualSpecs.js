@@ -10,6 +10,7 @@ import {
     subscribeUnitPreferences,
     volumeText
 } from './ComponentVisualShared.js';
+import { subscribeLanguageChanges, t } from '../../utils/I18n.js';
 
 export const SOURCE_COMPONENT_VISUAL = {
     svg: (id, tag) => `
@@ -145,11 +146,11 @@ export const TANK_COMPONENT_VISUAL = {
         <g clip-path="url(#clip-${id})">
             <line id="sp-line-${id}" x1="0" y1="120" x2="160" y2="120" stroke="#e74c3c" stroke-width="3" stroke-dasharray="8,4" opacity="0"/>
         </g>
-        <text id="sp-label-${id}" x="165" y="124" font-size="11" font-family="Arial" font-weight="bold" fill="#e74c3c" text-anchor="start" opacity="0">PA</text>
+        <text id="sp-label-${id}" x="165" y="124" font-size="11" font-family="Arial" font-weight="bold" fill="#e74c3c" text-anchor="start" opacity="0">${t('visual.sp')}</text>
         <rect id="sp-badge-${id}" x="4" y="44" width="52" height="14" rx="4" fill="#e74c3c" opacity="0"/>
-        <text id="sp-badge-txt-${id}" x="30" y="54" font-size="9" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#fff" opacity="0">PA ativo</text>
+        <text id="sp-badge-txt-${id}" x="30" y="54" font-size="9" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#fff" opacity="0">${t('visual.spActive')}</text>
         <text id="alt-util-${id}" x="80" y="205" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#2c3e50"></text>
-        <text id="cap-max-${id}" x="80" y="220" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#2c3e50">Capacidade: ${volumeText(1000)}</text>
+        <text id="cap-max-${id}" x="80" y="220" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#2c3e50">${t('visual.capacity')}: ${volumeText(1000)}</text>
         <text id="tag-${id}" x="80" y="100" font-size="20" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#1a252f">${tag}</text>
         <text id="vol-${id}" x="80" y="125" font-family="Arial" font-size="18" font-weight="bold" text-anchor="middle" fill="#1a252f">${volumeText(0)}</text>
         <g>${makePort(id, 80, 0, 'in')} ${makePort(id, 80, 240, 'out')}</g>
@@ -158,8 +159,10 @@ export const TANK_COMPONENT_VISUAL = {
         const atualizarElevacoes = createElevationUpdater({ visual, logica, id, offsetY: -40 });
         const atualizarRotulosTanque = () => {
             visual.querySelector(`#vol-${id}`).textContent = volumeText(logica.volumeAtual);
-            visual.querySelector(`#cap-max-${id}`).textContent = `Capacidade: ${volumeText(logica.capacidadeMaxima)}`;
-            visual.querySelector(`#alt-util-${id}`).textContent = `Altura: ${displayUnitValue('length', logica.alturaUtilMetros, 2)} ${getUnitSymbol('length')}`;
+            visual.querySelector(`#cap-max-${id}`).textContent = `${t('visual.capacity')}: ${volumeText(logica.capacidadeMaxima)}`;
+            visual.querySelector(`#alt-util-${id}`).textContent = `${t('visual.height')}: ${displayUnitValue('length', logica.alturaUtilMetros, 2)} ${getUnitSymbol('length')}`;
+            visual.querySelector(`#sp-label-${id}`).textContent = t('visual.sp');
+            visual.querySelector(`#sp-badge-txt-${id}`).textContent = t('visual.spActive');
         };
         const atualizarLinhaSetpoint = () => {
             const spFrac = logica.setpoint / 100;
@@ -201,6 +204,13 @@ export const TANK_COMPONENT_VISUAL = {
         const unsubscribeUnits = subscribeUnitPreferences(() => {
             if (!visual.isConnected) {
                 unsubscribeUnits();
+                return;
+            }
+            atualizarRotulosTanque();
+        });
+        const unsubscribeLanguage = subscribeLanguageChanges(() => {
+            if (!visual.isConnected) {
+                unsubscribeLanguage();
                 return;
             }
             atualizarRotulosTanque();

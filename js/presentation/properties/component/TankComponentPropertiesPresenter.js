@@ -18,6 +18,7 @@ import {
     setValue,
     validateInputWithFeedback
 } from '../PropertyPresenterShared.js';
+import { translateLiteral } from '../../../utils/I18n.js';
 
 export const TANK_PROPERTIES_PRESENTER = {
     render: (comp) => {
@@ -30,8 +31,8 @@ export const TANK_PROPERTIES_PRESENTER = {
         const corBordaControle = comp.setpointAtivo ? '#e74c3c' : (controleNivelDisponivel ? '#eee' : '#f39c12');
         const fundoControle = comp.setpointAtivo ? '#fdf5f4' : (controleNivelDisponivel ? '#f9fbfb' : '#fff8ee');
         const textoStatusControle = controleNivelDisponivel
-            ? 'O controlador usa a válvula de saída para modular o escoamento e estabilizar o nível.'
-            : diagnosticoControleNivel.motivoBloqueio;
+            ? translateLiteral('O controlador usa a válvula de saída para modular o escoamento e estabilizar o nível.')
+            : translateLiteral(diagnosticoControleNivel.motivoBloqueio);
         const corStatusControle = controleNivelDisponivel ? '#5f6f7f' : '#c0392b';
 
         const basicContent = `
@@ -133,8 +134,8 @@ export const TANK_PROPERTIES_PRESENTER = {
 
             if (statusEl) {
                 statusEl.textContent = diagnostico.podeAtivar
-                    ? 'O controlador usa a válvula de saída para modular o escoamento e estabilizar o nível.'
-                    : diagnostico.motivoBloqueio;
+                    ? translateLiteral('O controlador usa a válvula de saída para modular o escoamento e estabilizar o nível.')
+                    : translateLiteral(diagnostico.motivoBloqueio);
                 statusEl.style.color = diagnostico.podeAtivar ? '#5f6f7f' : '#c0392b';
             }
 

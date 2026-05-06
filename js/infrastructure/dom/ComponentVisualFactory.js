@@ -5,6 +5,7 @@
 
 import { ENGINE } from '../../application/engine/SimulationEngine.js';
 import { getComponentDefinition } from '../../presentation/registry/ComponentDefinitionRegistry.js';
+import { getComponentTagPrefix } from '../../utils/I18n.js';
 import { getComponentVisualSpec } from './ComponentVisualSpecs.js';
 import { registerComponentVisual } from './ComponentVisualRegistry.js';
 export { updatePortStates } from '../../utils/PortStateManager.js';
@@ -49,7 +50,8 @@ export class FabricaDeEquipamentos {
         visual.dataset.id = id;
         visual.dataset.logW = spec.w; visual.dataset.logH = spec.h;
 
-        let tag = isPalette ? spec.prefixoTag : obterProximaTag(spec.prefixoTag);
+        const prefixoTag = getComponentTagPrefix(tipo) || spec.prefixoTag;
+        let tag = isPalette ? prefixoTag : obterProximaTag(prefixoTag);
         const logica = new spec.Classe(id, tag, x, y);
 
         visual.innerHTML = `

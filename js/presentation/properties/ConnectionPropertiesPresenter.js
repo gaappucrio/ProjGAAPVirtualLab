@@ -3,6 +3,7 @@ import { getPresentationEngine } from '../context/PresentationEngineContext.js';
 import { clearInputError, InputValidator, showInputError } from '../validation/InputValidator.js';
 import { bindPropertyTabs, renderPropertyTabs } from '../../utils/PropertyTabs.js';
 import { TOOLTIPS } from '../../utils/Tooltips.js';
+import { localizeElement, translateLiteral } from '../../utils/I18n.js';
 import {
     DEFAULT_DESIGN_VELOCITY_MPS,
     DEFAULT_PIPE_ROUGHNESS_MM,
@@ -111,7 +112,7 @@ export function renderConnectionProperties({
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.regime}">Regime</label>
-            <input type="text" id="disp-pipe-regime" title="${TOOLTIPS.conexao.regime}" value="${state.regime}" disabled>
+            <input type="text" id="disp-pipe-regime" title="${TOOLTIPS.conexao.regime}" value="${translateLiteral(state.regime)}" disabled>
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.respostaHidraulica}">Resposta Hidráulica (s)</label>
@@ -127,6 +128,7 @@ export function renderConnectionProperties({
             advancedDescription: 'Os parâmetros desta aba refinam perdas distribuídas, perdas locais e a resposta transitória da linha. São úteis quando você quer aproximar melhor a hidráulica do trecho.'
         })}
     `;
+    localizeElement(propContent);
 
     bindUnitControls({ onChange: onRerender });
     bindPropertyTabs(propContent);

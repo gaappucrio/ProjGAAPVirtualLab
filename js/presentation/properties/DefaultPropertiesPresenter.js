@@ -3,6 +3,7 @@ import { getPresentationEngine } from '../context/PresentationEngineContext.js';
 import { clearInputError, InputValidator, showInputError } from '../validation/InputValidator.js';
 import { bindPropertyTabs, renderPropertyTabs } from '../../utils/PropertyTabs.js';
 import { TOOLTIPS } from '../../utils/Tooltips.js';
+import { getFluidNameVariants, localizeElement, translateFluidName } from '../../utils/I18n.js';
 import {
     formatUnitValue,
     getUnitStep,
@@ -25,7 +26,9 @@ import { bindUnitControls, renderUnitControls } from './PropertyUnitsPresenter.j
 
 function getCurrentFluidPresetId(engine) {
     const match = Object.entries(FLUID_PRESETS).find(([, preset]) =>
-        String(preset.nome || '').trim() === String(engine.fluidoOperante.nome || '').trim() &&
+        getFluidNameVariants(preset.nome).some((name) =>
+            String(name || '').trim() === String(engine.fluidoOperante.nome || '').trim()
+        ) &&
         Math.abs(preset.densidade - engine.fluidoOperante.densidade) < 0.5 &&
         Math.abs(preset.temperatura - engine.fluidoOperante.temperatura) < 0.05 &&
         Math.abs(preset.viscosidadeDinamicaPaS - engine.fluidoOperante.viscosidadeDinamicaPaS) < 0.00001 &&
@@ -106,6 +109,8 @@ export function renderDefaultProperties({
             advancedDescription: 'Viscosidade e pressões absolutas influenciam atrito, cavitação e disponibilidade de sucção. Em usos mais simples, a aba Geral costuma bastar.'
         })}
     `;
+    localizeElement(propContent);
+    setValue('input-fluid-name', translateFluidName(engine.fluidoOperante.nome));
 
     bindUnitControls({ onChange: onRerender });
     bindPropertyTabs(propContent);
@@ -168,7 +173,7 @@ export function renderDefaultProperties({
         const preset = FLUID_PRESETS[event.target.value];
         if (!preset) return;
 
-        setValue('input-fluid-name', preset.nome);
+        setValue('input-fluid-name', translateFluidName(preset.nome));
         setValue('input-fluid-density', preset.densidade);
         setValue('input-fluid-viscosity', preset.viscosidadeDinamicaPaS);
         setValue('input-fluid-temp', toDisplayValue('temperature', preset.temperatura).toFixed(1));

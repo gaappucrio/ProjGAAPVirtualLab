@@ -8,6 +8,7 @@ import { ENGINE_EVENTS } from '../../application/events/EventTypes.js';
 import { TransientConnectionStore } from '../../application/stores/TransientConnectionStore.js';
 import { camera } from './CameraController.js';
 import { EPSILON_FLOW, formatUnitValue, getUnitSymbol } from '../../utils/Units.js';
+import { translateLiteral } from '../../utils/I18n.js';
 import { updatePortStates } from '../../utils/PortStateManager.js';
 import {
     getComponentPortElement
@@ -166,7 +167,7 @@ function updateConnectionVisualState(connection) {
             ? ''
             : `${formatUnitValue('flow', labelFlow, 2)} ${getUnitSymbol('flow')}`,
         markerId: flow > 0.05 ? 'url(#arrow-active)' : 'url(#arrow)',
-        stateText: `${formatUnitValue('flow', flow, 2)} ${getUnitSymbol('flow')} | ${state.velocityMps.toFixed(2)} m/s | Re ${Math.round(state.reynolds)} | ${state.regime}`
+        stateText: `${formatUnitValue('flow', flow, 2)} ${getUnitSymbol('flow')} | ${state.velocityMps.toFixed(2)} m/s | Re ${Math.round(state.reynolds)} | ${translateLiteral(state.regime)}`
     });
 }
 
