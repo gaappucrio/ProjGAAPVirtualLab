@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { ENGINE } from '../js/application/engine/SimulationEngine.js';
+import { ENGINE, FLUID_PRESETS } from '../js/application/engine/SimulationEngine.js';
 import { BombaLogica } from '../js/domain/components/BombaLogica.js';
+import { mixFluidos } from '../js/domain/components/Fluido.js';
 import { FonteLogica } from '../js/domain/components/FonteLogica.js';
 import { TanqueLogico } from '../js/domain/components/TanqueLogico.js';
 import { VALVE_PROFILE_DEFINITIONS, ValvulaLogica } from '../js/domain/components/ValvulaLogica.js';
@@ -13,7 +14,7 @@ import {
     getSuggestedDiameterForConnection
 } from '../js/domain/services/PipeHydraulics.js';
 import { buildPumpCurveDatasets } from '../js/infrastructure/charts/PumpChartAdapter.js';
-import { pressureFromHeadBar } from '../js/utils/Units.js';
+import { DEFAULT_ATMOSPHERIC_PRESSURE_BAR, pressureFromHeadBar } from '../js/utils/Units.js';
 
 function approx(actual, expected, tolerance, label) {
     assert.ok(
@@ -71,6 +72,35 @@ test('fonte mantem propriedades de fluido de entrada independentes do fluido ope
     approx(fonte.fluidoEntrada.viscosidadeDinamicaPaS, 0.02, 1e-12, 'viscosidade customizada do fluido de entrada');
     approx(fonte.fluidoEntrada.pressaoVaporBar, 0.004, 1e-12, 'pressao de vapor customizada do fluido de entrada');
     approx(fonte.fluidoEntrada.pressaoAtmosfericaBar, 1.02, 1e-12, 'pressao atmosferica customizada do fluido de entrada');
+});
+
+test('presets de fluido usam a mesma pressao atmosferica padrao', () => {
+    Object.entries(FLUID_PRESETS).forEach(([presetId, preset]) => {
+        approx(
+            preset.pressaoAtmosfericaBar,
+            DEFAULT_ATMOSPHERIC_PRESSURE_BAR,
+            1e-12,
+            `pressao atmosferica padrao do preset ${presetId}`
+        );
+    });
+});
+
+test('mistura de fluidos pondera densidade e viscosidade por contribuicao', () => {
+    const mistura = mixFluidos([
+        { fluido: FLUID_PRESETS.agua, flowLps: 2 },
+        { fluido: FLUID_PRESETS.oleo_leve, flowLps: 1 }
+    ]);
+
+    const densidadeEsperada = ((2 * FLUID_PRESETS.agua.densidade) + FLUID_PRESETS.oleo_leve.densidade) / 3;
+    const viscosidadeEsperada = Math.exp(
+        ((2 / 3) * Math.log(FLUID_PRESETS.agua.viscosidadeDinamicaPaS))
+        + ((1 / 3) * Math.log(FLUID_PRESETS.oleo_leve.viscosidadeDinamicaPaS))
+    );
+
+    approx(mistura.densidade, densidadeEsperada, 1e-9, 'densidade da mistura');
+    approx(mistura.viscosidadeDinamicaPaS, viscosidadeEsperada, 1e-12, 'viscosidade logaritmica da mistura');
+    approx(mistura.composicao['Água'], 2 / 3, 1e-12, 'fracao de agua na mistura');
+    approx(mistura.composicao['Óleo leve'], 1 / 3, 1e-12, 'fracao de oleo leve na mistura');
 });
 
 test('fonte preserva preset custom mesmo com propriedades iguais a um preset', () => {

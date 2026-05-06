@@ -74,6 +74,8 @@ export class HydraulicBranchModel {
             const fluid = this.context.getConnectionFluid(conn);
             const pipeHydraulics = this.context.getPipeHydraulics(conn, geometry, conn.areaM2, flowLps, fluid);
             state.flowLps = flowLps;
+            state.fluid = fluid;
+            state.fluidName = fluid?.nome || '';
             state.velocityMps = pipeHydraulics.velocityMps;
             state.reynolds = pipeHydraulics.reynolds;
             state.frictionFactor = pipeHydraulics.frictionFactor;
@@ -129,8 +131,9 @@ export class HydraulicBranchModel {
             const target = this.context.getComponentById(conn.targetId);
             if (!source || !target) return;
 
-            source.registrarSaida(state.flowLps, state.sourcePressureBar || state.pressureBar || 0);
-            target.registrarEntrada(state.flowLps, state.outletPressureBar || state.pressureBar || 0);
+            const fluid = state.fluid || this.context.getConnectionFluid(conn);
+            source.registrarSaida(state.flowLps, state.sourcePressureBar || state.pressureBar || 0, fluid);
+            target.registrarEntrada(state.flowLps, state.outletPressureBar || state.pressureBar || 0, fluid);
         });
     }
 
@@ -140,6 +143,37 @@ export class HydraulicBranchModel {
         }
         if (target instanceof DrenoLogico) return target.pressaoSaidaBar;
         return 0;
+    }
+
+    getLocalLossReynoldsCorrection(pipeHydraulics, fluid) {
+        const reynolds = Number(pipeHydraulics?.reynolds);
+        if (!Number.isFinite(reynolds) || reynolds <= 0) return 1;
+
+        const viscosityRatio = Math.max(
+            1,
+            (Number(fluid?.viscosidadeDinamicaPaS) || DEFAULT_FLUID_VISCOSITY_PA_S) / DEFAULT_FLUID_VISCOSITY_PA_S
+        );
+        const viscosityWeight = clamp(1 + (Math.log10(viscosityRatio) * 0.18), 1, 1.4);
+        const reynoldsPenalty = (120 / Math.sqrt(Math.max(reynolds, 1))) * viscosityWeight;
+
+        return clamp(1 + reynoldsPenalty, 1, 4);
+    }
+
+    composeBranchLossCoefficients(conn, supply, baseTargetEntryLossCoeff, pipeHydraulics, fluid) {
+        const localLossCorrection = this.getLocalLossReynoldsCorrection(pipeHydraulics, fluid);
+        const upstreamLocalLossCoeff = (
+            1
+            + conn.perdaLocalK
+            + (supply.localLossCoeff || 0)
+        ) * localLossCorrection;
+        const effectiveTargetEntryLossCoeff = baseTargetEntryLossCoeff * localLossCorrection;
+        const upstreamLossCoeff = upstreamLocalLossCoeff + pipeHydraulics.distributedLossCoeff;
+
+        return {
+            upstreamLossCoeff,
+            targetEntryLossCoeff: effectiveTargetEntryLossCoeff,
+            totalLossCoeff: upstreamLossCoeff + effectiveTargetEntryLossCoeff
+        };
     }
 
     getTargetEntryLossCoeff(target) {
@@ -235,7 +269,7 @@ export class HydraulicBranchModel {
     }
 
     buildSupplyState(comp, dt, options = {}) {
-        const { inletPressureBar = null, estimating = false, flowLimitLps = null } = options;
+        const { inletPressureBar = null, estimating = false, flowLimitLps = null, inletFluid = null } = options;
         const areaM2 = comp.getAreaConexaoM2();
         const limitedFlow = (flowLps) => {
             const numericLimit = Number(flowLimitLps);
@@ -256,7 +290,7 @@ export class HydraulicBranchModel {
 
         if (comp instanceof TanqueLogico) {
             if (!estimating && comp.jaEmitiuIntrinseco()) return null;
-            const fluid = this.context.getComponentFluid(comp);
+            const fluid = comp.getFluidoSaidaAtual?.(this.context.getComponentFluid(comp)) || this.context.getComponentFluid(comp);
             const availableFromInventory = dt > 0 ? comp.volumeAtual / dt : MAX_NETWORK_FLOW_LPS;
             const hydrostaticPressureBar = comp.getPressaoDisponivelSaidaBar(fluid, this.context.usarAlturaRelativa);
             const localLossCoeff = 1.0 / Math.max(0.15, comp.coeficienteSaida * comp.coeficienteSaida);
@@ -288,7 +322,7 @@ export class HydraulicBranchModel {
             const referenceFlow = clamp(comp.estadoHidraulico.saidaVazaoLps, 0, qMax);
             const curveFrac = qMax > EPSILON_FLOW ? 1 - Math.pow(referenceFlow / qMax, 2) : 0;
             const inletPressure = inletPressureBar ?? comp.getPressaoEntradaBar();
-            const fluid = this.context.getComponentFluid(comp);
+            const fluid = inletFluid || comp.getFluidoEntradaMisturado?.(this.context.getComponentFluid(comp)) || this.context.getComponentFluid(comp);
             const efficiency = comp.getEficienciaInstantanea(referenceFlow);
             const suctionFlowReference = clamp(
                 Math.max(referenceFlow, estimating ? comp.estadoHidraulico.entradaVazaoLps : incomingFlow),
@@ -338,14 +372,14 @@ export class HydraulicBranchModel {
                 localLossCoeff: parametros.localLossCoeff,
                 characteristicFactor: parametros.characteristicFactor,
                 effectiveCv: parametros.effectiveCv,
-                fluid: this.context.getComponentFluid(comp)
+                fluid: inletFluid || comp.getFluidoEntradaMisturado?.(this.context.getComponentFluid(comp)) || this.context.getComponentFluid(comp)
             };
         }
 
         return null;
     }
 
-    estimateComponentPotential(comp, inletPressureBar, dt, visited = new Set(), flowLimitLps = null) {
+    estimateComponentPotential(comp, inletPressureBar, dt, visited = new Set(), flowLimitLps = null, inletFluid = null) {
         if (!comp || visited.has(comp.id)) return 0;
 
         if (comp instanceof DrenoLogico) return MAX_NETWORK_FLOW_LPS;
@@ -362,7 +396,8 @@ export class HydraulicBranchModel {
         const supply = this.buildSupplyState(comp, dt, {
             inletPressureBar,
             estimating: true,
-            flowLimitLps
+            flowLimitLps,
+            inletFluid
         });
         if (!supply || supply.availableFlowLps <= EPSILON_FLOW) return 0;
 
@@ -388,7 +423,7 @@ export class HydraulicBranchModel {
             supply.hydraulicAreaM2 || conn.areaM2,
             this.getTargetEntranceArea(target)
         );
-        const targetEntryLossCoeff = this.getTargetEntryLossCoeff(target);
+        const baseTargetEntryLossCoeff = this.getTargetEntryLossCoeff(target);
         const fluid = supply.fluid || this.context.getComponentFluid(comp);
         const backPressureBar = this.getTargetBackPressureBar(target, this.context.getComponentFluid(target));
         const staticHeadBar = pressureFromHeadBar(geometry.headGainM, fluid.densidade);
@@ -400,7 +435,8 @@ export class HydraulicBranchModel {
                 areaM2: branchAreaM2,
                 backPressureBar,
                 upstreamLossCoeff: 0,
-                targetEntryLossCoeff,
+                baseTargetEntryLossCoeff,
+                targetEntryLossCoeff: baseTargetEntryLossCoeff,
                 totalLossCoeff: 0,
                 inletPressureBar: 0,
                 outletPressureBar: 0,
@@ -410,17 +446,21 @@ export class HydraulicBranchModel {
         }
 
         const density = fluid.densidade;
-        const baseLossCoeff = 1 + conn.perdaLocalK + (supply.localLossCoeff || 0) + targetEntryLossCoeff + DEFAULT_PIPE_FRICTION * (geometry.lengthM / Math.max(conn.diameterM, 0.001));
+        const baseLossCoeff = 1 + conn.perdaLocalK + (supply.localLossCoeff || 0) + baseTargetEntryLossCoeff + DEFAULT_PIPE_FRICTION * (geometry.lengthM / Math.max(conn.diameterM, 0.001));
         let capacityLps = Math.min(supply.availableFlowLps, flowFromBernoulli(availableDeltaPBar, branchAreaM2, density, baseLossCoeff));
         let pipeHydraulics = this.context.getPipeHydraulics(conn, geometry, branchAreaM2, capacityLps, fluid);
-        let upstreamLossCoeff = 1 + conn.perdaLocalK + pipeHydraulics.distributedLossCoeff + (supply.localLossCoeff || 0);
-        let totalLossCoeff = upstreamLossCoeff + targetEntryLossCoeff;
+        let lossCoefficients = this.composeBranchLossCoefficients(conn, supply, baseTargetEntryLossCoeff, pipeHydraulics, fluid);
+        let upstreamLossCoeff = lossCoefficients.upstreamLossCoeff;
+        let targetEntryLossCoeff = lossCoefficients.targetEntryLossCoeff;
+        let totalLossCoeff = lossCoefficients.totalLossCoeff;
 
         for (let i = 0; i < 4; i += 1) {
             capacityLps = Math.min(supply.availableFlowLps, flowFromBernoulli(availableDeltaPBar, branchAreaM2, density, totalLossCoeff));
             pipeHydraulics = this.context.getPipeHydraulics(conn, geometry, branchAreaM2, capacityLps, fluid);
-            upstreamLossCoeff = 1 + conn.perdaLocalK + pipeHydraulics.distributedLossCoeff + (supply.localLossCoeff || 0);
-            totalLossCoeff = upstreamLossCoeff + targetEntryLossCoeff;
+            lossCoefficients = this.composeBranchLossCoefficients(conn, supply, baseTargetEntryLossCoeff, pipeHydraulics, fluid);
+            upstreamLossCoeff = lossCoefficients.upstreamLossCoeff;
+            targetEntryLossCoeff = lossCoefficients.targetEntryLossCoeff;
+            totalLossCoeff = lossCoefficients.totalLossCoeff;
         }
 
         let provisionalUpstreamLossBar = 0;
@@ -430,8 +470,10 @@ export class HydraulicBranchModel {
 
         const recalculateBranchPressures = () => {
             pipeHydraulics = this.context.getPipeHydraulics(conn, geometry, branchAreaM2, capacityLps, fluid);
-            upstreamLossCoeff = 1 + conn.perdaLocalK + pipeHydraulics.distributedLossCoeff + (supply.localLossCoeff || 0);
-            totalLossCoeff = upstreamLossCoeff + targetEntryLossCoeff;
+            lossCoefficients = this.composeBranchLossCoefficients(conn, supply, baseTargetEntryLossCoeff, pipeHydraulics, fluid);
+            upstreamLossCoeff = lossCoefficients.upstreamLossCoeff;
+            targetEntryLossCoeff = lossCoefficients.targetEntryLossCoeff;
+            totalLossCoeff = lossCoefficients.totalLossCoeff;
             provisionalUpstreamLossBar = pressureLossFromFlow(capacityLps, branchAreaM2, density, upstreamLossCoeff);
             inletPressureBar = Math.max(backPressureBar, supply.pressureBar + staticHeadBar - provisionalUpstreamLossBar);
             targetEntryLossBar = pressureLossFromFlow(capacityLps, branchAreaM2, density, targetEntryLossCoeff);
@@ -449,7 +491,8 @@ export class HydraulicBranchModel {
             downstreamInletPressureBar,
             dt,
             new Set(visited),
-            capacityLps
+            capacityLps,
+            fluid
         );
 
         if (Number.isFinite(downstreamLimit)) {
@@ -464,6 +507,7 @@ export class HydraulicBranchModel {
             areaM2: branchAreaM2,
             backPressureBar,
             upstreamLossCoeff,
+            baseTargetEntryLossCoeff,
             targetEntryLossCoeff,
             totalLossCoeff,
             inletPressureBar,
@@ -486,6 +530,8 @@ export class HydraulicBranchModel {
         const actualFlowLps = dynamics.flowLps;
         const state = this.context.getConnectionState(conn);
         state.targetFlowLps = flowLps;
+        state.fluid = fluid;
+        state.fluidName = fluid?.nome || '';
         state.responseTimeS = dynamics.responseTimeS;
         state.lengthM = estimate.geometry.lengthM;
         state.straightLengthM = estimate.geometry.straightLengthM;
@@ -495,20 +541,27 @@ export class HydraulicBranchModel {
 
         const density = fluid.densidade;
         const pipeHydraulics = this.context.getPipeHydraulics(conn, estimate.geometry, estimate.areaM2, actualFlowLps, fluid);
-        const upstreamLossCoeff = 1 + conn.perdaLocalK + pipeHydraulics.distributedLossCoeff + (supply.localLossCoeff || 0);
+        const lossCoefficients = this.composeBranchLossCoefficients(
+            conn,
+            supply,
+            estimate.baseTargetEntryLossCoeff ?? estimate.targetEntryLossCoeff,
+            pipeHydraulics,
+            fluid
+        );
+        const upstreamLossCoeff = lossCoefficients.upstreamLossCoeff;
         const upstreamLossBar = pressureLossFromFlow(actualFlowLps, estimate.areaM2, density, upstreamLossCoeff);
         const inletPressureBar = Math.max(estimate.backPressureBar, supply.pressureBar + pressureFromHeadBar(estimate.geometry.headGainM, density) - upstreamLossBar);
         const targetEntryLossBar = pressureLossFromFlow(
             actualFlowLps,
             estimate.areaM2,
             density,
-            estimate.targetEntryLossCoeff
+            lossCoefficients.targetEntryLossCoeff
         );
         const arrivalPressureBar = Math.max(estimate.backPressureBar, inletPressureBar - targetEntryLossBar);
         const totalLossBar = upstreamLossBar + targetEntryLossBar;
 
-        comp.registrarSaida(actualFlowLps, supply.pressureBar);
-        target.registrarEntrada(actualFlowLps, arrivalPressureBar);
+        comp.registrarSaida(actualFlowLps, supply.pressureBar, fluid);
+        target.registrarEntrada(actualFlowLps, arrivalPressureBar, fluid);
 
         const flowBefore = state.flowLps;
         state.flowLps += actualFlowLps;

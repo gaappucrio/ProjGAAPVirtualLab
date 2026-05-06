@@ -34,6 +34,7 @@ export const TANK_PROPERTIES_PRESENTER = {
             ? translateLiteral('O controlador usa a válvula de saída para modular o escoamento e estabilizar o nível.')
             : translateLiteral(diagnosticoControleNivel.motivoBloqueio);
         const corStatusControle = controleNivelDisponivel ? '#5f6f7f' : '#c0392b';
+        const fluidoConteudo = comp.getFluidoConteudo?.() || comp.fluidoConteudo;
 
         const basicContent = `
             <div class="prop-group">
@@ -63,6 +64,14 @@ export const TANK_PROPERTIES_PRESENTER = {
             <div class="prop-group">
                 ${makeUnitLabel('Vazão de saída', 'flow', TOOLTIP.tankOutletFlow)}
                 <input type="text" id="disp-qout-tanque" ${hintAttr(TOOLTIP.tankOutletFlow)} value="${displayUnitValue('flow', comp.lastQout, 2)}" disabled>
+            </div>
+            <div class="prop-group">
+                <label title="Fluido ou mistura atualmente armazenado no tanque.">Fluido no Tanque</label>
+                <input type="text" id="disp-tank-fluid" title="Fluido ou mistura atualmente armazenado no tanque." value="${fluidoConteudo?.nome || '-'}" disabled>
+            </div>
+            <div class="prop-group">
+                <label title="Densidade do fluido ou mistura armazenado no tanque.">Densidade do Fluido (kg/m³)</label>
+                <input type="text" id="disp-tank-fluid-density" title="Densidade do fluido ou mistura armazenado no tanque." value="${(fluidoConteudo?.densidade || 0).toFixed(1)}" disabled>
             </div>
             <div class="prop-group" id="grp-sp-main" style="border-color:${corBordaControle}; background:${fundoControle};">
                 <label ${hintAttr(TOOLTIP.tankPiController)} style="color:#c0392b; font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">
@@ -161,6 +170,9 @@ export const TANK_PROPERTIES_PRESENTER = {
 
             setValue('disp-pressao-tanque', displayUnitValue('pressure', comp.pressaoFundoBar, 2));
             setValue('disp-nível-tanque', displayUnitValue('length', comp.getAlturaLiquidoM(), 2));
+            const fluidoAtual = comp.getFluidoConteudo?.() || comp.fluidoConteudo;
+            setValue('disp-tank-fluid', fluidoAtual?.nome || '-');
+            setValue('disp-tank-fluid-density', fluidoAtual?.densidade ? fluidoAtual.densidade.toFixed(1) : '0.0');
             notifyPanelRefresh();
         };
 

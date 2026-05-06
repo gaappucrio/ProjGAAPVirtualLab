@@ -337,7 +337,9 @@ export class SistemaSimulacao extends Observable {
                 reynolds: 0,
                 frictionFactor: DEFAULT_PIPE_FRICTION,
                 relativeRoughness: 0,
-                regime: 'sem fluxo'
+                regime: 'sem fluxo',
+                fluid: null,
+                fluidName: ''
             }));
     }
 

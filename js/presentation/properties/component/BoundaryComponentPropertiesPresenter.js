@@ -190,6 +190,7 @@ function bindSourceFluidProperties(comp) {
         setValue('input-source-fluid-viscosity', preset.viscosidadeDinamicaPaS);
         setValue('input-source-fluid-temp', toDisplayValue('temperature', preset.temperatura).toFixed(1));
         setValue('input-source-fluid-vapor', formatUnitValue('pressure', preset.pressaoVaporBar, 3));
+        setValue('input-source-fluid-atm', formatUnitValue('pressure', preset.pressaoAtmosfericaBar, 3));
         applySourceFluidFromInputs(comp, { preferredPresetId: presetId });
     });
 

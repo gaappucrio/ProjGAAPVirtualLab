@@ -26,12 +26,16 @@ function updateConnectionValues(engine, connection) {
     if (!connection) return;
 
     const state = engine.getConnectionState(connection);
+    const fluid = state.fluid || engine.hydraulicContext?.getConnectionFluid?.(connection);
     setFieldValue('disp-pipe-flow', state.flowLps, 'flow', 2);
     setFieldValue('disp-pipe-target-flow', state.targetFlowLps, 'flow', 2);
     setValue('disp-pipe-velocity', state.velocityMps.toFixed(2));
     setValue('disp-pipe-reynolds', Math.round(state.reynolds));
     setValue('disp-pipe-friction', state.frictionFactor.toFixed(4));
     setValue('disp-pipe-regime', translateLiteral(state.regime));
+    setValue('disp-pipe-fluid', fluid?.nome || '-');
+    setValue('disp-pipe-fluid-density', fluid?.densidade ? fluid.densidade.toFixed(1) : '0.0');
+    setValue('disp-pipe-fluid-viscosity', fluid?.viscosidadeDinamicaPaS ? fluid.viscosidadeDinamicaPaS.toFixed(5) : '0.00000');
     setFieldValue('disp-pipe-deltap', state.deltaPBar, 'pressure', 3);
     setFieldValue('disp-pipe-length', state.lengthM, 'length', 2);
     setValue('disp-pipe-response', state.responseTimeS.toFixed(2));
@@ -52,6 +56,9 @@ function updateTankValues(component) {
     setFieldValue('disp-nível-tanque', component.getAlturaLiquidoM(), 'length', 2);
     setFieldValue('disp-qin-tanque', component.lastQin, 'flow', 2);
     setFieldValue('disp-qout-tanque', component.lastQout, 'flow', 2);
+    const fluid = component.getFluidoConteudo?.() || component.fluidoConteudo;
+    setValue('disp-tank-fluid', fluid?.nome || '-');
+    setValue('disp-tank-fluid-density', fluid?.densidade ? fluid.densidade.toFixed(1) : '0.0');
     updateTankSaturationAlert(component);
     updateTankControlAvailabilityUI(component);
 }

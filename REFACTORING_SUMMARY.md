@@ -24,6 +24,9 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Remoção por tecla `Delete` ou `Backspace`.
 - Renderização visual de tubos, rótulos de vazão e estados de portas.
 - Opção de altura relativa para considerar desníveis entre componentes.
+- Identificação estável de fronteiras com tags `inlet-01`, `outlet-01` etc., independente do idioma da interface.
+- Helper de tutorial no cabeçalho, abrindo um popup com os principais comandos de uso do simulador.
+- Toggle de idioma posicionado no canto superior direito da janela, fora da toolbar principal.
 
 ### 2.2 Simulação Hidráulica
 
@@ -35,6 +38,9 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Dinâmica transitória de conexões por suavização de primeira ordem.
 - Conservação de massa em componentes passantes, como válvulas e bombas.
 - Suporte a múltiplas saídas e redes com dezenas de componentes.
+- O fluido que entra na rede é definido pela fonte de entrada, não por uma configuração global.
+- A propagação hidráulica usa as propriedades do fluido associadas ao ramo iniciado por cada entrada e mistura fluidos quando múltiplas entradas convergem.
+- Em modo sem altura relativa, os trechos mantêm a geometria esquemática base, enquanto o solver aplica correção de perdas locais por Reynolds/viscosidade para diferenciar fluidos.
 
 ### 2.3 Bomba
 
@@ -69,6 +75,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Bloqueio de ativação do controle caso não exista válvula conectada diretamente à saída do tanque.
 - Alerta de saturação quando o set point não é alcançável com a capacidade hidráulica atual.
 - Ajuste automático recomendado para pressão das fontes de entrada.
+- Fluido de conteúdo persistente, atualizado por mistura volumétrica das entradas.
 
 ### 2.6 Conexões e Tubulações
 
@@ -102,6 +109,9 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
   - Posição de rolagem.
 - Tooltips em propriedades não triviais.
 - Conversão de unidades para pressão, vazão, comprimento, volume e temperatura.
+- Presets e propriedades de fluido ficam nas propriedades da entrada selecionada.
+- Não existe mais edição de fluido global quando nenhum componente de entrada está selecionado.
+- O preset `custom`/`personalizado` é preservado durante troca de idioma, mesmo quando seus valores coincidem com um preset conhecido.
 
 ## 3. Arquitetura Geral
 
@@ -181,6 +191,7 @@ Contém controllers, presenters, validações de UI e lógica de painel.
 Arquivos principais:
 
 - `presentation/controllers/PresentationController.js`
+- `presentation/controllers/HelpController.js`
 - `presentation/controllers/ToolbarController.js`
 - `presentation/controllers/PipeController.js`
 - `presentation/controllers/MonitorController.js`
@@ -204,6 +215,7 @@ Responsabilidades:
 - Atualizar valores vivos do painel.
 - Manipular abas e memória de contexto do painel.
 - Gerenciar monitoramento compacto e detalhado.
+- Controlar popup de tutorial e comandos básicos da interface.
 - Validar inputs digitados.
 
 ### 3.4 `infrastructure/`
@@ -247,18 +259,19 @@ Observação: parte desses arquivos é visual e pode ser realocada futuramente p
 1. `index.html` carrega `js/App.js`.
 2. `App.js` importa o singleton `ENGINE`.
 3. `App.js` inicializa a apresentação com `setupPresentation({ engine: ENGINE })`.
-4. O engine é injetado na camada de apresentação via `PresentationEngineContext`.
-5. São inicializados:
+4. `App.js` inicializa o helper de tutorial com `setupHelpController()`.
+5. O engine é injetado na camada de apresentação via `PresentationEngineContext`.
+6. São inicializados:
    - Câmera.
    - Drag-and-drop.
    - Controle de tubos.
    - Toolbar.
    - Atualização visual de portas.
-6. Adaptadores visuais são registrados no engine:
+7. Adaptadores visuais são registrados no engine:
    - Resolver de posição visual.
    - Atualizador visual de conexões.
    - Hooks de limpeza visual.
-7. A aplicação fica pronta para criação de componentes, conexões e simulação.
+8. A aplicação fica pronta para criação de componentes, conexões e simulação.
 
 ## 5. Fluxo do Tick de Simulação
 
@@ -355,6 +368,23 @@ Quando está desligada:
 - A malha usa comportamento mais esquemático.
 - Desníveis visuais não afetam a pressão.
 
+### 6.6 Fluido por Entrada e Mistura
+
+O modelo deixou de usar um fluido global editável no painel padrão. Cada `FonteLogica` possui suas próprias propriedades de fluido de entrada, incluindo:
+
+- Nome.
+- Densidade.
+- Temperatura.
+- Viscosidade dinâmica.
+- Pressão de vapor.
+- Preset selecionado.
+- Pressão atmosférica local, padronizada em todos os presets para entradas na mesma altitude.
+- Composição, usada quando o fluido é resultado de mistura.
+
+Quando múltiplas entradas convergem em um componente passante, o domínio calcula uma mistura ponderada pela vazão recebida. A densidade, temperatura, pressão de vapor e pressão atmosférica usam média volumétrica. A viscosidade dinâmica usa mistura logarítmica, uma aproximação mais adequada para líquidos com viscosidades muito diferentes.
+
+Tanques mantêm um `fluidoConteudo` persistente. Ao receber vazão, o conteúdo anterior é misturado ao fluido de entrada pelo volume recebido no passo de simulação. A saída do tanque usa esse fluido armazenado.
+
 ## 7. Solver Hidráulico
 
 O solver atual é push-based: fontes e tanques iniciam a emissão de vazão e pressão, e o sistema propaga pelos ramos.
@@ -374,6 +404,9 @@ Características:
 - Aplica dinâmica de conexão.
 - Balanceia massa em componentes passantes.
 - Atualiza estados de conexão.
+- Propaga o fluido ou mistura em cada conexão.
+- Mistura fluidos em componentes passantes com múltiplas entradas.
+- Corrige perdas locais por Reynolds e viscosidade, evitando que fluidos viscosos sejam favorecidos artificialmente apenas pela menor densidade.
 
 ### 7.1 Conservação de Massa
 
@@ -397,8 +430,11 @@ Propriedades principais:
 - Pressão da fonte.
 - Vazão máxima.
 - Vazão real entregue.
+- Fluido de entrada, com densidade, viscosidade, temperatura, pressão de vapor, nome e preset.
 
 A fonte é um emissor intrínseco: inicia o fluxo na rede.
+
+As propriedades de fluido são editadas somente quando a fonte está selecionada. Isso evita ambiguidade entre entradas diferentes e elimina o antigo conceito de fluido global do programa.
 
 ### 8.2 `DrenoLogico`
 
@@ -475,6 +511,7 @@ Propriedades principais:
 - Pressão no fundo.
 - Vazão de entrada.
 - Vazão de saída.
+- Fluido de conteúdo.
 - Set point.
 - Ganhos PI.
 
@@ -485,6 +522,7 @@ Comportamento:
 - O controle de nível atua em válvulas de entrada e saída.
 - O set point só pode ser ativado se houver válvula diretamente conectada à saída.
 - O alerta de saturação compara a vazão de entrada com a capacidade estimada de saída no nível do set point.
+- Entradas simultâneas com fluidos diferentes atualizam a composição armazenada.
 
 ## 9. Conexões
 
@@ -504,6 +542,7 @@ Propriedades principais:
 - Vazão resolvida.
 - Velocidade de projeto.
 - Vazão de projeto.
+- Comprimento hidráulico esquemático base de 1 m quando a altura relativa está desligada, sem usar distância visual para perda de carga.
 
 As referências visuais ficam em registries e renderizadores de infraestrutura, não no domínio.
 
@@ -513,7 +552,7 @@ O painel de propriedades é composto por presenters.
 
 Tipos:
 
-- `DefaultPropertiesPresenter`: estado global, fluido e unidades.
+- `DefaultPropertiesPresenter`: estado global e unidades, sem edição de fluido global.
 - `ConnectionPropertiesPresenter`: edição de tubo/conexão.
 - `ComponentPropertiesPresenter`: roteia para presenter por tipo.
 - `PumpComponentPropertiesPresenter`.
@@ -570,7 +609,19 @@ Funcionalidades:
 - Até dois gráficos simultâneos para comparação.
 - Histórico por slot para evitar perda ao alternar seleção.
 
-## 13. Eventos
+## 13. Internacionalização e Ajuda
+
+O sistema possui suporte a alternância de idioma entre português e inglês via `utils/I18n.js`. Os nomes padrão de componentes e os textos de interface são atualizados no DOM sem reinicializar a aplicação.
+
+Pontos atuais:
+
+- O toggle de idioma fica fixo no canto superior direito da janela.
+- As fronteiras usam tags técnicas estáveis (`inlet` e `outlet`) para evitar que nomes internos mudem com o idioma.
+- Textos do tutorial, botões e títulos participam do mesmo fluxo de tradução.
+- A seleção `custom`/`personalizado` de fluido é preservada como intenção do usuário, mesmo se os parâmetros forem iguais aos de um preset.
+- O helper `?` no cabeçalho abre um popup com comandos básicos de operação do simulador.
+
+## 14. Eventos
 
 O sistema evita strings soltas em boa parte da comunicação usando:
 
@@ -589,7 +640,7 @@ Eventos relevantes:
 
 `Observable.subscribe()` retorna uma função de unsubscribe, o que permite limpar listeners quando necessário.
 
-## 14. Testes
+## 15. Testes
 
 O projeto usa o test runner nativo do Node.
 
@@ -624,8 +675,15 @@ Coberturas importantes:
 - Histórico de monitoramento.
 - Regras de camadas.
 - Importação da apresentação sem DOM global.
+- Tags de fronteira `inlet`/`outlet` independentes do idioma.
+- Fluido definido por entrada e usado pelo ramo hidráulico.
+- Mistura de fluidos por vazão em componentes passantes.
+- Mistura persistente no conteúdo de tanques.
+- Preservação do preset `custom`/`personalizado` quando os valores coincidem com um preset.
+- Pressão atmosférica igual em todos os presets padrão.
+- Água escoando mais rápido que óleo leve em ramais equivalentes para tanque.
 
-## 15. Estado Atual da Refatoração
+## 16. Estado Atual da Refatoração
 
 Marcos concluídos:
 
@@ -638,6 +696,10 @@ Marcos concluídos:
 - Apresentação com presenters dedicados.
 - Injeção do engine na apresentação.
 - Monólito antigo de propriedades de bomba/válvula removido.
+- Fluido global removido do painel padrão; propriedades de fluido ficam por entrada.
+- Mistura de fluidos implementada no domínio e propagada pelo solver.
+- Toggle de idioma movido para controle fixo no canto superior direito.
+- Helper de tutorial adicionado ao cabeçalho.
 - Testes de arquitetura e comportamento adicionados.
 
 Pontos ainda observáveis:
@@ -646,7 +708,7 @@ Pontos ainda observáveis:
 - `utils/Tooltips.js`, `utils/PropertyTabs.js` e `utils/PortStateManager.js` poderiam ser realocados futuramente para camadas mais específicas.
 - `App.js` ainda contém alguns acessos diretos ao DOM para atalhos globais e limpeza visual. Isso é aceitável para composition root, mas pode ser extraído se a base crescer.
 
-## 16. Boas Práticas Para Manutenção
+## 17. Boas Práticas Para Manutenção
 
 Ao adicionar novo componente:
 
@@ -674,7 +736,7 @@ Ao alterar UI:
 4. Evitar duplicar lógica física na interface.
 5. Rodar `npm.cmd test`.
 
-## 17. Riscos Técnicos e Próximos Passos
+## 18. Riscos Técnicos e Próximos Passos
 
 Riscos atuais:
 
@@ -692,8 +754,8 @@ Próximos passos recomendados:
 - Adicionar exemplos de cenários prontos.
 - Criar exportação/importação de fluxogramas, caso o objetivo seja uso em laboratório.
 
-## 18. Resumo Executivo
+## 19. Resumo Executivo
 
 O projeto está em um estado estruturalmente muito melhor que a versão monolítica inicial. A física principal está concentrada no domínio, a aplicação orquestra o tick e a topologia, a apresentação foi dividida em controllers e presenters, e a infraestrutura visual está separada em adaptadores.
 
-O sistema já possui suporte funcional para montagem visual, simulação hidráulica, bombas, válvulas, tanques, set point, monitoramento, unidades, tooltips e testes automatizados. A base está preparada para novas implementações, desde que as fronteiras entre domínio, aplicação, apresentação e infraestrutura continuem sendo respeitadas.
+O sistema já possui suporte funcional para montagem visual, simulação hidráulica, bombas, válvulas, tanques, set point, monitoramento, unidades, tooltips, tutorial integrado, internacionalização, mistura de fluidos e testes automatizados. A base trata propriedades de fluido por entrada, composição por conexão e conteúdo misturado em tanques, desde que as fronteiras entre domínio, aplicação, apresentação e infraestrutura continuem sendo respeitadas.

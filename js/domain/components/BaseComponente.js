@@ -8,6 +8,7 @@ import {
 } from '../../utils/Units.js';
 import { ComponentEventPayloads } from '../../application/events/EventPayloads.js';
 import { mergeSimulationContext } from '../context/SimulationContext.js';
+import { mixFluidos } from './Fluido.js';
 
 export const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -98,9 +99,11 @@ export class ComponenteFisico extends Observable {
         this.estadoHidraulico = {
             entradaVazaoLps: 0,
             entradaPressaoPonderadaBar: 0,
+            entradaFluidoContribuicoes: [],
             entradaConsumidaLps: 0,
             saidaVazaoLps: 0,
             saidaPressaoPonderadaBar: 0,
+            saidaFluidoContribuicoes: [],
             emissaoIntrinsecaConsumida: false
         };
         this.pressaoEntradaAtualBar = 0;
@@ -125,21 +128,41 @@ export class ComponenteFisico extends Observable {
         return Math.max(0, this.estadoHidraulico.entradaVazaoLps - this.estadoHidraulico.entradaConsumidaLps);
     }
 
-    registrarEntrada(flowLps, pressureBar) {
+    registrarEntrada(flowLps, pressureBar, fluido = null) {
         if (flowLps <= EPSILON_FLOW) return;
         this.estadoHidraulico.entradaVazaoLps += flowLps;
         this.estadoHidraulico.entradaPressaoPonderadaBar += pressureBar * flowLps;
+        if (fluido) {
+            this.estadoHidraulico.entradaFluidoContribuicoes.push({
+                flowLps,
+                fluido
+            });
+        }
     }
 
-    registrarSaida(flowLps, pressureBar) {
+    registrarSaida(flowLps, pressureBar, fluido = null) {
         if (flowLps <= EPSILON_FLOW) return;
         this.estadoHidraulico.saidaVazaoLps += flowLps;
         this.estadoHidraulico.saidaPressaoPonderadaBar += pressureBar * flowLps;
+        if (fluido) {
+            this.estadoHidraulico.saidaFluidoContribuicoes.push({
+                flowLps,
+                fluido
+            });
+        }
     }
 
     consumirEntrada(flowLps) {
         if (flowLps <= EPSILON_FLOW) return;
         this.estadoHidraulico.entradaConsumidaLps += flowLps;
+    }
+
+    getFluidoEntradaMisturado(fallback = null) {
+        return mixFluidos(this.estadoHidraulico.entradaFluidoContribuicoes, fallback);
+    }
+
+    getFluidoSaidaMisturado(fallback = null) {
+        return mixFluidos(this.estadoHidraulico.saidaFluidoContribuicoes, fallback);
     }
 
     marcarEmissaoIntrinseca() {
