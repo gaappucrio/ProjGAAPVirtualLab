@@ -5,6 +5,7 @@ import {
     subscribeLanguageChanges,
     t
 } from '../../utils/I18n.js';
+import { exportSimulationData } from '../export/SimulationDataExporter.js';
 
 export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange } = {}) {
     const btnRun = document.getElementById('btn-run');
@@ -16,6 +17,8 @@ export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange } =
     const languageToggle = document.getElementById('toggle-language');
     const languageLabel = languageToggle?.closest('label');
     const languageText = languageLabel?.querySelector('span');
+    const btnExportData = document.getElementById('btn-export-data');
+    const exportDataText = btnExportData?.querySelector('span');
 
     function updateRunButtonUI(isRunning) {
         if (isRunning) {
@@ -49,6 +52,8 @@ export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange } =
 
     function updateLanguageUI() {
         if (btnClear) btnClear.textContent = t('toolbar.clear');
+        if (exportDataText) exportDataText.textContent = t('toolbar.exportData');
+        if (btnExportData) btnExportData.title = t('toolbar.exportDataTitle');
         if (languageToggle) languageToggle.checked = isEnglishLanguage();
         if (languageLabel) languageLabel.title = t('toolbar.languageTitle');
         if (languageText) languageText.textContent = t('toolbar.language');
@@ -74,6 +79,10 @@ export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange } =
 
     languageToggle?.addEventListener('change', (event) => {
         setLanguage(event.target.checked ? 'en' : 'pt');
+    });
+
+    btnExportData?.addEventListener('click', () => {
+        exportSimulationData(engine);
     });
 
     btnClear.addEventListener('click', () => {

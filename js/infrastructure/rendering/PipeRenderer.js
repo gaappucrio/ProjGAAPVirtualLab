@@ -1,5 +1,48 @@
 import { getConnectionVisual, registerConnectionVisual, unregisterConnectionVisual } from './ConnectionVisualRegistry.js';
 
+function markerIdFromColor(color) {
+    return `arrow-fluid-${String(color || '').replace(/[^a-z0-9]/gi, '').toLowerCase() || 'default'}`;
+}
+
+function getOrCreateDefs(svgElement) {
+    let defs = svgElement?.querySelector('defs');
+    if (!defs && svgElement) {
+        defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+        svgElement.prepend(defs);
+    }
+
+    return defs;
+}
+
+function ensureFluidArrowMarker(svgElement, color) {
+    if (!svgElement || !color) return null;
+
+    const markerId = markerIdFromColor(color);
+    if (svgElement.querySelector(`#${markerId}`)) return `url(#${markerId})`;
+
+    const defs = getOrCreateDefs(svgElement);
+    if (!defs) return null;
+
+    const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+    marker.setAttribute('id', markerId);
+    marker.setAttribute('viewBox', '0 0 10 10');
+    marker.setAttribute('refX', '8');
+    marker.setAttribute('refY', '5');
+    marker.setAttribute('markerWidth', '6');
+    marker.setAttribute('markerHeight', '6');
+    marker.setAttribute('orient', 'auto-start-reverse');
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z');
+    path.setAttribute('fill', color);
+    path.style.transition = 'fill 0.5s ease';
+
+    marker.appendChild(path);
+    defs.appendChild(marker);
+
+    return `url(#${markerId})`;
+}
+
 export function drawConnectionCurve(x1, y1, x2, y2) {
     const dx = Math.abs(x2 - x1) * 0.5;
     return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
@@ -84,14 +127,23 @@ export function updateConnectionFlowVisual(connection, {
     active,
     flowLabel,
     markerId,
-    stateText
+    stateText,
+    fluidStyle = null
 }) {
     const visual = getConnectionVisual(connection);
     if (!visual) return;
 
+    const isSelected = visual.path.classList.contains('selected');
+    const activeStroke = active ? fluidStyle?.stroke : '';
+
     visual.path.classList.toggle('active', active);
-    if (!visual.path.classList.contains('selected')) {
-        visual.path.setAttribute('marker-end', markerId);
+    visual.path.style.stroke = activeStroke && !isSelected ? activeStroke : '';
+
+    if (!isSelected) {
+        const fluidMarkerId = activeStroke
+            ? ensureFluidArrowMarker(visual.path.ownerSVGElement, activeStroke)
+            : null;
+        visual.path.setAttribute('marker-end', fluidMarkerId || markerId);
     }
     visual.path.setAttribute('data-hydraulic-state', stateText);
 

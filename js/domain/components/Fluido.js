@@ -7,6 +7,7 @@ import {
 const DEFAULT_FLUID_NAME = '\u00c1gua';
 const DEFAULT_FLUID_DENSITY = 997.0;
 const DEFAULT_FLUID_TEMPERATURE = 25.0;
+const DEFAULT_FLUID_VISUAL_COLOR = '#3498db';
 
 function positiveNumber(value, fallback, minimum = Number.EPSILON) {
     const numericValue = Number(value);
@@ -23,6 +24,17 @@ function getFluidCompositionEntries(fluid) {
     }
 
     return [[fluid.nome || DEFAULT_FLUID_NAME, 1]];
+}
+
+function getFluidColorCompositionEntries(fluid) {
+    if (!fluid) return [];
+    if (fluid.corVisualComposicao && typeof fluid.corVisualComposicao === 'object') {
+        return Object.entries(fluid.corVisualComposicao)
+            .map(([color, fraction]) => [color, Number(fraction)])
+            .filter(([, fraction]) => Number.isFinite(fraction) && fraction > 0);
+    }
+
+    return fluid.corVisual ? [[fluid.corVisual, 1]] : [];
 }
 
 function normalizeComposition(composition) {
@@ -49,6 +61,8 @@ export class Fluido {
         this.viscosidadeDinamicaPaS = viscosidadeDinamicaPaS;
         this.pressaoVaporBar = DEFAULT_FLUID_VAPOR_PRESSURE_BAR;
         this.pressaoAtmosfericaBar = DEFAULT_ATMOSPHERIC_PRESSURE_BAR;
+        this.corVisual = DEFAULT_FLUID_VISUAL_COLOR;
+        this.corVisualComposicao = { [DEFAULT_FLUID_VISUAL_COLOR]: 1 };
     }
 }
 
@@ -77,6 +91,12 @@ export function updateFluidoProperties(fluido, dados = {}) {
         fluido.pressaoAtmosfericaBar ?? DEFAULT_ATMOSPHERIC_PRESSURE_BAR,
         0.5
     );
+    if (dados.corVisual !== undefined) {
+        fluido.corVisual = dados.corVisual ? String(dados.corVisual) : null;
+    }
+    const colorCompositionSource = dados.corVisualComposicao
+        ?? (dados.corVisual !== undefined && fluido.corVisual ? { [fluido.corVisual]: 1 } : fluido.corVisualComposicao);
+    fluido.corVisualComposicao = colorCompositionSource ? normalizeComposition(colorCompositionSource) : null;
     const compositionSource = dados.composicao
         ?? (dados.nome !== undefined && dados.nome !== previousName ? { [fluido.nome]: 1 } : fluido.composicao)
         ?? { [fluido.nome]: 1 };
@@ -105,6 +125,8 @@ export function cloneFluido(fluido, overrides = {}) {
         pressaoVaporBar: fluido?.pressaoVaporBar ?? DEFAULT_FLUID_VAPOR_PRESSURE_BAR,
         pressaoAtmosfericaBar: fluido?.pressaoAtmosfericaBar ?? DEFAULT_ATMOSPHERIC_PRESSURE_BAR,
         composicao: fluido?.composicao,
+        corVisual: fluido?.corVisual,
+        corVisualComposicao: fluido?.corVisualComposicao,
         ...overrides
     });
 }
@@ -132,6 +154,7 @@ export function mixFluidos(contributions = [], fallback = null, { nome = 'Mistur
     let logViscosity = 0;
     let vaporPressure = 0;
     let atmosphericPressure = 0;
+    const colorComposition = {};
 
     validContributions.forEach(({ fluido, weight }) => {
         const fraction = weight / totalWeight;
@@ -144,9 +167,18 @@ export function mixFluidos(contributions = [], fallback = null, { nome = 'Mistur
         getFluidCompositionEntries(fluido).forEach(([componentName, componentFraction]) => {
             composition[componentName] = (composition[componentName] || 0) + (fraction * componentFraction);
         });
+
+        getFluidColorCompositionEntries(fluido).forEach(([color, colorFraction]) => {
+            colorComposition[color] = (colorComposition[color] || 0) + (fraction * colorFraction);
+        });
     });
 
     const normalizedComposition = normalizeComposition(composition);
+    const normalizedColorComposition = Object.keys(colorComposition).length > 0
+        ? normalizeComposition(colorComposition)
+        : null;
+    const colorCompositionEntries = normalizedColorComposition ? Object.entries(normalizedColorComposition) : [];
+    const dominantVisualColor = colorCompositionEntries.length === 1 ? colorCompositionEntries[0][0] : null;
     const compositionNames = Object.entries(normalizedComposition)
         .sort(([, a], [, b]) => b - a)
         .map(([componentName, fraction]) => `${componentName} ${(fraction * 100).toFixed(0)}%`);
@@ -158,6 +190,8 @@ export function mixFluidos(contributions = [], fallback = null, { nome = 'Mistur
         viscosidadeDinamicaPaS: Math.exp(logViscosity),
         pressaoVaporBar: vaporPressure,
         pressaoAtmosfericaBar: atmosphericPressure,
-        composicao: normalizedComposition
+        composicao: normalizedComposition,
+        corVisual: dominantVisualColor,
+        corVisualComposicao: normalizedColorComposition
     });
 }

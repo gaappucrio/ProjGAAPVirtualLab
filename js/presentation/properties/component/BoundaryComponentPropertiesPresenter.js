@@ -1,4 +1,9 @@
 import { FLUID_PRESETS } from '../../../application/config/FluidPresets.js';
+import {
+    CUSTOM_FLUID_COLOR_OPTIONS,
+    getFluidVisualStyle,
+    resolveCustomFluidColor
+} from '../../../infrastructure/rendering/FluidVisualStyle.js';
 import { formatUnitValue, getUnitStep, toDisplayValue } from '../../../utils/Units.js';
 import { getFluidNameVariants, translateFluidName } from '../../../utils/I18n.js';
 import {
@@ -54,6 +59,39 @@ function getCurrentSourceFluidPresetId(comp) {
     return inferredPresetId;
 }
 
+function getDefaultCustomFluidColor(fluido) {
+    return resolveCustomFluidColor(fluido?.corVisual)
+        || resolveCustomFluidColor(getFluidVisualStyle(fluido).stroke)
+        || CUSTOM_FLUID_COLOR_OPTIONS.find((option) => option.id === 'azul_claro')?.color
+        || CUSTOM_FLUID_COLOR_OPTIONS[0].color;
+}
+
+function renderCustomColorSwatches(fluido, currentPreset) {
+    const selectedColor = getDefaultCustomFluidColor(fluido);
+    const swatches = CUSTOM_FLUID_COLOR_OPTIONS.map((option) => `
+        <button
+            type="button"
+            class="fluid-color-swatch${selectedColor === option.color ? ' selected' : ''}"
+            data-fluid-color="${option.color}"
+            title="${option.label}"
+            aria-label="${option.label}"
+            aria-pressed="${selectedColor === option.color ? 'true' : 'false'}"
+            style="--swatch-color: ${option.color};"
+            ${currentPreset === 'custom' ? '' : 'disabled'}
+        ></button>
+    `).join('');
+
+    return `
+        <div class="prop-group source-fluid-color-group" ${currentPreset === 'custom' ? '' : 'hidden'}>
+            <label>Cor do Fluido</label>
+            <input type="hidden" id="input-source-fluid-color" value="${selectedColor}">
+            <div class="fluid-color-grid">
+                ${swatches}
+            </div>
+        </div>
+    `;
+}
+
 function renderSourceFluidFields(comp) {
     const fluido = ensureSourceFluid(comp);
     const currentPreset = getCurrentSourceFluidPresetId(comp);
@@ -93,6 +131,7 @@ function renderSourceFluidFields(comp) {
             ${makeUnitLabel('Pressão Atmosférica', 'pressure', TOOLTIPS.fluido.pressaoAtmosferica)}
             <input type="number" id="input-source-fluid-atm" title="${TOOLTIPS.fluido.pressaoAtmosferica}" value="${displayUnitValue('pressure', fluido.pressaoAtmosfericaBar, 3)}" step="${displayStep('pressure', 0.001)}" min="${displayBound('pressure', 0.5)}" max="${displayBound('pressure', 2)}">
         </div>
+        ${renderCustomColorSwatches(fluido, currentPreset)}
     `;
 }
 
@@ -102,6 +141,11 @@ function pressureInputValue(id, fallback) {
 
 function temperatureInputValue(id, fallback) {
     return baseFromDisplay('temperature', valueOf(id), fallback);
+}
+
+function getSourceFluidColorValue(fluido, presetId) {
+    if (presetId !== 'custom') return FLUID_PRESETS[presetId]?.corVisual || null;
+    return resolveCustomFluidColor(valueOf('input-source-fluid-color')) || getDefaultCustomFluidColor(fluido);
 }
 
 function applySourceFluidFromInputs(comp, { preferredPresetId = null } = {}) {
@@ -155,7 +199,8 @@ function applySourceFluidFromInputs(comp, { preferredPresetId = null } = {}) {
             temperatura: temperatureInputValue('input-source-fluid-temp', fluido.temperatura),
             viscosidadeDinamicaPaS: viscosityResult.value,
             pressaoVaporBar: vaporResult.value,
-            pressaoAtmosfericaBar: atmResult.value
+            pressaoAtmosfericaBar: atmResult.value,
+            corVisual: getSourceFluidColorValue(fluido, nextPresetId)
         },
         { presetId: nextPresetId }
     );
@@ -169,6 +214,28 @@ function applySourceFluidFromInputs(comp, { preferredPresetId = null } = {}) {
     notifyPanelRefresh();
 }
 
+function updateCustomColorControls(isCustom) {
+    const group = byId('input-source-fluid-color')?.closest?.('.source-fluid-color-group');
+    if (!group) return;
+
+    group.hidden = !isCustom;
+    group.querySelectorAll('.fluid-color-swatch').forEach((button) => {
+        button.disabled = !isCustom;
+    });
+}
+
+function setSelectedCustomColor(color) {
+    const resolvedColor = resolveCustomFluidColor(color);
+    if (!resolvedColor) return;
+
+    setValue('input-source-fluid-color', resolvedColor);
+    document.querySelectorAll?.('.fluid-color-swatch').forEach((button) => {
+        const selected = button.dataset.fluidColor === resolvedColor;
+        button.classList.toggle('selected', selected);
+        button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+    });
+}
+
 function bindSourceFluidProperties(comp) {
     const fluido = ensureSourceFluid(comp);
     setValue('input-source-fluid-name', translateFluidName(fluido.nome));
@@ -177,6 +244,11 @@ function bindSourceFluidProperties(comp) {
         const presetId = event.target.value;
         if (presetId === 'custom') {
             comp.fluidoEntradaPresetId = 'custom';
+            setSelectedCustomColor(getDefaultCustomFluidColor(comp.fluidoEntrada));
+            comp.atualizarFluidoEntrada({
+                corVisual: getSourceFluidColorValue(comp.fluidoEntrada, 'custom')
+            }, { presetId: 'custom' });
+            updateCustomColorControls(true);
             comp.notify(ComponentEventPayloads.state({ fluidUpdate: true }));
             notifyPanelRefresh();
             return;
@@ -191,7 +263,16 @@ function bindSourceFluidProperties(comp) {
         setValue('input-source-fluid-temp', toDisplayValue('temperature', preset.temperatura).toFixed(1));
         setValue('input-source-fluid-vapor', formatUnitValue('pressure', preset.pressaoVaporBar, 3));
         setValue('input-source-fluid-atm', formatUnitValue('pressure', preset.pressaoAtmosfericaBar, 3));
+        updateCustomColorControls(false);
         applySourceFluidFromInputs(comp, { preferredPresetId: presetId });
+    });
+
+    document.querySelectorAll?.('.fluid-color-swatch').forEach((button) => {
+        button.addEventListener('click', () => {
+            if (button.disabled) return;
+            setSelectedCustomColor(button.dataset.fluidColor);
+            applySourceFluidFromInputs(comp, { preferredPresetId: 'custom' });
+        });
     });
 
     [

@@ -11,19 +11,27 @@ import {
     volumeText
 } from './ComponentVisualShared.js';
 import { subscribeLanguageChanges, t } from '../../utils/I18n.js';
+import { getFluidVisualStyle } from '../rendering/FluidVisualStyle.js';
 
 export const SOURCE_COMPONENT_VISUAL = {
     svg: (id, tag) => `
-        <circle cx="40" cy="40" r="25" fill="#3498db" stroke="#2980b9" stroke-width="4"/>
-        <path d="M 25 40 L 40 40 M 35 35 L 40 40 L 35 45" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+        <circle id="source-body-${id}" cx="40" cy="40" r="25" fill="#3498db" stroke="#2980b9" stroke-width="4"/>
+        <path id="source-arrow-${id}" d="M 25 40 L 40 40 M 35 35 L 40 40 L 35 45" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
         <text id="tag-${id}" x="40" y="80" font-size="11" ${labelStyle}>${tag}</text>
         <g>${makePort(id, 65, 40, 'out')}</g>
     `,
     setup: (visual, logica, id) => {
         const atualizarElevacoes = createElevationUpdater({ visual, logica, id, offsetY: -20 });
+        const atualizarCorFonte = () => {
+            const estilo = getFluidVisualStyle(logica.fluidoEntrada);
+            visual.querySelector(`#source-body-${id}`)?.setAttribute('fill', estilo.stroke);
+            visual.querySelector(`#source-body-${id}`)?.setAttribute('stroke', estilo.fillEnd);
+            visual.querySelector(`#source-arrow-${id}`)?.setAttribute('stroke', estilo.contrast);
+        };
 
         logica.subscribe((dados) => {
             if (dados.tipo === COMPONENT_EVENTS.POSITION_UPDATE) atualizarElevacoes();
+            if (dados.tipo === COMPONENT_EVENTS.STATE && dados.fluidUpdate) atualizarCorFonte();
             if (dados.tipo === COMPONENT_EVENTS.TAG_UPDATE) {
                 visual.querySelector(`#tag-${id}`).textContent = logica.tag;
             }
@@ -33,6 +41,7 @@ export const SOURCE_COMPONENT_VISUAL = {
             if (dados.tipo === ENGINE_EVENTS.SIMULATION_CONFIG) atualizarElevacoes();
         });
 
+        atualizarCorFonte();
         atualizarElevacoes();
     }
 };
@@ -132,8 +141,8 @@ export const TANK_COMPONENT_VISUAL = {
     svg: (id, tag) => `
         <defs>
             <linearGradient id="grad-${id}" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#3498db" stop-opacity="0.9"/>
-                <stop offset="100%" stop-color="#2980b9" stop-opacity="0.95"/>
+                <stop id="grad-start-${id}" offset="0%" stop-color="#3498db" stop-opacity="0.9"/>
+                <stop id="grad-end-${id}" offset="100%" stop-color="#2980b9" stop-opacity="0.95"/>
             </linearGradient>
             <clipPath id="clip-${id}">
                 <path d="M 0 40 L 0 200 A 80 40 0 0 0 160 200 L 160 40 A 80 40 0 0 0 0 40 Z"/>
@@ -164,6 +173,11 @@ export const TANK_COMPONENT_VISUAL = {
             visual.querySelector(`#sp-label-${id}`).textContent = t('visual.sp');
             visual.querySelector(`#sp-badge-txt-${id}`).textContent = t('visual.spActive');
         };
+        const atualizarCorConteudo = (fluido = logica.getFluidoConteudo?.()) => {
+            const estilo = getFluidVisualStyle(fluido);
+            visual.querySelector(`#grad-start-${id}`)?.setAttribute('stop-color', estilo.fillStart);
+            visual.querySelector(`#grad-end-${id}`)?.setAttribute('stop-color', estilo.fillEnd);
+        };
         const atualizarLinhaSetpoint = () => {
             const spFrac = logica.setpoint / 100;
             const spY = 240 - (spFrac * 240);
@@ -176,19 +190,21 @@ export const TANK_COMPONENT_VISUAL = {
             visual.querySelector(`#sp-badge-${id}`).setAttribute('opacity', vis);
             visual.querySelector(`#sp-badge-txt-${id}`).setAttribute('opacity', vis);
         };
-        const atualizarFluxoEntrada = (qIn = logica.lastQin) => {
+        const atualizarFluxoEntrada = (qIn = logica.lastQin, fluido = null) => {
             const stream = visual.querySelector(`#stream-${id}`);
             if (!stream) return;
+            stream.setAttribute('stroke', getFluidVisualStyle(fluido || logica.getFluidoConteudo?.()).stream);
             stream.style.opacity = ENGINE.isRunning && qIn > 0.1 ? '0.7' : '0';
         };
 
         logica.subscribe((dados) => {
             if (dados.tipo === COMPONENT_EVENTS.POSITION_UPDATE) atualizarElevacoes();
             if (dados.tipo === COMPONENT_EVENTS.VOLUME_UPDATE) {
+                atualizarCorConteudo(dados.fluidoConteudo);
                 visual.querySelector(`#agua-${id}`).setAttribute('height', dados.perc * 240);
                 visual.querySelector(`#agua-${id}`).setAttribute('y', 240 - (dados.perc * 240));
                 atualizarRotulosTanque();
-                atualizarFluxoEntrada(dados.qIn);
+                atualizarFluxoEntrada(dados.qIn, dados.fluidoEntrada || dados.fluidoConteudo);
             } else if (dados.tipo === COMPONENT_EVENTS.TAG_UPDATE) {
                 visual.querySelector(`#tag-${id}`).textContent = logica.tag;
             } else if (dados.tipo === COMPONENT_EVENTS.SETPOINT_UPDATE) {
@@ -217,6 +233,7 @@ export const TANK_COMPONENT_VISUAL = {
         });
 
         atualizarRotulosTanque();
+        atualizarCorConteudo();
         atualizarElevacoes();
     }
 };

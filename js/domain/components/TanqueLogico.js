@@ -485,12 +485,17 @@ export class TanqueLogico extends ComponenteFisico {
     }
 
     _notificarVolume() {
+        const fluidoConteudo = this.getFluidoConteudo();
         this.notify(ComponentEventPayloads.volumeUpdate({
             perc: this.capacidadeMaxima > 0 ? this.volumeAtual / this.capacidadeMaxima : 0,
             abs: this.volumeAtual,
             qIn: this.lastQin,
             qOut: this.lastQout,
-            pBottom: this.pressaoFundoBar
+            pBottom: this.pressaoFundoBar,
+            fluidoConteudo,
+            fluidoEntrada: this.lastQin > EPSILON_FLOW
+                ? this.getFluidoEntradaMisturado(fluidoConteudo)
+                : null
         }));
     }
 

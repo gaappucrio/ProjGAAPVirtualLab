@@ -36,6 +36,9 @@
       top: 20px;
       right: 20px;
       z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 8px;
       pointer-events: none;
   }
 
@@ -817,6 +820,34 @@
       /* Largura total para os sliders dentro dos grupos de propriedades, garantindo que eles se encaixem adequadamente dentro dos limites dos grupos de propriedades e proporcionando um layout mais organizado e profissional para os campos de entrada das propriedades dos componentes selecionados, especialmente quando combinados com o layout flexível e o alinhamento centralizado para destacar os campos de entrada das propriedades */
       cursor: pointer;
       /* Cursor de ponteiro para indicar que os sliders são interativos e podem ser arrastados pelos usuários, melhorando a experiência do usuário ao interagir com os campos de entrada das propriedades dos componentes selecionados e incentivando a exploração das funcionalidades de ajuste dos sliders, além de criar um visual mais dinâmico e agradável para os sliders, especialmente quando combinados com o layout flexível e o alinhamento centralizado para destacar os campos de entrada das propriedades */
+  }
+
+  .fluid-color-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin-top: 8px;
+  }
+
+  .fluid-color-swatch {
+      width: 100%;
+      aspect-ratio: 1;
+      min-height: 30px;
+      border: 2px solid #d6dee2;
+      border-radius: 6px;
+      background: var(--swatch-color);
+      cursor: pointer;
+      box-shadow: inset 0 0 0 1px rgba(44, 62, 80, 0.12);
+  }
+
+  .fluid-color-swatch.selected {
+      border-color: #2c3e50;
+      box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.22), inset 0 0 0 1px rgba(44, 62, 80, 0.18);
+  }
+
+  .fluid-color-swatch:disabled {
+      cursor: default;
+      opacity: 0.45;
   }
 
   .prop-group input:focus

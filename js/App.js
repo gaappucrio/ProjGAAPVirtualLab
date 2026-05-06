@@ -10,7 +10,7 @@ import {
     setConnectionVisualUpdater,
     setPortStateUpdater
 } from './application/engine/SimulationEngine.js';
-import { ComponentEventPayloads } from './application/events/EventPayloads.js';
+import { ComponentEventPayloads, EngineEventPayloads } from './application/events/EventPayloads.js';
 import { updatePortStates } from './utils/PortStateManager.js';
 import {
     applyLanguageToDocument,
@@ -34,13 +34,20 @@ import {
 const connectionService = createConnectionServiceRuntime(ENGINE);
 
 function translateDefaultTagsForCurrentLanguage() {
+    let updatedSelectionTag = false;
+
     ENGINE.componentes.forEach((component) => {
         const translatedTag = translateDefaultComponentTag(component.tag);
         if (translatedTag === component.tag) return;
 
         component.tag = translatedTag;
         component.notify(ComponentEventPayloads.tagUpdate());
+        if (component === ENGINE.selectedComponent) updatedSelectionTag = true;
     });
+
+    if (updatedSelectionTag) {
+        ENGINE.notify(EngineEventPayloads.selection(ENGINE.selectedComponent, null));
+    }
 }
 
 applyLanguageToDocument();

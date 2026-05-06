@@ -262,6 +262,8 @@ const TEXTS = {
             start: '&#9654; Iniciar Simulação Física',
             pause: '&#9208; Pausar Simulação',
             clear: 'Limpar Área',
+            exportData: 'Exportar dados',
+            exportDataTitle: 'Exporta dados dos componentes e conexões atuais para tabelas.',
             relativeHeight: 'Altura relativa',
             language: 'Inglês',
             languageTitle: 'Alterna os textos do laboratório entre português e inglês.',
@@ -300,8 +302,8 @@ const TEXTS = {
             spActive: 'PA ativo'
         },
         componentPrefixes: {
-            source: 'inlet',
-            sink: 'outlet',
+            source: 'Entrada',
+            sink: 'Sa\u00edda',
             pump: 'P',
             valve: 'V',
             tank: 'T'
@@ -335,6 +337,8 @@ const TEXTS = {
             start: '&#9654; Start Physical Simulation',
             pause: '&#9208; Pause Simulation',
             clear: 'Clear Area',
+            exportData: 'Export data',
+            exportDataTitle: 'Exports current component and connection data to tables.',
             relativeHeight: 'Relative height',
             language: 'English',
             languageTitle: 'Switches the lab text between Portuguese and English.',
@@ -476,6 +480,17 @@ const LEGACY_PT_TO_EN = {
     'Predefinição do Fluido': 'Fluid Preset',
     'Nome do Fluido': 'Fluid Name',
     'Fluido': 'Fluid',
+    'Cor do Fluido': 'Fluid Color',
+    'Cinza': 'Gray',
+    'Roxo': 'Purple',
+    'Rosa': 'Pink',
+    'Vermelho': 'Red',
+    'Azul claro': 'Light blue',
+    'Laranja': 'Orange',
+    'Verde escuro': 'Dark green',
+    'Magenta': 'Magenta',
+    'Ciano': 'Cyan',
+    'Verde': 'Green',
     'Propriedades registradas nesta fronteira de entrada para suportar futuras misturas de fluidos.': 'Properties recorded at this inlet boundary to support future fluid mixtures.',
     'Fluido no Trecho': 'Line Fluid',
     'Fluido no Tanque': 'Tank Fluid',
@@ -644,6 +659,13 @@ function storeLanguage(language) {
 
 function normalizeText(value) {
     return String(value ?? '').trim().replace(/\s+/g, ' ');
+}
+
+function normalizeTagPrefix(value) {
+    return normalizeText(value)
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
 }
 
 function preserveOuterWhitespace(original, translated) {
@@ -873,17 +895,19 @@ export function getComponentTagPrefix(type) {
 
 export function translateDefaultComponentTag(tag) {
     const text = String(tag ?? '');
-    const pairs = [
-        ['Entrada', 'inlet'],
-        ['Source', 'inlet'],
-        ['Saída', 'outlet'],
-        ['Sink', 'outlet']
-    ];
+    const match = text.match(/^(.+)-(\d+)$/);
+    if (!match) return text;
 
-    for (const [from, to] of pairs) {
-        const match = text.match(new RegExp(`^${from}-(\\d+)$`));
-        if (match) return `${to}-${match[1]}`;
-    }
+    const typeByPrefix = {
+        entrada: 'source',
+        source: 'source',
+        inlet: 'source',
+        saida: 'sink',
+        sink: 'sink',
+        outlet: 'sink'
+    };
+    const type = typeByPrefix[normalizeTagPrefix(match[1])];
+    if (type) return `${getComponentTagPrefix(type)}-${match[2]}`;
 
     return text;
 }
