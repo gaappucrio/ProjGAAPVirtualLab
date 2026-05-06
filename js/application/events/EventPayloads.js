@@ -14,10 +14,6 @@ export const EngineEventPayloads = Object.freeze({
         tipo: ENGINE_EVENTS.SIMULATION_CONFIG,
         usarAlturaRelativa
     }),
-    fluidUpdate: (fluido) => ({
-        tipo: ENGINE_EVENTS.FLUID_UPDATE,
-        fluido
-    }),
     panelUpdate: (dt = 0) => ({
         tipo: ENGINE_EVENTS.PANEL_UPDATE,
         dt

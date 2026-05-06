@@ -3,6 +3,7 @@ import { getPresentationEngine } from '../context/PresentationEngineContext.js';
 import { clearInputError, InputValidator, showInputError } from '../validation/InputValidator.js';
 import { bindPropertyTabs, renderPropertyTabs } from '../../utils/PropertyTabs.js';
 import { TOOLTIPS } from '../../utils/Tooltips.js';
+import { localizeElement, translateLiteral } from '../../utils/LanguageManager.js';
 import {
     DEFAULT_DESIGN_VELOCITY_MPS,
     DEFAULT_PIPE_ROUGHNESS_MM,
@@ -36,6 +37,10 @@ function getSuggestedDiameterM(connection, state) {
     return getSuggestedDiameterForConnection(connection, state);
 }
 
+function formatFluidName(fluid) {
+    return fluid?.nome || '-';
+}
+
 export function renderConnectionProperties({
     propContent,
     connection,
@@ -47,6 +52,7 @@ export function renderConnectionProperties({
     const labels = getConnectionDisplay(engine, connection);
     const geometry = engine.getConnectionGeometry(connection);
     const suggestedDiameterM = getSuggestedDiameterM(connection, state);
+    const currentFluid = state.fluid || engine.hydraulicContext?.getConnectionFluid?.(connection);
 
     const basicContent = `
         <div class="prop-group">
@@ -69,6 +75,10 @@ export function renderConnectionProperties({
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.vazaoAtual}">Vazão Atual (${getUnitSymbol('flow')})</label>
             <input type="text" id="disp-pipe-flow" title="${TOOLTIPS.conexao.vazaoAtual}" value="${displayUnitValue('flow', state.flowLps, 2)}" disabled>
+        </div>
+        <div class="prop-group">
+            <label title="Fluido atualmente transportado neste trecho.">Fluido no Trecho</label>
+            <input type="text" id="disp-pipe-fluid" title="Fluido atualmente transportado neste trecho." value="${formatFluidName(currentFluid)}" disabled>
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.vazaoAlvo}">Vazão Alvo (${getUnitSymbol('flow')})</label>
@@ -111,7 +121,15 @@ export function renderConnectionProperties({
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.regime}">Regime</label>
-            <input type="text" id="disp-pipe-regime" title="${TOOLTIPS.conexao.regime}" value="${state.regime}" disabled>
+            <input type="text" id="disp-pipe-regime" title="${TOOLTIPS.conexao.regime}" value="${translateLiteral(state.regime)}" disabled>
+        </div>
+        <div class="prop-group">
+            <label title="Densidade do fluido ou mistura que está no trecho.">Densidade do Fluido (kg/m³)</label>
+            <input type="text" id="disp-pipe-fluid-density" title="Densidade do fluido ou mistura que está no trecho." value="${(currentFluid?.densidade || 0).toFixed(1)}" disabled>
+        </div>
+        <div class="prop-group">
+            <label title="Viscosidade dinâmica do fluido ou mistura que está no trecho.">Viscosidade do Fluido (Pa.s)</label>
+            <input type="text" id="disp-pipe-fluid-viscosity" title="Viscosidade dinâmica do fluido ou mistura que está no trecho." value="${(currentFluid?.viscosidadeDinamicaPaS || 0).toFixed(5)}" disabled>
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.respostaHidraulica}">Resposta Hidráulica (s)</label>
@@ -127,6 +145,7 @@ export function renderConnectionProperties({
             advancedDescription: 'Os parâmetros desta aba refinam perdas distribuídas, perdas locais e a resposta transitória da linha. São úteis quando você quer aproximar melhor a hidráulica do trecho.'
         })}
     `;
+    localizeElement(propContent);
 
     bindUnitControls({ onChange: onRerender });
     bindPropertyTabs(propContent);

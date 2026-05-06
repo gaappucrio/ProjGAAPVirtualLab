@@ -11,14 +11,13 @@ import {
     pressureLossFromFlow,
     smoothFirstOrder
 } from '../../domain/components/BaseComponente.js';
-import { Fluido } from '../../domain/components/Fluido.js';
+import { createFluidoFromProperties } from '../../domain/components/Fluido.js';
 import { HydraulicBranchModel } from '../../domain/services/HydraulicBranchModel.js';
 import { HydraulicNetworkSolver } from '../../domain/services/HydraulicNetworkSolver.js';
 import { ensureConnectionProperties as ensurePipeConnectionProperties } from '../../domain/services/PipeHydraulics.js';
 import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
 import { createSimulationContext } from '../../domain/context/SimulationContext.js';
 import {
-    DEFAULT_FLUID_VISCOSITY_PA_S,
     DEFAULT_PIPE_FRICTION,
     EPSILON_FLOW,
     MAX_NETWORK_FLOW_LPS,
@@ -59,8 +58,6 @@ let clearComponentVisualRegistryHandler = null;
 
 // Rastreamento de estabilidade numerica do solver
 
-const safeViscosity = (value) => Math.max(0.00001, value || DEFAULT_FLUID_VISCOSITY_PA_S);
-
 export { FLUID_PRESETS };
 
 export function setPortStateUpdater(fn) {
@@ -94,14 +91,7 @@ export class SistemaSimulacao extends Observable {
         super();
         this.configStore = new SimulationConfigStore();
         const fluidoPadrao = FLUID_PRESETS.agua;
-        this.fluidoOperante = new Fluido(
-            fluidoPadrao.nome,
-            fluidoPadrao.densidade,
-            fluidoPadrao.viscosidadeDinamicaPaS,
-            fluidoPadrao.temperatura
-        );
-        this.fluidoOperante.viscosidadeDinamicaPaS = fluidoPadrao.viscosidadeDinamicaPaS;
-        this.fluidoOperante.pressaoVaporBar = fluidoPadrao.pressaoVaporBar;
+        this.fluidoOperante = createFluidoFromProperties(fluidoPadrao);
         this.selectionStore = new SelectionStore();
         this.topology = new TopologyGraph();
         this.connectionStateStore = new ConnectionStateStore();
@@ -183,7 +173,8 @@ export class SistemaSimulacao extends Observable {
             elapsedTime: this.elapsedTime,
             queries: {
                 isBombaBloqueadaPorSetpoint: (bomba) => this.isBombaBloqueadaPorSetpoint(bomba),
-                isValvulaBloqueadaPorSetpoint: (valvula) => this.isValvulaBloqueadaPorSetpoint(valvula)
+                isValvulaBloqueadaPorSetpoint: (valvula) => this.isValvulaBloqueadaPorSetpoint(valvula),
+                getComponentFluid: (component) => this.hydraulicContext.getComponentFluid(component)
             },
             ...overrides
         });
@@ -306,16 +297,6 @@ export class SistemaSimulacao extends Observable {
         this.notify(EngineEventPayloads.simulationConfig(this.usarAlturaRelativa));
     }
 
-    atualizarFluido(dados) {
-        this.fluidoOperante.nome = dados.nome ?? this.fluidoOperante.nome;
-        this.fluidoOperante.densidade = Math.max(1, Number(dados.densidade) || this.fluidoOperante.densidade);
-        this.fluidoOperante.temperatura = Number(dados.temperatura) || this.fluidoOperante.temperatura;
-        this.fluidoOperante.viscosidadeDinamicaPaS = safeViscosity(dados.viscosidadeDinamicaPaS ?? this.fluidoOperante.viscosidadeDinamicaPaS);
-        this.fluidoOperante.pressaoVaporBar = Math.max(0.0001, Number(dados.pressaoVaporBar) || this.fluidoOperante.pressaoVaporBar);
-        this.fluidoOperante.pressaoAtmosfericaBar = Math.max(0.5, Number(dados.pressaoAtmosfericaBar) || this.fluidoOperante.pressaoAtmosfericaBar);
-        this.notify(EngineEventPayloads.fluidUpdate(this.fluidoOperante));
-    }
-
     tick(timestamp) {
         if (!this.isRunning) return;
 
@@ -356,7 +337,9 @@ export class SistemaSimulacao extends Observable {
                 reynolds: 0,
                 frictionFactor: DEFAULT_PIPE_FRICTION,
                 relativeRoughness: 0,
-                regime: 'sem fluxo'
+                regime: 'sem fluxo',
+                fluid: null,
+                fluidName: ''
             }));
     }
 

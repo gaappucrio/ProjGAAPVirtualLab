@@ -6,6 +6,7 @@ import {
     setHtml,
     setText
 } from './PropertyDomAdapter.js';
+import { t, translateLiteral } from '../../utils/LanguageManager.js';
 import { formatMeasuredValue } from './PropertyValueFormatters.js';
 
 function getRecommendedSourcePressureText(alerta) {
@@ -21,7 +22,7 @@ function getRecommendedSourcePressureText(alerta) {
         return formatMeasuredValue('pressure', maior, 2);
     }
 
-    return `${formatMeasuredValue('pressure', menor, 2)} a ${formatMeasuredValue('pressure', maior, 2)}`;
+    return `${formatMeasuredValue('pressure', menor, 2)}${t('common.rangeSeparator')}${formatMeasuredValue('pressure', maior, 2)}`;
 }
 
 export function updateTankSaturationAlert(component) {
@@ -44,35 +45,40 @@ export function updateTankSaturationAlert(component) {
 
     const pressaoRecomendada = getRecommendedSourcePressureText(alerta);
     const textoModoAltura = alerta.usarAlturaRelativa
-        ? `Com a altura relativa ativa, a recomendação considera a contrapressão no bocal de entrada no set point (${formatMeasuredValue('pressure', alerta.pressaoBaseEntradaSetpointBar, 2)}) e a pressão disponível de saída nesse mesmo nível (${formatMeasuredValue('pressure', alerta.pressaoSaidaSetpointBar, 2)}).`
-        : `Com a altura relativa desativada, a entrada do tanque não considera contrapressão hidrostática; o ajuste usa somente a capacidade de saída estimada para o set point (${formatMeasuredValue('pressure', alerta.pressaoSaidaSetpointBar, 2)}).`;
+        ? t('saturation.heightOn', {
+            baseInlet: formatMeasuredValue('pressure', alerta.pressaoBaseEntradaSetpointBar, 2),
+            outlet: formatMeasuredValue('pressure', alerta.pressaoSaidaSetpointBar, 2)
+        })
+        : t('saturation.heightOff', {
+            outlet: formatMeasuredValue('pressure', alerta.pressaoSaidaSetpointBar, 2)
+        });
     const textoPressao = pressaoRecomendada
-        ? `Para estabilizar no set point de <b>${component.setpoint}%</b>, ajuste a pressão de alimentação para <b>${pressaoRecomendada}</b>.`
-        : 'Nenhuma fonte de entrada foi encontrada para aplicar o ajuste automaticamente.';
+        ? t('saturation.pressure', { setpoint: component.setpoint, pressure: pressaoRecomendada })
+        : t('saturation.noSource');
     const textoBombas = alerta.possuiBombasMontante
-        ? ` Há ${alerta.quantidadeBombasMontante} bomba(s) no trecho de entrada; o ajuste automático atua apenas nas fontes de alimentação.`
+        ? t('saturation.pumps', { count: alerta.quantidadeBombasMontante })
         : '';
 
     setDisplay('painel-alerta-saturacao', 'block');
-    setHtml('texto-alerta-saturacao', `
-        A saída do tanque atingiu o limite físico para o controle de nível.
-        ${textoPressao}
-        A vazão máxima estimada de saída no set point é <b>${formatMeasuredValue('flow', alerta.vazaoSaidaLimiteSetpointLps, 2)}</b>.
-        ${textoModoAltura}${textoBombas}
-    `);
+    setHtml('texto-alerta-saturacao', t('saturation.message', {
+        pressureText: textoPressao,
+        flow: formatMeasuredValue('flow', alerta.vazaoSaidaLimiteSetpointLps, 2),
+        heightText: textoModoAltura,
+        pumpText: textoBombas
+    }));
 
     if (btnAjuste) {
         btnAjuste.style.display = 'inline-flex';
         btnAjuste.disabled = !alerta.autoAjustavel;
         btnAjuste.textContent = alerta.autoAjustavel
             ? (alerta.ajustesFonte.length === 1
-                ? 'Aplicar na fonte de entrada'
-                : `Aplicar nas ${alerta.ajustesFonte.length} fontes de entrada`)
-            : 'Ajuste automático indisponível';
+                ? t('saturation.applyOne')
+                : t('saturation.applyMany', { count: alerta.ajustesFonte.length }))
+            : t('saturation.unavailable');
     }
 
     if (feedbackAjuste && !alerta.autoAjustavel && !feedbackAjuste.dataset.state) {
-        setText('texto-acao-alerta-saturacao', 'Conecte uma fonte de entrada para permitir o ajuste automático.');
+        setText('texto-acao-alerta-saturacao', t('saturation.connectSource'));
         feedbackAjuste.style.color = '#a84300';
     } else if (feedbackAjuste && alerta.autoAjustavel && !feedbackAjuste.dataset.state) {
         setText('texto-acao-alerta-saturacao', '');
@@ -90,12 +96,12 @@ export function bindTankSaturationAlertActions(component, { onAdjustmentApplied 
         const resultado = component.aplicarAjustePressaoSetpoint();
         if (resultado.aplicado) {
             feedbackAjuste.textContent = resultado.quantidadeFontes === 1
-                ? 'Pressão de alimentação ajustada automaticamente.'
-                : `Pressão ajustada automaticamente em ${resultado.quantidadeFontes} fontes de entrada.`;
+                ? t('saturation.successOne')
+                : t('saturation.successMany', { count: resultado.quantidadeFontes });
             feedbackAjuste.style.color = '#1e8449';
             feedbackAjuste.dataset.state = 'success';
         } else {
-            feedbackAjuste.textContent = resultado.motivo;
+            feedbackAjuste.textContent = translateLiteral(resultado.motivo);
             feedbackAjuste.style.color = '#a84300';
             feedbackAjuste.dataset.state = 'warning';
         }
@@ -126,8 +132,8 @@ export function updateTankControlAvailabilityUI(component) {
 
     if (statusEl) {
         statusEl.textContent = diagnostico.podeAtivar
-            ? 'O controlador usa a válvula de saída para modular o escoamento e estabilizar o nível.'
-            : diagnostico.motivoBloqueio;
+            ? translateLiteral('O controlador usa a válvula de saída para modular o escoamento e estabilizar o nível.')
+            : translateLiteral(diagnostico.motivoBloqueio);
         statusEl.style.color = diagnostico.podeAtivar ? '#5f6f7f' : '#c0392b';
     }
 

@@ -1,4 +1,5 @@
 import { ComponenteFisico } from './BaseComponente.js';
+import { createFluidoFromProperties, updateFluidoProperties } from './Fluido.js';
 import { DEFAULT_SOURCE_PRESSURE_BAR, MAX_NETWORK_FLOW_LPS } from '../../utils/Units.js';
 
 export class FonteLogica extends ComponenteFisico {
@@ -7,6 +8,13 @@ export class FonteLogica extends ComponenteFisico {
         this.pressaoFonteBar = DEFAULT_SOURCE_PRESSURE_BAR;
         this.vazaoMaxima = MAX_NETWORK_FLOW_LPS;
         this.fluxoReal = 0;
+        this.fluidoEntrada = createFluidoFromProperties();
+        this.fluidoEntradaPresetId = 'agua';
+    }
+
+    atualizarFluidoEntrada(dados = {}, { presetId = this.fluidoEntradaPresetId } = {}) {
+        this.fluidoEntradaPresetId = presetId || 'custom';
+        return updateFluidoProperties(this.fluidoEntrada, dados);
     }
 
     sincronizarMetricasFisicas() {

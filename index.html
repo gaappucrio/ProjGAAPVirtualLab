@@ -9,13 +9,57 @@
     <script type="module" src="js/App.js"></script>
 </head>
 <body>
+    <div class="language-window-control">
+        <button id="btn-export-data" class="toolbar-toggle export-data-button" type="button" title="Exporta dados dos componentes e conexões atuais." style="display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid #dfe6e9; border-radius:999px; background:#f8fbfc; color:#2c3e50; font-size:13px; font-weight:700; cursor:pointer; user-select:none;">
+            <span>Exportar dados</span>
+        </button>
+        <label class="toolbar-toggle" for="toggle-language" title="Alterna os textos do laboratório entre português e inglês." style="display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid #dfe6e9; border-radius:999px; background:#f8fbfc; color:#2c3e50; font-size:13px; font-weight:700; cursor:pointer; user-select:none;">
+            <input type="checkbox" id="toggle-language">
+            <span>Inglês</span>
+        </label>
+    </div>
+
     <div class="gaap-header">
-        <h2>Sandbox Modular GAAP - Fronteiras de Controle</h2>
-        <p>
-            Use a <b>rolagem do mouse para aproximar ou afastar</b> e arraste segurando <b>Espaço</b> para navegar.
-            Aperte <b>DEL</b> para deletar um componente e <b>CLIQUE DUPLO</b> para editar.
-            Você também pode desconectar componentes usando <b>CLIQUE DUPLO</b> nas setas.
-        </p>
+        <div class="gaap-title-row">
+            <h2>Sandbox Modular GAAP - Fronteiras de Controle</h2>
+            <button id="btn-help" class="help-trigger" type="button" title="Abrir tutorial do simulador" aria-label="Abrir tutorial do simulador">?</button>
+        </div>
+    </div>
+
+    <div id="help-modal" class="help-modal" aria-hidden="true">
+        <div class="help-backdrop" data-help-close></div>
+        <section class="help-dialog" role="dialog" aria-modal="true" aria-labelledby="help-title">
+            <div class="help-dialog-header">
+                <h3 id="help-title">Tutorial do Simulador</h3>
+                <button id="btn-help-close" class="help-close" type="button" title="Fechar tutorial" aria-label="Fechar tutorial">&#10006;</button>
+            </div>
+            <div class="help-command-list">
+                <div class="help-command">
+                    <b>Adicionar componentes</b>
+                    <span>Abra a paleta lateral, arraste uma entrada, saida, tanque, bomba ou valvula para a area de trabalho.</span>
+                </div>
+                <div class="help-command">
+                    <b>Conectar componentes</b>
+                    <span>Clique em uma porta de saida e depois em uma porta de entrada para criar o trecho.</span>
+                </div>
+                <div class="help-command">
+                    <b>Navegar no canvas</b>
+                    <span>Use a rolagem do mouse para aproximar ou afastar. Segure Espaco e arraste para mover a visao.</span>
+                </div>
+                <div class="help-command">
+                    <b>Editar propriedades</b>
+                    <span>Clique em um componente ou trecho para abrir as propriedades no painel lateral.</span>
+                </div>
+                <div class="help-command">
+                    <b>Comandos rapidos</b>
+                    <span>DEL ou Backspace remove o item selecionado. Clique duplo edita componentes e desconecta trechos.</span>
+                </div>
+                <div class="help-command">
+                    <b>Simular</b>
+                    <span>Use Iniciar Simulacao Fisica para rodar ou pausar o comportamento hidraulico.</span>
+                </div>
+            </div>
+        </section>
     </div>
 
     <div class="sandbox-container">

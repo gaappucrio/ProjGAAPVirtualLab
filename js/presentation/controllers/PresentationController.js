@@ -9,6 +9,7 @@ import {
     getPropertyTabsState,
     restorePropertyTabsState
 } from '../../utils/PropertyTabs.js';
+import { subscribeLanguageChanges } from '../../utils/LanguageManager.js';
 import { setupLayoutController } from './LayoutController.js';
 import { createMonitorController } from './MonitorController.js';
 import { createPropertyPanelContextStore } from './PropertyPanelContextController.js';
@@ -120,6 +121,11 @@ function renderComponentProperties(component) {
 function setupSubscriptions() {
     const engine = getEngine();
     setupWorkspaceSelectionController({ engine });
+    subscribeLanguageChanges(() => {
+        renderCurrentProperties();
+        monitorController.refreshPresentation();
+        monitorController.updateLayout();
+    });
 
     engine.subscribe((dados) => {
         if (dados.tipo === 'selecao') {
@@ -127,7 +133,7 @@ function setupSubscriptions() {
             return;
         }
 
-        if (dados.tipo === 'config_simulacao' || dados.tipo === 'fluido_update') {
+        if (dados.tipo === 'config_simulacao') {
             renderCurrentProperties();
             return;
         }

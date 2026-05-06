@@ -1,4 +1,5 @@
 import { getUnitSymbol, toDisplayValue } from '../../utils/Units.js';
+import { t } from '../../utils/LanguageManager.js';
 
 const DEFAULT_PRESSURE_AXIS_MAX_BAR = 10;
 const DEFAULT_NPSH_AXIS_MAX_M = 5;
@@ -65,12 +66,12 @@ export function applyPumpChartPresentation(chart, datasets, { expanded = false }
     chart.options.plugins.legend.labels.padding = profile.legendPadding;
     chart.options.plugins.legend.labels.font = { size: profile.legendFontSize };
 
-    chart.options.scales.x.title.text = `Vazão (${datasets.flowUnit})`;
+    chart.options.scales.x.title.text = `${t('chart.flow')} (${datasets.flowUnit})`;
     chart.options.scales.x.title.font = { size: profile.titleFontSize };
     chart.options.scales.x.ticks.font = { size: profile.tickFontSize };
     chart.options.scales.x.ticks.maxTicksLimit = profile.maxTicksX;
 
-    chart.options.scales.yHead.title.text = `Carga (${datasets.pressureUnit})`;
+    chart.options.scales.yHead.title.text = `${t('chart.head')} (${datasets.pressureUnit})`;
     chart.options.scales.yHead.title.font = { size: profile.titleFontSize };
     chart.options.scales.yHead.ticks.font = { size: profile.tickFontSize };
     chart.options.scales.yHead.ticks.maxTicksLimit = profile.maxTicksY;
@@ -78,7 +79,7 @@ export function applyPumpChartPresentation(chart, datasets, { expanded = false }
     chart.options.scales.yHead.suggestedMax = datasets.pressureAxisMax;
 
     chart.options.scales.yEff.title.display = profile.showSecondaryTitles;
-    chart.options.scales.yEff.title.text = 'Eficiência (%)';
+    chart.options.scales.yEff.title.text = `${t('chart.efficiency')} (%)`;
     chart.options.scales.yEff.title.font = { size: profile.titleFontSize };
     chart.options.scales.yEff.ticks.font = { size: profile.secondaryTickFontSize };
     chart.options.scales.yEff.ticks.maxTicksLimit = profile.maxTicksY;
@@ -103,7 +104,7 @@ export function createPumpChart(ctx, component, { expanded = false } = {}) {
         data: {
             datasets: [
                 {
-                    label: 'Carga',
+                    label: t('chart.head'),
                     data: datasets.headPoints,
                     borderColor: '#2980b9',
                     backgroundColor: 'rgba(41, 128, 185, 0.12)',
@@ -114,7 +115,7 @@ export function createPumpChart(ctx, component, { expanded = false } = {}) {
                     pointRadius: 0
                 },
                 {
-                    label: 'Eficiência',
+                    label: t('chart.efficiency'),
                     data: datasets.efficiencyPoints,
                     borderColor: '#27ae60',
                     backgroundColor: 'rgba(39, 174, 96, 0.1)',
@@ -137,7 +138,7 @@ export function createPumpChart(ctx, component, { expanded = false } = {}) {
                     pointRadius: 0
                 },
                 {
-                    label: 'Operação',
+                    label: t('chart.operation'),
                     type: 'scatter',
                     data: [{ x: datasets.currentFlow, y: datasets.currentHead }],
                     borderColor: '#c0392b',
@@ -168,18 +169,18 @@ export function createPumpChart(ctx, component, { expanded = false } = {}) {
                 },
                 tooltip: {
                     callbacks: {
-                        title: (ctx) => `Vazão: ${Number(ctx[0].parsed.x).toFixed(2)} ${datasets.flowUnit}`,
+                        title: (ctx) => `${t('chart.flow')}: ${Number(ctx[0].parsed.x).toFixed(2)} ${datasets.flowUnit}`,
                         label: (ctx) => {
                             if (ctx.dataset.yAxisID === 'yHead') {
                                 return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.pressureUnit}`;
                             }
                             if (ctx.dataset.yAxisID === 'yEff') {
-                                return `Eficiência: ${Number(ctx.parsed.y).toFixed(1)} %`;
+                                return `${t('chart.efficiency')}: ${Number(ctx.parsed.y).toFixed(1)} %`;
                             }
                             if (ctx.dataset.yAxisID === 'yNpsh') {
                                 return `NPSHr: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.lengthUnit}`;
                             }
-                            return `Ponto atual: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.pressureUnit}`;
+                            return `${t('chart.currentPoint')}: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.pressureUnit}`;
                         }
                     }
                 }
@@ -187,13 +188,13 @@ export function createPumpChart(ctx, component, { expanded = false } = {}) {
             scales: {
                 x: {
                     type: 'linear',
-                    title: { display: true, text: `Vazão (${datasets.flowUnit})` },
+                    title: { display: true, text: `${t('chart.flow')} (${datasets.flowUnit})` },
                     ticks: { maxTicksLimit: 6 }
                 },
                 yHead: {
                     type: 'linear',
                     position: 'left',
-                    title: { display: true, text: `Carga (${datasets.pressureUnit})` },
+                    title: { display: true, text: `${t('chart.head')} (${datasets.pressureUnit})` },
                     ticks: { maxTicksLimit: 5 }
                 },
                 yEff: {
@@ -202,7 +203,7 @@ export function createPumpChart(ctx, component, { expanded = false } = {}) {
                     min: 0,
                     max: 100,
                     grid: { drawOnChartArea: false },
-                    title: { display: false, text: 'Eficiência (%)' },
+                    title: { display: false, text: `${t('chart.efficiency')} (%)` },
                     ticks: {
                         maxTicksLimit: 5,
                         callback: (value) => `${value}%`
@@ -229,26 +230,26 @@ export function refreshPumpChart(chart, component, { expanded = false } = {}) {
     if (!chart) return;
 
     const datasets = buildPumpCurveDatasets(component);
-    chart.data.datasets[0].label = 'Carga';
+    chart.data.datasets[0].label = t('chart.head');
     chart.data.datasets[0].data = datasets.headPoints;
-    chart.data.datasets[1].label = 'Eficiência';
+    chart.data.datasets[1].label = t('chart.efficiency');
     chart.data.datasets[1].data = datasets.efficiencyPoints;
     chart.data.datasets[2].label = 'NPSHr';
     chart.data.datasets[2].data = datasets.npshPoints;
-    chart.data.datasets[3].label = 'Operação';
+    chart.data.datasets[3].label = t('chart.operation');
     chart.data.datasets[3].data = [{ x: datasets.currentFlow, y: datasets.currentHead }];
-    chart.options.plugins.tooltip.callbacks.title = (ctx) => `Vazão: ${Number(ctx[0].parsed.x).toFixed(2)} ${datasets.flowUnit}`;
+    chart.options.plugins.tooltip.callbacks.title = (ctx) => `${t('chart.flow')}: ${Number(ctx[0].parsed.x).toFixed(2)} ${datasets.flowUnit}`;
     chart.options.plugins.tooltip.callbacks.label = (ctx) => {
         if (ctx.dataset.yAxisID === 'yHead') {
             return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.pressureUnit}`;
         }
         if (ctx.dataset.yAxisID === 'yEff') {
-            return `Eficiência: ${Number(ctx.parsed.y).toFixed(1)} %`;
+            return `${t('chart.efficiency')}: ${Number(ctx.parsed.y).toFixed(1)} %`;
         }
         if (ctx.dataset.yAxisID === 'yNpsh') {
             return `NPSHr: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.lengthUnit}`;
         }
-        return `Ponto atual: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.pressureUnit}`;
+        return `${t('chart.currentPoint')}: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.pressureUnit}`;
     };
 
     applyPumpChartPresentation(chart, datasets, { expanded });

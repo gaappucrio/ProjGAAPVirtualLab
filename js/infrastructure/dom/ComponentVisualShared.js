@@ -6,6 +6,7 @@ import {
     getUnitSymbol,
     subscribeUnitPreferences
 } from '../../utils/Units.js';
+import { subscribeLanguageChanges, t } from '../../utils/LanguageManager.js';
 
 export {
     ENGINE,
@@ -28,7 +29,7 @@ export const makePort = (id, cx, cy, inOut) => {
 };
 
 export function createElevationUpdater({ visual, logica, id, offsetY }) {
-    return () => {
+    const update = () => {
         ['in', 'out'].forEach((tipo) => {
             const el = visual.querySelector(`#elev-${tipo}-${id}`);
             if (!el) return;
@@ -37,13 +38,16 @@ export function createElevationUpdater({ visual, logica, id, offsetY }) {
                 const cy = parseFloat(el.getAttribute('data-cy'));
                 const logicalY = logica.y + offsetY + cy;
                 const elevM = (logicalY / 80).toFixed(2);
-                el.textContent = `Elev.: ${elevM} m`;
+                el.textContent = `${t('visual.elevation')}: ${elevM} m`;
                 el.setAttribute('opacity', '1');
             } else {
                 el.setAttribute('opacity', '0');
             }
         });
     };
+
+    subscribeLanguageChanges(update);
+    return update;
 }
 
 export const displayUnitValue = (category, baseValue, digits = null) => formatUnitValue(category, baseValue, digits);

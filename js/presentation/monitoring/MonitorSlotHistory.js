@@ -37,6 +37,18 @@ export function createMonitorSlotHistory({ maxEntries = 2, onRemove = () => {} }
         return { changed, entries: snapshot() };
     }
 
+    function removeAt(index) {
+        const numericIndex = Number(index);
+        if (!Number.isInteger(numericIndex) || numericIndex < 0 || numericIndex >= entries.length) {
+            return { changed: false, entries: snapshot() };
+        }
+
+        const [removedEntry] = entries.splice(numericIndex, 1);
+        onRemove(removedEntry);
+
+        return { changed: true, entries: snapshot() };
+    }
+
     function getEntries() {
         return snapshot();
     }
@@ -44,6 +56,7 @@ export function createMonitorSlotHistory({ maxEntries = 2, onRemove = () => {} }
     return {
         remember,
         prune,
+        removeAt,
         getEntries
     };
 }

@@ -3,6 +3,8 @@
 // Arquivo: js/presentation/validation/InputValidator.js
 // ===================================
 
+import { translateLiteral } from '../../utils/LanguageManager.js';
+
 /**
  * Validador centralizado para entradas editadas pelo usuário.
  */
@@ -17,17 +19,18 @@ export class InputValidator {
      */
     static validateNumber(value, min = -Infinity, max = Infinity, fieldName = 'valor') {
         const num = parseFloat(value);
+        const label = translateLiteral(fieldName);
 
         if (Number.isNaN(num)) {
-            return { valid: false, error: `${fieldName} deve ser um número válido` };
+            return { valid: false, error: translateLiteral(`${label} deve ser um número válido`) };
         }
 
         if (num < min) {
-            return { valid: false, error: `${fieldName} não pode ser menor que ${min}` };
+            return { valid: false, error: translateLiteral(`${label} não pode ser menor que ${min}`) };
         }
 
         if (num > max) {
-            return { valid: false, error: `${fieldName} não pode ser maior que ${max}` };
+            return { valid: false, error: translateLiteral(`${label} não pode ser maior que ${max}`) };
         }
 
         return { valid: true, value: num };
@@ -41,7 +44,7 @@ export class InputValidator {
         if (!result.valid) return result;
 
         if (result.value > maxFlow) {
-            return { valid: false, error: `${fieldName} não pode exceder ${maxFlow} l/s` };
+            return { valid: false, error: translateLiteral(`${translateLiteral(fieldName)} não pode exceder ${maxFlow} l/s`) };
         }
 
         return result;
@@ -90,7 +93,7 @@ export class InputValidator {
         if (!result.valid) return result;
 
         if (result.value < 1 || result.value > 300) {
-            return { valid: false, error: `${fieldName} deve estar entre 1mm e 300mm` };
+            return { valid: false, error: translateLiteral(`${translateLiteral(fieldName)} deve estar entre 1mm e 300mm`) };
         }
 
         return result;
@@ -118,7 +121,7 @@ export class InputValidator {
         if (!result.valid) return result;
 
         if (result.value <= 0) {
-            return { valid: false, error: `${fieldName} deve ser maior que 0` };
+            return { valid: false, error: translateLiteral(`${translateLiteral(fieldName)} deve ser maior que 0`) };
         }
 
         return result;
@@ -148,7 +151,7 @@ export class InputValidator {
         const result = validator(value, fieldName);
 
         if (!result.valid) {
-            alert(`❌ Erro: ${result.error}`);
+            alert(translateLiteral(`Erro: ${result.error}`));
             return null;
         }
 

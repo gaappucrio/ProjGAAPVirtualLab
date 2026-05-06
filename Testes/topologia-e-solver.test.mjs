@@ -3,10 +3,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 
-import { SistemaSimulacao } from '../js/application/engine/SimulationEngine.js';
+import { FLUID_PRESETS, SistemaSimulacao } from '../js/application/engine/SimulationEngine.js';
 import { ConnectionModel } from '../js/domain/models/ConnectionModel.js';
 import { DrenoLogico } from '../js/domain/components/DrenoLogico.js';
 import { FonteLogica } from '../js/domain/components/FonteLogica.js';
+import { TanqueLogico } from '../js/domain/components/TanqueLogico.js';
 import { ValvulaLogica } from '../js/domain/components/ValvulaLogica.js';
 
 const DOMAIN_ROOT = path.resolve('js/domain');
@@ -59,6 +60,117 @@ test('módulos de domínio não importam engine global, DOM, Chart ou controller
         assert.ok(!content.includes('document.'), `Referência direta a document encontrada em ${filePath}`);
         assert.ok(!content.includes('Chart('), `Referência direta a Chart encontrada em ${filePath}`);
     });
+});
+
+test('trecho que sai da fonte usa o fluido definido na entrada', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-01', 'inlet-01', 0, 0);
+    const dreno = new DrenoLogico('D-01', 'outlet-01', 160, 0);
+
+    fonte.pressaoFonteBar = 2;
+    fonte.vazaoMaxima = 40;
+    fonte.atualizarFluidoEntrada({
+        nome: 'Fluido viscoso',
+        densidade: 1200,
+        viscosidadeDinamicaPaS: 2,
+        pressaoVaporBar: 0.002
+    });
+    dreno.pressaoSaidaBar = 0;
+    fonte.conectarSaida(dreno);
+
+    const connection = new ConnectionModel({ sourceId: fonte.id, targetId: dreno.id });
+    engine.add(fonte);
+    engine.add(dreno);
+    engine.addConnection(connection);
+
+    runSinglePhysicsStep(engine);
+
+    const state = engine.getConnectionState(connection);
+    assert.equal(engine.hydraulicContext.getConnectionFluid(connection), fonte.fluidoEntrada);
+    assert.ok(state.flowLps > 0, 'A fonte deve fornecer vazao com o fluido de entrada');
+    assert.ok(state.reynolds < 1000, 'Reynolds deve refletir a viscosidade configurada na entrada');
+});
+
+test('agua tem maior vazao que oleo leve em ramais equivalentes para tanque', () => {
+    const measureFlowToTank = (presetId) => {
+        const engine = createEngine();
+        const fonte = new FonteLogica(`F-${presetId}`, `inlet-${presetId}`, 0, 0);
+        const tanque = new TanqueLogico(`T-${presetId}`, `tank-${presetId}`, 160, 0);
+        const connection = new ConnectionModel({ sourceId: fonte.id, targetId: tanque.id });
+
+        fonte.pressaoFonteBar = 0.5;
+        fonte.vazaoMaxima = 500;
+        fonte.atualizarFluidoEntrada(FLUID_PRESETS[presetId], { presetId });
+        tanque.volumeAtual = 0;
+        tanque.capacidadeMaxima = 100000;
+        fonte.conectarSaida(tanque);
+
+        engine.add(fonte);
+        engine.add(tanque);
+        engine.addConnection(connection);
+        runPhysicsSteps(engine, 120, 0.1);
+
+        return engine.getConnectionState(connection).flowLps;
+    };
+
+    const waterFlowLps = measureFlowToTank('agua');
+    const lightOilFlowLps = measureFlowToTank('oleo_leve');
+
+    assert.ok(
+        waterFlowLps > lightOilFlowLps,
+        `Água deve escoar mais rápido que óleo leve em ramais iguais: água=${waterFlowLps}, óleo=${lightOilFlowLps}`
+    );
+});
+
+test('valvula mistura fluidos de multiplas entradas e entrega composicao ao tanque', () => {
+    const engine = createEngine();
+    const fonteAgua = new FonteLogica('F-agua', 'inlet-agua', 0, -40);
+    const fonteOleo = new FonteLogica('F-oleo', 'inlet-oleo', 0, 40);
+    const valvula = new ValvulaLogica('V-mix', 'V-mix', 140, 0);
+    const tanque = new TanqueLogico('T-mix', 'tank-mix', 280, 0);
+
+    fonteAgua.pressaoFonteBar = 1.5;
+    fonteOleo.pressaoFonteBar = 1.5;
+    fonteAgua.vazaoMaxima = 80;
+    fonteOleo.vazaoMaxima = 80;
+    fonteAgua.atualizarFluidoEntrada(FLUID_PRESETS.agua, { presetId: 'agua' });
+    fonteOleo.atualizarFluidoEntrada(FLUID_PRESETS.oleo_leve, { presetId: 'oleo_leve' });
+    valvula.aberta = true;
+    valvula.grauAbertura = 100;
+    valvula.aberturaEfetiva = 100;
+    tanque.capacidadeMaxima = 100000;
+    tanque.volumeAtual = 0;
+
+    fonteAgua.conectarSaida(valvula);
+    fonteOleo.conectarSaida(valvula);
+    valvula.conectarSaida(tanque);
+
+    const aguaValvula = new ConnectionModel({ sourceId: fonteAgua.id, targetId: valvula.id });
+    const oleoValvula = new ConnectionModel({ sourceId: fonteOleo.id, targetId: valvula.id });
+    const valvulaTanque = new ConnectionModel({ sourceId: valvula.id, targetId: tanque.id });
+
+    [fonteAgua, fonteOleo, valvula, tanque].forEach((component) => engine.add(component));
+    [aguaValvula, oleoValvula, valvulaTanque].forEach((connection) => engine.addConnection(connection));
+
+    for (let i = 0; i < 3; i += 1) {
+        engine.componentes.forEach((component) => component.atualizarDinamica(0.1, engine.fluidoOperante));
+        engine.resolvePushBasedNetwork(0.1);
+        tanque.atualizarFisica(0.1, engine.hydraulicContext.getComponentFluid(tanque));
+        [fonteAgua, fonteOleo, valvula].forEach((component) => component.sincronizarMetricasFisicas(engine.hydraulicContext.getComponentFluid(component)));
+    }
+
+    const mixedState = engine.getConnectionState(valvulaTanque);
+    const mixedFluid = mixedState.fluid;
+
+    assert.ok(mixedState.flowLps > 0, 'A valvula deve entregar vazao ao tanque');
+    assert.ok(mixedFluid.composicao['Água'] > 0, 'Mistura deve conter agua');
+    assert.ok(mixedFluid.composicao['Óleo leve'] > 0, 'Mistura deve conter oleo leve');
+    assert.ok(
+        mixedFluid.densidade > FLUID_PRESETS.oleo_leve.densidade && mixedFluid.densidade < FLUID_PRESETS.agua.densidade,
+        `Densidade misturada deve ficar entre oleo e agua: ${mixedFluid.densidade}`
+    );
+    assert.ok(tanque.fluidoConteudo.composicao['Água'] > 0, 'Tanque deve armazenar agua da mistura');
+    assert.ok(tanque.fluidoConteudo.composicao['Óleo leve'] > 0, 'Tanque deve armazenar oleo da mistura');
 });
 
 test('topologia indexa componentes e conexões sem depender de DOM', () => {

@@ -3,6 +3,7 @@ import { clamp, ComponenteFisico, flowFromBernoulli } from './BaseComponente.js'
 import { ComponentEventPayloads } from '../../application/events/EventPayloads.js';
 import { FonteLogica } from './FonteLogica.js';
 import { ValvulaLogica } from './ValvulaLogica.js';
+import { cloneFluido, createFluidoFromProperties, mixFluidos } from './Fluido.js';
 import { EPSILON_FLOW, pressureFromHeadBar } from '../../utils/Units.js';
 
 const TOLERANCIA_ERRO_SATURACAO = -0.02;
@@ -23,6 +24,7 @@ export class TanqueLogico extends ComponenteFisico {
         this.alturaBocalSaidaM = 0.1;
         this.volumeInicial = 0;
         this.pressaoFundoBar = 0;
+        this.fluidoConteudo = createFluidoFromProperties();
         this.setpointAtivo = false;
         this.setpoint = 50;
         this.kp = 250;
@@ -95,6 +97,33 @@ export class TanqueLogico extends ComponenteFisico {
             this.getNivelNormalizado(),
             considerarAlturaBocal
         );
+    }
+
+    getFluidoConteudo() {
+        return this.fluidoConteudo || createFluidoFromProperties();
+    }
+
+    getFluidoSaidaAtual(fallback = null) {
+        if (this.volumeAtual > EPSILON_FLOW) return this.getFluidoConteudo();
+        return this.getFluidoEntradaMisturado(fallback || this.getFluidoConteudo());
+    }
+
+    atualizarMisturaConteudo(dt, fluidoEntrada = null, volumeAnteriorL = this.volumeAtual) {
+        const entradaVolumeL = Math.max(0, this.lastQin * dt);
+        if (entradaVolumeL <= EPSILON_FLOW) return;
+
+        const entrada = fluidoEntrada || this.getFluidoEntradaMisturado(this.getFluidoConteudo());
+        const volumeConteudoAnteriorL = Math.max(0, volumeAnteriorL);
+
+        if (volumeConteudoAnteriorL <= EPSILON_FLOW) {
+            this.fluidoConteudo = cloneFluido(entrada);
+            return;
+        }
+
+        this.fluidoConteudo = mixFluidos([
+            { fluido: this.getFluidoConteudo(), volumeL: volumeConteudoAnteriorL },
+            { fluido: entrada, volumeL: entradaVolumeL }
+        ], this.getFluidoConteudo());
     }
 
     _coletarAtuadoresDaPerna(componentes) {
@@ -175,7 +204,7 @@ export class TanqueLogico extends ComponenteFisico {
     }
 
     getResumoAjustePressaoSetpoint(
-        fluido = this.getSimulationContext().fluidoOperante,
+        fluido = this.getSimulationContext().queries.getComponentFluid?.(this) || this.getSimulationContext().fluidoOperante,
         usarAlturaRelativa = this.getSimulationContext().usarAlturaRelativa
     ) {
         const nivelAtual = this.getNivelNormalizado();
@@ -456,24 +485,33 @@ export class TanqueLogico extends ComponenteFisico {
     }
 
     _notificarVolume() {
+        const fluidoConteudo = this.getFluidoConteudo();
         this.notify(ComponentEventPayloads.volumeUpdate({
             perc: this.capacidadeMaxima > 0 ? this.volumeAtual / this.capacidadeMaxima : 0,
             abs: this.volumeAtual,
             qIn: this.lastQin,
             qOut: this.lastQout,
-            pBottom: this.pressaoFundoBar
+            pBottom: this.pressaoFundoBar,
+            fluidoConteudo,
+            fluidoEntrada: this.lastQin > EPSILON_FLOW
+                ? this.getFluidoEntradaMisturado(fluidoConteudo)
+                : null
         }));
     }
 
     atualizarFisica(dt, fluido) {
         this.normalizarAlturasBocais();
+        const volumeAnteriorL = this.volumeAtual;
         this.lastQin = this.estadoHidraulico.entradaVazaoLps;
         this.lastQout = this.estadoHidraulico.saidaVazaoLps;
+        const fluidoEntrada = this.getFluidoEntradaMisturado(this.getFluidoConteudo());
         this.volumeAtual += (this.lastQin - this.lastQout) * dt;
         this.volumeAtual = clamp(this.volumeAtual, 0, this.capacidadeMaxima);
-        this.pressaoFundoBar = this.getPressaoHidrostaticaBar(fluido);
-        this.sincronizarMetricasFisicas(fluido);
-        this._atualizarAlertaSaturacao(fluido);
+        this.atualizarMisturaConteudo(dt, fluidoEntrada, volumeAnteriorL);
+        const fluidoAtual = this.getFluidoConteudo();
+        this.pressaoFundoBar = this.getPressaoHidrostaticaBar(fluidoAtual);
+        this.sincronizarMetricasFisicas(fluidoAtual);
+        this._atualizarAlertaSaturacao(fluidoAtual);
 
         this._notificarVolume();
     }
@@ -488,7 +526,8 @@ export class TanqueLogico extends ComponenteFisico {
     sincronizarMetricasFisicas(fluido) {
         this.normalizarAlturasBocais();
         super.sincronizarMetricasFisicas(fluido);
-        const fluidoAtual = fluido || this.getSimulationContext().fluidoOperante;
+        const context = this.getSimulationContext();
+        const fluidoAtual = fluido || context.queries.getComponentFluid?.(this) || context.fluidoOperante;
         this.pressaoFundoBar = this.getPressaoHidrostaticaBar(fluidoAtual);
     }
 
@@ -498,7 +537,7 @@ export class TanqueLogico extends ComponenteFisico {
 
     getFluxoSaidaFromTank(
         nivelMontante,
-        fluido = this.getSimulationContext().fluidoOperante,
+        fluido = this.getSimulationContext().queries.getComponentFluid?.(this) || this.getSimulationContext().fluidoOperante,
         usarAlturaRelativa = this.getSimulationContext().usarAlturaRelativa
     ) {
         const headBar = this.getPressaoDisponivelSaidaParaNivelBar(

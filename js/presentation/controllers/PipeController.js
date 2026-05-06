@@ -8,6 +8,7 @@ import { ENGINE_EVENTS } from '../../application/events/EventTypes.js';
 import { TransientConnectionStore } from '../../application/stores/TransientConnectionStore.js';
 import { camera } from './CameraController.js';
 import { EPSILON_FLOW, formatUnitValue, getUnitSymbol } from '../../utils/Units.js';
+import { translateLiteral } from '../../utils/LanguageManager.js';
 import { updatePortStates } from '../../utils/PortStateManager.js';
 import {
     getComponentPortElement
@@ -26,6 +27,7 @@ import {
     updateConnectionVisualLayout,
     updateTransientConnectionVisual
 } from '../../infrastructure/rendering/PipeRenderer.js';
+import { getFluidVisualStyle } from '../../infrastructure/rendering/FluidVisualStyle.js';
 
 const transientConnection = new TransientConnectionStore();
 let transientPath = null;
@@ -159,6 +161,7 @@ function updateConnectionVisualState(connection) {
     const state = currentEngine.getConnectionState(connection);
     const flow = currentEngine.isRunning ? state.flowLps : 0;
     const labelFlow = getConnectionFlow(connection);
+    const fluid = state.fluid || currentEngine.hydraulicContext?.getConnectionFluid(connection);
 
     updateConnectionFlowVisual(connection, {
         active: flow > 0.05,
@@ -166,7 +169,8 @@ function updateConnectionVisualState(connection) {
             ? ''
             : `${formatUnitValue('flow', labelFlow, 2)} ${getUnitSymbol('flow')}`,
         markerId: flow > 0.05 ? 'url(#arrow-active)' : 'url(#arrow)',
-        stateText: `${formatUnitValue('flow', flow, 2)} ${getUnitSymbol('flow')} | ${state.velocityMps.toFixed(2)} m/s | Re ${Math.round(state.reynolds)} | ${state.regime}`
+        stateText: `${formatUnitValue('flow', flow, 2)} ${getUnitSymbol('flow')} | ${state.velocityMps.toFixed(2)} m/s | Re ${Math.round(state.reynolds)} | ${translateLiteral(state.regime)}`,
+        fluidStyle: getFluidVisualStyle(fluid)
     });
 }
 
