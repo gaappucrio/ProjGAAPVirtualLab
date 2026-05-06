@@ -38,13 +38,13 @@ test('dimensionamento por continuidade calcula diâmetro a partir de vazão e ve
         diameterFromM3sVelocity(flowM3s, velocityMps),
         0.08,
         1e-12,
-        'Diâmetro por Q em m³/s e V em m/s'
+        'Diâmetro por Q em m³/s e v em m/s'
     );
     approx(
         diameterFromFlowVelocity(flowM3s * 1000, velocityMps),
         0.08,
         1e-12,
-        'Diâmetro por vazão interna em L/s e V em m/s'
+        'Diâmetro por vazão interna em L/s e v em m/s'
     );
 });
 

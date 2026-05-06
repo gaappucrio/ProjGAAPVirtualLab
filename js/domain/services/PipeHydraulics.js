@@ -19,7 +19,7 @@ import { calculateConnectionGeometry } from './PortPositionCalculator.js';
 
 /**
  * Calcula o diâmetro interno sugerido a partir da vazão em m³/s e da
- * velocidade média desejada. É a forma direta de d = sqrt(4Q / piV).
+ * velocidade média desejada. É a forma direta de d = sqrt(4Q / (pi v)).
  */
 export function diameterFromM3sVelocity(flowM3s, velocityMps) {
     if (flowM3s <= 0 || velocityMps <= 0) return 0;

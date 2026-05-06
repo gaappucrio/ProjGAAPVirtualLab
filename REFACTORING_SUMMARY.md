@@ -284,10 +284,10 @@ Esse fluxo deixa o motor mais legível e evita concentrar toda a lógica dentro 
 A relação de continuidade é usada para converter vazão e área em velocidade:
 
 ```text
-Q = A * V
+Q = A * v
 A = pi * d² / 4
-V = Q / A
-d = sqrt(4Q / (piV))
+v = Q / A
+d = sqrt(4Q / (pi v))
 ```
 
 No código:
@@ -303,8 +303,8 @@ O sistema usa L/s internamente para vazão, mas converte para m³/s nos cálculo
 O cálculo de vazão a partir de pressão diferencial usa uma forma simplificada de Bernoulli com coeficiente de perda:
 
 ```text
-V = sqrt(2 * deltaP / (rho * K))
-Q = A * V
+v = sqrt(2 * deltaP / (rho * K))
+Q = A * v
 ```
 
 No código:
@@ -317,7 +317,7 @@ No código:
 A perda distribuída é representada por:
 
 ```text
-h_f = f * (L / D) * (V² / 2g)
+h_f = f * (L / D) * (v² / 2g)
 ```
 
 No código, a parcela `f * L / D` entra como `distributedLossCoeff`. O fator de atrito é calculado com:
@@ -337,7 +337,7 @@ tau = mu * du/dy
 Ela entra no cálculo do número de Reynolds:
 
 ```text
-Re = rho * V * D / mu
+Re = rho * v * D / mu
 ```
 
 Isso é adequado para um solver de rede hidráulica simplificado, porque a viscosidade afeta o regime e o fator de atrito.
