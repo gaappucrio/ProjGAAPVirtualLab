@@ -6,7 +6,7 @@ import {
     getUnitSymbol,
     subscribeUnitPreferences
 } from '../../utils/Units.js';
-import { subscribeLanguageChanges, t } from '../../utils/I18n.js';
+import { subscribeLanguageChanges, t } from '../../utils/LanguageManager.js';
 
 export {
     ENGINE,

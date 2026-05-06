@@ -9,7 +9,7 @@ import {
 } from '../../infrastructure/charts/TankChartAdapter.js';
 import { createMonitorSlotHistory } from '../monitoring/MonitorSlotHistory.js';
 import { getUnitSymbol } from '../../utils/Units.js';
-import { t } from '../../utils/I18n.js';
+import { t } from '../../utils/LanguageManager.js';
 
 const MAX_MONITOR_CHART_HISTORY = 2;
 const MONITOR_LIVE_REFRESH_INTERVAL_S = 0.1;
@@ -222,14 +222,49 @@ export function createMonitorController({ engine }) {
 
     function getExpandedChartElements(index) {
         const slot = index + 1;
+        const card = document.getElementById(`chart-compare-card-${slot}`);
         return {
-            card: document.getElementById(`chart-compare-card-${slot}`),
+            card,
+            header: card?.querySelector('.chart-compare-card-header'),
             title: document.getElementById(`chart-compare-title-${slot}`),
             subtitle: document.getElementById(`chart-compare-subtitle-${slot}`),
             canvas: document.getElementById(`gaap-compare-chart-${slot}`),
             canvasWrap: document.getElementById(`chart-compare-wrap-${slot}`),
-            empty: document.getElementById(`chart-compare-empty-${slot}`)
+            empty: document.getElementById(`chart-compare-empty-${slot}`),
+            dismissButton: document.getElementById(`chart-compare-dismiss-${slot}`)
         };
+    }
+
+    function removeMonitorChartAt(index) {
+        const result = monitorChartHistory.removeAt(index);
+        if (!result.changed) return;
+
+        renderExpandedMonitorCharts();
+    }
+
+    function ensureExpandedChartDismissButton(elements, index) {
+        if (!elements?.header) return null;
+
+        let button = elements.dismissButton;
+        if (!button) {
+            button = document.createElement('button');
+            button.id = `chart-compare-dismiss-${index + 1}`;
+            button.type = 'button';
+            button.className = 'chart-compare-dismiss';
+            button.dataset.monitorDismissBound = 'true';
+            button.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                removeMonitorChartAt(index);
+            });
+            elements.header.appendChild(button);
+        }
+
+        button.textContent = 'x';
+        button.title = t('chart.removeChart');
+        button.setAttribute('aria-label', t('chart.removeChart'));
+
+        return button;
     }
 
     function destroyExpandedMonitorCharts() {
@@ -307,11 +342,13 @@ export function createMonitorController({ engine }) {
         for (let index = 0; index < MAX_MONITOR_CHART_HISTORY; index += 1) {
             const elements = getExpandedChartElements(index);
             const entry = entries[index];
+            const dismissButton = ensureExpandedChartDismissButton(elements, index);
 
             if (!elements.card) continue;
 
             if (!entry) {
                 elements.card.hidden = index > 0;
+                if (dismissButton) dismissButton.hidden = true;
                 if (elements.title) elements.title.textContent = t('chart.waiting');
                 if (elements.subtitle) elements.subtitle.textContent = '';
                 if (elements.canvasWrap) elements.canvasWrap.hidden = true;
@@ -325,6 +362,7 @@ export function createMonitorController({ engine }) {
             }
 
             elements.card.hidden = false;
+            if (dismissButton) dismissButton.hidden = false;
             if (elements.title) elements.title.textContent = entry.component.tag || getMonitorChartKindLabel(entry.kind);
             if (elements.subtitle) elements.subtitle.textContent = getExpandedChartSubtitle(entry);
             if (elements.canvasWrap) elements.canvasWrap.hidden = false;
@@ -364,7 +402,9 @@ export function createMonitorController({ engine }) {
         entries.forEach((entry, index) => {
             const chart = expandedMonitorCharts[index];
             const elements = getExpandedChartElements(index);
+            const dismissButton = ensureExpandedChartDismissButton(elements, index);
 
+            if (dismissButton) dismissButton.hidden = false;
             if (elements.title) elements.title.textContent = entry.component.tag || getMonitorChartKindLabel(entry.kind);
             if (elements.subtitle) elements.subtitle.textContent = getExpandedChartSubtitle(entry);
 

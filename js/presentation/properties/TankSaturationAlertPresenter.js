@@ -6,7 +6,7 @@ import {
     setHtml,
     setText
 } from './PropertyDomAdapter.js';
-import { t, translateLiteral } from '../../utils/I18n.js';
+import { t, translateLiteral } from '../../utils/LanguageManager.js';
 import { formatMeasuredValue } from './PropertyValueFormatters.js';
 
 function getRecommendedSourcePressureText(alerta) {

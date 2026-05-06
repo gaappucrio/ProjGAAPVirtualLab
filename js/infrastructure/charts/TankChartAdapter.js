@@ -1,5 +1,5 @@
 import { getUnitSymbol, toDisplayValue } from '../../utils/Units.js';
-import { t } from '../../utils/I18n.js';
+import { t } from '../../utils/LanguageManager.js';
 
 function volumeTickLabel(value) {
     return toDisplayValue('volume', value).toFixed(1);

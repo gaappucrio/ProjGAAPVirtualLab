@@ -1,5 +1,5 @@
 import { getPresentationEngine } from '../context/PresentationEngineContext.js';
-import { localizeElement } from '../../utils/I18n.js';
+import { localizeElement } from '../../utils/LanguageManager.js';
 import { TOOLTIPS } from '../../utils/Tooltips.js';
 import {
     bind,

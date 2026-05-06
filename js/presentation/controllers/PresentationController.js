@@ -9,7 +9,7 @@ import {
     getPropertyTabsState,
     restorePropertyTabsState
 } from '../../utils/PropertyTabs.js';
-import { subscribeLanguageChanges } from '../../utils/I18n.js';
+import { subscribeLanguageChanges } from '../../utils/LanguageManager.js';
 import { setupLayoutController } from './LayoutController.js';
 import { createMonitorController } from './MonitorController.js';
 import { createPropertyPanelContextStore } from './PropertyPanelContextController.js';

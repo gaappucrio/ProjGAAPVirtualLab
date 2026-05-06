@@ -292,6 +292,8 @@ const TEXTS = {
             statusCompare: 'Comparando os dois últimos componentes monitoráveis selecionados.',
             statusOne: 'Clique em outro tanque ou bomba para dividir a visualização expandida.',
             statusEmpty: 'Clique em um tanque ou bomba para exibir um gráfico aqui.',
+            removeChart: 'Remover gráfico do monitoramento',
+            resizeMonitor: 'Arraste para ajustar a altura do monitoramento.',
             badge: ({ count }) => `${count} gráfico${count === 1 ? '' : 's'}`
         },
         visual: {
@@ -367,6 +369,8 @@ const TEXTS = {
             statusCompare: 'Comparing the last two selected monitorable components.',
             statusOne: 'Click another tank or pump to split the expanded view.',
             statusEmpty: 'Click a tank or pump to display a chart here.',
+            removeChart: 'Remove chart from monitoring',
+            resizeMonitor: 'Drag to adjust monitoring height.',
             badge: ({ count }) => `${count} chart${count === 1 ? '' : 's'}`
         },
         visual: {

@@ -5,7 +5,7 @@
 
 import { ENGINE } from '../../application/engine/SimulationEngine.js';
 import { getComponentDefinition } from '../../presentation/registry/ComponentDefinitionRegistry.js';
-import { getComponentTagPrefix } from '../../utils/I18n.js';
+import { getComponentTagPrefix } from '../../utils/LanguageManager.js';
 import { getComponentVisualSpec } from './ComponentVisualSpecs.js';
 import { registerComponentVisual } from './ComponentVisualRegistry.js';
 export { updatePortStates } from '../../utils/PortStateManager.js';

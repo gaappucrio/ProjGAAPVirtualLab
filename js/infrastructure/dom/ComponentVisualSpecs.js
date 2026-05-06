@@ -10,7 +10,7 @@ import {
     subscribeUnitPreferences,
     volumeText
 } from './ComponentVisualShared.js';
-import { subscribeLanguageChanges, t } from '../../utils/I18n.js';
+import { subscribeLanguageChanges, t } from '../../utils/LanguageManager.js';
 import { getFluidVisualStyle } from '../rendering/FluidVisualStyle.js';
 
 export const SOURCE_COMPONENT_VISUAL = {

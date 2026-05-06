@@ -72,7 +72,7 @@ test('prefixos visuais das fronteiras acompanham o idioma atual', async () => {
         getComponentTagPrefix,
         setLanguage,
         translateDefaultComponentTag
-    } = await import('../js/utils/I18n.js');
+    } = await import('../js/utils/LanguageManager.js');
 
     setLanguage('pt');
     assert.equal(getComponentTagPrefix('source'), 'Entrada');

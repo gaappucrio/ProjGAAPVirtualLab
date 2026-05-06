@@ -3,6 +3,6 @@
 // Arquivo: js/utils/Tooltips.js
 // =======================================
 
-import { createTranslationProxy } from './I18n.js';
+import { createTranslationProxy } from './LanguageManager.js';
 
 export const TOOLTIPS = createTranslationProxy(['tooltips']);

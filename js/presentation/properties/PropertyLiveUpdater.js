@@ -5,7 +5,7 @@ import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
 import { ValvulaLogica } from '../../domain/components/ValvulaLogica.js';
 import { getSuggestedDiameterForConnection } from '../../domain/services/PipeHydraulics.js';
 import { toDisplayValue } from '../../utils/Units.js';
-import { localizeElement, translateLiteral } from '../../utils/I18n.js';
+import { localizeElement, translateLiteral } from '../../utils/LanguageManager.js';
 import { byId, isActive, setValue } from './PropertyDomAdapter.js';
 import { setFieldValue } from './PropertyValueFormatters.js';
 import {

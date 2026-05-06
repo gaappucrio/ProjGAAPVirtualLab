@@ -16,7 +16,7 @@ import {
     applyLanguageToDocument,
     subscribeLanguageChanges,
     translateDefaultComponentTag
-} from './utils/I18n.js';
+} from './utils/LanguageManager.js';
 import { setupPresentation as setupUI } from './presentation/controllers/PresentationController.js';
 import { setupCameraControl } from './presentation/controllers/CameraController.js';
 import { setupHelpController } from './presentation/controllers/HelpController.js';

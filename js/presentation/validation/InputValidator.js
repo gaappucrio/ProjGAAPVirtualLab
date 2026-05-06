@@ -3,7 +3,7 @@
 // Arquivo: js/presentation/validation/InputValidator.js
 // ===================================
 
-import { translateLiteral } from '../../utils/I18n.js';
+import { translateLiteral } from '../../utils/LanguageManager.js';
 
 /**
  * Validador centralizado para entradas editadas pelo usuário.

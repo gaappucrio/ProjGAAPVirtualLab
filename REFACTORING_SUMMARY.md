@@ -25,8 +25,10 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Renderização visual de tubos, rótulos de vazão e estados de portas.
 - Opção de altura relativa para considerar desníveis entre componentes.
 - Identificação estável de fronteiras com tags `inlet-01`, `outlet-01` etc., independente do idioma da interface.
+- Exibição localizada dos nomes padrão de entrada e saída conforme o idioma ativo.
 - Helper de tutorial no cabeçalho, abrindo um popup com os principais comandos de uso do simulador.
 - Toggle de idioma posicionado no canto superior direito da janela, fora da toolbar principal.
+- Botão `Exportar dados` no controle superior da janela, ao lado do seletor de idioma.
 
 ### 2.2 Simulação Hidráulica
 
@@ -41,6 +43,8 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - O fluido que entra na rede é definido pela fonte de entrada, não por uma configuração global.
 - A propagação hidráulica usa as propriedades do fluido associadas ao ramo iniciado por cada entrada e mistura fluidos quando múltiplas entradas convergem.
 - Em modo sem altura relativa, os trechos mantêm a geometria esquemática base, enquanto o solver aplica correção de perdas locais por Reynolds/viscosidade para diferenciar fluidos.
+- A cor visual do fluido acompanha o preset ou a cor personalizada da entrada, afetando entrada, tubos e enchimento do tanque.
+- Misturas de fluidos preservam uma composição visual própria, evitando troca instantânea de cor no tanque quando outro fluido entra em um volume já existente.
 
 ### 2.3 Bomba
 
@@ -96,6 +100,8 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Monitor compacto ligado à seleção atual.
 - Monitor detalhado redimensionável.
 - Comparação com até dois gráficos simultâneos.
+- Cada gráfico no monitor detalhado pode ser removido individualmente, permitindo voltar de comparação dupla para análise única.
+- A altura do monitor detalhado pode ser ajustada arrastando a borda superior, com limites responsivos para não quebrar o layout.
 - Histórico por componente para tanque.
 - Gráfico de curva e ponto de operação para bomba.
 - Redimensionamento e atualização dos gráficos por adaptadores de Chart.js.
@@ -112,6 +118,15 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Presets e propriedades de fluido ficam nas propriedades da entrada selecionada.
 - Não existe mais edição de fluido global quando nenhum componente de entrada está selecionado.
 - O preset `custom`/`personalizado` é preservado durante troca de idioma, mesmo quando seus valores coincidem com um preset conhecido.
+- Fluido personalizado permite escolher uma cor visual entre opções pré-definidas, incluindo cinza, roxo, rosa, vermelho, azul claro, laranja, verde escuro, magenta, ciano e verde.
+
+### 2.9 Exportação de Dados
+
+- Exportação dos dados atuais da simulação em arquivo `.xls` compatível com planilhas.
+- Tabela de resumo com data da exportação e estado de altura relativa.
+- Tabela de componentes com nome, tipo, identificadores, posição, conexões, pressões, vazões e parâmetros específicos de fontes, saídas, bombas, válvulas e tanques.
+- Tabela de conexões com origem, destino, diâmetro, rugosidade, perdas, vazões, pressões, geometria, Reynolds, fator de atrito, regime e fluido do trecho.
+- A exportação foi mantida focada em dados tabulares para comparação com DWSIM, sem anexar gráficos ao arquivo.
 
 ## 3. Arquitetura Geral
 
@@ -199,6 +214,7 @@ Arquivos principais:
 - `presentation/controllers/CameraController.js`
 - `presentation/controllers/WorkspaceSelectionController.js`
 - `presentation/controllers/UnitsController.js`
+- `presentation/export/SimulationDataExporter.js`
 - `presentation/properties/ComponentPropertiesPresenter.js`
 - `presentation/properties/ConnectionPropertiesPresenter.js`
 - `presentation/properties/DefaultPropertiesPresenter.js`
@@ -216,6 +232,7 @@ Responsabilidades:
 - Manipular abas e memória de contexto do painel.
 - Gerenciar monitoramento compacto e detalhado.
 - Controlar popup de tutorial e comandos básicos da interface.
+- Exportar dados tabulares de componentes e conexões.
 - Validar inputs digitados.
 
 ### 3.4 `infrastructure/`
@@ -229,6 +246,7 @@ Arquivos principais:
 - `infrastructure/dom/ComponentVisualFactory.js`
 - `infrastructure/dom/ComponentVisualRegistry.js`
 - `infrastructure/dom/ComponentVisualSpecs.js`
+- `infrastructure/rendering/FluidVisualStyle.js`
 - `infrastructure/rendering/PipeRenderer.js`
 - `infrastructure/rendering/ConnectionVisualRegistry.js`
 
@@ -237,6 +255,7 @@ Responsabilidades:
 - Criar SVG/DOM dos componentes.
 - Registrar posições visuais.
 - Renderizar tubos.
+- Resolver cores visuais de fluidos para componentes, tubos e tanques.
 - Atualizar gráficos.
 - Conectar tecnologias visuais externas à aplicação.
 
@@ -247,6 +266,7 @@ Contém utilidades compartilhadas ainda mantidas fora das camadas principais.
 Arquivos relevantes:
 
 - `utils/Units.js`
+- `utils/LanguageManager.js`
 - `utils/Tooltips.js`
 - `utils/PropertyTabs.js`
 - `utils/PortStateManager.js`
@@ -378,12 +398,16 @@ O modelo deixou de usar um fluido global editável no painel padrão. Cada `Font
 - Viscosidade dinâmica.
 - Pressão de vapor.
 - Preset selecionado.
+- Cor visual quando o fluido usa configuração personalizada.
 - Pressão atmosférica local, padronizada em todos os presets para entradas na mesma altitude.
 - Composição, usada quando o fluido é resultado de mistura.
+- Composição visual, usada para misturar cores de líquidos diferentes de forma gradual no tanque.
 
 Quando múltiplas entradas convergem em um componente passante, o domínio calcula uma mistura ponderada pela vazão recebida. A densidade, temperatura, pressão de vapor e pressão atmosférica usam média volumétrica. A viscosidade dinâmica usa mistura logarítmica, uma aproximação mais adequada para líquidos com viscosidades muito diferentes.
 
 Tanques mantêm um `fluidoConteudo` persistente. Ao receber vazão, o conteúdo anterior é misturado ao fluido de entrada pelo volume recebido no passo de simulação. A saída do tanque usa esse fluido armazenado.
+
+As cores visuais são resolvidas por `FluidVisualStyle.js`. Água permanece azul, óleo leve usa amarelo, glicol usa marrom e fluidos personalizados usam a cor escolhida na fonte. Quando há mistura, a cor exibida é calculada pela composição visual acumulada, então tubos e tanques acompanham a transição gradualmente.
 
 ## 7. Solver Hidráulico
 
@@ -608,15 +632,18 @@ Funcionalidades:
 - Monitor detalhado redimensionável.
 - Até dois gráficos simultâneos para comparação.
 - Histórico por slot para evitar perda ao alternar seleção.
+- Remoção individual de slots por botão `x`, compactando os gráficos restantes.
+- Ajuste de altura do monitor detalhado por arraste da borda superior, em comportamento semelhante a uma janela.
 
 ## 13. Internacionalização e Ajuda
 
-O sistema possui suporte a alternância de idioma entre português e inglês via `utils/I18n.js`. Os nomes padrão de componentes e os textos de interface são atualizados no DOM sem reinicializar a aplicação.
+O sistema possui suporte a alternância de idioma entre português e inglês via `utils/LanguageManager.js`. Os nomes padrão de componentes e os textos de interface são atualizados no DOM sem reinicializar a aplicação.
 
 Pontos atuais:
 
+- O antigo utilitário `I18n.js` foi renomeado para `LanguageManager.js`, deixando a função do arquivo mais explícita.
 - O toggle de idioma fica fixo no canto superior direito da janela.
-- As fronteiras usam tags técnicas estáveis (`inlet` e `outlet`) para evitar que nomes internos mudem com o idioma.
+- As fronteiras usam tags técnicas estáveis (`inlet` e `outlet`) internamente, mas os nomes padrão exibidos acompanham o idioma (`Entrada`/`Saída` em português e `inlet`/`outlet` em inglês).
 - Textos do tutorial, botões e títulos participam do mesmo fluxo de tradução.
 - A seleção `custom`/`personalizado` de fluido é preservada como intenção do usuário, mesmo se os parâmetros forem iguais aos de um preset.
 - O helper `?` no cabeçalho abre um popup com comandos básicos de operação do simulador.
@@ -673,13 +700,17 @@ Coberturas importantes:
 - Conservação de massa em cadeia passante.
 - Rede com 30 componentes e múltiplas saídas.
 - Histórico de monitoramento.
+- Remoção de slot no monitoramento detalhado.
 - Regras de camadas.
 - Importação da apresentação sem DOM global.
 - Tags de fronteira `inlet`/`outlet` independentes do idioma.
+- Cores visuais de presets e fluidos personalizados.
 - Fluido definido por entrada e usado pelo ramo hidráulico.
 - Mistura de fluidos por vazão em componentes passantes.
 - Mistura persistente no conteúdo de tanques.
+- Mistura gradual de cor visual no conteúdo de tanques.
 - Preservação do preset `custom`/`personalizado` quando os valores coincidem com um preset.
+- Exportação de dados com resumo de altura relativa e sem anexos gráficos.
 - Pressão atmosférica igual em todos os presets padrão.
 - Água escoando mais rápido que óleo leve em ramais equivalentes para tanque.
 
@@ -698,7 +729,11 @@ Marcos concluídos:
 - Monólito antigo de propriedades de bomba/válvula removido.
 - Fluido global removido do painel padrão; propriedades de fluido ficam por entrada.
 - Mistura de fluidos implementada no domínio e propagada pelo solver.
+- Estilo visual de fluidos centralizado, com cores por preset, cores personalizadas e mistura gradual no tanque.
+- Exportação tabular de dados da rede implementada para comparação externa.
+- Monitoramento detalhado com remoção individual de gráficos e redimensionamento por arraste.
 - Toggle de idioma movido para controle fixo no canto superior direito.
+- `I18n.js` renomeado para `LanguageManager.js` e imports atualizados.
 - Helper de tutorial adicionado ao cabeçalho.
 - Testes de arquitetura e comportamento adicionados.
 
@@ -743,7 +778,7 @@ Riscos atuais:
 - O solver push-based é adequado para cenários educacionais e fluxos dirigidos, mas não é um solver nodal não linear completo.
 - Redes muito complexas, com recirculação ou malhas fechadas reais, podem exigir um solver iterativo por nós.
 - A UI ainda é manual, então mudanças grandes de DOM exigem cuidado com bindings.
-- Alguns utilitários visuais ainda vivem em `utils/`.
+- Alguns utilitários visuais ainda vivem em `utils/`, embora `LanguageManager.js` agora deixe mais clara a responsabilidade de idioma/tradução.
 
 Próximos passos recomendados:
 
@@ -752,10 +787,10 @@ Próximos passos recomendados:
 - Migrar utilitários visuais restantes para `presentation` ou `infrastructure`.
 - Criar documentação curta para usuários finais além deste relatório técnico.
 - Adicionar exemplos de cenários prontos.
-- Criar exportação/importação de fluxogramas, caso o objetivo seja uso em laboratório.
+- Criar importação/exportação de fluxogramas completos, caso o objetivo seja uso em laboratório. A exportação tabular de dados da simulação já existe.
 
 ## 19. Resumo Executivo
 
 O projeto está em um estado estruturalmente muito melhor que a versão monolítica inicial. A física principal está concentrada no domínio, a aplicação orquestra o tick e a topologia, a apresentação foi dividida em controllers e presenters, e a infraestrutura visual está separada em adaptadores.
 
-O sistema já possui suporte funcional para montagem visual, simulação hidráulica, bombas, válvulas, tanques, set point, monitoramento, unidades, tooltips, tutorial integrado, internacionalização, mistura de fluidos e testes automatizados. A base trata propriedades de fluido por entrada, composição por conexão e conteúdo misturado em tanques, desde que as fronteiras entre domínio, aplicação, apresentação e infraestrutura continuem sendo respeitadas.
+O sistema já possui suporte funcional para montagem visual, simulação hidráulica, bombas, válvulas, tanques, set point, monitoramento, unidades, tooltips, tutorial integrado, internacionalização, mistura de fluidos, cores visuais por fluido, exportação tabular de dados e testes automatizados. A base trata propriedades de fluido por entrada, composição por conexão e conteúdo misturado em tanques, desde que as fronteiras entre domínio, aplicação, apresentação e infraestrutura continuem sendo respeitadas.

@@ -8,7 +8,7 @@ import { ENGINE_EVENTS } from '../../application/events/EventTypes.js';
 import { TransientConnectionStore } from '../../application/stores/TransientConnectionStore.js';
 import { camera } from './CameraController.js';
 import { EPSILON_FLOW, formatUnitValue, getUnitSymbol } from '../../utils/Units.js';
-import { translateLiteral } from '../../utils/I18n.js';
+import { translateLiteral } from '../../utils/LanguageManager.js';
 import { updatePortStates } from '../../utils/PortStateManager.js';
 import {
     getComponentPortElement

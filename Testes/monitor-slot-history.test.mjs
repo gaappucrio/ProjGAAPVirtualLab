@@ -41,3 +41,30 @@ test('histórico do monitor substitui apenas o slot mais antigo ao entrar tercei
         { id: 'tank-1', kind: 'tank' }
     ]);
 });
+
+test('histórico do monitor permite remover um slot e compacta os restantes', () => {
+    const removed = [];
+    const history = createMonitorSlotHistory({
+        maxEntries: 2,
+        onRemove: (entry) => removed.push(entry)
+    });
+
+    history.remember({ id: 'tank-1', kind: 'tank' });
+    history.remember({ id: 'pump-1', kind: 'pump' });
+
+    const result = history.removeAt(0);
+
+    assert.equal(result.changed, true);
+    assert.deepEqual(history.getEntries(), [
+        { id: 'pump-1', kind: 'pump' }
+    ]);
+    assert.deepEqual(removed, [
+        { id: 'tank-1', kind: 'tank' }
+    ]);
+
+    const unchanged = history.removeAt(5);
+    assert.equal(unchanged.changed, false);
+    assert.deepEqual(history.getEntries(), [
+        { id: 'pump-1', kind: 'pump' }
+    ]);
+});

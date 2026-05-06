@@ -3,7 +3,7 @@ import { getPresentationEngine } from '../context/PresentationEngineContext.js';
 import { clearInputError, InputValidator, showInputError } from '../validation/InputValidator.js';
 import { bindPropertyTabs, renderPropertyTabs } from '../../utils/PropertyTabs.js';
 import { TOOLTIPS } from '../../utils/Tooltips.js';
-import { localizeElement, translateLiteral } from '../../utils/I18n.js';
+import { localizeElement, translateLiteral } from '../../utils/LanguageManager.js';
 import {
     DEFAULT_DESIGN_VELOCITY_MPS,
     DEFAULT_PIPE_ROUGHNESS_MM,
