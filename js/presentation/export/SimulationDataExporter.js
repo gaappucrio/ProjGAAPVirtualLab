@@ -5,6 +5,11 @@ import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
 import { ValvulaLogica } from '../../domain/components/ValvulaLogica.js';
 import { getFluidVisualStyle } from '../../infrastructure/rendering/FluidVisualStyle.js';
 
+const EXPORT_METADATA_COLUMNS = [
+    'Data da exportação',
+    'Altura relativa'
+];
+
 const COMPONENT_COLUMNS = [
     'Nome do componente',
     'Tipo do componente',
@@ -127,6 +132,17 @@ function numberValue(value, digits = null) {
 
 function booleanValue(value) {
     return value ? 'Sim' : 'Não';
+}
+
+function heightModeValue(value) {
+    return value ? 'Ligada' : 'Desligada';
+}
+
+function buildExportMetadataRows(engine, timestamp) {
+    return [{
+        'Data da exportação': timestamp.toLocaleString('pt-BR'),
+        'Altura relativa': heightModeValue(engine?.usarAlturaRelativa === true)
+    }];
 }
 
 function listTags(components = []) {
@@ -317,8 +333,9 @@ function renderTable(title, columns, rows) {
     `;
 }
 
-function buildExportHtml(engine) {
+export function buildExportHtml(engine) {
     const timestamp = new Date();
+    const metadataRows = buildExportMetadataRows(engine, timestamp);
     const componentRows = engine.componentes.map(buildComponentRow);
     const connectionRows = engine.conexoes.map((connection, index) => buildConnectionRow(engine, connection, index));
 
@@ -337,7 +354,7 @@ function buildExportHtml(engine) {
 </head>
 <body>
     <h1>Exportação de Dados - GAAP Virtual Lab</h1>
-    <p>Gerado em ${escapeHtml(timestamp.toLocaleString('pt-BR'))}</p>
+    ${renderTable('Resumo da exportação', EXPORT_METADATA_COLUMNS, metadataRows)}
     ${renderTable('Componentes', COMPONENT_COLUMNS, componentRows)}
     ${renderTable('Conexões', CONNECTION_COLUMNS, connectionRows)}
 </body>

@@ -34,6 +34,39 @@ test('módulos de apresentação carregam sem DOM global no import', async () =>
     }
 });
 
+test('exportação registra altura relativa sem anexar gráficos', async () => {
+    const { buildExportHtml } = await import('../js/presentation/export/SimulationDataExporter.js');
+    const { BombaLogica } = await import('../js/domain/components/BombaLogica.js');
+    const { TanqueLogico } = await import('../js/domain/components/TanqueLogico.js');
+
+    const tanque = new TanqueLogico('tank-01', 'Tanque-01', 10, 20);
+    tanque.capacidadeMaxima = 1000;
+    tanque.volumeAtual = 420;
+    tanque.lastQin = 12.5;
+    tanque.lastQout = 7.25;
+
+    const bomba = new BombaLogica('pump-01', 'Bomba-01', 100, 40);
+    bomba.vazaoNominal = 45;
+    bomba.pressaoMaxima = 5;
+    bomba.fluxoReal = 18;
+    bomba.cargaGeradaBar = 3.2;
+
+    const html = buildExportHtml({
+        componentes: [tanque, bomba],
+        conexoes: [],
+        usarAlturaRelativa: true
+    });
+
+    assert.match(html, /Resumo da exporta\u00e7\u00e3o/);
+    assert.match(html, /Data da exporta\u00e7\u00e3o/);
+    assert.match(html, /Altura relativa/);
+    assert.match(html, /Ligada/);
+    assert.match(html, /Tanque-01/);
+    assert.match(html, /Bomba-01/);
+    assert.doesNotMatch(html, /Gr\u00e1ficos dos componentes/);
+    assert.doesNotMatch(html, /export-chart-svg/);
+});
+
 test('prefixos visuais das fronteiras acompanham o idioma atual', async () => {
     const {
         getComponentTagPrefix,
