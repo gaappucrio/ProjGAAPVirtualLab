@@ -5,6 +5,7 @@ import test from 'node:test';
 
 import { FLUID_PRESETS, SistemaSimulacao } from '../js/application/engine/SimulationEngine.js';
 import { ConnectionModel } from '../js/domain/models/ConnectionModel.js';
+import { BombaLogica } from '../js/domain/components/BombaLogica.js';
 import { DrenoLogico } from '../js/domain/components/DrenoLogico.js';
 import { FonteLogica } from '../js/domain/components/FonteLogica.js';
 import { TanqueLogico } from '../js/domain/components/TanqueLogico.js';
@@ -120,6 +121,142 @@ test('agua tem maior vazao que oleo leve em ramais equivalentes para tanque', ()
     assert.ok(
         waterFlowLps > lightOilFlowLps,
         `Água deve escoar mais rápido que óleo leve em ramais iguais: água=${waterFlowLps}, óleo=${lightOilFlowLps}`
+    );
+});
+
+test('bomba ativa na saida do tanque aumenta vazao sem pressao incoerente', () => {
+    const measureTankDrainFlow = (usarAlturaRelativa, withPump) => {
+        const engine = createEngine();
+        engine.usarAlturaRelativa = usarAlturaRelativa;
+
+        const tanque = new TanqueLogico('T-01', 'T-01', 180, 120);
+        const dreno = new DrenoLogico('D-01', 'outlet-01', 520, 260);
+
+        tanque.volumeAtual = 999;
+        tanque.capacidadeMaxima = 1000;
+        tanque.alturaUtilMetros = 2.4;
+        tanque.fluidoConteudo = { ...FLUID_PRESETS.agua };
+        tanque.conectarSaida(dreno);
+        dreno.pressaoSaidaBar = 0;
+
+        engine.add(tanque);
+        engine.add(dreno);
+
+        let pump = null;
+        let pumpOutletConnection = null;
+
+        if (withPump) {
+            pump = new BombaLogica('P-01', 'P-01', 380, 210);
+            pump.vazaoNominal = 45;
+            pump.pressaoMaxima = 5;
+            pump.grauAcionamento = 100;
+            pump.acionamentoEfetivo = 100;
+            tanque.saidas = [];
+            tanque.conectarSaida(pump);
+            pump.conectarSaida(dreno);
+            const tankPump = new ConnectionModel({ sourceId: tanque.id, targetId: pump.id });
+            pumpOutletConnection = new ConnectionModel({ sourceId: pump.id, targetId: dreno.id });
+            engine.add(pump);
+            engine.addConnection(tankPump);
+            engine.addConnection(pumpOutletConnection);
+        } else {
+            const tankDrain = new ConnectionModel({ sourceId: tanque.id, targetId: dreno.id });
+            engine.addConnection(tankDrain);
+        }
+
+        runPhysicsSteps(engine, 30, 0.1);
+
+        if (!withPump) return { flowLps: dreno.vazaoRecebidaLps };
+
+        const outletState = engine.getConnectionState(pumpOutletConnection);
+        return {
+            flowLps: outletState.flowLps,
+            pump
+        };
+    };
+
+    [false, true].forEach((usarAlturaRelativa) => {
+        const direct = measureTankDrainFlow(usarAlturaRelativa, false);
+        const pumped = measureTankDrainFlow(usarAlturaRelativa, true);
+
+        assert.ok(
+            pumped.flowLps > direct.flowLps * 1.5,
+            `Bomba deve elevar a vazao do tanque: altura=${usarAlturaRelativa}, direto=${direct.flowLps}, bomba=${pumped.flowLps}`
+        );
+        assert.ok(
+            pumped.pump.pressaoDescargaAtualBar > pumped.pump.pressaoSucaoAtualBar,
+            `Pressao da bomba deve subir atraves do rotor: succao=${pumped.pump.pressaoSucaoAtualBar}, descarga=${pumped.pump.pressaoDescargaAtualBar}`
+        );
+        assert.ok(
+            pumped.pump.fatorCavitacaoAtual > 0.95,
+            `Bomba nao deveria cavitar nesse cenario base: fator=${pumped.pump.fatorCavitacaoAtual}`
+        );
+    });
+});
+
+test('valvula totalmente aberta com Cv alto se aproxima de tubo equivalente', () => {
+    const buildTank = (id) => {
+        const tanque = new TanqueLogico(id, id, 0, 0);
+        tanque.volumeAtual = 999;
+        tanque.capacidadeMaxima = 1000;
+        tanque.alturaUtilMetros = 2.4;
+        tanque.fluidoConteudo = { ...FLUID_PRESETS.agua };
+        return tanque;
+    };
+
+    const measureEquivalentPipe = () => {
+        const engine = createEngine();
+        const tanque = buildTank('T-pipe');
+        const dreno = new DrenoLogico('D-pipe', 'D-pipe', 200, 0);
+        const connection = new ConnectionModel({
+            sourceId: tanque.id,
+            targetId: dreno.id,
+            extraLengthM: 1,
+            perdaLocalK: 0
+        });
+
+        tanque.conectarSaida(dreno);
+        engine.add(tanque);
+        engine.add(dreno);
+        engine.addConnection(connection);
+        runPhysicsSteps(engine, 60, 0.1);
+
+        return engine.getConnectionState(connection).flowLps;
+    };
+
+    const measureTransparentValve = () => {
+        const engine = createEngine();
+        const tanque = buildTank('T-valve');
+        const valvula = new ValvulaLogica('V-transparent', 'V-transparent', 100, 0);
+        const dreno = new DrenoLogico('D-valve', 'D-valve', 200, 0);
+
+        valvula.aplicarPerfilCaracteristica('custom');
+        valvula.setCoeficienteVazao(250);
+        valvula.setCoeficientePerda(0);
+        valvula.setTipoCaracteristica('linear');
+        valvula.setAbertura(100);
+        valvula.aberturaEfetiva = 100;
+
+        tanque.conectarSaida(valvula);
+        valvula.conectarSaida(dreno);
+
+        const entradaValvula = new ConnectionModel({ sourceId: tanque.id, targetId: valvula.id, perdaLocalK: 0 });
+        const saidaValvula = new ConnectionModel({ sourceId: valvula.id, targetId: dreno.id, perdaLocalK: 0 });
+
+        [tanque, valvula, dreno].forEach((component) => engine.add(component));
+        [entradaValvula, saidaValvula].forEach((connection) => engine.addConnection(connection));
+        runPhysicsSteps(engine, 60, 0.1);
+
+        return engine.getConnectionState(saidaValvula).flowLps;
+    };
+
+    const pipeFlow = measureEquivalentPipe();
+    const valveFlow = measureTransparentValve();
+    const relativeDifference = Math.abs(pipeFlow - valveFlow) / pipeFlow;
+
+    assert.ok(
+        relativeDifference < 0.03,
+        `Valvula transparente deve se aproximar de tubo equivalente: tubo=${pipeFlow}, valvula=${valveFlow}`
     );
 });
 

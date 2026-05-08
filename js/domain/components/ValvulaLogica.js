@@ -112,7 +112,7 @@ export class ValvulaLogica extends ComponenteFisico {
         const hydraulicAreaM2 = this.getAreaConexaoM2() * hydraulicAreaFactor;
         const throttlingLoss = Math.max(0, (1 / Math.max(FATOR_MINIMO_AREA, characteristicFactor)) - 1);
         const lossFromCv = BASE_PERDA_POR_CV / Math.max(0.01, effectiveCv * effectiveCv);
-        const localLossCoeff = Math.max(0.05, this.perdaLocalK + throttlingLoss + lossFromCv);
+        const localLossCoeff = Math.max(0, this.perdaLocalK + throttlingLoss + lossFromCv);
 
         return {
             opening: aberturaNormalizada,

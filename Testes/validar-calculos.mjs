@@ -321,6 +321,20 @@ test('característica da válvula altera capacidade hidráulica na mesma abertur
     );
 });
 
+test('valvula aberta com K zero nao aplica perda minima escondida', () => {
+    const valvula = new ValvulaLogica('V-zero', 'V-zero', 0, 0);
+    valvula.aplicarPerfilCaracteristica('custom');
+    valvula.setCoeficienteVazao(250);
+    valvula.setCoeficientePerda(0);
+    valvula.setTipoCaracteristica('linear');
+    valvula.aberturaEfetiva = 100;
+
+    const parametros = valvula.getParametrosHidraulicos();
+
+    approx(parametros.localLossCoeff, 25 / (250 * 250), 1e-12, 'Perda local deve vir apenas do Cv efetivo');
+    assert.ok(parametros.localLossCoeff < 0.001, 'Valvula com Cv alto e K zero deve ser praticamente transparente');
+});
+
 test('perfis da válvula aplicam propriedades e modo personalizado libera edição fina', () => {
     const valvula = new ValvulaLogica('V-03', 'V-03', 0, 0);
     const perfilRapido = VALVE_PROFILE_DEFINITIONS.quick_opening;

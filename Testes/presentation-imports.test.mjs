@@ -176,6 +176,45 @@ test('clipboard de componentes preserva propriedades clonaveis e sufixo por idio
     setLanguage('pt');
 });
 
+test('clipboard de grupo preserva componentes selecionados e conexoes internas', async () => {
+    const {
+        createComponentGroupClipboardSnapshot
+    } = await import('../js/presentation/controllers/ClipboardController.js');
+    const { ConnectionModel } = await import('../js/domain/models/ConnectionModel.js');
+    const { FonteLogica } = await import('../js/domain/components/FonteLogica.js');
+    const { ValvulaLogica } = await import('../js/domain/components/ValvulaLogica.js');
+    const { DrenoLogico } = await import('../js/domain/components/DrenoLogico.js');
+
+    const fonte = new FonteLogica('source-01', 'Entrada-01', 20, 40);
+    const valvula = new ValvulaLogica('valve-01', 'V-01', 120, 40);
+    const dreno = new DrenoLogico('sink-01', 'Saida-01', 220, 40);
+    const conexaoInterna = new ConnectionModel({
+        sourceId: fonte.id,
+        targetId: valvula.id,
+        diameterM: 0.12,
+        roughnessMm: 0.02,
+        extraLengthM: 3,
+        perdaLocalK: 0.4
+    });
+    const conexaoExterna = new ConnectionModel({
+        sourceId: valvula.id,
+        targetId: dreno.id
+    });
+
+    const snapshot = createComponentGroupClipboardSnapshot(
+        [fonte, valvula],
+        [conexaoInterna, conexaoExterna]
+    );
+
+    assert.equal(snapshot.kind, 'component-group');
+    assert.equal(snapshot.components.length, 2);
+    assert.equal(snapshot.connections.length, 1);
+    assert.equal(snapshot.connections[0].sourceId, fonte.id);
+    assert.equal(snapshot.connections[0].targetId, valvula.id);
+    assert.equal(snapshot.connections[0].diameterM, 0.12);
+    assert.equal(snapshot.connections[0].extraLengthM, 3);
+});
+
 test('cores visuais acompanham os presets de fluido', async () => {
     const { FLUID_PRESETS } = await import('../js/application/config/FluidPresets.js');
     const { createFluidoFromProperties, mixFluidos } = await import('../js/domain/components/Fluido.js');

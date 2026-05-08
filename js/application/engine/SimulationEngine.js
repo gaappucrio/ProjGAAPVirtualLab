@@ -161,6 +161,10 @@ export class SistemaSimulacao extends Observable {
         this.selectionStore.selectedConnection = value || null;
     }
 
+    get selectedComponents() {
+        return [...this.selectionStore.selectedComponents];
+    }
+
     get connectionStates() {
         return this.connectionStateStore.states;
     }
@@ -281,12 +285,22 @@ export class SistemaSimulacao extends Observable {
 
     selectComponent(comp) {
         this.selectionStore.selectComponent(comp);
-        this.notify(EngineEventPayloads.selection(comp, null));
+        this.notify(EngineEventPayloads.selection(comp, null, this.selectedComponents));
+    }
+
+    selectComponents(components = []) {
+        this.selectionStore.selectComponents(components);
+        this.notify(EngineEventPayloads.selection(this.selectedComponent, null, this.selectedComponents));
+    }
+
+    toggleComponentSelection(component) {
+        this.selectionStore.toggleComponent(component);
+        this.notify(EngineEventPayloads.selection(this.selectedComponent, null, this.selectedComponents));
     }
 
     selectConnection(conn) {
         this.selectionStore.selectConnection(conn);
-        this.notify(EngineEventPayloads.selection(null, conn));
+        this.notify(EngineEventPayloads.selection(null, conn, []));
     }
 
     setUsarAlturaRelativa(ativo) {

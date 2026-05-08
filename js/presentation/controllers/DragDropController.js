@@ -10,38 +10,59 @@ import { camera } from './CameraController.js';
 import { updateAllPipes } from './PipeController.js';
 import { GRID_SIZE } from '../../Config.js';
 
+function getSelectedDragElements(fallbackElement) {
+    const selectedElements = [...document.querySelectorAll('#workspace-canvas .placed-component.selected')]
+        .filter((element) => element?.logica);
+
+    if (fallbackElement.classList.contains('selected') && selectedElements.length > 1) {
+        return selectedElements;
+    }
+
+    return [fallbackElement];
+}
+
 export function makeComponentDraggable(element) {
-    let isDragging = false, startX, startY, initX, initY;
+    let isDragging = false, startX, startY, dragTargets = [];
     element.addEventListener('mousedown', e => {
         if (e.target.classList.contains('port-node')) return;
         isDragging = true;
         startX = e.clientX;
         startY = e.clientY;
-        initX = parseInt(element.style.left);
-        initY = parseInt(element.style.top);
+        dragTargets = getSelectedDragElements(element).map((targetElement) => ({
+            element: targetElement,
+            initX: parseInt(targetElement.style.left),
+            initY: parseInt(targetElement.style.top)
+        }));
     });
 
     document.addEventListener('mousemove', e => {
         if (!isDragging) return;
-        const newX = initX + (e.clientX - startX) / camera.scale;
-        const newY = initY + (e.clientY - startY) / camera.scale;
-        const snappedX = Math.round(newX / GRID_SIZE) * GRID_SIZE;
-        const snappedY = Math.round(newY / GRID_SIZE) * GRID_SIZE;
 
-        element.style.left = `${snappedX}px`;
-        element.style.top = `${snappedY}px`;
-        element.logica.x = snappedX;
-        element.logica.y = snappedY;
-        element.logica.notify(ComponentEventPayloads.positionUpdate());
+        dragTargets.forEach((target) => {
+            const newX = target.initX + (e.clientX - startX) / camera.scale;
+            const newY = target.initY + (e.clientY - startY) / camera.scale;
+            const snappedX = Math.round(newX / GRID_SIZE) * GRID_SIZE;
+            const snappedY = Math.round(newY / GRID_SIZE) * GRID_SIZE;
+
+            target.element.style.left = `${snappedX}px`;
+            target.element.style.top = `${snappedY}px`;
+            target.element.logica.x = snappedX;
+            target.element.logica.y = snappedY;
+            target.element.logica.notify(ComponentEventPayloads.positionUpdate());
+        });
+
         updateAllPipes();
     });
 
     document.addEventListener('mouseup', () => {
         if (isDragging) {
             isDragging = false;
-            element.logica.x = parseInt(element.style.left);
-            element.logica.y = parseInt(element.style.top);
-            element.logica.notify(ComponentEventPayloads.positionUpdate());
+            dragTargets.forEach((target) => {
+                target.element.logica.x = parseInt(target.element.style.left);
+                target.element.logica.y = parseInt(target.element.style.top);
+                target.element.logica.notify(ComponentEventPayloads.positionUpdate());
+            });
+            dragTargets = [];
             updateAllPipes();
         }
     });

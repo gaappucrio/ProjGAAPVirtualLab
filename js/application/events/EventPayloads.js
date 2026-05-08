@@ -1,10 +1,11 @@
 import { COMPONENT_EVENTS, ENGINE_EVENTS } from './EventTypes.js';
 
 export const EngineEventPayloads = Object.freeze({
-    selection: (component = null, connection = null) => ({
+    selection: (component = null, connection = null, components = []) => ({
         tipo: ENGINE_EVENTS.SELECTION,
         componente: component,
-        conexao: connection
+        conexao: connection,
+        componentes: components
     }),
     motorState: (rodando) => ({
         tipo: ENGINE_EVENTS.MOTOR_STATE,
