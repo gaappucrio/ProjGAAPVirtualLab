@@ -5,6 +5,22 @@
 
 import { translateLiteral } from '../../utils/LanguageManager.js';
 
+export function parseStrictNumber(value) {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : NaN;
+
+    const text = String(value ?? '').trim();
+    if (!text) return NaN;
+
+    const decimalText = text.includes(',') && !text.includes('.')
+        ? text.replace(',', '.')
+        : text;
+    const validDecimal = /^[+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:e[+-]?\d+)?$/i.test(decimalText);
+    if (!validDecimal) return NaN;
+
+    const number = Number(decimalText);
+    return Number.isFinite(number) ? number : NaN;
+}
+
 /**
  * Validador centralizado para entradas editadas pelo usuário.
  */
@@ -18,10 +34,10 @@ export class InputValidator {
      * Valida valor numerico dentro de limites.
      */
     static validateNumber(value, min = -Infinity, max = Infinity, fieldName = 'valor') {
-        const num = parseFloat(value);
+        const num = parseStrictNumber(value);
         const label = translateLiteral(fieldName);
 
-        if (Number.isNaN(num)) {
+        if (!Number.isFinite(num)) {
             return { valid: false, error: translateLiteral(`${label} deve ser um número válido`) };
         }
 

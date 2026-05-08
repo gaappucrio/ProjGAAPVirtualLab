@@ -51,6 +51,10 @@ test('validação de input vive somente na apresentação', () => {
 
     const invalidPressure = InputValidator.validatePressure('-1', 10, 'Pressão');
     assert.equal(invalidPressure.valid, false);
+    assert.equal(InputValidator.validateNumber('12abc', 0, 100, 'Campo').valid, false);
+    assert.equal(InputValidator.validateNumber('', 0, 100, 'Campo').valid, false);
+    assert.deepEqual(InputValidator.validateNumber('1e-3', 0, 1, 'Campo'), { valid: true, value: 0.001 });
+    assert.deepEqual(InputValidator.validateNumber('1,5', 0, 2, 'Campo'), { valid: true, value: 1.5 });
 });
 
 test('hidráulica de tubos vive somente no domínio', () => {

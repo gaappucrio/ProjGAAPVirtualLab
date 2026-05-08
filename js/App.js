@@ -23,6 +23,7 @@ import { setupHelpController } from './presentation/controllers/HelpController.j
 import { setupPipeControl, updateAllPipes, updateConnectionVisualStates } from './presentation/controllers/PipeController.js';
 import { setupDragDrop } from './presentation/controllers/DragDropController.js';
 import { setupToolbar } from './presentation/controllers/ToolbarController.js';
+import { setupClipboardController } from './presentation/controllers/ClipboardController.js';
 import { createConnectionServiceRuntime } from './application/services/ConnectionServiceRuntime.js';
 import { findConnectionByPath } from './infrastructure/rendering/ConnectionVisualRegistry.js';
 import {
@@ -57,6 +58,7 @@ setupHelpController();
 setupCameraControl();
 setupPipeControl({ engine: ENGINE, connectionService });
 setupDragDrop();
+setupClipboardController({ engine: ENGINE });
 
 setPortStateUpdater(() => updatePortStates());
 setConnectionVisualUpdater(() => updateConnectionVisualStates());
@@ -82,7 +84,8 @@ subscribeLanguageChanges(() => {
 });
 
 document.addEventListener('keydown', (e) => {
-    if (e.target.tagName.toLowerCase() === 'input') return;
+    const targetTagName = e.target.tagName.toLowerCase();
+    if (targetTagName === 'input' || targetTagName === 'textarea' || targetTagName === 'select' || e.target.isContentEditable) return;
 
     if (e.key === 'Delete' || e.key === 'Backspace') {
         const selectedCompDiv = document.querySelector('.placed-component.selected');

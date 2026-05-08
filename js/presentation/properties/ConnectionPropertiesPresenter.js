@@ -101,7 +101,7 @@ export function renderConnectionProperties({
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.rugosidade}">Rugosidade Absoluta (${getUnitSymbol('length')})</label>
-            <input type="number" id="input-pipe-roughness" title="${TOOLTIPS.conexao.rugosidade}" value="${displayEditableUnitValue('length', (connection.roughnessMm || DEFAULT_PIPE_ROUGHNESS_MM) / 1000, 6)}" step="${displayStep('length', 0.000005, 6)}" min="${displayBound('length', 0.000001, 6)}" max="${displayBound('length', 0.005, 6)}">
+            <input type="number" id="input-pipe-roughness" title="${TOOLTIPS.conexao.rugosidade}" value="${displayEditableUnitValue('length', connection.roughnessMm / 1000, 6)}" step="${displayStep('length', 0.000005, 6)}" min="${displayBound('length', 0, 6)}" max="${displayBound('length', 0.005, 6)}">
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.perdaLocal}">Perda Local K</label>
@@ -193,7 +193,7 @@ export function renderConnectionProperties({
     bind('input-pipe-roughness', 'change', (event) => {
         validatePipeInput(
             event.target,
-            (value, name) => InputValidator.validateNumber(lengthInputValue(value), 0.000001, 0.005, name),
+            (value, name) => InputValidator.validateNumber(lengthInputValue(value), 0, 0.005, name),
             'Rugosidade',
             (value) => { connection.roughnessMm = value * 1000; }
         );

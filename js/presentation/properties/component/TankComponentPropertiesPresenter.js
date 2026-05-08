@@ -179,7 +179,7 @@ export const TANK_PROPERTIES_PRESENTER = {
         bind('input-cap', 'change', (event) => {
             validateInputWithFeedback(
                 event.target,
-                (value, name) => InputValidator.validateVolume(baseFromDisplay('volume', value, 0), 10000, name),
+                (value, name) => InputValidator.validateVolume(baseFromDisplay('volume', value), 10000, name),
                 'Capacidade máxima',
                 (validated) => {
                     comp.capacidadeMaxima = validated;
@@ -195,7 +195,7 @@ export const TANK_PROPERTIES_PRESENTER = {
         bind('input-volume-tanque', 'change', (event) => {
             validateInputWithFeedback(
                 event.target,
-                (value, name) => InputValidator.validateNumber(baseFromDisplay('volume', value, 0), 0, comp.capacidadeMaxima, name),
+                (value, name) => InputValidator.validateNumber(baseFromDisplay('volume', value), 0, comp.capacidadeMaxima, name),
                 'Volume atual',
                 (validated) => {
                     comp.volumeAtual = Math.max(0, Math.min(comp.capacidadeMaxima, validated));
@@ -209,16 +209,16 @@ export const TANK_PROPERTIES_PRESENTER = {
         bind('input-altura-tanque', 'change', (event) => {
             validateInputWithFeedback(
                 event.target,
-                (value, name) => InputValidator.validateHeight(baseFromDisplay('length', value, 0), 100, name),
+                (value, name) => InputValidator.validateNumber(baseFromDisplay('length', value), 0.5, 10, name),
                 'Altura útil',
                 (validated) => {
                     comp.alturaUtilMetros = validated;
-                    comp.alturaBocalEntradaM = Math.min(comp.alturaBocalEntradaM, comp.alturaUtilMetros);
-                    comp.alturaBocalSaidaM = Math.min(comp.alturaBocalSaidaM, comp.alturaUtilMetros);
+                    comp.normalizarAlturasBocais?.();
                     const inletHeight = byId('input-altura-entrada-tanque');
                     const outletHeight = byId('input-altura-saída-tanque');
                     if (inletHeight) inletHeight.max = displayBound('length', comp.alturaUtilMetros);
                     if (outletHeight) outletHeight.max = displayBound('length', comp.alturaUtilMetros);
+                    setValue('input-altura-tanque', displayEditableUnitValue('length', comp.alturaUtilMetros, 3));
                     setValue('input-altura-entrada-tanque', displayEditableUnitValue('length', comp.alturaBocalEntradaM, 3));
                     setValue('input-altura-saída-tanque', displayEditableUnitValue('length', comp.alturaBocalSaidaM, 3));
                     comp.sincronizarMetricasFisicas();
@@ -230,7 +230,7 @@ export const TANK_PROPERTIES_PRESENTER = {
         bind('input-altura-entrada-tanque', 'change', (event) => {
             validateInputWithFeedback(
                 event.target,
-                (value, name) => InputValidator.validateHeight(baseFromDisplay('length', value, 0), comp.alturaUtilMetros, name),
+                (value, name) => InputValidator.validateNumber(baseFromDisplay('length', value), 0, comp.alturaUtilMetros, name),
                 'Elevação do bocal de entrada',
                 (validated) => {
                     comp.alturaBocalEntradaM = Math.max(0, Math.min(comp.alturaUtilMetros, validated));
@@ -243,7 +243,7 @@ export const TANK_PROPERTIES_PRESENTER = {
         bind('input-altura-saída-tanque', 'change', (event) => {
             validateInputWithFeedback(
                 event.target,
-                (value, name) => InputValidator.validateHeight(baseFromDisplay('length', value, 0), comp.alturaUtilMetros, name),
+                (value, name) => InputValidator.validateNumber(baseFromDisplay('length', value), 0, comp.alturaUtilMetros, name),
                 'Elevação do bocal de saída',
                 (validated) => {
                     comp.alturaBocalSaidaM = Math.max(0, Math.min(comp.alturaUtilMetros, validated));

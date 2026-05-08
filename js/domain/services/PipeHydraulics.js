@@ -17,6 +17,21 @@ import {
 import { clamp } from '../components/BaseComponente.js';
 import { calculateConnectionGeometry } from './PortPositionCalculator.js';
 
+function finiteNumber(value) {
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : null;
+}
+
+function positiveNumber(value, fallback) {
+    const numericValue = finiteNumber(value);
+    return numericValue !== null && numericValue > 0 ? numericValue : fallback;
+}
+
+function nonNegativeNumber(value, fallback) {
+    const numericValue = finiteNumber(value);
+    return numericValue !== null && numericValue >= 0 ? numericValue : fallback;
+}
+
 /**
  * Calcula o diâmetro interno sugerido a partir da vazão em m³/s e da
  * velocidade média desejada. É a forma direta de d = sqrt(4Q / (pi v)).
@@ -54,7 +69,7 @@ export function ensureConnectionDesignFlowLps(conn, state = {}) {
 }
 
 export function getSuggestedDiameterForConnection(conn, state = {}) {
-    const designVelocityMps = conn?.designVelocityMps || DEFAULT_DESIGN_VELOCITY_MPS;
+    const designVelocityMps = positiveNumber(conn?.designVelocityMps, DEFAULT_DESIGN_VELOCITY_MPS);
     return diameterFromFlowVelocity(ensureConnectionDesignFlowLps(conn, state), designVelocityMps);
 }
 
@@ -144,16 +159,14 @@ export function getConnectionResponseTimeS(conn, geometry, fluidoOperante) {
  * Garante que a conexão tenha parâmetros hidráulicos padrão.
  */
 export function ensureConnectionProperties(conn) {
-    if (typeof conn.diameterM !== 'number') conn.diameterM = DEFAULT_PIPE_DIAMETER_M;
-    if (typeof conn.roughnessMm !== 'number') conn.roughnessMm = DEFAULT_PIPE_ROUGHNESS_MM;
-    if (typeof conn.extraLengthM !== 'number') conn.extraLengthM = DEFAULT_PIPE_EXTRA_LENGTH_M;
-    if (typeof conn.perdaLocalK !== 'number') conn.perdaLocalK = DEFAULT_PIPE_MINOR_LOSS;
-    if (typeof conn.designVelocityMps !== 'number' || conn.designVelocityMps <= 0) {
-        conn.designVelocityMps = DEFAULT_DESIGN_VELOCITY_MPS;
-    }
-    if (typeof conn.designFlowLps !== 'number' || conn.designFlowLps < 0) conn.designFlowLps = 0;
-    if (typeof conn.transientFlowLps !== 'number') conn.transientFlowLps = 0;
-    if (typeof conn.lastResolvedFlowLps !== 'number') conn.lastResolvedFlowLps = 0;
+    conn.diameterM = positiveNumber(conn.diameterM, DEFAULT_PIPE_DIAMETER_M);
+    conn.roughnessMm = nonNegativeNumber(conn.roughnessMm, DEFAULT_PIPE_ROUGHNESS_MM);
+    conn.extraLengthM = nonNegativeNumber(conn.extraLengthM, DEFAULT_PIPE_EXTRA_LENGTH_M);
+    conn.perdaLocalK = nonNegativeNumber(conn.perdaLocalK, DEFAULT_PIPE_MINOR_LOSS);
+    conn.designVelocityMps = positiveNumber(conn.designVelocityMps, DEFAULT_DESIGN_VELOCITY_MPS);
+    conn.designFlowLps = nonNegativeNumber(conn.designFlowLps, 0);
+    conn.transientFlowLps = nonNegativeNumber(conn.transientFlowLps, 0);
+    conn.lastResolvedFlowLps = nonNegativeNumber(conn.lastResolvedFlowLps, 0);
 
     conn.areaM2 = areaFromDiameter(conn.diameterM);
     return conn;

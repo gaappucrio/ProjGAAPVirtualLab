@@ -22,6 +22,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Conexão entre componentes por portas de entrada e saída.
 - Seleção de componentes e conexões para edição.
 - Remoção por tecla `Delete` ou `Backspace`.
+- Clone de componentes selecionados por `Ctrl+C` e `Ctrl+V`, preservando propriedades configuráveis e criando a tag com sufixo `- copia` ou `- copy` conforme o idioma ativo.
 - Renderização visual de tubos, rótulos de vazão e estados de portas.
 - Opção de altura relativa para considerar desníveis entre componentes.
 - Identificação estável de fronteiras com tags `inlet-01`, `outlet-01` etc., independente do idioma da interface.
@@ -103,6 +104,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Cada gráfico no monitor detalhado pode ser removido individualmente, permitindo voltar de comparação dupla para análise única.
 - A altura do monitor detalhado pode ser ajustada arrastando a borda superior, com limites responsivos para não quebrar o layout.
 - Histórico por componente para tanque.
+- Reabertura de componente já monitorado sem reinicializar a série do gráfico, inclusive após pausar a simulação.
 - Gráfico de curva e ponto de operação para bomba.
 - Redimensionamento e atualização dos gráficos por adaptadores de Chart.js.
 
@@ -206,6 +208,7 @@ Contém controllers, presenters, validações de UI e lógica de painel.
 Arquivos principais:
 
 - `presentation/controllers/PresentationController.js`
+- `presentation/controllers/ClipboardController.js`
 - `presentation/controllers/HelpController.js`
 - `presentation/controllers/ToolbarController.js`
 - `presentation/controllers/PipeController.js`
@@ -231,6 +234,7 @@ Responsabilidades:
 - Atualizar valores vivos do painel.
 - Manipular abas e memória de contexto do painel.
 - Gerenciar monitoramento compacto e detalhado.
+- Gerenciar atalhos de clipboard de componentes (`Ctrl+C`/`Ctrl+V`) na camada de apresentação.
 - Controlar popup de tutorial e comandos básicos da interface.
 - Exportar dados tabulares de componentes e conexões.
 - Validar inputs digitados.
@@ -633,6 +637,7 @@ Funcionalidades:
 - Até dois gráficos simultâneos para comparação.
 - Histórico por slot para evitar perda ao alternar seleção.
 - Remoção individual de slots por botão `x`, compactando os gráficos restantes.
+- Séries de tanque monitorado são reaproveitadas ao selecionar novamente o componente, evitando reset visual quando a simulação está pausada.
 - Ajuste de altura do monitor detalhado por arraste da borda superior, em comportamento semelhante a uma janela.
 
 ## 13. Internacionalização e Ajuda
@@ -701,6 +706,7 @@ Coberturas importantes:
 - Rede com 30 componentes e múltiplas saídas.
 - Histórico de monitoramento.
 - Remoção de slot no monitoramento detalhado.
+- Snapshot e aplicação de propriedades clonáveis no clipboard de componentes.
 - Regras de camadas.
 - Importação da apresentação sem DOM global.
 - Tags de fronteira `inlet`/`outlet` independentes do idioma.
@@ -736,6 +742,7 @@ Marcos concluídos:
 - `I18n.js` renomeado para `LanguageManager.js` e imports atualizados.
 - Helper de tutorial adicionado ao cabeçalho.
 - Testes de arquitetura e comportamento adicionados.
+- Verificação final de consistência física adicionou validação numérica estrita, normalização segura de parâmetros de tubulação e proteção contra altura útil inválida em tanques.
 
 Pontos ainda observáveis:
 
@@ -793,4 +800,4 @@ Próximos passos recomendados:
 
 O projeto está em um estado estruturalmente muito melhor que a versão monolítica inicial. A física principal está concentrada no domínio, a aplicação orquestra o tick e a topologia, a apresentação foi dividida em controllers e presenters, e a infraestrutura visual está separada em adaptadores.
 
-O sistema já possui suporte funcional para montagem visual, simulação hidráulica, bombas, válvulas, tanques, set point, monitoramento, unidades, tooltips, tutorial integrado, internacionalização, mistura de fluidos, cores visuais por fluido, exportação tabular de dados e testes automatizados. A base trata propriedades de fluido por entrada, composição por conexão e conteúdo misturado em tanques, desde que as fronteiras entre domínio, aplicação, apresentação e infraestrutura continuem sendo respeitadas.
+O sistema já possui suporte funcional para montagem visual, clonagem de componentes por teclado, simulação hidráulica, bombas, válvulas, tanques, set point, monitoramento, unidades, tooltips, tutorial integrado, internacionalização, mistura de fluidos, cores visuais por fluido, exportação tabular de dados e testes automatizados. A base trata propriedades de fluido por entrada, composição por conexão e conteúdo misturado em tanques, desde que as fronteiras entre domínio, aplicação, apresentação e infraestrutura continuem sendo respeitadas.

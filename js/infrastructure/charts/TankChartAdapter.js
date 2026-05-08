@@ -1,8 +1,45 @@
 import { getUnitSymbol, toDisplayValue } from '../../utils/Units.js';
 import { t } from '../../utils/LanguageManager.js';
+import { getFluidVisualStyle } from '../rendering/FluidVisualStyle.js';
+
+const DEFAULT_TANK_CHART_LINE_COLOR = '#3498db';
 
 function volumeTickLabel(value) {
     return toDisplayValue('volume', value).toFixed(1);
+}
+
+function hexToRgba(hexColor, alpha = 0.2) {
+    const normalized = String(hexColor || '').trim().replace('#', '');
+    const fullHex = normalized.length === 3
+        ? normalized.split('').map((char) => `${char}${char}`).join('')
+        : normalized;
+
+    if (!/^[0-9a-f]{6}$/i.test(fullHex)) {
+        return `rgba(52, 152, 219, ${alpha})`;
+    }
+
+    const r = parseInt(fullHex.slice(0, 2), 16);
+    const g = parseInt(fullHex.slice(2, 4), 16);
+    const b = parseInt(fullHex.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+export function resolveTankChartColors(component) {
+    const fluid = component?.getFluidoConteudo?.() || component?.fluidoConteudo || null;
+    const lineColor = getFluidVisualStyle(fluid).stroke || DEFAULT_TANK_CHART_LINE_COLOR;
+
+    return {
+        lineColor,
+        fillColor: hexToRgba(lineColor, 0.2)
+    };
+}
+
+function applyTankChartColors(dataset, component) {
+    if (!dataset) return;
+
+    const colors = resolveTankChartColors(component);
+    dataset.borderColor = colors.lineColor;
+    dataset.backgroundColor = colors.fillColor;
 }
 
 export function createEmptyMonitorChart(ctx) {
@@ -56,6 +93,8 @@ export function createEmptyMonitorChart(ctx) {
 }
 
 export function createTankVolumeChart(ctx, component, series) {
+    const colors = resolveTankChartColors(component);
+
     return new Chart(ctx, {
         type: 'line',
         data: {
@@ -63,8 +102,8 @@ export function createTankVolumeChart(ctx, component, series) {
             datasets: [{
                 label: `${t('chart.volume')}: ${component.tag}`,
                 data: [...series.values],
-                borderColor: '#3498db',
-                backgroundColor: 'rgba(52, 152, 219, 0.2)',
+                borderColor: colors.lineColor,
+                backgroundColor: colors.fillColor,
                 borderWidth: 2,
                 fill: true,
                 pointRadius: 0,
@@ -124,6 +163,7 @@ export function refreshTankVolumeChart(chart, component, series, { update = true
     chart.data.labels = [...series.labels];
     chart.data.datasets[0].label = `${t('chart.volume')}: ${component.tag}`;
     chart.data.datasets[0].data = [...series.values];
+    applyTankChartColors(chart.data.datasets[0], component);
     chart.options.scales.y.max = component.capacidadeMaxima;
     chart.options.scales.x.title.text = `${t('chart.time')} (s)`;
     chart.options.scales.y.title.text = `${t('chart.volume')} (${getUnitSymbol('volume')})`;

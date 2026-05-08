@@ -159,7 +159,7 @@ export const PUMP_PROPERTIES_PRESENTER = {
         bind('input-vazmax', 'change', (event) => {
             validateInputWithFeedback(
                 event.target,
-                (value, name) => InputValidator.validateFlow(baseFromDisplay('flow', value, 0), 500, name),
+                (value, name) => InputValidator.validateFlow(baseFromDisplay('flow', value), 500, name),
                 'Vazão nominal',
                 (validated) => {
                     comp.vazaoNominal = validated;
@@ -170,7 +170,7 @@ export const PUMP_PROPERTIES_PRESENTER = {
         bind('input-pressao-max-bomba', 'change', (event) => {
             validateInputWithFeedback(
                 event.target,
-                (value, name) => InputValidator.validatePressure(baseFromDisplay('pressure', value, 0), 20, name),
+                (value, name) => InputValidator.validatePressure(baseFromDisplay('pressure', value), 20, name),
                 'Pressão máxima',
                 (validated) => {
                     comp.pressaoMaxima = validated;
@@ -192,7 +192,7 @@ export const PUMP_PROPERTIES_PRESENTER = {
         bind('input-npsh-bomba', 'change', (event) => {
             validateInputWithFeedback(
                 event.target,
-                (value, name) => InputValidator.validateNPSH(baseFromDisplay('length', value, 0), name),
+                (value, name) => InputValidator.validateNPSH(baseFromDisplay('length', value), name),
                 'NPSH requerido',
                 (validated) => {
                     comp.npshRequeridoM = validated;
