@@ -10,6 +10,43 @@ import { camera } from './CameraController.js';
 import { updateAllPipes } from './PipeController.js';
 import { GRID_SIZE } from '../../Config.js';
 
+export function makeComponentDraggable(element) {
+    let isDragging = false, startX, startY, initX, initY;
+    element.addEventListener('mousedown', e => {
+        if (e.target.classList.contains('port-node')) return;
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        initX = parseInt(element.style.left);
+        initY = parseInt(element.style.top);
+    });
+
+    document.addEventListener('mousemove', e => {
+        if (!isDragging) return;
+        const newX = initX + (e.clientX - startX) / camera.scale;
+        const newY = initY + (e.clientY - startY) / camera.scale;
+        const snappedX = Math.round(newX / GRID_SIZE) * GRID_SIZE;
+        const snappedY = Math.round(newY / GRID_SIZE) * GRID_SIZE;
+
+        element.style.left = `${snappedX}px`;
+        element.style.top = `${snappedY}px`;
+        element.logica.x = snappedX;
+        element.logica.y = snappedY;
+        element.logica.notify(ComponentEventPayloads.positionUpdate());
+        updateAllPipes();
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (isDragging) {
+            isDragging = false;
+            element.logica.x = parseInt(element.style.left);
+            element.logica.y = parseInt(element.style.top);
+            element.logica.notify(ComponentEventPayloads.positionUpdate());
+            updateAllPipes();
+        }
+    });
+}
+
 export function setupDragDrop() {
     const workspaceContainer = document.getElementById('workspace');
     const workspaceCanvas = document.getElementById('workspace-canvas');
@@ -47,46 +84,8 @@ export function setupDragDrop() {
 
         const novoVisual = FabricaDeEquipamentos.criar(t, snapX, snapY);
         workspaceCanvas.appendChild(novoVisual);
-        makeDraggable(novoVisual);
+        makeComponentDraggable(novoVisual);
 
         updatePortStates();
     });
-
-    // Funções auxiliares
-    function makeDraggable(element) {
-        let isDragging = false, startX, startY, initX, initY;
-        element.addEventListener('mousedown', e => {
-            if (e.target.classList.contains('port-node')) return;
-            isDragging = true;
-            startX = e.clientX;
-            startY = e.clientY;
-            initX = parseInt(element.style.left);
-            initY = parseInt(element.style.top);
-        });
-
-        document.addEventListener('mousemove', e => {
-            if (!isDragging) return;
-            const newX = initX + (e.clientX - startX) / camera.scale;
-            const newY = initY + (e.clientY - startY) / camera.scale;
-            const snappedX = Math.round(newX / GRID_SIZE) * GRID_SIZE;
-            const snappedY = Math.round(newY / GRID_SIZE) * GRID_SIZE;
-
-            element.style.left = `${snappedX}px`;
-            element.style.top = `${snappedY}px`;
-            element.logica.x = snappedX;
-            element.logica.y = snappedY;
-            element.logica.notify(ComponentEventPayloads.positionUpdate());
-            updateAllPipes();
-        });
-
-        document.addEventListener('mouseup', () => {
-            if (isDragging) {
-                isDragging = false;
-                element.logica.x = parseInt(element.style.left);
-                element.logica.y = parseInt(element.style.top);
-                element.logica.notify(ComponentEventPayloads.positionUpdate());
-                updateAllPipes();
-            }
-        });
-    }
 }

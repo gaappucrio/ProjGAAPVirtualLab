@@ -146,7 +146,7 @@ export function createMonitorController({ engine }) {
         if (!ctx) return;
 
         destroyCompactChart();
-        compactChart = createTankMonitorChartInstance(ctx, component, { resetSeries: true });
+        compactChart = createTankMonitorChartInstance(ctx, component);
 
         setCompactMonitorMode('tank');
         chartedTankId = component.id;

@@ -3,6 +3,8 @@ import test from 'node:test';
 
 const PRESENTATION_MODULES = [
     '../js/presentation/controllers/PresentationController.js',
+    '../js/presentation/controllers/ClipboardController.js',
+    '../js/presentation/controllers/DragDropController.js',
     '../js/presentation/controllers/HelpController.js',
     '../js/presentation/controllers/MonitorController.js',
     '../js/presentation/export/SimulationDataExporter.js',
@@ -87,6 +89,69 @@ test('prefixos visuais das fronteiras acompanham o idioma atual', async () => {
     assert.equal(translateDefaultComponentTag('Sink-01'), 'outlet-01');
     assert.equal(translateDefaultComponentTag('Entrada-01'), 'inlet-01');
     assert.equal(translateDefaultComponentTag('Sa\u00edda-01'), 'outlet-01');
+
+    setLanguage('pt');
+});
+
+test('clipboard de componentes preserva propriedades clonaveis e sufixo por idioma', async () => {
+    const {
+        applyComponentClipboardSnapshot,
+        buildClonedComponentTag,
+        createComponentClipboardSnapshot
+    } = await import('../js/presentation/controllers/ClipboardController.js');
+    const { FonteLogica } = await import('../js/domain/components/FonteLogica.js');
+    const { BombaLogica } = await import('../js/domain/components/BombaLogica.js');
+    const { setLanguage } = await import('../js/utils/LanguageManager.js');
+
+    setLanguage('pt');
+
+    const fonte = new FonteLogica('source-01', 'Entrada-01', 20, 40);
+    fonte.pressaoFonteBar = 4.2;
+    fonte.vazaoMaxima = 88;
+    fonte.atualizarFluidoEntrada({
+        nome: 'Fluido teste',
+        densidade: 910,
+        viscosidadeDinamicaPaS: 0.002,
+        pressaoVaporBar: 0.045,
+        corVisual: '#00aa99'
+    }, { presetId: 'custom' });
+
+    const fonteSnapshot = createComponentClipboardSnapshot(fonte);
+    const fonteClone = new FonteLogica('source-02', 'Entrada-02', 80, 120);
+    applyComponentClipboardSnapshot(fonteSnapshot, fonteClone, {
+        tag: buildClonedComponentTag(fonteSnapshot.tag)
+    });
+
+    assert.equal(fonteClone.tag, 'Entrada-01 - copia');
+    assert.equal(fonteClone.pressaoFonteBar, 4.2);
+    assert.equal(fonteClone.vazaoMaxima, 88);
+    assert.equal(fonteClone.fluidoEntrada.nome, 'Fluido teste');
+    assert.equal(fonteClone.fluidoEntrada.densidade, 910);
+    assert.notEqual(fonteClone.fluidoEntrada, fonte.fluidoEntrada);
+
+    fonteClone.fluidoEntrada.nome = 'Clone alterado';
+    assert.equal(fonte.fluidoEntrada.nome, 'Fluido teste');
+
+    const bomba = new BombaLogica('pump-01', 'P-01', 0, 0);
+    bomba.grauAcionamento = 75;
+    bomba.vazaoNominal = 123;
+    bomba.pressaoMaxima = 6.5;
+    bomba.tempoRampaSegundos = 2.75;
+
+    const bombaSnapshot = createComponentClipboardSnapshot(bomba);
+    const bombaClone = new BombaLogica('pump-02', 'P-02', 0, 0);
+    applyComponentClipboardSnapshot(bombaSnapshot, bombaClone, {
+        tag: buildClonedComponentTag(bombaSnapshot.tag)
+    });
+
+    assert.equal(bombaClone.tag, 'P-01 - copia');
+    assert.equal(bombaClone.grauAcionamento, 75);
+    assert.equal(bombaClone.vazaoNominal, 123);
+    assert.equal(bombaClone.pressaoMaxima, 6.5);
+    assert.equal(bombaClone.tempoRampaSegundos, 2.75);
+
+    setLanguage('en');
+    assert.equal(buildClonedComponentTag('Pump-01'), 'Pump-01 - copy');
 
     setLanguage('pt');
 });

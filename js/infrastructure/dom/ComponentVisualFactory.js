@@ -38,7 +38,7 @@ export class FabricaDeEquipamentos {
     (por exemplo, seleção, duplo clique para alternar estado, etc.).
     O método também define os atributos de dados necessários para a lógica do componente
     e retorna o elemento visual completo para ser adicionado ao workspace ou à paleta. */
-    static criar(tipo, x, y, isPalette = false) {
+    static criar(tipo, x, y, isPalette = false, options = {}) {
         const spec = getComponentDefinition(tipo);
         const visualSpec = getComponentVisualSpec(tipo);
         if (!spec || !visualSpec) return console.error("Componente não registrado:", tipo);
@@ -48,10 +48,11 @@ export class FabricaDeEquipamentos {
         visual.className = 'placed-component';
         visual.style.left = `${x}px`; visual.style.top = `${y}px`; visual.style.zIndex = '10';
         visual.dataset.id = id;
+        visual.dataset.type = tipo;
         visual.dataset.logW = spec.w; visual.dataset.logH = spec.h;
 
         const prefixoTag = getComponentTagPrefix(tipo) || spec.prefixoTag;
-        let tag = isPalette ? prefixoTag : obterProximaTag(prefixoTag);
+        let tag = options.tag || (isPalette ? prefixoTag : obterProximaTag(prefixoTag));
         const logica = new spec.Classe(id, tag, x, y);
 
         visual.innerHTML = `
