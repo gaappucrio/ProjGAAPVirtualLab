@@ -1,5 +1,6 @@
 import {
     DEFAULT_ATMOSPHERIC_PRESSURE_BAR,
+    DEFAULT_FLUID_SPECIFIC_HEAT_JKGK,
     DEFAULT_FLUID_VAPOR_PRESSURE_BAR,
     DEFAULT_FLUID_VISCOSITY_PA_S
 } from '../../utils/Units.js';
@@ -59,6 +60,7 @@ export class Fluido {
         this.viscosidade = viscosidadeDinamicaPaS;
         this.temperatura = temperatura;
         this.viscosidadeDinamicaPaS = viscosidadeDinamicaPaS;
+        this.calorEspecificoJkgK = DEFAULT_FLUID_SPECIFIC_HEAT_JKGK;
         this.pressaoVaporBar = DEFAULT_FLUID_VAPOR_PRESSURE_BAR;
         this.pressaoAtmosfericaBar = DEFAULT_ATMOSPHERIC_PRESSURE_BAR;
         this.corVisual = DEFAULT_FLUID_VISUAL_COLOR;
@@ -81,6 +83,11 @@ export function updateFluidoProperties(fluido, dados = {}) {
         0.00001
     );
     fluido.viscosidade = fluido.viscosidadeDinamicaPaS;
+    fluido.calorEspecificoJkgK = positiveNumber(
+        dados.calorEspecificoJkgK,
+        fluido.calorEspecificoJkgK ?? DEFAULT_FLUID_SPECIFIC_HEAT_JKGK,
+        1
+    );
     fluido.pressaoVaporBar = positiveNumber(
         dados.pressaoVaporBar,
         fluido.pressaoVaporBar ?? DEFAULT_FLUID_VAPOR_PRESSURE_BAR,
@@ -122,6 +129,7 @@ export function cloneFluido(fluido, overrides = {}) {
         densidade: fluido?.densidade ?? DEFAULT_FLUID_DENSITY,
         temperatura: fluido?.temperatura ?? DEFAULT_FLUID_TEMPERATURE,
         viscosidadeDinamicaPaS: fluido?.viscosidadeDinamicaPaS ?? DEFAULT_FLUID_VISCOSITY_PA_S,
+        calorEspecificoJkgK: fluido?.calorEspecificoJkgK ?? DEFAULT_FLUID_SPECIFIC_HEAT_JKGK,
         pressaoVaporBar: fluido?.pressaoVaporBar ?? DEFAULT_FLUID_VAPOR_PRESSURE_BAR,
         pressaoAtmosfericaBar: fluido?.pressaoAtmosfericaBar ?? DEFAULT_ATMOSPHERIC_PRESSURE_BAR,
         composicao: fluido?.composicao,
@@ -152,6 +160,8 @@ export function mixFluidos(contributions = [], fallback = null, { nome = 'Mistur
     let density = 0;
     let temperature = 0;
     let logViscosity = 0;
+    let heatCapacityMassWeight = 0;
+    let heatCapacityWeighted = 0;
     let vaporPressure = 0;
     let atmosphericPressure = 0;
     const colorComposition = {};
@@ -161,6 +171,13 @@ export function mixFluidos(contributions = [], fallback = null, { nome = 'Mistur
         density += fraction * positiveNumber(fluido.densidade, DEFAULT_FLUID_DENSITY, 1);
         temperature += fraction * (Number.isFinite(Number(fluido.temperatura)) ? Number(fluido.temperatura) : DEFAULT_FLUID_TEMPERATURE);
         logViscosity += fraction * Math.log(positiveNumber(fluido.viscosidadeDinamicaPaS, DEFAULT_FLUID_VISCOSITY_PA_S, 0.00001));
+        const massWeight = weight * positiveNumber(fluido.densidade, DEFAULT_FLUID_DENSITY, 1);
+        heatCapacityMassWeight += massWeight;
+        heatCapacityWeighted += massWeight * positiveNumber(
+            fluido.calorEspecificoJkgK,
+            DEFAULT_FLUID_SPECIFIC_HEAT_JKGK,
+            1
+        );
         vaporPressure += fraction * positiveNumber(fluido.pressaoVaporBar, DEFAULT_FLUID_VAPOR_PRESSURE_BAR, 0.0001);
         atmosphericPressure += fraction * positiveNumber(fluido.pressaoAtmosfericaBar, DEFAULT_ATMOSPHERIC_PRESSURE_BAR, 0.5);
 
@@ -188,6 +205,9 @@ export function mixFluidos(contributions = [], fallback = null, { nome = 'Mistur
         densidade: density,
         temperatura: temperature,
         viscosidadeDinamicaPaS: Math.exp(logViscosity),
+        calorEspecificoJkgK: heatCapacityMassWeight > 0
+            ? heatCapacityWeighted / heatCapacityMassWeight
+            : DEFAULT_FLUID_SPECIFIC_HEAT_JKGK,
         pressaoVaporBar: vaporPressure,
         pressaoAtmosfericaBar: atmosphericPressure,
         composicao: normalizedComposition,

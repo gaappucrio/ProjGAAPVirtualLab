@@ -1,5 +1,9 @@
 import { SOURCE_COMPONENT_SPEC, SINK_COMPONENT_SPEC } from './specs/BoundaryComponentSpecs.js';
-import { PUMP_COMPONENT_SPEC, VALVE_COMPONENT_SPEC } from './specs/PumpValveComponentSpecs.js';
+import {
+    HEAT_EXCHANGER_COMPONENT_SPEC,
+    PUMP_COMPONENT_SPEC,
+    VALVE_COMPONENT_SPEC
+} from './specs/PumpValveComponentSpecs.js';
 import { TANK_COMPONENT_SPEC } from './specs/TankComponentSpec.js';
 
 export const REGISTRO_COMPONENTES = {
@@ -7,7 +11,8 @@ export const REGISTRO_COMPONENTES = {
     sink: SINK_COMPONENT_SPEC,
     pump: PUMP_COMPONENT_SPEC,
     valve: VALVE_COMPONENT_SPEC,
-    tank: TANK_COMPONENT_SPEC
+    tank: TANK_COMPONENT_SPEC,
+    heat_exchanger: HEAT_EXCHANGER_COMPONENT_SPEC
 };
 
 export function getComponentDefinition(type) {

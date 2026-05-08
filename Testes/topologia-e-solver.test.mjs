@@ -8,6 +8,7 @@ import { ConnectionModel } from '../js/domain/models/ConnectionModel.js';
 import { DrenoLogico } from '../js/domain/components/DrenoLogico.js';
 import { FonteLogica } from '../js/domain/components/FonteLogica.js';
 import { TanqueLogico } from '../js/domain/components/TanqueLogico.js';
+import { TrocadorCalorLogico } from '../js/domain/components/TrocadorCalorLogico.js';
 import { ValvulaLogica } from '../js/domain/components/ValvulaLogica.js';
 
 const DOMAIN_ROOT = path.resolve('js/domain');
@@ -227,6 +228,46 @@ test('solver mantém fluxo em série com conexão puramente lógica', () => {
     assert.ok(valvula.fluxoReal > 0, 'A válvula deve receber vazão na malha em série');
     assert.ok(dreno.vazaoRecebidaLps > 0, 'O dreno deve receber vazão na malha em série');
     assert.ok(engine.conexoes.every((conn) => conn.lastResolvedFlowLps >= 0), 'As conexões devem registrar vazões resolvidas válidas');
+});
+
+test('solver propaga temperatura alterada pelo trocador de calor', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-HX', 'Fonte-HX', 0, 0);
+    const trocador = new TrocadorCalorLogico('HX-01', 'TC-01', 120, 0);
+    const dreno = new DrenoLogico('D-HX', 'Dreno-HX', 240, 0);
+
+    fonte.pressaoFonteBar = 2;
+    fonte.vazaoMaxima = 40;
+    fonte.atualizarFluidoEntrada({
+        ...FLUID_PRESETS.agua,
+        temperatura: 20
+    }, { presetId: 'agua' });
+    trocador.temperaturaServicoC = 80;
+    trocador.uaWPorK = 8000;
+    dreno.pressaoSaidaBar = 0;
+
+    fonte.conectarSaida(trocador);
+    trocador.conectarSaida(dreno);
+
+    const entradaHx = new ConnectionModel({ sourceId: fonte.id, targetId: trocador.id });
+    const saidaHx = new ConnectionModel({ sourceId: trocador.id, targetId: dreno.id });
+
+    [fonte, trocador, dreno].forEach((component) => engine.add(component));
+    [entradaHx, saidaHx].forEach((connection) => engine.addConnection(connection));
+
+    runPhysicsSteps(engine, 30, 0.1);
+
+    const entradaState = engine.getConnectionState(entradaHx);
+    const saidaState = engine.getConnectionState(saidaHx);
+
+    assert.ok(saidaState.flowLps > 0, 'O trocador deve entregar vazao ao dreno');
+    assert.ok(trocador.fluxoReal > 0, 'O trocador deve registrar vazao passante');
+    assert.ok(saidaState.fluid.temperatura > entradaState.fluid.temperatura, 'A conexao de saida deve carregar fluido aquecido');
+    assert.ok(trocador.cargaTermicaW > 0, 'A carga termica deve ser positiva no aquecimento');
+    assert.ok(
+        Math.abs(fonte.fluxoReal - dreno.vazaoRecebidaLps) < 1e-6,
+        'A vazao deve ser conservada atraves do trocador'
+    );
 });
 
 test('solver distribui fluxo em bifurcação simples', () => {

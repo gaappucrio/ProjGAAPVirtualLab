@@ -4,6 +4,7 @@ import { DrenoLogico } from '../../domain/components/DrenoLogico.js';
 import { FonteLogica } from '../../domain/components/FonteLogica.js';
 import { cloneFluido } from '../../domain/components/Fluido.js';
 import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
+import { TrocadorCalorLogico } from '../../domain/components/TrocadorCalorLogico.js';
 import { ValvulaLogica } from '../../domain/components/ValvulaLogica.js';
 import { FabricaDeEquipamentos, updatePortStates } from '../../infrastructure/dom/ComponentVisualFactory.js';
 import { GRID_SIZE } from '../../Config.js';
@@ -65,6 +66,12 @@ const CLONEABLE_PROPERTIES_BY_TYPE = {
         'setpoint',
         'kp',
         'ki'
+    ],
+    heat_exchanger: [
+        'temperaturaServicoC',
+        'uaWPorK',
+        'perdaLocalK',
+        'efetividadeMaxima'
     ]
 };
 
@@ -73,6 +80,7 @@ function getComponentTypeKey(component) {
     if (component instanceof BombaLogica) return 'pump';
     if (component instanceof ValvulaLogica) return 'valve';
     if (component instanceof TanqueLogico) return 'tank';
+    if (component instanceof TrocadorCalorLogico) return 'heat_exchanger';
     if (component instanceof FonteLogica) return 'source';
     return null;
 }
@@ -217,6 +225,20 @@ function syncClonedComponentVisual(component) {
             fluidoConteudo
         }));
         component.notify(ComponentEventPayloads.setpointUpdate());
+        return;
+    }
+
+    if (component instanceof TrocadorCalorLogico) {
+        component.sincronizarMetricasFisicas?.();
+        component.notify(ComponentEventPayloads.state({
+            fluxoReal: component.fluxoReal,
+            temperaturaEntradaC: component.temperaturaEntradaC,
+            temperaturaSaidaC: component.temperaturaSaidaC,
+            deltaTemperaturaC: component.deltaTemperaturaC,
+            cargaTermicaW: component.cargaTermicaW,
+            efetividadeAtual: component.efetividadeAtual,
+            deltaPAtualBar: component.deltaPAtualBar
+        }));
     }
 }
 

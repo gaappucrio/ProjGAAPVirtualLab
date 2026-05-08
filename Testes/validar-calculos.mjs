@@ -6,6 +6,10 @@ import { BombaLogica } from '../js/domain/components/BombaLogica.js';
 import { mixFluidos } from '../js/domain/components/Fluido.js';
 import { FonteLogica } from '../js/domain/components/FonteLogica.js';
 import { TanqueLogico } from '../js/domain/components/TanqueLogico.js';
+import {
+    TrocadorCalorLogico,
+    calcularSaidaTrocadorCalor
+} from '../js/domain/components/TrocadorCalorLogico.js';
 import { VALVE_PROFILE_DEFINITIONS, ValvulaLogica } from '../js/domain/components/ValvulaLogica.js';
 import { ConnectionModel } from '../js/domain/models/ConnectionModel.js';
 import {
@@ -104,6 +108,49 @@ test('tanque normaliza altura util e bocais para manter hidrostatica fisica', ()
         1e-12,
         'Pressao hidrostatica deve seguir rho*g*h'
     );
+});
+
+test('trocador de calor usa efetividade NTU e conserva sentido termico', () => {
+    const resultado = calcularSaidaTrocadorCalor({
+        temperaturaEntradaC: 20,
+        temperaturaServicoC: 80,
+        uaWPorK: 4182,
+        vazaoLps: 1,
+        densidadeKgM3: 1000,
+        calorEspecificoJkgK: 4182,
+        efetividadeMaxima: 0.99
+    });
+
+    const efetividadeEsperada = 1 - Math.exp(-1);
+    approx(resultado.efetividade, efetividadeEsperada, 1e-12, 'Efetividade NTU');
+    approx(resultado.temperaturaSaidaC, 20 + (efetividadeEsperada * 60), 1e-9, 'Temperatura de saida aquecida');
+    approx(resultado.cargaTermicaW, resultado.capacidadeTermicaWPorK * resultado.deltaTemperaturaC, 1e-9, 'Carga termica por m_dot cp dT');
+
+    const resfriamento = calcularSaidaTrocadorCalor({
+        temperaturaEntradaC: 80,
+        temperaturaServicoC: 20,
+        uaWPorK: 4182,
+        vazaoLps: 1,
+        densidadeKgM3: 1000,
+        calorEspecificoJkgK: 4182
+    });
+
+    assert.ok(resfriamento.temperaturaSaidaC < 80, 'Servico frio deve resfriar o fluido');
+    assert.ok(resfriamento.cargaTermicaW < 0, 'Carga termica negativa indica resfriamento');
+});
+
+test('trocador de calor clona fluido de saida sem alterar composicao hidraulica', () => {
+    const trocador = new TrocadorCalorLogico('HX-01', 'TC-01', 0, 0);
+    const agua = FLUID_PRESETS.agua;
+
+    trocador.temperaturaServicoC = 80;
+    trocador.uaWPorK = 4182;
+    const saida = trocador.getFluidoSaidaPara(agua, 1);
+
+    assert.notEqual(saida, agua);
+    assert.equal(saida.densidade, agua.densidade);
+    assert.equal(saida.viscosidadeDinamicaPaS, agua.viscosidadeDinamicaPaS);
+    assert.ok(saida.temperatura > agua.temperatura);
 });
 
 test('fonte mantem propriedades de fluido de entrada independentes do fluido operante', () => {

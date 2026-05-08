@@ -1,6 +1,7 @@
 import { BombaLogica } from '../../domain/components/BombaLogica.js';
 import { DrenoLogico } from '../../domain/components/DrenoLogico.js';
 import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
+import { TrocadorCalorLogico } from '../../domain/components/TrocadorCalorLogico.js';
 import { ValvulaLogica } from '../../domain/components/ValvulaLogica.js';
 import { ComponentEventPayloads } from '../../application/events/EventPayloads.js';
 import { bindPropertyTabs } from '../../utils/PropertyTabs.js';
@@ -16,6 +17,7 @@ export function getComponentTypeKey(component) {
     if (component instanceof BombaLogica) return 'pump';
     if (component instanceof ValvulaLogica) return 'valve';
     if (component instanceof TanqueLogico) return 'tank';
+    if (component instanceof TrocadorCalorLogico) return 'heat_exchanger';
     return 'source';
 }
 

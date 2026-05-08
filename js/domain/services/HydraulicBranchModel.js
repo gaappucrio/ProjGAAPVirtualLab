@@ -2,6 +2,7 @@ import { BombaLogica } from '../components/BombaLogica.js';
 import { DrenoLogico } from '../components/DrenoLogico.js';
 import { FonteLogica } from '../components/FonteLogica.js';
 import { TanqueLogico } from '../components/TanqueLogico.js';
+import { TrocadorCalorLogico } from '../components/TrocadorCalorLogico.js';
 import { ValvulaLogica } from '../components/ValvulaLogica.js';
 import { clamp, flowFromBernoulli, pressureLossFromFlow, smoothFirstOrder } from '../components/BaseComponente.js';
 import {
@@ -196,11 +197,11 @@ export class HydraulicBranchModel {
     }
 
     isPressureForwardingTarget(target) {
-        return target instanceof ValvulaLogica || target instanceof BombaLogica;
+        return target instanceof ValvulaLogica || target instanceof BombaLogica || target instanceof TrocadorCalorLogico;
     }
 
     isPassThroughComponent(component) {
-        return component instanceof ValvulaLogica || component instanceof BombaLogica;
+        return component instanceof ValvulaLogica || component instanceof BombaLogica || component instanceof TrocadorCalorLogico;
     }
 
     balancePassThroughMass() {
@@ -265,6 +266,7 @@ export class HydraulicBranchModel {
         if (comp instanceof ValvulaLogica) {
             return comp.getAberturaNormalizadaAtual() > 0 && comp.getFluxoPendenteLps() > EPSILON_FLOW;
         }
+        if (comp instanceof TrocadorCalorLogico) return comp.getFluxoPendenteLps() > EPSILON_FLOW;
         return false;
     }
 
@@ -373,6 +375,23 @@ export class HydraulicBranchModel {
                 characteristicFactor: parametros.characteristicFactor,
                 effectiveCv: parametros.effectiveCv,
                 fluid: inletFluid || comp.getFluidoEntradaMisturado?.(this.context.getComponentFluid(comp)) || this.context.getComponentFluid(comp)
+            };
+        }
+
+        if (comp instanceof TrocadorCalorLogico) {
+            const parametros = comp.getParametrosHidraulicos();
+            const availableFlow = estimating ? limitedFlow(MAX_NETWORK_FLOW_LPS) : comp.getFluxoPendenteLps();
+            if (availableFlow <= EPSILON_FLOW) return null;
+
+            const fluidInlet = inletFluid || comp.getFluidoEntradaMisturado?.(this.context.fluidoOperante) || this.context.fluidoOperante;
+            const outletFluid = comp.getFluidoSaidaPara(fluidInlet, availableFlow);
+
+            return {
+                availableFlowLps: availableFlow,
+                pressureBar: inletPressureBar ?? comp.getPressaoEntradaBar(),
+                hydraulicAreaM2: Math.min(areaM2, parametros.hydraulicAreaM2),
+                localLossCoeff: parametros.localLossCoeff,
+                fluid: outletFluid
             };
         }
 
