@@ -194,6 +194,23 @@ test('cores visuais acompanham os presets de fluido', async () => {
     assert.notEqual(getFluidVisualStyle(misturaCustomizada).stroke, '#ff00ff');
 });
 
+test('gráfico de tanque usa a cor do fluido armazenado', async () => {
+    const { TanqueLogico } = await import('../js/domain/components/TanqueLogico.js');
+    const { createFluidoFromProperties } = await import('../js/domain/components/Fluido.js');
+    const { resolveTankChartColors } = await import('../js/infrastructure/charts/TankChartAdapter.js');
+
+    const tanque = new TanqueLogico('tank-color', 'T-Color', 0, 0);
+    tanque.fluidoConteudo = createFluidoFromProperties({
+        nome: 'Fluido magenta',
+        corVisual: '#ff00ff'
+    });
+
+    const colors = resolveTankChartColors(tanque);
+
+    assert.equal(colors.lineColor, '#ff00ff');
+    assert.equal(colors.fillColor, 'rgba(255, 0, 255, 0.2)');
+});
+
 test('presenter da fonte preserva custom selecionado mesmo com valores de preset', async () => {
     const { FonteLogica } = await import('../js/domain/components/FonteLogica.js');
     const { SOURCE_PROPERTIES_PRESENTER } = await import('../js/presentation/properties/component/BoundaryComponentPropertiesPresenter.js');
