@@ -4,6 +4,7 @@ import {
     toBaseValue,
     toDisplayValue
 } from '../../utils/Units.js';
+import { parseStrictNumber } from '../validation/InputValidator.js';
 import { byId, valueOf } from './PropertyDomAdapter.js';
 
 export function setFieldValue(id, value, category = null, digits = 2, suffix = '') {
@@ -31,12 +32,16 @@ export function displayStep(category, baseStep, digits = 6) {
 }
 
 export function inputBaseValue(category, id, fallback) {
-    const value = toBaseValue(category, parseFloat(valueOf(id)));
+    const displayValue = parseStrictNumber(valueOf(id));
+    if (!Number.isFinite(displayValue)) return fallback;
+    const value = toBaseValue(category, displayValue);
     return Number.isFinite(value) ? value : fallback;
 }
 
 export function rawBaseValue(category, rawValue, fallback = NaN) {
-    const value = toBaseValue(category, parseFloat(rawValue));
+    const displayValue = parseStrictNumber(rawValue);
+    if (!Number.isFinite(displayValue)) return fallback;
+    const value = toBaseValue(category, displayValue);
     return Number.isFinite(value) ? value : fallback;
 }
 

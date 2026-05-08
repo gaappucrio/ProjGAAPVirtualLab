@@ -26,6 +26,21 @@ function normalizeEndpoint(endpoint, fallbackType) {
     };
 }
 
+function finiteNumber(value) {
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : null;
+}
+
+function positiveNumber(value, fallback) {
+    const numericValue = finiteNumber(value);
+    return numericValue !== null && numericValue > 0 ? numericValue : fallback;
+}
+
+function nonNegativeNumber(value, fallback) {
+    const numericValue = finiteNumber(value);
+    return numericValue !== null && numericValue >= 0 ? numericValue : fallback;
+}
+
 export class ConnectionModel {
     constructor({
         id = nextConnectionId(),
@@ -47,14 +62,14 @@ export class ConnectionModel {
         this.targetId = targetId;
         this.sourceEndpoint = normalizeEndpoint(sourceEndpoint, 'out');
         this.targetEndpoint = normalizeEndpoint(targetEndpoint, 'in');
-        this.diameterM = Number(diameterM) || DEFAULT_PIPE_DIAMETER_M;
-        this.roughnessMm = Number(roughnessMm) || DEFAULT_PIPE_ROUGHNESS_MM;
-        this.extraLengthM = Number(extraLengthM) || DEFAULT_PIPE_EXTRA_LENGTH_M;
-        this.perdaLocalK = Number(perdaLocalK) || DEFAULT_PIPE_MINOR_LOSS;
-        this.designVelocityMps = Number(designVelocityMps) || DEFAULT_DESIGN_VELOCITY_MPS;
-        this.designFlowLps = Number(designFlowLps) || 0;
-        this.transientFlowLps = Number(transientFlowLps) || 0;
-        this.lastResolvedFlowLps = Number(lastResolvedFlowLps) || 0;
+        this.diameterM = positiveNumber(diameterM, DEFAULT_PIPE_DIAMETER_M);
+        this.roughnessMm = nonNegativeNumber(roughnessMm, DEFAULT_PIPE_ROUGHNESS_MM);
+        this.extraLengthM = nonNegativeNumber(extraLengthM, DEFAULT_PIPE_EXTRA_LENGTH_M);
+        this.perdaLocalK = nonNegativeNumber(perdaLocalK, DEFAULT_PIPE_MINOR_LOSS);
+        this.designVelocityMps = positiveNumber(designVelocityMps, DEFAULT_DESIGN_VELOCITY_MPS);
+        this.designFlowLps = nonNegativeNumber(designFlowLps, 0);
+        this.transientFlowLps = nonNegativeNumber(transientFlowLps, 0);
+        this.lastResolvedFlowLps = nonNegativeNumber(lastResolvedFlowLps, 0);
         this.areaM2 = areaFromDiameter(this.diameterM);
     }
 

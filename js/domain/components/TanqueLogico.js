@@ -9,6 +9,7 @@ import { EPSILON_FLOW, pressureFromHeadBar } from '../../utils/Units.js';
 const TOLERANCIA_ERRO_SATURACAO = -0.02;
 const FATOR_EXCESSO_ENTRADA = 1.02;
 const U_SAIDA_TOTALMENTE_ABERTA = -0.99;
+const ALTURA_UTIL_MINIMA_M = 0.5;
 
 export class TanqueLogico extends ComponenteFisico {
     constructor(id, tag, x, y) {
@@ -44,8 +45,16 @@ export class TanqueLogico extends ComponenteFisico {
         return clamp(this.setpoint / 100, 0, 1);
     }
 
+    normalizarAlturaUtil() {
+        const alturaUtil = Number(this.alturaUtilMetros);
+        this.alturaUtilMetros = Number.isFinite(alturaUtil) && alturaUtil >= ALTURA_UTIL_MINIMA_M
+            ? alturaUtil
+            : ALTURA_UTIL_MINIMA_M;
+        return this.alturaUtilMetros;
+    }
+
     getAlturaLiquidoParaNivelM(nivelNormalizado) {
-        return clamp(nivelNormalizado, 0, 1) * this.alturaUtilMetros;
+        return clamp(nivelNormalizado, 0, 1) * this.normalizarAlturaUtil();
     }
 
     getAlturaLiquidoM() {
@@ -53,8 +62,11 @@ export class TanqueLogico extends ComponenteFisico {
     }
 
     normalizarAlturasBocais() {
-        this.alturaBocalEntradaM = clamp(this.alturaBocalEntradaM, 0, this.alturaUtilMetros);
-        this.alturaBocalSaidaM = clamp(this.alturaBocalSaidaM, 0, this.alturaUtilMetros);
+        const alturaUtil = this.normalizarAlturaUtil();
+        const alturaEntrada = Number(this.alturaBocalEntradaM);
+        const alturaSaida = Number(this.alturaBocalSaidaM);
+        this.alturaBocalEntradaM = clamp(Number.isFinite(alturaEntrada) ? alturaEntrada : 0, 0, alturaUtil);
+        this.alturaBocalSaidaM = clamp(Number.isFinite(alturaSaida) ? alturaSaida : 0, 0, alturaUtil);
     }
 
     getPressaoHidrostaticaParaNivelBar(fluido, nivelNormalizado) {

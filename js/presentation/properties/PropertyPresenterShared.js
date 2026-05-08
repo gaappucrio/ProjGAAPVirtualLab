@@ -1,6 +1,6 @@
 import { ComponentEventPayloads, EngineEventPayloads } from '../../application/events/EventPayloads.js';
 import { COMPONENT_EVENTS, ENGINE_EVENTS } from '../../application/events/EventTypes.js';
-import { InputValidator, clearInputError, showInputError } from '../validation/InputValidator.js';
+import { InputValidator, clearInputError, parseStrictNumber, showInputError } from '../validation/InputValidator.js';
 import { getPresentationEngine } from '../context/PresentationEngineContext.js';
 import { renderPropertyTabs } from '../../utils/PropertyTabs.js';
 import { TOOLTIPS } from '../../utils/Tooltips.js';
@@ -68,8 +68,10 @@ export const displayEditableUnitValue = (category, baseValue, digits = 3) => {
 };
 export const displayBound = (category, baseValue, digits = 3) => Number(toDisplayValue(category, baseValue).toFixed(digits));
 export const displayStep = (category, baseStep, digits = 6) => Math.max(Number(toDisplayValue(category, baseStep).toFixed(digits)), Number.EPSILON);
-export const baseFromDisplay = (category, rawValue, fallback) => {
-    const converted = toBaseValue(category, parseFloat(rawValue));
+export const baseFromDisplay = (category, rawValue, fallback = NaN) => {
+    const displayValue = parseStrictNumber(rawValue);
+    if (!Number.isFinite(displayValue)) return fallback;
+    const converted = toBaseValue(category, displayValue);
     return Number.isFinite(converted) ? converted : fallback;
 };
 export const notifyPanelRefresh = () => getPresentationEngine().notify(EngineEventPayloads.panelUpdate(0));

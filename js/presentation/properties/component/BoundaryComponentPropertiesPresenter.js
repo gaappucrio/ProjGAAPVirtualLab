@@ -152,6 +152,7 @@ function applySourceFluidFromInputs(comp, { preferredPresetId = null } = {}) {
     const fluido = ensureSourceFluid(comp);
     const inputDensity = byId('input-source-fluid-density');
     const inputViscosity = byId('input-source-fluid-viscosity');
+    const inputTemp = byId('input-source-fluid-temp');
     const inputVapor = byId('input-source-fluid-vapor');
     const inputAtm = byId('input-source-fluid-atm');
 
@@ -169,8 +170,20 @@ function applySourceFluidFromInputs(comp, { preferredPresetId = null } = {}) {
     }
     clearInputError(inputViscosity);
 
+    const temperatureResult = InputValidator.validateNumber(
+        temperatureInputValue('input-source-fluid-temp', NaN),
+        -20,
+        200,
+        'Temperatura'
+    );
+    if (!temperatureResult.valid) {
+        showInputError(inputTemp, temperatureResult.error);
+        return;
+    }
+    clearInputError(inputTemp);
+
     const vaporResult = InputValidator.validatePressure(
-        pressureInputValue('input-source-fluid-vapor', fluido.pressaoVaporBar),
+        pressureInputValue('input-source-fluid-vapor', NaN),
         5,
         'Pressão de Vapor'
     );
@@ -181,7 +194,7 @@ function applySourceFluidFromInputs(comp, { preferredPresetId = null } = {}) {
     clearInputError(inputVapor);
 
     const atmResult = InputValidator.validatePressure(
-        pressureInputValue('input-source-fluid-atm', fluido.pressaoAtmosfericaBar),
+        pressureInputValue('input-source-fluid-atm', NaN),
         2,
         'Pressão Atmosférica'
     );
@@ -196,7 +209,7 @@ function applySourceFluidFromInputs(comp, { preferredPresetId = null } = {}) {
         {
             nome: InputValidator.sanitizeText(valueOf('input-source-fluid-name'), 50),
             densidade: densityResult.value,
-            temperatura: temperatureInputValue('input-source-fluid-temp', fluido.temperatura),
+            temperatura: temperatureResult.value,
             viscosidadeDinamicaPaS: viscosityResult.value,
             pressaoVaporBar: vaporResult.value,
             pressaoAtmosfericaBar: atmResult.value,
@@ -318,7 +331,7 @@ export const SOURCE_PROPERTIES_PRESENTER = {
         bind('input-pressao-fonte', 'change', () => {
             validateInputWithFeedback(
                 inputPressure,
-                (value, name) => InputValidator.validatePressure(baseFromDisplay('pressure', value, 0), 20, name),
+                (value, name) => InputValidator.validatePressure(baseFromDisplay('pressure', value), 20, name),
                 'Pressão da fonte',
                 (value) => { comp.pressaoFonteBar = value; }
             );
@@ -327,7 +340,7 @@ export const SOURCE_PROPERTIES_PRESENTER = {
         bind('input-vazao-fonte-max', 'change', () => {
             validateInputWithFeedback(
                 inputFlow,
-                (value, name) => InputValidator.validateFlow(baseFromDisplay('flow', value, 0), 500, name),
+                (value, name) => InputValidator.validateFlow(baseFromDisplay('flow', value), 500, name),
                 'Vazão máxima',
                 (value) => { comp.vazaoMaxima = value; }
             );
@@ -354,7 +367,7 @@ export const SINK_PROPERTIES_PRESENTER = {
         bind('input-pressao-dreno', 'change', () => {
             validateInputWithFeedback(
                 inputPressure,
-                (value, name) => InputValidator.validatePressure(baseFromDisplay('pressure', value, 0), 10, name),
+                (value, name) => InputValidator.validatePressure(baseFromDisplay('pressure', value), 10, name),
                 'Pressão de saída',
                 (value) => { comp.pressaoSaidaBar = value; }
             );

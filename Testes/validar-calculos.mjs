@@ -11,6 +11,7 @@ import { ConnectionModel } from '../js/domain/models/ConnectionModel.js';
 import {
     diameterFromFlowVelocity,
     diameterFromM3sVelocity,
+    ensureConnectionProperties,
     getSuggestedDiameterForConnection
 } from '../js/domain/services/PipeHydraulics.js';
 import { buildPumpCurveDatasets } from '../js/infrastructure/charts/PumpChartAdapter.js';
@@ -46,6 +47,62 @@ test('dimensionamento por continuidade calcula diâmetro a partir de vazão e ve
         0.08,
         1e-12,
         'Diâmetro por vazão interna em L/s e v em m/s'
+    );
+});
+
+test('propriedades hidraulicas de conexao preservam zero fisico e reparam invalidos', () => {
+    const semPerdas = new ConnectionModel({
+        sourceId: 'F-01',
+        targetId: 'D-01',
+        diameterM: 0.05,
+        roughnessMm: 0,
+        extraLengthM: 0,
+        perdaLocalK: 0
+    });
+
+    assert.equal(semPerdas.roughnessMm, 0);
+    assert.equal(semPerdas.extraLengthM, 0);
+    assert.equal(semPerdas.perdaLocalK, 0);
+    assert.ok(semPerdas.areaM2 > 0, 'Diametro valido deve gerar area positiva');
+
+    const corrigida = ensureConnectionProperties({
+        diameterM: -0.1,
+        roughnessMm: -1,
+        extraLengthM: -2,
+        perdaLocalK: -3,
+        designVelocityMps: 0,
+        designFlowLps: -4,
+        transientFlowLps: Number.POSITIVE_INFINITY,
+        lastResolvedFlowLps: Number.NaN
+    });
+
+    assert.ok(corrigida.diameterM > 0, 'Diametro invalido deve voltar ao padrao positivo');
+    assert.ok(corrigida.roughnessMm >= 0, 'Rugosidade nao pode ficar negativa');
+    assert.ok(corrigida.extraLengthM >= 0, 'Comprimento extra nao pode ficar negativo');
+    assert.ok(corrigida.perdaLocalK >= 0, 'Perda local nao pode ficar negativa');
+    assert.ok(corrigida.designVelocityMps > 0, 'Velocidade de projeto deve ficar positiva');
+    assert.equal(corrigida.designFlowLps, 0);
+    assert.equal(corrigida.transientFlowLps, 0);
+    assert.equal(corrigida.lastResolvedFlowLps, 0);
+    assert.ok(corrigida.areaM2 > 0, 'Conexao corrigida deve manter area hidraulica positiva');
+});
+
+test('tanque normaliza altura util e bocais para manter hidrostatica fisica', () => {
+    const tanque = new TanqueLogico('T-NORM', 'Tanque-Norm', 0, 0);
+
+    tanque.alturaUtilMetros = -2;
+    tanque.alturaBocalEntradaM = -1;
+    tanque.alturaBocalSaidaM = 99;
+    tanque.normalizarAlturasBocais();
+
+    assert.ok(tanque.alturaUtilMetros >= 0.5, 'Altura util deve permanecer positiva');
+    assert.ok(tanque.alturaBocalEntradaM >= 0 && tanque.alturaBocalEntradaM <= tanque.alturaUtilMetros);
+    assert.ok(tanque.alturaBocalSaidaM >= 0 && tanque.alturaBocalSaidaM <= tanque.alturaUtilMetros);
+    approx(
+        tanque.getPressaoHidrostaticaParaNivelBar(ENGINE.fluidoOperante, 1),
+        pressureFromHeadBar(tanque.alturaUtilMetros, ENGINE.fluidoOperante.densidade),
+        1e-12,
+        'Pressao hidrostatica deve seguir rho*g*h'
     );
 });
 
