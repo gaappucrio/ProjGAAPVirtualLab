@@ -2,6 +2,7 @@ import { BombaLogica } from '../../domain/components/BombaLogica.js';
 import { DrenoLogico } from '../../domain/components/DrenoLogico.js';
 import { FonteLogica } from '../../domain/components/FonteLogica.js';
 import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
+import { TrocadorCalorLogico } from '../../domain/components/TrocadorCalorLogico.js';
 import { ValvulaLogica } from '../../domain/components/ValvulaLogica.js';
 import { getFluidVisualStyle } from '../../infrastructure/rendering/FluidVisualStyle.js';
 
@@ -31,6 +32,7 @@ const COMPONENT_COLUMNS = [
     'Densidade do fluido (kg/m³)',
     'Temperatura do fluido (°C)',
     'Viscosidade dinâmica (Pa.s)',
+    'Calor específico (J/kg.K)',
     'Pressão de vapor (bar)',
     'Pressão atmosférica (bar)',
     'Cor visual do fluido',
@@ -63,6 +65,17 @@ const COMPONENT_COLUMNS = [
     'Rangeabilidade',
     'Tempo de curso (s)',
     'Queda de pressão na válvula (bar)',
+    'Temperatura de serviço do trocador (°C)',
+    'UA do trocador (W/K)',
+    'Perda local do trocador K',
+    'Efetividade máxima do trocador',
+    'Efetividade atual do trocador',
+    'Temperatura de entrada do trocador (°C)',
+    'Temperatura de saída do trocador (°C)',
+    'Delta T do trocador (°C)',
+    'Carga térmica do trocador (W)',
+    'Vazão no trocador (L/s)',
+    'Queda de pressão no trocador (bar)',
     'Capacidade máxima do tanque (L)',
     'Volume atual do tanque (L)',
     'Nível do tanque (%)',
@@ -154,6 +167,7 @@ function getComponentType(component) {
     if (component instanceof DrenoLogico) return 'Saída';
     if (component instanceof BombaLogica) return 'Bomba';
     if (component instanceof ValvulaLogica) return 'Válvula';
+    if (component instanceof TrocadorCalorLogico) return 'Trocador de calor';
     if (component instanceof TanqueLogico) return 'Tanque';
     return 'Componente';
 }
@@ -165,6 +179,7 @@ function assignFluidColumns(row, prefix, fluid) {
     row[`${prefix}Densidade do fluido (kg/m³)`] = numberValue(fluid.densidade, 3);
     row[`${prefix}Temperatura do fluido (°C)`] = numberValue(fluid.temperatura, 3);
     row[`${prefix}Viscosidade dinâmica (Pa.s)`] = numberValue(fluid.viscosidadeDinamicaPaS, 6);
+    row[`${prefix}Calor específico (J/kg.K)`] = numberValue(fluid.calorEspecificoJkgK, 3);
     row[`${prefix}Pressão de vapor (bar)`] = numberValue(fluid.pressaoVaporBar, 5);
     row[`${prefix}Pressão atmosférica (bar)`] = numberValue(fluid.pressaoAtmosfericaBar, 5);
     row[`${prefix}Cor visual do fluido`] = getFluidVisualStyle(fluid).stroke;
@@ -234,6 +249,20 @@ function buildComponentRow(component) {
         row.Rangeabilidade = numberValue(component.rangeabilidade, 5);
         row['Tempo de curso (s)'] = numberValue(component.tempoCursoSegundos, 5);
         row['Queda de pressão na válvula (bar)'] = numberValue(component.deltaPAtualBar, 5);
+    }
+
+    if (component instanceof TrocadorCalorLogico) {
+        row['Temperatura de serviço do trocador (°C)'] = numberValue(component.temperaturaServicoC, 3);
+        row['UA do trocador (W/K)'] = numberValue(component.uaWPorK, 3);
+        row['Perda local do trocador K'] = numberValue(component.perdaLocalK, 5);
+        row['Efetividade máxima do trocador'] = numberValue(component.efetividadeMaxima, 5);
+        row['Efetividade atual do trocador'] = numberValue(component.efetividadeAtual, 5);
+        row['Temperatura de entrada do trocador (°C)'] = numberValue(component.temperaturaEntradaC, 3);
+        row['Temperatura de saída do trocador (°C)'] = numberValue(component.temperaturaSaidaC, 3);
+        row['Delta T do trocador (°C)'] = numberValue(component.deltaTemperaturaC, 3);
+        row['Carga térmica do trocador (W)'] = numberValue(component.cargaTermicaW, 3);
+        row['Vazão no trocador (L/s)'] = numberValue(component.fluxoReal, 5);
+        row['Queda de pressão no trocador (bar)'] = numberValue(component.deltaPAtualBar, 5);
     }
 
     if (component instanceof TanqueLogico) {

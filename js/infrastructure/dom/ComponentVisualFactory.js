@@ -10,6 +10,8 @@ import { getComponentVisualSpec } from './ComponentVisualSpecs.js';
 import { registerComponentVisual } from './ComponentVisualRegistry.js';
 export { updatePortStates } from '../../utils/PortStateManager.js';
 
+let nextVisualSequence = 1;
+
 /* A função obterProximaTag é responsável por gerar uma nova tag única para um componente do mesmo tipo,
 garantindo que não haja duplicatas. Ela verifica as tags existentes dos componentes no ENGINE,
 filtra aquelas que começam com o mesmo prefixo (indicando o mesmo tipo de componente),
@@ -18,6 +20,27 @@ export function obterProximaTag(prefixo) {
     const numeros = ENGINE.componentes.map(c => c.tag).filter(t => t.startsWith(prefixo + '-')).map(t => parseInt(t.split('-')[1]));
     let i = 1; while (numeros.includes(i)) i++;
     return `${prefixo}-${String(i).padStart(2, '0')}`;
+}
+
+function createComponentId(tipo) {
+    const sequence = nextVisualSequence;
+    nextVisualSequence += 1;
+    return `${tipo}-${Date.now()}-${sequence}`;
+}
+
+function resetPipeSelection() {
+    document.querySelectorAll('.pipe-line').forEach(el => {
+        el.classList.remove('selected');
+        if (el.classList.contains('active')) el.setAttribute("marker-end", "url(#arrow-active)");
+        else el.setAttribute("marker-end", "url(#arrow)");
+    });
+}
+
+function syncComponentSelectionVisuals(selectedComponents) {
+    const selectedIds = new Set((selectedComponents || []).map(component => component.id));
+    document.querySelectorAll('.placed-component').forEach(el => {
+        el.classList.toggle('selected', selectedIds.has(el.dataset.id));
+    });
 }
 
 // Função Global para gerenciar as animações das portas e indicar visualmente quais estão conectadas ou não.
@@ -43,7 +66,7 @@ export class FabricaDeEquipamentos {
         const visualSpec = getComponentVisualSpec(tipo);
         if (!spec || !visualSpec) return console.error("Componente não registrado:", tipo);
 
-        const id = tipo + '-' + Date.now();
+        const id = createComponentId(tipo);
         const visual = document.createElement('div');
         visual.className = 'placed-component';
         visual.style.left = `${x}px`; visual.style.top = `${y}px`; visual.style.zIndex = '10';
@@ -64,15 +87,21 @@ export class FabricaDeEquipamentos {
             if (visualSpec.setup) visualSpec.setup(visual, logica, id);
             ENGINE.add(logica);
             registerComponentVisual(logica, visual);
-            visual.addEventListener('mousedown', () => {
+            visual.addEventListener('mousedown', (event) => {
+                resetPipeSelection();
+
+                if (event.ctrlKey || event.metaKey) {
+                    ENGINE.toggleComponentSelection(logica);
+                    syncComponentSelectionVisuals(ENGINE.selectedComponents);
+                    return;
+                }
+
+                if (visual.classList.contains('selected') && ENGINE.selectedComponents.length > 1) {
+                    return;
+                }
+
                 ENGINE.selectComponent(logica);
-                document.querySelectorAll('.placed-component').forEach(el => el.classList.remove('selected'));
-                document.querySelectorAll('.pipe-line').forEach(el => {
-                    el.classList.remove('selected');
-                    if (el.classList.contains('active')) el.setAttribute("marker-end", "url(#arrow-active)");
-                    else el.setAttribute("marker-end", "url(#arrow)");
-                });
-                visual.classList.add('selected');
+                syncComponentSelectionVisuals(ENGINE.selectedComponents);
             });
         }
 

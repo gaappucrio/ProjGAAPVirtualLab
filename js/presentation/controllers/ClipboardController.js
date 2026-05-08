@@ -4,11 +4,14 @@ import { DrenoLogico } from '../../domain/components/DrenoLogico.js';
 import { FonteLogica } from '../../domain/components/FonteLogica.js';
 import { cloneFluido } from '../../domain/components/Fluido.js';
 import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
+import { TrocadorCalorLogico } from '../../domain/components/TrocadorCalorLogico.js';
 import { ValvulaLogica } from '../../domain/components/ValvulaLogica.js';
+import { ConnectionModel } from '../../domain/models/ConnectionModel.js';
 import { FabricaDeEquipamentos, updatePortStates } from '../../infrastructure/dom/ComponentVisualFactory.js';
 import { GRID_SIZE } from '../../Config.js';
 import { isEnglishLanguage } from '../../utils/LanguageManager.js';
 import { makeComponentDraggable } from './DragDropController.js';
+import { updateAllPipes } from './PipeController.js';
 
 const PASTE_OFFSET = GRID_SIZE;
 
@@ -65,6 +68,12 @@ const CLONEABLE_PROPERTIES_BY_TYPE = {
         'setpoint',
         'kp',
         'ki'
+    ],
+    heat_exchanger: [
+        'temperaturaServicoC',
+        'uaWPorK',
+        'perdaLocalK',
+        'efetividadeMaxima'
     ]
 };
 
@@ -73,6 +82,7 @@ function getComponentTypeKey(component) {
     if (component instanceof BombaLogica) return 'pump';
     if (component instanceof ValvulaLogica) return 'valve';
     if (component instanceof TanqueLogico) return 'tank';
+    if (component instanceof TrocadorCalorLogico) return 'heat_exchanger';
     if (component instanceof FonteLogica) return 'source';
     return null;
 }
@@ -130,6 +140,45 @@ export function createComponentClipboardSnapshot(component) {
         x: Number(component.x) || 0,
         y: Number(component.y) || 0,
         properties
+    };
+}
+
+function createConnectionClipboardSnapshot(connection) {
+    return {
+        sourceId: connection.sourceId,
+        targetId: connection.targetId,
+        sourceEndpoint: cloneSnapshotValue(connection.sourceEndpoint),
+        targetEndpoint: cloneSnapshotValue(connection.targetEndpoint),
+        diameterM: connection.diameterM,
+        roughnessMm: connection.roughnessMm,
+        extraLengthM: connection.extraLengthM,
+        perdaLocalK: connection.perdaLocalK,
+        designVelocityMps: connection.designVelocityMps,
+        designFlowLps: connection.designFlowLps
+    };
+}
+
+export function createComponentGroupClipboardSnapshot(components, connections = []) {
+    const selectedComponents = [...new Set((components || []).filter(Boolean))];
+    if (selectedComponents.length === 0) return null;
+    if (selectedComponents.length === 1) return createComponentClipboardSnapshot(selectedComponents[0]);
+
+    const selectedIds = new Set(selectedComponents.map((component) => component.id));
+    const componentSnapshots = selectedComponents
+        .map((component) => ({
+            originalId: component.id,
+            snapshot: createComponentClipboardSnapshot(component)
+        }))
+        .filter((entry) => entry.snapshot);
+
+    if (componentSnapshots.length === 0) return null;
+
+    return {
+        kind: 'component-group',
+        components: componentSnapshots,
+        connections: (connections || [])
+            .filter((connection) => selectedIds.has(connection.sourceId) && selectedIds.has(connection.targetId))
+            .map((connection) => createConnectionClipboardSnapshot(connection))
     };
 }
 
@@ -217,16 +266,36 @@ function syncClonedComponentVisual(component) {
             fluidoConteudo
         }));
         component.notify(ComponentEventPayloads.setpointUpdate());
+        return;
+    }
+
+    if (component instanceof TrocadorCalorLogico) {
+        component.sincronizarMetricasFisicas?.();
+        component.notify(ComponentEventPayloads.state({
+            fluxoReal: component.fluxoReal,
+            temperaturaEntradaC: component.temperaturaEntradaC,
+            temperaturaSaidaC: component.temperaturaSaidaC,
+            deltaTemperaturaC: component.deltaTemperaturaC,
+            cargaTermicaW: component.cargaTermicaW,
+            efetividadeAtual: component.efetividadeAtual,
+            deltaPAtualBar: component.deltaPAtualBar
+        }));
     }
 }
 
-function getSelectedComponent(engine) {
-    if (engine.selectedComponent) return engine.selectedComponent;
-    const selectedVisual = document.querySelector('.placed-component.selected');
-    return selectedVisual?.logica || null;
+function getSelectedComponents(engine) {
+    if (engine.selectedComponents?.length) return engine.selectedComponents;
+
+    const selectedVisuals = [...document.querySelectorAll('.placed-component.selected')]
+        .map((element) => element.logica)
+        .filter(Boolean);
+
+    if (selectedVisuals.length) return selectedVisuals;
+    if (engine.selectedComponent) return [engine.selectedComponent];
+    return [];
 }
 
-function pasteComponentFromSnapshot({ engine, snapshot, pasteCount }) {
+function pasteComponentFromSnapshot({ engine, snapshot, pasteCount, selectAfterPaste = true }) {
     const workspaceCanvas = document.getElementById('workspace-canvas');
     if (!workspaceCanvas || !snapshot) return null;
 
@@ -247,12 +316,69 @@ function pasteComponentFromSnapshot({ engine, snapshot, pasteCount }) {
     makeComponentDraggable(visual);
     syncClonedComponentVisual(visual.logica);
 
-    clearVisualSelection();
-    visual.classList.add('selected');
-    engine.selectComponent(visual.logica);
-    updatePortStates();
+    if (selectAfterPaste) {
+        clearVisualSelection();
+        visual.classList.add('selected');
+        engine.selectComponent(visual.logica);
+        updatePortStates();
+    }
 
     return visual.logica;
+}
+
+function pasteGroupFromSnapshot({ engine, snapshot, pasteCount }) {
+    if (!snapshot?.components?.length) return [];
+
+    const clonedByOriginalId = new Map();
+    const clonedComponents = [];
+
+    snapshot.components.forEach((entry) => {
+        const cloned = pasteComponentFromSnapshot({
+            engine,
+            snapshot: entry.snapshot,
+            pasteCount,
+            selectAfterPaste: false
+        });
+
+        if (!cloned) return;
+        clonedByOriginalId.set(entry.originalId, cloned);
+        clonedComponents.push(cloned);
+    });
+
+    snapshot.connections?.forEach((connectionSnapshot) => {
+        const sourceComponent = clonedByOriginalId.get(connectionSnapshot.sourceId);
+        const targetComponent = clonedByOriginalId.get(connectionSnapshot.targetId);
+        if (!sourceComponent || !targetComponent) return;
+
+        sourceComponent.conectarSaida(targetComponent);
+        const connection = new ConnectionModel({
+            ...connectionSnapshot,
+            sourceId: sourceComponent.id,
+            targetId: targetComponent.id,
+            sourceEndpoint: cloneSnapshotValue(connectionSnapshot.sourceEndpoint),
+            targetEndpoint: cloneSnapshotValue(connectionSnapshot.targetEndpoint)
+        });
+        engine.addConnection(connection);
+    });
+
+    clearVisualSelection();
+    const selectedIds = new Set(clonedComponents.map((component) => component.id));
+    document.querySelectorAll('.placed-component').forEach((element) => {
+        element.classList.toggle('selected', selectedIds.has(element.dataset.id));
+    });
+    engine.selectComponents(clonedComponents);
+    updatePortStates();
+    updateAllPipes();
+
+    return clonedComponents;
+}
+
+function pasteClipboardSnapshot({ engine, snapshot, pasteCount }) {
+    if (snapshot?.kind === 'component-group') {
+        return pasteGroupFromSnapshot({ engine, snapshot, pasteCount });
+    }
+
+    return pasteComponentFromSnapshot({ engine, snapshot, pasteCount });
 }
 
 export function setupClipboardController({ engine } = {}) {
@@ -268,10 +394,10 @@ export function setupClipboardController({ engine } = {}) {
         const key = String(event.key || '').toLowerCase();
 
         if (key === 'c') {
-            const component = getSelectedComponent(engine);
-            if (!component) return;
+            const selectedComponents = getSelectedComponents(engine);
+            if (!selectedComponents.length) return;
 
-            copiedSnapshot = createComponentClipboardSnapshot(component);
+            copiedSnapshot = createComponentGroupClipboardSnapshot(selectedComponents, engine.conexoes);
             pasteCount = 0;
             if (copiedSnapshot) event.preventDefault();
             return;
@@ -282,7 +408,7 @@ export function setupClipboardController({ engine } = {}) {
 
             event.preventDefault();
             pasteCount += 1;
-            pasteComponentFromSnapshot({ engine, snapshot: copiedSnapshot, pasteCount });
+            pasteClipboardSnapshot({ engine, snapshot: copiedSnapshot, pasteCount });
         }
     });
 }

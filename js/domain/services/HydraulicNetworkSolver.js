@@ -1,6 +1,7 @@
 import { BombaLogica } from '../components/BombaLogica.js';
 import { FonteLogica } from '../components/FonteLogica.js';
 import { TanqueLogico } from '../components/TanqueLogico.js';
+import { TrocadorCalorLogico } from '../components/TrocadorCalorLogico.js';
 import { ValvulaLogica } from '../components/ValvulaLogica.js';
 import { EPSILON_FLOW } from '../../utils/Units.js';
 
@@ -88,7 +89,11 @@ export class HydraulicNetworkSolver {
                 const deliveredFlow = hydraulicModel.applyBranchFlow(comp, item.conn, supply, item.estimate, branchFlow, dt);
                 emittedFlowLps += deliveredFlow;
                 const target = network.getComponentById(item.conn.targetId);
-                if (deliveredFlow > EPSILON_FLOW && (target instanceof BombaLogica || target instanceof ValvulaLogica)) {
+                if (deliveredFlow > EPSILON_FLOW && (
+                    target instanceof BombaLogica
+                    || target instanceof ValvulaLogica
+                    || target instanceof TrocadorCalorLogico
+                )) {
                     enqueue(target);
                 }
             });

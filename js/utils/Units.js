@@ -20,6 +20,7 @@ export const PADROES_HIDRAULICOS = Object.freeze({
     perdaEntradaPadraoK: 0.35,
     velocidadeProjetoPadraoMps: 2.0,
     viscosidadePadraoPaS: 0.00089,
+    calorEspecificoPadraoJkgK: 4182,
     pressaoVaporPadraoBar: 0.0317,
     pressaoAtmosfericaPadraoBar: 1.01325,
     vazaoMaximaRedeLps: 500,
@@ -37,6 +38,7 @@ export const DEFAULT_PIPE_MINOR_LOSS = PADROES_HIDRAULICOS.perdaLocalPadraoK;
 export const DEFAULT_ENTRY_LOSS = PADROES_HIDRAULICOS.perdaEntradaPadraoK;
 export const DEFAULT_DESIGN_VELOCITY_MPS = PADROES_HIDRAULICOS.velocidadeProjetoPadraoMps;
 export const DEFAULT_FLUID_VISCOSITY_PA_S = PADROES_HIDRAULICOS.viscosidadePadraoPaS;
+export const DEFAULT_FLUID_SPECIFIC_HEAT_JKGK = PADROES_HIDRAULICOS.calorEspecificoPadraoJkgK;
 export const DEFAULT_FLUID_VAPOR_PRESSURE_BAR = PADROES_HIDRAULICOS.pressaoVaporPadraoBar;
 export const DEFAULT_ATMOSPHERIC_PRESSURE_BAR = PADROES_HIDRAULICOS.pressaoAtmosfericaPadraoBar;
 export const MAX_NETWORK_FLOW_LPS = PADROES_HIDRAULICOS.vazaoMaximaRedeLps;

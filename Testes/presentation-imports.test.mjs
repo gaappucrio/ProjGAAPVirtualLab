@@ -13,6 +13,7 @@ const PRESENTATION_MODULES = [
     '../js/presentation/properties/DefaultPropertiesPresenter.js',
     '../js/presentation/properties/TankSaturationAlertPresenter.js',
     '../js/presentation/properties/component/BoundaryComponentPropertiesPresenter.js',
+    '../js/presentation/properties/component/HeatExchangerComponentPropertiesPresenter.js',
     '../js/presentation/properties/component/PumpComponentPropertiesPresenter.js',
     '../js/presentation/properties/component/TankComponentPropertiesPresenter.js',
     '../js/presentation/properties/component/ValveComponentPropertiesPresenter.js'
@@ -101,6 +102,7 @@ test('clipboard de componentes preserva propriedades clonaveis e sufixo por idio
     } = await import('../js/presentation/controllers/ClipboardController.js');
     const { FonteLogica } = await import('../js/domain/components/FonteLogica.js');
     const { BombaLogica } = await import('../js/domain/components/BombaLogica.js');
+    const { TrocadorCalorLogico } = await import('../js/domain/components/TrocadorCalorLogico.js');
     const { setLanguage } = await import('../js/utils/LanguageManager.js');
 
     setLanguage('pt');
@@ -150,10 +152,67 @@ test('clipboard de componentes preserva propriedades clonaveis e sufixo por idio
     assert.equal(bombaClone.pressaoMaxima, 6.5);
     assert.equal(bombaClone.tempoRampaSegundos, 2.75);
 
+    const trocador = new TrocadorCalorLogico('hx-01', 'TC-01', 0, 0);
+    trocador.temperaturaServicoC = 12;
+    trocador.uaWPorK = 4500;
+    trocador.perdaLocalK = 2.2;
+    trocador.efetividadeMaxima = 0.8;
+
+    const trocadorSnapshot = createComponentClipboardSnapshot(trocador);
+    const trocadorClone = new TrocadorCalorLogico('hx-02', 'TC-02', 0, 0);
+    applyComponentClipboardSnapshot(trocadorSnapshot, trocadorClone, {
+        tag: buildClonedComponentTag(trocadorSnapshot.tag)
+    });
+
+    assert.equal(trocadorClone.tag, 'TC-01 - copia');
+    assert.equal(trocadorClone.temperaturaServicoC, 12);
+    assert.equal(trocadorClone.uaWPorK, 4500);
+    assert.equal(trocadorClone.perdaLocalK, 2.2);
+    assert.equal(trocadorClone.efetividadeMaxima, 0.8);
+
     setLanguage('en');
     assert.equal(buildClonedComponentTag('Pump-01'), 'Pump-01 - copy');
 
     setLanguage('pt');
+});
+
+test('clipboard de grupo preserva componentes selecionados e conexoes internas', async () => {
+    const {
+        createComponentGroupClipboardSnapshot
+    } = await import('../js/presentation/controllers/ClipboardController.js');
+    const { ConnectionModel } = await import('../js/domain/models/ConnectionModel.js');
+    const { FonteLogica } = await import('../js/domain/components/FonteLogica.js');
+    const { ValvulaLogica } = await import('../js/domain/components/ValvulaLogica.js');
+    const { DrenoLogico } = await import('../js/domain/components/DrenoLogico.js');
+
+    const fonte = new FonteLogica('source-01', 'Entrada-01', 20, 40);
+    const valvula = new ValvulaLogica('valve-01', 'V-01', 120, 40);
+    const dreno = new DrenoLogico('sink-01', 'Saida-01', 220, 40);
+    const conexaoInterna = new ConnectionModel({
+        sourceId: fonte.id,
+        targetId: valvula.id,
+        diameterM: 0.12,
+        roughnessMm: 0.02,
+        extraLengthM: 3,
+        perdaLocalK: 0.4
+    });
+    const conexaoExterna = new ConnectionModel({
+        sourceId: valvula.id,
+        targetId: dreno.id
+    });
+
+    const snapshot = createComponentGroupClipboardSnapshot(
+        [fonte, valvula],
+        [conexaoInterna, conexaoExterna]
+    );
+
+    assert.equal(snapshot.kind, 'component-group');
+    assert.equal(snapshot.components.length, 2);
+    assert.equal(snapshot.connections.length, 1);
+    assert.equal(snapshot.connections[0].sourceId, fonte.id);
+    assert.equal(snapshot.connections[0].targetId, valvula.id);
+    assert.equal(snapshot.connections[0].diameterM, 0.12);
+    assert.equal(snapshot.connections[0].extraLengthM, 3);
 });
 
 test('cores visuais acompanham os presets de fluido', async () => {

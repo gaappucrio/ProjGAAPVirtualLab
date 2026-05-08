@@ -51,6 +51,7 @@ function getCurrentSourceFluidPresetId(comp) {
         Math.abs(preset.densidade - fluido.densidade) < 0.5 &&
         Math.abs(preset.temperatura - fluido.temperatura) < 0.05 &&
         Math.abs(preset.viscosidadeDinamicaPaS - fluido.viscosidadeDinamicaPaS) < 0.00001 &&
+        Math.abs((preset.calorEspecificoJkgK || 0) - (fluido.calorEspecificoJkgK || 0)) < 1 &&
         Math.abs(preset.pressaoVaporBar - fluido.pressaoVaporBar) < 0.0001
     );
 
@@ -124,6 +125,10 @@ function renderSourceFluidFields(comp) {
             <input type="number" id="input-source-fluid-viscosity" title="${TOOLTIPS.fluido.viscosidade}" value="${fluido.viscosidadeDinamicaPaS}" step="0.0001" min="0.0001">
         </div>
         <div class="prop-group">
+            <label title="${TOOLTIPS.fluido.calorEspecifico}">Calor Específico (J/kg.K)</label>
+            <input type="number" id="input-source-fluid-cp" title="${TOOLTIPS.fluido.calorEspecifico}" value="${fluido.calorEspecificoJkgK}" step="10" min="500" max="10000">
+        </div>
+        <div class="prop-group">
             ${makeUnitLabel('Pressão de Vapor', 'pressure', TOOLTIPS.fluido.pressaoVapor)}
             <input type="number" id="input-source-fluid-vapor" title="${TOOLTIPS.fluido.pressaoVapor}" value="${displayUnitValue('pressure', fluido.pressaoVaporBar, 3)}" step="${displayStep('pressure', 0.001)}" min="${displayBound('pressure', 0.0001)}" max="${displayBound('pressure', 5)}">
         </div>
@@ -152,6 +157,7 @@ function applySourceFluidFromInputs(comp, { preferredPresetId = null } = {}) {
     const fluido = ensureSourceFluid(comp);
     const inputDensity = byId('input-source-fluid-density');
     const inputViscosity = byId('input-source-fluid-viscosity');
+    const inputSpecificHeat = byId('input-source-fluid-cp');
     const inputTemp = byId('input-source-fluid-temp');
     const inputVapor = byId('input-source-fluid-vapor');
     const inputAtm = byId('input-source-fluid-atm');
@@ -169,6 +175,13 @@ function applySourceFluidFromInputs(comp, { preferredPresetId = null } = {}) {
         return;
     }
     clearInputError(inputViscosity);
+
+    const specificHeatResult = InputValidator.validateNumber(inputSpecificHeat.value, 500, 10000, 'Calor específico');
+    if (!specificHeatResult.valid) {
+        showInputError(inputSpecificHeat, specificHeatResult.error);
+        return;
+    }
+    clearInputError(inputSpecificHeat);
 
     const temperatureResult = InputValidator.validateNumber(
         temperatureInputValue('input-source-fluid-temp', NaN),
@@ -211,6 +224,7 @@ function applySourceFluidFromInputs(comp, { preferredPresetId = null } = {}) {
             densidade: densityResult.value,
             temperatura: temperatureResult.value,
             viscosidadeDinamicaPaS: viscosityResult.value,
+            calorEspecificoJkgK: specificHeatResult.value,
             pressaoVaporBar: vaporResult.value,
             pressaoAtmosfericaBar: atmResult.value,
             corVisual: getSourceFluidColorValue(fluido, nextPresetId)
@@ -273,6 +287,7 @@ function bindSourceFluidProperties(comp) {
         setValue('input-source-fluid-name', translateFluidName(preset.nome));
         setValue('input-source-fluid-density', preset.densidade);
         setValue('input-source-fluid-viscosity', preset.viscosidadeDinamicaPaS);
+        setValue('input-source-fluid-cp', preset.calorEspecificoJkgK);
         setValue('input-source-fluid-temp', toDisplayValue('temperature', preset.temperatura).toFixed(1));
         setValue('input-source-fluid-vapor', formatUnitValue('pressure', preset.pressaoVaporBar, 3));
         setValue('input-source-fluid-atm', formatUnitValue('pressure', preset.pressaoAtmosfericaBar, 3));
@@ -292,6 +307,7 @@ function bindSourceFluidProperties(comp) {
         'input-source-fluid-name',
         'input-source-fluid-density',
         'input-source-fluid-viscosity',
+        'input-source-fluid-cp',
         'input-source-fluid-temp',
         'input-source-fluid-vapor',
         'input-source-fluid-atm'

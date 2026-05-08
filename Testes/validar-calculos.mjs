@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { ENGINE, FLUID_PRESETS } from '../js/application/engine/SimulationEngine.js';
+import { FLUID_PRESETS, SistemaSimulacao } from '../js/application/engine/SimulationEngine.js';
 import { BombaLogica } from '../js/domain/components/BombaLogica.js';
 import { mixFluidos } from '../js/domain/components/Fluido.js';
 import { FonteLogica } from '../js/domain/components/FonteLogica.js';
 import { TanqueLogico } from '../js/domain/components/TanqueLogico.js';
+import {
+    TrocadorCalorLogico,
+    calcularSaidaTrocadorCalor
+} from '../js/domain/components/TrocadorCalorLogico.js';
 import { VALVE_PROFILE_DEFINITIONS, ValvulaLogica } from '../js/domain/components/ValvulaLogica.js';
 import { ConnectionModel } from '../js/domain/models/ConnectionModel.js';
 import {
@@ -24,12 +28,11 @@ function approx(actual, expected, tolerance, label) {
     );
 }
 
-function resetEngine() {
-    ENGINE.isRunning = false;
-    ENGINE.componentes = [];
-    ENGINE.conexoes = [];
-    ENGINE.usarAlturaRelativa = true;
-    ENGINE.fluidoOperante.densidade = 1000;
+function createEngine() {
+    const engine = new SistemaSimulacao();
+    engine.usarAlturaRelativa = true;
+    engine.fluidoOperante.densidade = 1000;
+    return engine;
 }
 
 test('dimensionamento por continuidade calcula diâmetro a partir de vazão e velocidade', () => {
@@ -89,6 +92,7 @@ test('propriedades hidraulicas de conexao preservam zero fisico e reparam invali
 
 test('tanque normaliza altura util e bocais para manter hidrostatica fisica', () => {
     const tanque = new TanqueLogico('T-NORM', 'Tanque-Norm', 0, 0);
+    const fluido = FLUID_PRESETS.agua;
 
     tanque.alturaUtilMetros = -2;
     tanque.alturaBocalEntradaM = -1;
@@ -99,11 +103,54 @@ test('tanque normaliza altura util e bocais para manter hidrostatica fisica', ()
     assert.ok(tanque.alturaBocalEntradaM >= 0 && tanque.alturaBocalEntradaM <= tanque.alturaUtilMetros);
     assert.ok(tanque.alturaBocalSaidaM >= 0 && tanque.alturaBocalSaidaM <= tanque.alturaUtilMetros);
     approx(
-        tanque.getPressaoHidrostaticaParaNivelBar(ENGINE.fluidoOperante, 1),
-        pressureFromHeadBar(tanque.alturaUtilMetros, ENGINE.fluidoOperante.densidade),
+        tanque.getPressaoHidrostaticaParaNivelBar(fluido, 1),
+        pressureFromHeadBar(tanque.alturaUtilMetros, fluido.densidade),
         1e-12,
         'Pressao hidrostatica deve seguir rho*g*h'
     );
+});
+
+test('trocador de calor usa efetividade NTU e conserva sentido termico', () => {
+    const resultado = calcularSaidaTrocadorCalor({
+        temperaturaEntradaC: 20,
+        temperaturaServicoC: 80,
+        uaWPorK: 4182,
+        vazaoLps: 1,
+        densidadeKgM3: 1000,
+        calorEspecificoJkgK: 4182,
+        efetividadeMaxima: 0.99
+    });
+
+    const efetividadeEsperada = 1 - Math.exp(-1);
+    approx(resultado.efetividade, efetividadeEsperada, 1e-12, 'Efetividade NTU');
+    approx(resultado.temperaturaSaidaC, 20 + (efetividadeEsperada * 60), 1e-9, 'Temperatura de saida aquecida');
+    approx(resultado.cargaTermicaW, resultado.capacidadeTermicaWPorK * resultado.deltaTemperaturaC, 1e-9, 'Carga termica por m_dot cp dT');
+
+    const resfriamento = calcularSaidaTrocadorCalor({
+        temperaturaEntradaC: 80,
+        temperaturaServicoC: 20,
+        uaWPorK: 4182,
+        vazaoLps: 1,
+        densidadeKgM3: 1000,
+        calorEspecificoJkgK: 4182
+    });
+
+    assert.ok(resfriamento.temperaturaSaidaC < 80, 'Servico frio deve resfriar o fluido');
+    assert.ok(resfriamento.cargaTermicaW < 0, 'Carga termica negativa indica resfriamento');
+});
+
+test('trocador de calor clona fluido de saida sem alterar composicao hidraulica', () => {
+    const trocador = new TrocadorCalorLogico('HX-01', 'TC-01', 0, 0);
+    const agua = FLUID_PRESETS.agua;
+
+    trocador.temperaturaServicoC = 80;
+    trocador.uaWPorK = 4182;
+    const saida = trocador.getFluidoSaidaPara(agua, 1);
+
+    assert.notEqual(saida, agua);
+    assert.equal(saida.densidade, agua.densidade);
+    assert.equal(saida.viscosidadeDinamicaPaS, agua.viscosidadeDinamicaPaS);
+    assert.ok(saida.temperatura > agua.temperatura);
 });
 
 test('fonte mantem propriedades de fluido de entrada independentes do fluido operante', () => {
@@ -200,9 +247,6 @@ test('diâmetro sugerido usa vazão de projeto estável ao aplicar repetidas vez
 });
 
 test('tempo de curso e rampa aceitam zero e respeitam a escala configurada', () => {
-    resetEngine();
-    ENGINE.isRunning = true;
-
     const valvula = new ValvulaLogica('V-01', 'V-01', 0, 0);
     valvula.aberturaEfetiva = 0;
     valvula.grauAbertura = 100;
@@ -272,6 +316,20 @@ test('característica da válvula altera capacidade hidráulica na mesma abertur
             && linear.localLossCoeff > aberturaRapida.localLossCoeff,
         'A característica deve alterar a perda local efetiva'
     );
+});
+
+test('valvula aberta com K zero nao aplica perda minima escondida', () => {
+    const valvula = new ValvulaLogica('V-zero', 'V-zero', 0, 0);
+    valvula.aplicarPerfilCaracteristica('custom');
+    valvula.setCoeficienteVazao(250);
+    valvula.setCoeficientePerda(0);
+    valvula.setTipoCaracteristica('linear');
+    valvula.aberturaEfetiva = 100;
+
+    const parametros = valvula.getParametrosHidraulicos();
+
+    approx(parametros.localLossCoeff, 25 / (250 * 250), 1e-12, 'Perda local deve vir apenas do Cv efetivo');
+    assert.ok(parametros.localLossCoeff < 0.001, 'Valvula com Cv alto e K zero deve ser praticamente transparente');
 });
 
 test('perfis da válvula aplicam propriedades e modo personalizado libera edição fina', () => {
@@ -401,7 +459,7 @@ test('curva da bomba reflete alteração de NPSHr sem esconder a mudança pela e
 });
 
 test('resumo de ajuste de pressão no set point considera altura relativa ligada e desligada', () => {
-    resetEngine();
+    const engine = createEngine();
 
     const fonte = new FonteLogica('F-01', 'Entrada-01', 0, 0);
     const tanque = new TanqueLogico('T-01', 'Tanque-01', 0, 0);
@@ -419,9 +477,10 @@ test('resumo de ajuste de pressão no set point considera altura relativa ligada
     tanque._ultimoEstadoControle = { u: -1, erro: -0.3 };
 
     fonte.pressaoFonteBar = 1.5;
-    ENGINE.componentes = [fonte, tanque];
+    engine.add(fonte);
+    engine.add(tanque);
 
-    const densidade = ENGINE.fluidoOperante.densidade;
+    const densidade = engine.fluidoOperante.densidade;
     const pressaoSaidaAtualAtiva = pressureFromHeadBar(1.92 - 0.2, densidade);
     const pressaoSaidaSetpointAtiva = pressureFromHeadBar(1.2 - 0.2, densidade);
     const vazaoSetpointAtiva = 10 * Math.sqrt(pressaoSaidaSetpointAtiva / pressaoSaidaAtualAtiva);
@@ -430,10 +489,10 @@ test('resumo de ajuste de pressão no set point considera altura relativa ligada
     const fatorAtivo = Math.pow(vazaoSetpointAtiva / 20, 2);
     const pressaoFonteAtivaEsperada = pressaoBaseSetpointAtiva + ((1.5 - pressaoBaseAtualAtiva) * fatorAtivo);
 
-    const resumoAtivo = tanque.getResumoAjustePressaoSetpoint(ENGINE.fluidoOperante, true);
+    const resumoAtivo = tanque.getResumoAjustePressaoSetpoint(engine.fluidoOperante, true);
     approx(resumoAtivo.vazaoSaidaLimiteSetpointLps, vazaoSetpointAtiva, 1e-9, 'Vazão limite no set point com altura relativa');
     approx(resumoAtivo.ajustesFonte[0].pressaoRecomendadaBar, pressaoFonteAtivaEsperada, 1e-9, 'Pressão recomendada com altura relativa');
-    tanque._atualizarAlertaSaturacao(ENGINE.fluidoOperante);
+    tanque._atualizarAlertaSaturacao(engine.fluidoOperante);
     assert.equal(tanque.alertaSaturacao?.ativo, true, 'Alerta deve usar a capacidade de saída estimada no nível do set point');
 
     const pressaoSaidaAtualSemAltura = pressureFromHeadBar(1.92, densidade);
@@ -442,12 +501,12 @@ test('resumo de ajuste de pressão no set point considera altura relativa ligada
     const fatorSemAltura = Math.pow(vazaoSetpointSemAltura / 20, 2);
     const pressaoFonteSemAlturaEsperada = 1.5 * fatorSemAltura;
 
-    const resumoSemAltura = tanque.getResumoAjustePressaoSetpoint(ENGINE.fluidoOperante, false);
+    const resumoSemAltura = tanque.getResumoAjustePressaoSetpoint(engine.fluidoOperante, false);
     approx(resumoSemAltura.pressaoBaseEntradaSetpointBar, 0, 1e-9, 'Contrapressão de entrada sem altura relativa');
     approx(resumoSemAltura.vazaoSaidaLimiteSetpointLps, vazaoSetpointSemAltura, 1e-9, 'Vazão limite no set point sem altura relativa');
     approx(resumoSemAltura.ajustesFonte[0].pressaoRecomendadaBar, pressaoFonteSemAlturaEsperada, 1e-9, 'Pressão recomendada sem altura relativa');
 
-    ENGINE.usarAlturaRelativa = false;
+    engine.usarAlturaRelativa = false;
     const resultado = tanque.aplicarAjustePressaoSetpoint();
     assert.equal(resultado.aplicado, true, 'O ajuste automático deveria ser aplicado');
     approx(fonte.pressaoFonteBar, pressaoFonteSemAlturaEsperada, 1e-9, 'Aplicação automática da pressão recomendada');

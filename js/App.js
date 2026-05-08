@@ -88,15 +88,19 @@ document.addEventListener('keydown', (e) => {
     if (targetTagName === 'input' || targetTagName === 'textarea' || targetTagName === 'select' || e.target.isContentEditable) return;
 
     if (e.key === 'Delete' || e.key === 'Backspace') {
-        const selectedCompDiv = document.querySelector('.placed-component.selected');
-        if (selectedCompDiv) {
-            const compId = selectedCompDiv.dataset.id;
-            const comp = ENGINE.componentes.find((c) => c.id === compId);
-            if (comp) {
-                ENGINE.removeComponent(comp);
-                selectedCompDiv.remove();
-                updatePortStates();
-            }
+        const selectedComponentDivs = [...document.querySelectorAll('.placed-component.selected')];
+        if (selectedComponentDivs.length > 0) {
+            selectedComponentDivs.forEach((selectedCompDiv) => {
+                const compId = selectedCompDiv.dataset.id;
+                const comp = ENGINE.componentes.find((c) => c.id === compId);
+                if (comp) {
+                    ENGINE.removeComponent(comp);
+                    selectedCompDiv.remove();
+                }
+            });
+            ENGINE.selectComponent(null);
+            updatePortStates();
+            return;
         }
 
         const selectedPipe = document.querySelector('.pipe-line.selected');

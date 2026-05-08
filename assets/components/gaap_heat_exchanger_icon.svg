@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90" role="img" aria-label="Trocador de calor">
+  <rect x="12" y="24" width="96" height="42" rx="8" fill="#ffffff" stroke="#2c3e50" stroke-width="6"/>
+  <path d="M18 45 C30 24 48 24 60 45 S90 66 102 45" fill="none" stroke="#e67e22" stroke-width="8" stroke-linecap="round"/>
+  <path d="M22 34 H98 M22 56 H98" fill="none" stroke="#7f8c8d" stroke-width="4" stroke-linecap="round" opacity="0.75"/>
+  <circle cx="60" cy="45" r="9" fill="#3498db" stroke="#2c3e50" stroke-width="3"/>
+  <circle cx="12" cy="45" r="5" fill="#ffffff" stroke="#2c3e50" stroke-width="3"/>
+  <circle cx="108" cy="45" r="5" fill="#ffffff" stroke="#2c3e50" stroke-width="3"/>
+</svg>

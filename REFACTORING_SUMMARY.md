@@ -21,8 +21,9 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
   - Tanque.
 - Conexão entre componentes por portas de entrada e saída.
 - Seleção de componentes e conexões para edição.
-- Remoção por tecla `Delete` ou `Backspace`.
-- Clone de componentes selecionados por `Ctrl+C` e `Ctrl+V`, preservando propriedades configuráveis e criando a tag com sufixo `- copia` ou `- copy` conforme o idioma ativo.
+- Seleção múltipla de componentes por retângulo azul no workspace ou `Ctrl+clique`.
+- Remoção por tecla `Delete` ou `Backspace`, incluindo seleções múltiplas.
+- Clone de componentes selecionados por `Ctrl+C` e `Ctrl+V`, preservando propriedades configuráveis, conexões internas do grupo e criando a tag com sufixo `- copia` ou `- copy` conforme o idioma ativo.
 - Renderização visual de tubos, rótulos de vazão e estados de portas.
 - Opção de altura relativa para considerar desníveis entre componentes.
 - Identificação estável de fronteiras com tags `inlet-01`, `outlet-01` etc., independente do idioma da interface.
@@ -234,7 +235,8 @@ Responsabilidades:
 - Atualizar valores vivos do painel.
 - Manipular abas e memória de contexto do painel.
 - Gerenciar monitoramento compacto e detalhado.
-- Gerenciar atalhos de clipboard de componentes (`Ctrl+C`/`Ctrl+V`) na camada de apresentação.
+- Gerenciar atalhos de clipboard de componentes (`Ctrl+C`/`Ctrl+V`) na camada de apresentação, incluindo grupos com conexões internas.
+- Controlar seleção por retângulo e `Ctrl+clique` no workspace.
 - Controlar popup de tutorial e comandos básicos da interface.
 - Exportar dados tabulares de componentes e conexões.
 - Validar inputs digitados.
@@ -435,6 +437,8 @@ Características:
 - Propaga o fluido ou mistura em cada conexão.
 - Mistura fluidos em componentes passantes com múltiplas entradas.
 - Corrige perdas locais por Reynolds e viscosidade, evitando que fluidos viscosos sejam favorecidos artificialmente apenas pela menor densidade.
+- Resolve bombas ativas a jusante de tanques de forma implícita, permitindo sucção acima da vazão gravitacional passiva e limitando o resultado por curva da bomba, perdas do ramo e NPSH.
+- Componentes passantes não duplicam a perda base do trecho a jusante; válvulas abertas com `K=0` e `Cv` alto se aproximam de um tubo de comprimento hidráulico equivalente.
 
 ### 7.1 Conservação de Massa
 
@@ -500,6 +504,7 @@ Comportamento:
 - A eficiência varia ao redor do ponto de melhor eficiência.
 - O NPSHr varia com vazão e acionamento.
 - Se NPSHa for menor que NPSHr, o fator de cavitação reduz desempenho.
+- Quando instalada na saída de um tanque, a bomba pode produzir pressão de sucção manométrica negativa; isso é esperado em cenários de sucção e é limitado por NPSH/cavitação.
 
 ### 8.4 `ValvulaLogica`
 
@@ -707,6 +712,7 @@ Coberturas importantes:
 - Histórico de monitoramento.
 - Remoção de slot no monitoramento detalhado.
 - Snapshot e aplicação de propriedades clonáveis no clipboard de componentes.
+- Snapshot de grupos selecionados, preservando conexões internas ao copiar e colar sistemas inteiros.
 - Regras de camadas.
 - Importação da apresentação sem DOM global.
 - Tags de fronteira `inlet`/`outlet` independentes do idioma.
@@ -719,6 +725,8 @@ Coberturas importantes:
 - Exportação de dados com resumo de altura relativa e sem anexos gráficos.
 - Pressão atmosférica igual em todos os presets padrão.
 - Água escoando mais rápido que óleo leve em ramais equivalentes para tanque.
+- Bomba ativa na saída de tanque aumentando vazão sem manter o limite puramente gravitacional do tanque.
+- Válvula totalmente aberta, com `Cv` alto e `K=0`, não aplica perda mínima escondida e se aproxima de tubo equivalente.
 
 ## 16. Estado Atual da Refatoração
 
@@ -741,6 +749,7 @@ Marcos concluídos:
 - Toggle de idioma movido para controle fixo no canto superior direito.
 - `I18n.js` renomeado para `LanguageManager.js` e imports atualizados.
 - Helper de tutorial adicionado ao cabeçalho.
+- Seleção múltipla por retângulo azul, `Ctrl+clique`, arraste em grupo, remoção em lote e clipboard de sistemas inteiros.
 - Testes de arquitetura e comportamento adicionados.
 - Verificação final de consistência física adicionou validação numérica estrita, normalização segura de parâmetros de tubulação e proteção contra altura útil inválida em tanques.
 
@@ -800,4 +809,4 @@ Próximos passos recomendados:
 
 O projeto está em um estado estruturalmente muito melhor que a versão monolítica inicial. A física principal está concentrada no domínio, a aplicação orquestra o tick e a topologia, a apresentação foi dividida em controllers e presenters, e a infraestrutura visual está separada em adaptadores.
 
-O sistema já possui suporte funcional para montagem visual, clonagem de componentes por teclado, simulação hidráulica, bombas, válvulas, tanques, set point, monitoramento, unidades, tooltips, tutorial integrado, internacionalização, mistura de fluidos, cores visuais por fluido, exportação tabular de dados e testes automatizados. A base trata propriedades de fluido por entrada, composição por conexão e conteúdo misturado em tanques, desde que as fronteiras entre domínio, aplicação, apresentação e infraestrutura continuem sendo respeitadas.
+O sistema já possui suporte funcional para montagem visual, seleção múltipla por retângulo, clonagem de componentes e sistemas por teclado, simulação hidráulica, bombas, válvulas, tanques, set point, monitoramento, unidades, tooltips, tutorial integrado, internacionalização, mistura de fluidos, cores visuais por fluido, exportação tabular de dados e testes automatizados. A base trata propriedades de fluido por entrada, composição por conexão e conteúdo misturado em tanques, desde que as fronteiras entre domínio, aplicação, apresentação e infraestrutura continuem sendo respeitadas.

@@ -5,9 +5,11 @@ import test from 'node:test';
 
 import { FLUID_PRESETS, SistemaSimulacao } from '../js/application/engine/SimulationEngine.js';
 import { ConnectionModel } from '../js/domain/models/ConnectionModel.js';
+import { BombaLogica } from '../js/domain/components/BombaLogica.js';
 import { DrenoLogico } from '../js/domain/components/DrenoLogico.js';
 import { FonteLogica } from '../js/domain/components/FonteLogica.js';
 import { TanqueLogico } from '../js/domain/components/TanqueLogico.js';
+import { TrocadorCalorLogico } from '../js/domain/components/TrocadorCalorLogico.js';
 import { ValvulaLogica } from '../js/domain/components/ValvulaLogica.js';
 
 const DOMAIN_ROOT = path.resolve('js/domain');
@@ -20,9 +22,13 @@ function createEngine() {
 }
 
 function runSinglePhysicsStep(engine, dt = 0.1) {
-    engine.componentes.forEach((component) => component.atualizarDinamica(dt, engine.fluidoOperante));
+    engine.componentes.forEach((component) => {
+        component.atualizarDinamica(dt, engine.hydraulicContext.getComponentFluid(component) || engine.fluidoOperante);
+    });
     engine.resolvePushBasedNetwork(dt);
-    engine.componentes.forEach((component) => component.sincronizarMetricasFisicas(engine.fluidoOperante));
+    engine.componentes.forEach((component) => {
+        component.sincronizarMetricasFisicas(engine.hydraulicContext.getComponentFluid(component) || engine.fluidoOperante);
+    });
 }
 
 function runPhysicsSteps(engine, steps = 120, dt = 0.1) {
@@ -122,6 +128,142 @@ test('agua tem maior vazao que oleo leve em ramais equivalentes para tanque', ()
     );
 });
 
+test('bomba ativa na saida do tanque aumenta vazao sem pressao incoerente', () => {
+    const measureTankDrainFlow = (usarAlturaRelativa, withPump) => {
+        const engine = createEngine();
+        engine.usarAlturaRelativa = usarAlturaRelativa;
+
+        const tanque = new TanqueLogico('T-01', 'T-01', 180, 120);
+        const dreno = new DrenoLogico('D-01', 'outlet-01', 520, 260);
+
+        tanque.volumeAtual = 999;
+        tanque.capacidadeMaxima = 1000;
+        tanque.alturaUtilMetros = 2.4;
+        tanque.fluidoConteudo = { ...FLUID_PRESETS.agua };
+        tanque.conectarSaida(dreno);
+        dreno.pressaoSaidaBar = 0;
+
+        engine.add(tanque);
+        engine.add(dreno);
+
+        let pump = null;
+        let pumpOutletConnection = null;
+
+        if (withPump) {
+            pump = new BombaLogica('P-01', 'P-01', 380, 210);
+            pump.vazaoNominal = 45;
+            pump.pressaoMaxima = 5;
+            pump.grauAcionamento = 100;
+            pump.acionamentoEfetivo = 100;
+            tanque.saidas = [];
+            tanque.conectarSaida(pump);
+            pump.conectarSaida(dreno);
+            const tankPump = new ConnectionModel({ sourceId: tanque.id, targetId: pump.id });
+            pumpOutletConnection = new ConnectionModel({ sourceId: pump.id, targetId: dreno.id });
+            engine.add(pump);
+            engine.addConnection(tankPump);
+            engine.addConnection(pumpOutletConnection);
+        } else {
+            const tankDrain = new ConnectionModel({ sourceId: tanque.id, targetId: dreno.id });
+            engine.addConnection(tankDrain);
+        }
+
+        runPhysicsSteps(engine, 30, 0.1);
+
+        if (!withPump) return { flowLps: dreno.vazaoRecebidaLps };
+
+        const outletState = engine.getConnectionState(pumpOutletConnection);
+        return {
+            flowLps: outletState.flowLps,
+            pump
+        };
+    };
+
+    [false, true].forEach((usarAlturaRelativa) => {
+        const direct = measureTankDrainFlow(usarAlturaRelativa, false);
+        const pumped = measureTankDrainFlow(usarAlturaRelativa, true);
+
+        assert.ok(
+            pumped.flowLps > direct.flowLps * 1.5,
+            `Bomba deve elevar a vazao do tanque: altura=${usarAlturaRelativa}, direto=${direct.flowLps}, bomba=${pumped.flowLps}`
+        );
+        assert.ok(
+            pumped.pump.pressaoDescargaAtualBar > pumped.pump.pressaoSucaoAtualBar,
+            `Pressao da bomba deve subir atraves do rotor: succao=${pumped.pump.pressaoSucaoAtualBar}, descarga=${pumped.pump.pressaoDescargaAtualBar}`
+        );
+        assert.ok(
+            pumped.pump.fatorCavitacaoAtual > 0.95,
+            `Bomba nao deveria cavitar nesse cenario base: fator=${pumped.pump.fatorCavitacaoAtual}`
+        );
+    });
+});
+
+test('valvula totalmente aberta com Cv alto se aproxima de tubo equivalente', () => {
+    const buildTank = (id) => {
+        const tanque = new TanqueLogico(id, id, 0, 0);
+        tanque.volumeAtual = 999;
+        tanque.capacidadeMaxima = 1000;
+        tanque.alturaUtilMetros = 2.4;
+        tanque.fluidoConteudo = { ...FLUID_PRESETS.agua };
+        return tanque;
+    };
+
+    const measureEquivalentPipe = () => {
+        const engine = createEngine();
+        const tanque = buildTank('T-pipe');
+        const dreno = new DrenoLogico('D-pipe', 'D-pipe', 200, 0);
+        const connection = new ConnectionModel({
+            sourceId: tanque.id,
+            targetId: dreno.id,
+            extraLengthM: 1,
+            perdaLocalK: 0
+        });
+
+        tanque.conectarSaida(dreno);
+        engine.add(tanque);
+        engine.add(dreno);
+        engine.addConnection(connection);
+        runPhysicsSteps(engine, 60, 0.1);
+
+        return engine.getConnectionState(connection).flowLps;
+    };
+
+    const measureTransparentValve = () => {
+        const engine = createEngine();
+        const tanque = buildTank('T-valve');
+        const valvula = new ValvulaLogica('V-transparent', 'V-transparent', 100, 0);
+        const dreno = new DrenoLogico('D-valve', 'D-valve', 200, 0);
+
+        valvula.aplicarPerfilCaracteristica('custom');
+        valvula.setCoeficienteVazao(250);
+        valvula.setCoeficientePerda(0);
+        valvula.setTipoCaracteristica('linear');
+        valvula.setAbertura(100);
+        valvula.aberturaEfetiva = 100;
+
+        tanque.conectarSaida(valvula);
+        valvula.conectarSaida(dreno);
+
+        const entradaValvula = new ConnectionModel({ sourceId: tanque.id, targetId: valvula.id, perdaLocalK: 0 });
+        const saidaValvula = new ConnectionModel({ sourceId: valvula.id, targetId: dreno.id, perdaLocalK: 0 });
+
+        [tanque, valvula, dreno].forEach((component) => engine.add(component));
+        [entradaValvula, saidaValvula].forEach((connection) => engine.addConnection(connection));
+        runPhysicsSteps(engine, 60, 0.1);
+
+        return engine.getConnectionState(saidaValvula).flowLps;
+    };
+
+    const pipeFlow = measureEquivalentPipe();
+    const valveFlow = measureTransparentValve();
+    const relativeDifference = Math.abs(pipeFlow - valveFlow) / pipeFlow;
+
+    assert.ok(
+        relativeDifference < 0.03,
+        `Valvula transparente deve se aproximar de tubo equivalente: tubo=${pipeFlow}, valvula=${valveFlow}`
+    );
+});
+
 test('valvula mistura fluidos de multiplas entradas e entrega composicao ao tanque', () => {
     const engine = createEngine();
     const fonteAgua = new FonteLogica('F-agua', 'inlet-agua', 0, -40);
@@ -215,18 +357,66 @@ test('solver mantém fluxo em série com conexão puramente lógica', () => {
     fonte.conectarSaida(valvula);
     valvula.conectarSaida(dreno);
 
+    const entradaValvula = new ConnectionModel({ sourceId: fonte.id, targetId: valvula.id });
+    const saidaValvula = new ConnectionModel({ sourceId: valvula.id, targetId: dreno.id });
+
     engine.add(fonte);
     engine.add(valvula);
     engine.add(dreno);
-    engine.addConnection(new ConnectionModel({ sourceId: fonte.id, targetId: valvula.id }));
-    engine.addConnection(new ConnectionModel({ sourceId: valvula.id, targetId: dreno.id }));
+    engine.addConnection(entradaValvula);
+    engine.addConnection(saidaValvula);
 
     runSinglePhysicsStep(engine);
+
+    const entradaState = engine.getConnectionState(entradaValvula);
+    const saidaState = engine.getConnectionState(saidaValvula);
 
     assert.ok(fonte.fluxoReal > 0, 'A fonte deve fornecer vazão');
     assert.ok(valvula.fluxoReal > 0, 'A válvula deve receber vazão na malha em série');
     assert.ok(dreno.vazaoRecebidaLps > 0, 'O dreno deve receber vazão na malha em série');
+    assert.ok(Math.abs(entradaState.flowLps - saidaState.flowLps) < 1e-6, 'Conexões em série devem conservar a vazão');
+    assert.ok(entradaState.sourcePressureBar > saidaState.outletPressureBar, 'Pressão deve cair de montante para jusante em ramo passivo');
     assert.ok(engine.conexoes.every((conn) => conn.lastResolvedFlowLps >= 0), 'As conexões devem registrar vazões resolvidas válidas');
+});
+
+test('solver propaga temperatura alterada pelo trocador de calor', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-HX', 'Fonte-HX', 0, 0);
+    const trocador = new TrocadorCalorLogico('HX-01', 'TC-01', 120, 0);
+    const dreno = new DrenoLogico('D-HX', 'Dreno-HX', 240, 0);
+
+    fonte.pressaoFonteBar = 2;
+    fonte.vazaoMaxima = 40;
+    fonte.atualizarFluidoEntrada({
+        ...FLUID_PRESETS.agua,
+        temperatura: 20
+    }, { presetId: 'agua' });
+    trocador.temperaturaServicoC = 80;
+    trocador.uaWPorK = 8000;
+    dreno.pressaoSaidaBar = 0;
+
+    fonte.conectarSaida(trocador);
+    trocador.conectarSaida(dreno);
+
+    const entradaHx = new ConnectionModel({ sourceId: fonte.id, targetId: trocador.id });
+    const saidaHx = new ConnectionModel({ sourceId: trocador.id, targetId: dreno.id });
+
+    [fonte, trocador, dreno].forEach((component) => engine.add(component));
+    [entradaHx, saidaHx].forEach((connection) => engine.addConnection(connection));
+
+    runPhysicsSteps(engine, 30, 0.1);
+
+    const entradaState = engine.getConnectionState(entradaHx);
+    const saidaState = engine.getConnectionState(saidaHx);
+
+    assert.ok(saidaState.flowLps > 0, 'O trocador deve entregar vazao ao dreno');
+    assert.ok(trocador.fluxoReal > 0, 'O trocador deve registrar vazao passante');
+    assert.ok(saidaState.fluid.temperatura > entradaState.fluid.temperatura, 'A conexao de saida deve carregar fluido aquecido');
+    assert.ok(trocador.cargaTermicaW > 0, 'A carga termica deve ser positiva no aquecimento');
+    assert.ok(
+        Math.abs(fonte.fluxoReal - dreno.vazaoRecebidaLps) < 1e-6,
+        'A vazao deve ser conservada atraves do trocador'
+    );
 });
 
 test('solver distribui fluxo em bifurcação simples', () => {
@@ -241,16 +431,23 @@ test('solver distribui fluxo em bifurcação simples', () => {
     fonte.conectarSaida(drenoA);
     fonte.conectarSaida(drenoB);
 
+    const ramoA = new ConnectionModel({ sourceId: fonte.id, targetId: drenoA.id });
+    const ramoB = new ConnectionModel({ sourceId: fonte.id, targetId: drenoB.id });
+
     engine.add(fonte);
     engine.add(drenoA);
     engine.add(drenoB);
-    engine.addConnection(new ConnectionModel({ sourceId: fonte.id, targetId: drenoA.id }));
-    engine.addConnection(new ConnectionModel({ sourceId: fonte.id, targetId: drenoB.id }));
+    engine.addConnection(ramoA);
+    engine.addConnection(ramoB);
 
     runSinglePhysicsStep(engine);
 
+    const flowA = engine.getConnectionState(ramoA).flowLps;
+    const flowB = engine.getConnectionState(ramoB).flowLps;
+
     assert.ok(drenoA.vazaoRecebidaLps > 0, 'O primeiro ramo da bifurcação deve receber fluxo');
     assert.ok(drenoB.vazaoRecebidaLps > 0, 'O segundo ramo da bifurcação deve receber fluxo');
+    assert.ok(Math.abs(flowA - flowB) < 1e-6, `Ramos equivalentes devem receber vazões equivalentes: A=${flowA}, B=${flowB}`);
     assert.ok(fonte.fluxoReal >= drenoA.vazaoRecebidaLps + drenoB.vazaoRecebidaLps - 1e-9, 'A fonte deve suprir a soma dos ramos');
 });
 

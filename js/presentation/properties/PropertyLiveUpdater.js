@@ -2,6 +2,7 @@ import { BombaLogica } from '../../domain/components/BombaLogica.js';
 import { DrenoLogico } from '../../domain/components/DrenoLogico.js';
 import { FonteLogica } from '../../domain/components/FonteLogica.js';
 import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
+import { TrocadorCalorLogico } from '../../domain/components/TrocadorCalorLogico.js';
 import { ValvulaLogica } from '../../domain/components/ValvulaLogica.js';
 import { getSuggestedDiameterForConnection } from '../../domain/services/PipeHydraulics.js';
 import { toDisplayValue } from '../../utils/Units.js';
@@ -121,6 +122,16 @@ function updatePumpValues(component, { monitorController } = {}) {
     monitorController?.refreshPump(component);
 }
 
+function updateHeatExchangerValues(component) {
+    setFieldValue('disp-hx-temp-in', component.temperaturaEntradaC, 'temperature', 2);
+    setFieldValue('disp-hx-temp-out', component.temperaturaSaidaC, 'temperature', 2);
+    setValue('disp-hx-delta-t', component.deltaTemperaturaC.toFixed(2));
+    setValue('disp-hx-duty', `${(component.cargaTermicaW / 1000).toFixed(2)} kW`);
+    setFieldValue('disp-hx-flow', component.fluxoReal, 'flow', 2);
+    setValue('disp-hx-effectiveness', `${(component.efetividadeAtual * 100).toFixed(1)}%`);
+    setFieldValue('disp-hx-deltap', component.deltaPAtualBar, 'pressure', 2);
+}
+
 export function updatePropertyPanelValues({
     engine,
     component,
@@ -147,6 +158,10 @@ export function updatePropertyPanelValues({
 
     if (component instanceof BombaLogica) {
         updatePumpValues(component, { monitorController });
+    }
+
+    if (component instanceof TrocadorCalorLogico) {
+        updateHeatExchangerValues(component);
     }
 
     if (typeof document !== 'undefined') {
