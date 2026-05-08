@@ -22,9 +22,13 @@ function createEngine() {
 }
 
 function runSinglePhysicsStep(engine, dt = 0.1) {
-    engine.componentes.forEach((component) => component.atualizarDinamica(dt, engine.fluidoOperante));
+    engine.componentes.forEach((component) => {
+        component.atualizarDinamica(dt, engine.hydraulicContext.getComponentFluid(component) || engine.fluidoOperante);
+    });
     engine.resolvePushBasedNetwork(dt);
-    engine.componentes.forEach((component) => component.sincronizarMetricasFisicas(engine.fluidoOperante));
+    engine.componentes.forEach((component) => {
+        component.sincronizarMetricasFisicas(engine.hydraulicContext.getComponentFluid(component) || engine.fluidoOperante);
+    });
 }
 
 function runPhysicsSteps(engine, steps = 120, dt = 0.1) {
@@ -353,17 +357,25 @@ test('solver mantém fluxo em série com conexão puramente lógica', () => {
     fonte.conectarSaida(valvula);
     valvula.conectarSaida(dreno);
 
+    const entradaValvula = new ConnectionModel({ sourceId: fonte.id, targetId: valvula.id });
+    const saidaValvula = new ConnectionModel({ sourceId: valvula.id, targetId: dreno.id });
+
     engine.add(fonte);
     engine.add(valvula);
     engine.add(dreno);
-    engine.addConnection(new ConnectionModel({ sourceId: fonte.id, targetId: valvula.id }));
-    engine.addConnection(new ConnectionModel({ sourceId: valvula.id, targetId: dreno.id }));
+    engine.addConnection(entradaValvula);
+    engine.addConnection(saidaValvula);
 
     runSinglePhysicsStep(engine);
+
+    const entradaState = engine.getConnectionState(entradaValvula);
+    const saidaState = engine.getConnectionState(saidaValvula);
 
     assert.ok(fonte.fluxoReal > 0, 'A fonte deve fornecer vazão');
     assert.ok(valvula.fluxoReal > 0, 'A válvula deve receber vazão na malha em série');
     assert.ok(dreno.vazaoRecebidaLps > 0, 'O dreno deve receber vazão na malha em série');
+    assert.ok(Math.abs(entradaState.flowLps - saidaState.flowLps) < 1e-6, 'Conexões em série devem conservar a vazão');
+    assert.ok(entradaState.sourcePressureBar > saidaState.outletPressureBar, 'Pressão deve cair de montante para jusante em ramo passivo');
     assert.ok(engine.conexoes.every((conn) => conn.lastResolvedFlowLps >= 0), 'As conexões devem registrar vazões resolvidas válidas');
 });
 
@@ -419,16 +431,23 @@ test('solver distribui fluxo em bifurcação simples', () => {
     fonte.conectarSaida(drenoA);
     fonte.conectarSaida(drenoB);
 
+    const ramoA = new ConnectionModel({ sourceId: fonte.id, targetId: drenoA.id });
+    const ramoB = new ConnectionModel({ sourceId: fonte.id, targetId: drenoB.id });
+
     engine.add(fonte);
     engine.add(drenoA);
     engine.add(drenoB);
-    engine.addConnection(new ConnectionModel({ sourceId: fonte.id, targetId: drenoA.id }));
-    engine.addConnection(new ConnectionModel({ sourceId: fonte.id, targetId: drenoB.id }));
+    engine.addConnection(ramoA);
+    engine.addConnection(ramoB);
 
     runSinglePhysicsStep(engine);
 
+    const flowA = engine.getConnectionState(ramoA).flowLps;
+    const flowB = engine.getConnectionState(ramoB).flowLps;
+
     assert.ok(drenoA.vazaoRecebidaLps > 0, 'O primeiro ramo da bifurcação deve receber fluxo');
     assert.ok(drenoB.vazaoRecebidaLps > 0, 'O segundo ramo da bifurcação deve receber fluxo');
+    assert.ok(Math.abs(flowA - flowB) < 1e-6, `Ramos equivalentes devem receber vazões equivalentes: A=${flowA}, B=${flowB}`);
     assert.ok(fonte.fluxoReal >= drenoA.vazaoRecebidaLps + drenoB.vazaoRecebidaLps - 1e-9, 'A fonte deve suprir a soma dos ramos');
 });
 

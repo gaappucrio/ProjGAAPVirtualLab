@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { FLUID_PRESETS, SistemaSimulacao } from '../js/application/engine/SimulationEngine.js';
+import { SelectionStore } from '../js/application/stores/SelectionStore.js';
 import { createSimulationContext } from '../js/domain/context/SimulationContext.js';
 import { ConnectionModel } from '../js/domain/models/ConnectionModel.js';
 import { DrenoLogico } from '../js/domain/components/DrenoLogico.js';
@@ -51,6 +52,27 @@ test('remoção de conexão limpa estado hidráulico e índices de topologia', (
     assert.equal(engine.getOutputConnections(fonte).length, 0);
     assert.equal(engine.getInputConnections(dreno).length, 0);
     assert.equal(engine.connectionStates.has(connection), false);
+});
+
+test('seleção múltipla mantém contrato de componente único e limpa conexões', () => {
+    const store = new SelectionStore();
+    const fonte = new FonteLogica('F-01', 'Fonte-01', 0, 0);
+    const tanque = new TanqueLogico('T-01', 'Tanque-01', 120, 0);
+    const connection = new ConnectionModel({ sourceId: fonte.id, targetId: tanque.id });
+
+    store.selectComponents([fonte, tanque]);
+    assert.deepEqual([...store.selectedComponents], [fonte, tanque]);
+    assert.equal(store.selectedComponent, null, 'Seleção múltipla não deve fingir ser seleção simples');
+    assert.equal(store.selectedConnection, null);
+
+    store.toggleComponent(tanque);
+    assert.deepEqual([...store.selectedComponents], [fonte]);
+    assert.equal(store.selectedComponent, fonte, 'Ao sobrar um componente, o painel pode usar a seleção simples');
+
+    store.selectConnection(connection);
+    assert.equal(store.selectedConnection, connection);
+    assert.equal(store.selectedComponent, null);
+    assert.equal(store.selectedComponents.size, 0, 'Selecionar trecho deve limpar seleção múltipla');
 });
 
 test('remoção de atuador desativa controle de nível inconsistente', () => {
