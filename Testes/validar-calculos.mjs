@@ -11,8 +11,10 @@ import {
     calcularSaidaTrocadorCalor
 } from '../js/domain/components/TrocadorCalorLogico.js';
 import { VALVE_PROFILE_DEFINITIONS, ValvulaLogica } from '../js/domain/components/ValvulaLogica.js';
+import { pressureLossFromFlow } from '../js/domain/components/BaseComponente.js';
 import { ConnectionModel } from '../js/domain/models/ConnectionModel.js';
 import {
+    darcyFrictionFactor,
     diameterFromFlowVelocity,
     diameterFromM3sVelocity,
     ensureConnectionProperties,
@@ -88,6 +90,27 @@ test('propriedades hidraulicas de conexao preservam zero fisico e reparam invali
     assert.equal(corrigida.transientFlowLps, 0);
     assert.equal(corrigida.lastResolvedFlowLps, 0);
     assert.ok(corrigida.areaM2 > 0, 'Conexao corrigida deve manter area hidraulica positiva');
+});
+
+test('perda de pressao preserva coeficiente zero e atrito laminar Darcy', () => {
+    approx(
+        pressureLossFromFlow(10, 0.01, 1000, 0),
+        0,
+        1e-12,
+        'Perda de pressao com K zero'
+    );
+    approx(
+        darcyFrictionFactor(100, 0),
+        0.64,
+        1e-12,
+        'Fator de Darcy laminar deve seguir 64/Re sem teto artificial'
+    );
+    approx(
+        darcyFrictionFactor(2000, 0),
+        0.032,
+        1e-12,
+        'Fator de Darcy laminar proximo da transicao'
+    );
 });
 
 test('tanque normaliza altura util e bocais para manter hidrostatica fisica', () => {
@@ -205,6 +228,23 @@ test('mistura de fluidos pondera densidade e viscosidade por contribuicao', () =
     approx(mistura.viscosidadeDinamicaPaS, viscosidadeEsperada, 1e-12, 'viscosidade logaritmica da mistura');
     approx(mistura.composicao['Água'], 2 / 3, 1e-12, 'fracao de agua na mistura');
     approx(mistura.composicao['Óleo leve'], 1 / 3, 1e-12, 'fracao de oleo leve na mistura');
+});
+
+test('mistura do tanque considera volume que saiu no mesmo passo', () => {
+    const tanque = new TanqueLogico('T-MIX', 'Tanque-Mix', 0, 0);
+    const agua = FLUID_PRESETS.agua;
+    const oleo = FLUID_PRESETS.oleo_leve;
+
+    tanque.fluidoConteudo = mixFluidos([{ fluido: agua, volumeL: 100 }]);
+    tanque.volumeAtual = 70;
+    tanque.lastQin = 50;
+    tanque.lastQout = 80;
+    tanque.atualizarMisturaConteudo(1, oleo, 100);
+
+    const densidadeEsperada = ((20 * agua.densidade) + (50 * oleo.densidade)) / 70;
+    approx(tanque.fluidoConteudo.densidade, densidadeEsperada, 1e-9, 'Densidade apos entrada e saida simultaneas');
+    approx(tanque.fluidoConteudo.composicao[agua.nome], 20 / 70, 1e-12, 'Fracao retida de agua no tanque');
+    approx(tanque.fluidoConteudo.composicao[oleo.nome], 50 / 70, 1e-12, 'Fracao retida de oleo no tanque');
 });
 
 test('fonte preserva preset custom mesmo com propriedades iguais a um preset', () => {

@@ -12,7 +12,19 @@ import { mixFluidos } from './Fluido.js';
 
 export const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
-const safeLossCoeff = (lossCoeff) => Math.max(0.1, lossCoeff);
+const MIN_SOLVER_LOSS_COEFF = 0.1;
+
+const positiveDensity = (density) => {
+    const numericDensity = Number(density);
+    return Number.isFinite(numericDensity) && numericDensity > 0 ? numericDensity : null;
+};
+
+const nonNegativeLossCoeff = (lossCoeff) => {
+    const numericLossCoeff = Number(lossCoeff);
+    return Number.isFinite(numericLossCoeff) ? Math.max(0, numericLossCoeff) : 0;
+};
+
+const solverLossCoeff = (lossCoeff) => Math.max(MIN_SOLVER_LOSS_COEFF, nonNegativeLossCoeff(lossCoeff));
 
 export const smoothFirstOrder = (current, target, dt, timeConstantS) => {
     if (dt <= 0) return target;
@@ -34,15 +46,18 @@ export const rampToTarget = (current, target, dt, fullScaleTimeS, fullScaleRange
 };
 
 export function flowFromBernoulli(deltaPBar, areaM2, density, lossCoeff) {
-    if (deltaPBar <= 0 || areaM2 <= 0) return 0;
-    const velocity = Math.sqrt((2 * deltaPBar * BAR_TO_PA) / (density * safeLossCoeff(lossCoeff)));
+    const safeDensity = positiveDensity(density);
+    if (deltaPBar <= 0 || areaM2 <= 0 || !safeDensity) return 0;
+    const velocity = Math.sqrt((2 * deltaPBar * BAR_TO_PA) / (safeDensity * solverLossCoeff(lossCoeff)));
     return m3sToLps(areaM2 * velocity);
 }
 
 export function pressureLossFromFlow(flowLps, areaM2, density, lossCoeff) {
-    if (flowLps <= 0 || areaM2 <= 0) return 0;
+    const safeDensity = positiveDensity(density);
+    const safeLossCoeff = nonNegativeLossCoeff(lossCoeff);
+    if (flowLps <= 0 || areaM2 <= 0 || !safeDensity || safeLossCoeff <= 0) return 0;
     const velocity = lpsToM3s(flowLps) / areaM2;
-    return ((density * velocity * velocity * safeLossCoeff(lossCoeff)) / 2) / BAR_TO_PA;
+    return ((safeDensity * velocity * velocity * safeLossCoeff) / 2) / BAR_TO_PA;
 }
 
 export class Observable {

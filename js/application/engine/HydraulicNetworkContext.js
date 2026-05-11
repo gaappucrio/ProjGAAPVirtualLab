@@ -39,7 +39,7 @@ export class HydraulicNetworkContext {
             if (!componentId || visited.has(componentId)) continue;
             visited.add(componentId);
 
-            const upstreamConnections = this.conexoes.filter((connection) => connection.targetId === componentId);
+            const upstreamConnections = this.getInputConnections(componentId);
             for (const connection of upstreamConnections) {
                 const state = this.getConnectionState(connection);
                 if (state?.fluid && (state.flowLps > 0 || state.targetFlowLps > 0 || connection.lastResolvedFlowLps > 0)) {
@@ -87,6 +87,10 @@ export class HydraulicNetworkContext {
 
     getOutputConnections(component) {
         return this.engine.getOutputConnections(component);
+    }
+
+    getInputConnections(component) {
+        return this.engine.getInputConnections(component);
     }
 
     getConnectionState(connection) {
