@@ -139,6 +139,7 @@ O projeto segue uma arquitetura em camadas leves:
 ```text
 index.html
   -> js/App.js
+      -> js/VirtualLabRuntime.js
       -> application/
       -> domain/
       -> presentation/
@@ -146,7 +147,7 @@ index.html
       -> utils/
 ```
 
-O arquivo `js/App.js` atua como composition root. Ele conecta o motor de simulação aos controladores de apresentação, adaptadores visuais e serviços de conexão.
+O arquivo `js/App.js` atua como ponto de entrada minimo. A ordem de inicializacao do navegador fica concentrada em `js/VirtualLabRuntime.js`, que conecta o motor de simulacao aos controladores de apresentacao, adaptadores visuais e servicos de conexao.
 
 ### 3.1 `domain/`
 
@@ -210,6 +211,7 @@ Contém controllers, presenters, validações de UI e lógica de painel.
 Arquivos principais:
 
 - `presentation/controllers/PresentationController.js`
+- `presentation/controllers/PropertyPanelController.js`
 - `presentation/controllers/ClipboardController.js`
 - `presentation/controllers/DeleteSelectionController.js`
 - `presentation/controllers/HelpController.js`
@@ -289,14 +291,17 @@ Observação: os utilitários visuais de abas, tooltips e estado de portas já f
 
 1. `index.html` carrega `js/App.js`.
 2. `App.js` importa o singleton `ENGINE`.
-3. `App.js` inicializa a apresentação com `setupPresentation({ engine: ENGINE })`.
-4. `App.js` inicializa o helper de tutorial com `setupHelpController()`.
+3. `App.js` chama `setupVirtualLabRuntime({ engine: ENGINE })`.
+4. O runtime cria o servico de conexoes e inicializa os controllers de apresentacao.
 5. O engine é injetado na camada de apresentação via `PresentationEngineContext`.
 6. São inicializados:
    - Câmera.
    - Drag-and-drop.
    - Controle de tubos.
    - Toolbar.
+   - Monitoramento.
+   - Painel de propriedades.
+   - Atalhos de remocao e clipboard.
    - Atualização visual de portas.
 7. Adaptadores visuais são registrados no engine:
    - Resolver de posição visual.
@@ -771,13 +776,15 @@ Marcos concluídos:
 - `Tooltips.js` e `PropertyTabs.js` saíram de `utils/` e foram realocados para `presentation/properties`.
 - `PortStateManager.js` saiu de `utils/` e foi realocado para `infrastructure/dom`.
 - Atalho global de remoção e limpeza visual do canvas saíram de `App.js` e foram movidos para controller/infraestrutura dedicados.
+- `PresentationController.js` deixou de coordenar a apresentacao completa e passou a ser uma fachada de compatibilidade para `PropertyPanelController.js`.
+- `App.js` foi reduzido ao ponto de entrada; a ordem de inicializacao da UI foi movida para `VirtualLabRuntime.js`.
 - Testes de arquitetura e comportamento adicionados.
 - Verificação final de consistência física adicionou validação numérica estrita, normalização segura de parâmetros de tubulação e proteção contra altura útil inválida em tanques.
 
 Pontos ainda observáveis:
 
-- `PresentationController.js` ainda coordena vários controllers. Ele não é mais o monólito original, mas ainda é o ponto principal da apresentação.
-- `App.js` está mais próximo de um composition root puro, mas ainda concentra a ordem de inicialização da aplicação. Isso é desejável por enquanto; novas responsabilidades de UI devem ir para controllers dedicados.
+- `VirtualLabRuntime.js` agora concentra a montagem do navegador. Isso é intencional: ele é a borda de composição entre engine, controllers e infraestrutura visual.
+- `PresentationController.js` permanece apenas como fachada de compatibilidade. Novas mudanças devem mirar `PropertyPanelController.js` ou controllers específicos.
 
 ## 17. Boas Práticas Para Manutenção
 

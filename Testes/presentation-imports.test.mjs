@@ -10,6 +10,7 @@ const PRESENTATION_MODULES = [
     '../js/presentation/controllers/HelpController.js',
     '../js/presentation/controllers/MonitorController.js',
     '../js/presentation/export/SimulationDataExporter.js',
+    '../js/presentation/controllers/PropertyPanelController.js',
     '../js/presentation/properties/ComponentPropertiesPresenter.js',
     '../js/presentation/properties/ConnectionPropertiesPresenter.js',
     '../js/presentation/properties/DefaultPropertiesPresenter.js',
