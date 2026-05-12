@@ -18,6 +18,7 @@ import {
     diameterFromFlowVelocity,
     diameterFromM3sVelocity,
     ensureConnectionProperties,
+    getCurrentDesignFlowCandidateLps,
     getSuggestedDiameterForConnection
 } from '../js/domain/services/PipeHydraulics.js';
 import { buildPumpCurveDatasets } from '../js/infrastructure/charts/PumpChartAdapter.js';
@@ -320,6 +321,15 @@ test('diâmetro sugerido usa vazão de projeto estável ao aplicar repetidas vez
 
     approx(connection.designFlowLps, 20, 1e-12, 'Vazão de projeto preservada');
     approx(secondSuggestion, firstSuggestion, 1e-12, 'Diâmetro sugerido deve permanecer estável');
+
+    connection.designFlowLps = getCurrentDesignFlowCandidateLps(connection, {
+        flowLps: 8,
+        targetFlowLps: 14
+    });
+    const updatedSuggestion = getSuggestedDiameterForConnection(connection, recalculatedStateAfterApply);
+
+    approx(connection.designFlowLps, 14, 1e-12, 'Vazão de projeto pode ser atualizada explicitamente pela vazão alvo atual');
+    approx(updatedSuggestion, diameterFromFlowVelocity(14, 2), 1e-12, 'Diâmetro sugerido deve refletir a nova vazão de projeto');
 });
 
 test('tempo de curso e rampa aceitam zero e respeitam a escala configurada', () => {

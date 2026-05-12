@@ -1,13 +1,13 @@
 // ===================================
-// UTILS: Gerenciador de Estado de Portas
-// Arquivo: js/utils/PortStateManager.js
+// INFRASTRUCTURE DOM: Gerenciador visual de portas
+// Arquivo: js/infrastructure/dom/PortStateManager.js
 // ===================================
 
-import { ENGINE } from '../application/engine/SimulationEngine.js';
-import { getComponentPortElement } from '../infrastructure/dom/ComponentVisualRegistry.js';
+import { ENGINE } from '../../application/engine/SimulationEngine.js';
+import { getComponentPortElement } from './ComponentVisualRegistry.js';
 
 /**
- * Atualiza o estado visual das portas com base nas conexões atuais
+ * Atualiza o estado visual das portas com base nas conexões atuais.
  */
 export function updatePortStates() {
     const allPorts = document.querySelectorAll('#workspace-canvas .port-node');

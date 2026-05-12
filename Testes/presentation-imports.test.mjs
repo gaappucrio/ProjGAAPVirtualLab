@@ -5,6 +5,7 @@ const PRESENTATION_MODULES = [
     '../js/presentation/controllers/PresentationController.js',
     '../js/presentation/controllers/ClipboardController.js',
     '../js/presentation/controllers/ComponentRotationController.js',
+    '../js/presentation/controllers/DeleteSelectionController.js',
     '../js/presentation/controllers/DragDropController.js',
     '../js/presentation/controllers/HelpController.js',
     '../js/presentation/controllers/MonitorController.js',

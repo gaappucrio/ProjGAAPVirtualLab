@@ -8,7 +8,7 @@ import { EngineEventPayloads } from '../../application/events/EventPayloads.js';
 import {
     getPropertyTabsState,
     restorePropertyTabsState
-} from '../../utils/PropertyTabs.js';
+} from '../properties/PropertyTabs.js';
 import { subscribeLanguageChanges } from '../../utils/LanguageManager.js';
 import { setupLayoutController } from './LayoutController.js';
 import { createMonitorController } from './MonitorController.js';

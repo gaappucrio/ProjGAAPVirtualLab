@@ -82,3 +82,10 @@ export function unregisterComponentVisual(componentOrId) {
 export function clearComponentVisualRegistry() {
     visualsByComponentId.clear();
 }
+
+export function removeAllComponentVisualElements() {
+    visualsByComponentId.forEach((entry) => {
+        entry.visualEl?.remove();
+    });
+    clearComponentVisualRegistry();
+}

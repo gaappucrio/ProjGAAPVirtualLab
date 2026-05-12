@@ -23,9 +23,13 @@ const removedFiles = [
     ['js', ['Motor', 'Fisico.js'].join('')],
     ['js', ['Registro', 'Componentes.js'].join('')],
     ['js', ['Fabrica', 'Equipamentos.js'].join('')],
+    ['js', 'Config.js'],
     ['js', 'utils', ['Flow', 'Solver.js'].join('')],
     ['js', 'utils', 'InputValidator.js'],
     ['js', 'utils', 'PipeHydraulics.js'],
+    ['js', 'utils', 'PropertyTabs.js'],
+    ['js', 'utils', 'Tooltips.js'],
+    ['js', 'utils', 'PortStateManager.js'],
     ['js', 'presentation', 'properties', 'component', 'PumpValveComponentPropertiesPresenter.js']
 ];
 

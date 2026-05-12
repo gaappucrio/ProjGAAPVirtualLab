@@ -9,7 +9,7 @@ import { ValvulaLogica } from '../../domain/components/ValvulaLogica.js';
 import { ConnectionModel } from '../../domain/models/ConnectionModel.js';
 import { FabricaDeEquipamentos, updatePortStates } from '../../infrastructure/dom/ComponentVisualFactory.js';
 import { applyComponentVisualRotation } from '../../infrastructure/dom/ComponentVisualTransform.js';
-import { GRID_SIZE } from '../../Config.js';
+import { GRID_SIZE } from '../../infrastructure/dom/ComponentVisualConfig.js';
 import { isEnglishLanguage } from '../../utils/LanguageManager.js';
 import { makeComponentDraggable } from './DragDropController.js';
 import { updateAllPipes } from './PipeController.js';

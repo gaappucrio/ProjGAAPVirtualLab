@@ -11,7 +11,7 @@ import {
     setPortStateUpdater
 } from './application/engine/SimulationEngine.js';
 import { ComponentEventPayloads, EngineEventPayloads } from './application/events/EventPayloads.js';
-import { updatePortStates } from './utils/PortStateManager.js';
+import { updatePortStates } from './infrastructure/dom/PortStateManager.js';
 import {
     applyLanguageToDocument,
     subscribeLanguageChanges,
@@ -25,11 +25,12 @@ import { setupDragDrop } from './presentation/controllers/DragDropController.js'
 import { setupComponentRotationController } from './presentation/controllers/ComponentRotationController.js';
 import { setupToolbar } from './presentation/controllers/ToolbarController.js';
 import { setupClipboardController } from './presentation/controllers/ClipboardController.js';
+import { setupDeleteSelectionController } from './presentation/controllers/DeleteSelectionController.js';
 import { createConnectionServiceRuntime } from './application/services/ConnectionServiceRuntime.js';
-import { findConnectionByPath } from './infrastructure/rendering/ConnectionVisualRegistry.js';
 import {
     clearComponentVisualRegistry,
     getRegisteredComponentVisualPosition,
+    removeAllComponentVisualElements,
     unregisterComponentVisual
 } from './infrastructure/dom/ComponentVisualRegistry.js';
 
@@ -61,6 +62,7 @@ setupPipeControl({ engine: ENGINE, connectionService });
 setupDragDrop();
 setupComponentRotationController({ engine: ENGINE, onRotate: updateAllPipes });
 setupClipboardController({ engine: ENGINE });
+setupDeleteSelectionController({ engine: ENGINE, connectionService });
 
 setPortStateUpdater(() => updatePortStates());
 setConnectionVisualUpdater(() => updateConnectionVisualStates());
@@ -72,9 +74,7 @@ setComponentVisualCleanupHooks({
 
 setupToolbar({
     engine: ENGINE,
-    onClearCanvas: () => {
-        document.querySelectorAll('#workspace-canvas .placed-component').forEach((item) => item.remove());
-    },
+    onClearCanvas: () => removeAllComponentVisualElements(),
     onTopologyVisualChange: () => updateAllPipes()
 });
 
@@ -83,38 +83,6 @@ subscribeLanguageChanges(() => {
     translateDefaultTagsForCurrentLanguage();
     updatePortStates();
     updateAllPipes();
-});
-
-document.addEventListener('keydown', (e) => {
-    const targetTagName = e.target.tagName.toLowerCase();
-    if (targetTagName === 'input' || targetTagName === 'textarea' || targetTagName === 'select' || e.target.isContentEditable) return;
-
-    if (e.key === 'Delete' || e.key === 'Backspace') {
-        const selectedComponentDivs = [...document.querySelectorAll('.placed-component.selected')];
-        if (selectedComponentDivs.length > 0) {
-            selectedComponentDivs.forEach((selectedCompDiv) => {
-                const compId = selectedCompDiv.dataset.id;
-                const comp = ENGINE.componentes.find((c) => c.id === compId);
-                if (comp) {
-                    ENGINE.removeComponent(comp);
-                    selectedCompDiv.remove();
-                }
-            });
-            ENGINE.selectComponent(null);
-            updatePortStates();
-            return;
-        }
-
-        const selectedPipe = document.querySelector('.pipe-line.selected');
-        if (selectedPipe) {
-            const conn = findConnectionByPath(selectedPipe);
-            if (conn) {
-                connectionService.remove(conn);
-                ENGINE.selectComponent(null);
-                updatePortStates();
-            }
-        }
-    }
 });
 
 console.log('App.js carregado - todos os controladores inicializados');

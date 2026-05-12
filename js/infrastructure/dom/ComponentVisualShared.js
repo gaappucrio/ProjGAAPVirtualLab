@@ -1,6 +1,6 @@
 import { ENGINE } from '../../application/engine/SimulationEngine.js';
 import { COMPONENT_EVENTS, ENGINE_EVENTS } from '../../application/events/EventTypes.js';
-import { colorPort, labelStyle } from '../../Config.js';
+import { colorPort, labelStyle } from './ComponentVisualConfig.js';
 import {
     formatUnitValue,
     getUnitSymbol,

@@ -1,5 +1,5 @@
 import { bindUnitsPanel, renderUnitsPanel } from '../controllers/UnitsController.js';
-import { TOOLTIPS } from '../../utils/Tooltips.js';
+import { TOOLTIPS } from './PropertyTooltips.js';
 import {
     getUnitOptions,
     getUnitPreferences,

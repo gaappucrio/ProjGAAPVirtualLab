@@ -8,7 +8,7 @@ import { getComponentDefinition } from '../../presentation/registry/ComponentDef
 import { getComponentTagPrefix } from '../../utils/LanguageManager.js';
 import { getComponentVisualSpec } from './ComponentVisualSpecs.js';
 import { registerComponentVisual } from './ComponentVisualRegistry.js';
-export { updatePortStates } from '../../utils/PortStateManager.js';
+export { updatePortStates } from './PortStateManager.js';
 
 let nextVisualSequence = 1;
 
