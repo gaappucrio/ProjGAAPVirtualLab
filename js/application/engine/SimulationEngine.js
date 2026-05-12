@@ -276,9 +276,6 @@ export class SistemaSimulacao extends Observable {
 
     stop() {
         this.isRunning = false;
-        this.clearConnectionDynamics();
-        this.resetHydraulicState();
-        this.componentes.forEach(c => c.onSimulationStop());
         this.notify(EngineEventPayloads.motorState(false));
         this.updatePipesVisual();
     }
@@ -363,7 +360,7 @@ export class SistemaSimulacao extends Observable {
         }
 
         const state = this.getConnectionState(conn);
-        return this.isRunning ? state.flowLps : null;
+        return state.flowLps;
     }
 
     getComponentById(id) {

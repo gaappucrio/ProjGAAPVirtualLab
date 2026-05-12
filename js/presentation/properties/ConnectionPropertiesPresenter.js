@@ -1,15 +1,19 @@
 import { EngineEventPayloads } from '../../application/events/EventPayloads.js';
 import { getPresentationEngine } from '../context/PresentationEngineContext.js';
 import { clearInputError, InputValidator, showInputError } from '../validation/InputValidator.js';
-import { bindPropertyTabs, renderPropertyTabs } from '../../utils/PropertyTabs.js';
-import { TOOLTIPS } from '../../utils/Tooltips.js';
+import { bindPropertyTabs, renderPropertyTabs } from './PropertyTabs.js';
+import { TOOLTIPS } from './PropertyTooltips.js';
 import { localizeElement, translateLiteral } from '../../utils/LanguageManager.js';
 import {
     DEFAULT_DESIGN_VELOCITY_MPS,
+    MAX_NETWORK_FLOW_LPS,
     DEFAULT_PIPE_ROUGHNESS_MM,
     getUnitSymbol
 } from '../../utils/Units.js';
-import { getSuggestedDiameterForConnection } from '../../domain/services/PipeHydraulics.js';
+import {
+    getCurrentDesignFlowCandidateLps,
+    getSuggestedDiameterForConnection
+} from '../../domain/services/PipeHydraulics.js';
 import {
     displayBound,
     displayEditableUnitValue,
@@ -35,6 +39,10 @@ function lengthInputValue(rawValue, fallback = NaN) {
 
 function getSuggestedDiameterM(connection, state) {
     return getSuggestedDiameterForConnection(connection, state);
+}
+
+function getDesignFlowCandidateM(connection, state) {
+    return getCurrentDesignFlowCandidateLps(connection, state);
 }
 
 function formatFluidName(fluid) {
@@ -66,6 +74,11 @@ export function renderConnectionProperties({
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.velocidadeProjeto}">Velocidade de Projeto (m/s)</label>
             <input type="number" id="input-pipe-design-velocity" title="${TOOLTIPS.conexao.velocidadeProjeto}" value="${connection.designVelocityMps || DEFAULT_DESIGN_VELOCITY_MPS}" step="0.1" min="0.1" max="8">
+        </div>
+        <div class="prop-group">
+            <label title="${TOOLTIPS.conexao.vazaoProjeto}">Vazão de Dimensionamento (${getUnitSymbol('flow')})</label>
+            <input type="number" id="input-pipe-design-flow" title="${TOOLTIPS.conexao.vazaoProjeto}" value="${displayEditableUnitValue('flow', connection.designFlowLps || 0, 4)}" step="${displayStep('flow', 0.1)}" min="${displayBound('flow', 0)}" max="${displayBound('flow', MAX_NETWORK_FLOW_LPS)}">
+            <button id="btn-use-current-design-flow" type="button" title="${TOOLTIPS.conexao.usarVazaoAtualProjeto}" ${getDesignFlowCandidateM(connection, state) > 0 ? '' : 'disabled'} style="margin-top:6px; padding:6px 8px; border:1px solid #bdc3c7; border-radius:4px; background:#fff; font-size:11px; cursor:pointer;">Capturar vazão atual</button>
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.diametroSugerido}">Diâmetro Sugerido (${getUnitSymbol('length')})</label>
@@ -209,16 +222,45 @@ export function renderConnectionProperties({
     });
 
     bind('input-pipe-design-velocity', 'change', (event) => {
-        validatePipeInput(
-            event.target,
-            (value, name) => InputValidator.validateNumber(value, 0.1, 8, name),
-            'Velocidade de projeto',
-            (value) => {
-                connection.designVelocityMps = value;
-                const suggested = getSuggestedDiameterM(connection, engine.getConnectionState(connection));
-                setValue('disp-pipe-suggested-diameter', displayUnitValue('length', suggested, 4));
-            }
-        );
+        const result = InputValidator.validateNumber(event.target.value, 0.1, 8, 'Velocidade de projeto');
+        if (!result.valid) {
+            showInputError(event.target, result.error);
+            return;
+        }
+
+        clearInputError(event.target);
+        connection.designVelocityMps = result.value;
+        const suggested = getSuggestedDiameterM(connection, engine.getConnectionState(connection));
+        setValue('disp-pipe-suggested-diameter', displayUnitValue('length', suggested, 4));
+        engine.notify(EngineEventPayloads.panelUpdate(0));
+    });
+
+    bind('input-pipe-design-flow', 'change', (event) => {
+        const baseFlowLps = rawBaseValue('flow', event.target.value, NaN);
+        const result = InputValidator.validateNumber(baseFlowLps, 0, MAX_NETWORK_FLOW_LPS, 'Vazão de dimensionamento');
+        if (!result.valid) {
+            showInputError(event.target, result.error);
+            return;
+        }
+
+        clearInputError(event.target);
+        connection.designFlowLps = result.value;
+        const suggested = getSuggestedDiameterM(connection, engine.getConnectionState(connection));
+        setValue('input-pipe-design-flow', displayEditableUnitValue('flow', connection.designFlowLps || 0, 4));
+        setValue('disp-pipe-suggested-diameter', displayUnitValue('length', suggested, 4));
+        engine.notify(EngineEventPayloads.panelUpdate(0));
+    });
+
+    bind('btn-use-current-design-flow', 'click', () => {
+        const state = engine.getConnectionState(connection);
+        const candidate = getDesignFlowCandidateM(connection, state);
+        if (candidate <= 0) return;
+
+        connection.designFlowLps = candidate;
+        const suggested = getSuggestedDiameterM(connection, state);
+        setValue('input-pipe-design-flow', displayEditableUnitValue('flow', connection.designFlowLps, 4));
+        setValue('disp-pipe-suggested-diameter', displayUnitValue('length', suggested, 4));
+        engine.notify(EngineEventPayloads.panelUpdate(0));
     });
 
     bind('btn-apply-pipe-suggested-diameter', 'click', () => {

@@ -4,7 +4,10 @@ import { FonteLogica } from '../../domain/components/FonteLogica.js';
 import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
 import { TrocadorCalorLogico } from '../../domain/components/TrocadorCalorLogico.js';
 import { ValvulaLogica } from '../../domain/components/ValvulaLogica.js';
-import { getSuggestedDiameterForConnection } from '../../domain/services/PipeHydraulics.js';
+import {
+    getCurrentDesignFlowCandidateLps,
+    getSuggestedDiameterForConnection
+} from '../../domain/services/PipeHydraulics.js';
 import { toDisplayValue } from '../../utils/Units.js';
 import { localizeElement, translateLiteral } from '../../utils/LanguageManager.js';
 import { byId, isActive, setValue } from './PropertyDomAdapter.js';
@@ -42,7 +45,13 @@ function updateConnectionValues(engine, connection) {
     setValue('disp-pipe-response', state.responseTimeS.toFixed(2));
 
     const suggestedDiameterM = getSuggestedDiameterForConnection(connection, state);
+    const designFlowInput = byId('input-pipe-design-flow');
+    if (designFlowInput && !isActive(designFlowInput)) {
+        setFieldValue('input-pipe-design-flow', connection.designFlowLps || 0, 'flow', 4);
+    }
     setFieldValue('disp-pipe-suggested-diameter', suggestedDiameterM, 'length', 4);
+    const useCurrentButton = byId('btn-use-current-design-flow');
+    if (useCurrentButton) useCurrentButton.disabled = getCurrentDesignFlowCandidateLps(connection, state) <= 0;
     const applySuggestedButton = byId('btn-apply-pipe-suggested-diameter');
     if (applySuggestedButton) applySuggestedButton.disabled = suggestedDiameterM <= 0;
 }

@@ -8,7 +8,7 @@ import { getComponentDefinition } from '../registry/ComponentDefinitionRegistry.
 import { ComponentEventPayloads } from '../../application/events/EventPayloads.js';
 import { camera } from './CameraController.js';
 import { updateAllPipes } from './PipeController.js';
-import { GRID_SIZE } from '../../Config.js';
+import { GRID_SIZE } from '../../infrastructure/dom/ComponentVisualConfig.js';
 
 function getSelectedDragElements(fallbackElement) {
     const selectedElements = [...document.querySelectorAll('#workspace-canvas .placed-component.selected')]

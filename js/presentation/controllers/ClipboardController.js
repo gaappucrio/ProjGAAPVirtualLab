@@ -8,7 +8,8 @@ import { TrocadorCalorLogico } from '../../domain/components/TrocadorCalorLogico
 import { ValvulaLogica } from '../../domain/components/ValvulaLogica.js';
 import { ConnectionModel } from '../../domain/models/ConnectionModel.js';
 import { FabricaDeEquipamentos, updatePortStates } from '../../infrastructure/dom/ComponentVisualFactory.js';
-import { GRID_SIZE } from '../../Config.js';
+import { applyComponentVisualRotation } from '../../infrastructure/dom/ComponentVisualTransform.js';
+import { GRID_SIZE } from '../../infrastructure/dom/ComponentVisualConfig.js';
 import { isEnglishLanguage } from '../../utils/LanguageManager.js';
 import { makeComponentDraggable } from './DragDropController.js';
 import { updateAllPipes } from './PipeController.js';
@@ -16,7 +17,8 @@ import { updateAllPipes } from './PipeController.js';
 const PASTE_OFFSET = GRID_SIZE;
 
 const COMMON_CLONEABLE_PROPERTIES = [
-    'diametroConexaoM'
+    'diametroConexaoM',
+    'rotacaoVisualGraus'
 ];
 
 const CLONEABLE_PROPERTIES_BY_TYPE = {
@@ -311,6 +313,7 @@ function pasteComponentFromSnapshot({ engine, snapshot, pasteCount, selectAfterP
     visual.logica.y = y;
     visual.style.left = `${x}px`;
     visual.style.top = `${y}px`;
+    applyComponentVisualRotation(visual.logica, visual.logica.rotacaoVisualGraus);
 
     workspaceCanvas.appendChild(visual);
     makeComponentDraggable(visual);

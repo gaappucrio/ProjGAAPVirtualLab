@@ -96,6 +96,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Regime de escoamento.
 - Tempo de resposta hidráulica.
 - Diâmetro sugerido por continuidade, usando vazão de projeto e velocidade de projeto.
+- Vazão de dimensionamento editável no painel do trecho, com botão para capturar a vazão atual/alvo como base estável do cálculo de diâmetro sugerido.
 
 ### 2.7 Monitoramento
 
@@ -138,6 +139,7 @@ O projeto segue uma arquitetura em camadas leves:
 ```text
 index.html
   -> js/App.js
+      -> js/VirtualLabRuntime.js
       -> application/
       -> domain/
       -> presentation/
@@ -145,7 +147,7 @@ index.html
       -> utils/
 ```
 
-O arquivo `js/App.js` atua como composition root. Ele conecta o motor de simulação aos controladores de apresentação, adaptadores visuais e serviços de conexão.
+O arquivo `js/App.js` atua como ponto de entrada minimo. A ordem de inicializacao do navegador fica concentrada em `js/VirtualLabRuntime.js`, que conecta o motor de simulacao aos controladores de apresentacao, adaptadores visuais e servicos de conexao.
 
 ### 3.1 `domain/`
 
@@ -209,7 +211,9 @@ Contém controllers, presenters, validações de UI e lógica de painel.
 Arquivos principais:
 
 - `presentation/controllers/PresentationController.js`
+- `presentation/controllers/PropertyPanelController.js`
 - `presentation/controllers/ClipboardController.js`
+- `presentation/controllers/DeleteSelectionController.js`
 - `presentation/controllers/HelpController.js`
 - `presentation/controllers/ToolbarController.js`
 - `presentation/controllers/PipeController.js`
@@ -224,6 +228,8 @@ Arquivos principais:
 - `presentation/properties/DefaultPropertiesPresenter.js`
 - `presentation/properties/PropertyLiveUpdater.js`
 - `presentation/properties/PropertyDomAdapter.js`
+- `presentation/properties/PropertyTabs.js`
+- `presentation/properties/PropertyTooltips.js`
 - `presentation/properties/component/*`
 - `presentation/validation/InputValidator.js`
 - `presentation/monitoring/MonitorSlotHistory.js`
@@ -249,9 +255,11 @@ Arquivos principais:
 
 - `infrastructure/charts/PumpChartAdapter.js`
 - `infrastructure/charts/TankChartAdapter.js`
+- `infrastructure/dom/ComponentVisualConfig.js`
 - `infrastructure/dom/ComponentVisualFactory.js`
 - `infrastructure/dom/ComponentVisualRegistry.js`
 - `infrastructure/dom/ComponentVisualSpecs.js`
+- `infrastructure/dom/PortStateManager.js`
 - `infrastructure/rendering/FluidVisualStyle.js`
 - `infrastructure/rendering/PipeRenderer.js`
 - `infrastructure/rendering/ConnectionVisualRegistry.js`
@@ -259,6 +267,8 @@ Arquivos principais:
 Responsabilidades:
 
 - Criar SVG/DOM dos componentes.
+- Centralizar constantes visuais dos componentes, como tamanho da grade, cor de portas e estilo de rotulos SVG.
+- Atualizar estado visual das portas conectadas/desconectadas.
 - Registrar posições visuais.
 - Renderizar tubos.
 - Resolver cores visuais de fluidos para componentes, tubos e tanques.
@@ -273,25 +283,25 @@ Arquivos relevantes:
 
 - `utils/Units.js`
 - `utils/LanguageManager.js`
-- `utils/Tooltips.js`
-- `utils/PropertyTabs.js`
-- `utils/PortStateManager.js`
 - `utils/PerformanceProfiler.js`
 
-Observação: parte desses arquivos é visual e pode ser realocada futuramente para `presentation/` ou `infrastructure/`.
+Observação: os utilitários visuais de abas, tooltips e estado de portas já foram realocados para `presentation/` e `infrastructure/`.
 
 ## 4. Fluxo de Inicialização
 
 1. `index.html` carrega `js/App.js`.
 2. `App.js` importa o singleton `ENGINE`.
-3. `App.js` inicializa a apresentação com `setupPresentation({ engine: ENGINE })`.
-4. `App.js` inicializa o helper de tutorial com `setupHelpController()`.
+3. `App.js` chama `setupVirtualLabRuntime({ engine: ENGINE })`.
+4. O runtime cria o servico de conexoes e inicializa os controllers de apresentacao.
 5. O engine é injetado na camada de apresentação via `PresentationEngineContext`.
 6. São inicializados:
    - Câmera.
    - Drag-and-drop.
    - Controle de tubos.
    - Toolbar.
+   - Monitoramento.
+   - Painel de propriedades.
+   - Atalhos de remocao e clipboard.
    - Atualização visual de portas.
 7. Adaptadores visuais são registrados no engine:
    - Resolver de posição visual.
@@ -723,10 +733,20 @@ Coberturas importantes:
 - Mistura gradual de cor visual no conteúdo de tanques.
 - Preservação do preset `custom`/`personalizado` quando os valores coincidem com um preset.
 - Exportação de dados com resumo de altura relativa e sem anexos gráficos.
+- Pausa da simulação preservando o último estado hidráulico visível em componentes, conexões e painel de propriedades.
 - Pressão atmosférica igual em todos os presets padrão.
 - Água escoando mais rápido que óleo leve em ramais equivalentes para tanque.
 - Bomba ativa na saída de tanque aumentando vazão sem manter o limite puramente gravitacional do tanque.
 - Válvula totalmente aberta, com `Cv` alto e `K=0`, não aplica perda mínima escondida e se aproxima de tubo equivalente.
+- Configuracao visual de componentes centralizada em `infrastructure/dom/ComponentVisualConfig.js`, sem manter o antigo `js/Config.js` como fachada solta.
+
+Auditoria dos testes:
+
+- A suite executada por `npm.cmd test` cobre os 6 arquivos listados acima.
+- Esses arquivos contem 60 blocos `test(...)` executados pelo Node e 262 chamadas de `assert`.
+- Nao foi encontrado padrao trivial como `assert.ok(true)`, `assert.equal(true, true)`, `print(true)` ou `console.log` usado como teste na suite principal.
+- Os testes exercitam resultados observaveis: valores numericos, estado de stores, eventos, HTML gerado, regras de camadas, ausencia de dependencias indevidas e comportamento do solver.
+- `test-phase1.mjs` e os HTMLs em `Testes/VERTESTE/` sao artefatos auxiliares/manuais; eles nao fazem parte do script `npm test`.
 
 ## 16. Estado Atual da Refatoração
 
@@ -750,14 +770,21 @@ Marcos concluídos:
 - `I18n.js` renomeado para `LanguageManager.js` e imports atualizados.
 - Helper de tutorial adicionado ao cabeçalho.
 - Seleção múltipla por retângulo azul, `Ctrl+clique`, arraste em grupo, remoção em lote e clipboard de sistemas inteiros.
+- `js/Config.js` removido; constantes visuais migradas para `infrastructure/dom/ComponentVisualConfig.js`.
+- Dimensionamento de canos passou a expor vazão de dimensionamento manual e captura da vazão atual/alvo, deixando claro que ela não controla a vazão real da rede.
+- Pausa da simulação passou a congelar leituras hidráulicas em vez de zerar a UI.
+- `Tooltips.js` e `PropertyTabs.js` saíram de `utils/` e foram realocados para `presentation/properties`.
+- `PortStateManager.js` saiu de `utils/` e foi realocado para `infrastructure/dom`.
+- Atalho global de remoção e limpeza visual do canvas saíram de `App.js` e foram movidos para controller/infraestrutura dedicados.
+- `PresentationController.js` deixou de coordenar a apresentacao completa e passou a ser uma fachada de compatibilidade para `PropertyPanelController.js`.
+- `App.js` foi reduzido ao ponto de entrada; a ordem de inicializacao da UI foi movida para `VirtualLabRuntime.js`.
 - Testes de arquitetura e comportamento adicionados.
 - Verificação final de consistência física adicionou validação numérica estrita, normalização segura de parâmetros de tubulação e proteção contra altura útil inválida em tanques.
 
 Pontos ainda observáveis:
 
-- `PresentationController.js` ainda coordena vários controllers. Ele não é mais o monólito original, mas ainda é o ponto principal da apresentação.
-- `utils/Tooltips.js`, `utils/PropertyTabs.js` e `utils/PortStateManager.js` poderiam ser realocados futuramente para camadas mais específicas.
-- `App.js` ainda contém alguns acessos diretos ao DOM para atalhos globais e limpeza visual. Isso é aceitável para composition root, mas pode ser extraído se a base crescer.
+- `VirtualLabRuntime.js` agora concentra a montagem do navegador. Isso é intencional: ele é a borda de composição entre engine, controllers e infraestrutura visual.
+- `PresentationController.js` permanece apenas como fachada de compatibilidade. Novas mudanças devem mirar `PropertyPanelController.js` ou controllers específicos.
 
 ## 17. Boas Práticas Para Manutenção
 

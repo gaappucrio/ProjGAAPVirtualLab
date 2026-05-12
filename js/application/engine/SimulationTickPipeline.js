@@ -14,6 +14,7 @@ export class SimulationTickPipeline {
     calculateDeltaTime(timestamp) {
         let dt = ((timestamp - this.engine.lastTime) / 1000.0) * this.engine.velocidade;
         this.engine.lastTime = timestamp;
+        if (!Number.isFinite(dt) || dt < 0) dt = 0;
         if (dt > MAX_FRAME_DT_SECONDS) dt = MAX_FRAME_DT_SECONDS;
         return dt;
     }

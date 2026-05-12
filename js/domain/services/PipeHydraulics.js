@@ -88,8 +88,10 @@ export function classifyFlowRegime(reynolds) {
  */
 export function reynoldsFromFlow(flowLps, diameterM, areaM2, density, viscosityPaS) {
     if (flowLps <= 0 || diameterM <= 0 || areaM2 <= 0) return 0;
+    const safeDensity = positiveNumber(density, 0);
+    if (safeDensity <= 0) return 0;
     const velocity = lpsToM3s(flowLps) / areaM2;
-    return (density * velocity * diameterM) / Math.max(0.00001, viscosityPaS);
+    return (safeDensity * velocity * diameterM) / positiveNumber(viscosityPaS, DEFAULT_FLUID_VISCOSITY_PA_S);
 }
 
 /**
@@ -98,7 +100,7 @@ export function reynoldsFromFlow(flowLps, diameterM, areaM2, density, viscosityP
  */
 export function darcyFrictionFactor(reynolds, relativeRoughness) {
     if (!Number.isFinite(reynolds) || reynolds <= 0) return DEFAULT_PIPE_FRICTION;
-    if (reynolds < 2300) return clamp(64 / reynolds, 0.008, 0.15);
+    if (reynolds < 2300) return 64 / reynolds;
 
     const turbulent = 0.25 / Math.pow(
         Math.log10((relativeRoughness / 3.7) + (5.74 / Math.pow(reynolds, 0.9))),

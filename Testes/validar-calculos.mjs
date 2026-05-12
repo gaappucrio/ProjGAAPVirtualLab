@@ -11,11 +11,14 @@ import {
     calcularSaidaTrocadorCalor
 } from '../js/domain/components/TrocadorCalorLogico.js';
 import { VALVE_PROFILE_DEFINITIONS, ValvulaLogica } from '../js/domain/components/ValvulaLogica.js';
+import { pressureLossFromFlow } from '../js/domain/components/BaseComponente.js';
 import { ConnectionModel } from '../js/domain/models/ConnectionModel.js';
 import {
+    darcyFrictionFactor,
     diameterFromFlowVelocity,
     diameterFromM3sVelocity,
     ensureConnectionProperties,
+    getCurrentDesignFlowCandidateLps,
     getSuggestedDiameterForConnection
 } from '../js/domain/services/PipeHydraulics.js';
 import { buildPumpCurveDatasets } from '../js/infrastructure/charts/PumpChartAdapter.js';
@@ -88,6 +91,27 @@ test('propriedades hidraulicas de conexao preservam zero fisico e reparam invali
     assert.equal(corrigida.transientFlowLps, 0);
     assert.equal(corrigida.lastResolvedFlowLps, 0);
     assert.ok(corrigida.areaM2 > 0, 'Conexao corrigida deve manter area hidraulica positiva');
+});
+
+test('perda de pressao preserva coeficiente zero e atrito laminar Darcy', () => {
+    approx(
+        pressureLossFromFlow(10, 0.01, 1000, 0),
+        0,
+        1e-12,
+        'Perda de pressao com K zero'
+    );
+    approx(
+        darcyFrictionFactor(100, 0),
+        0.64,
+        1e-12,
+        'Fator de Darcy laminar deve seguir 64/Re sem teto artificial'
+    );
+    approx(
+        darcyFrictionFactor(2000, 0),
+        0.032,
+        1e-12,
+        'Fator de Darcy laminar proximo da transicao'
+    );
 });
 
 test('tanque normaliza altura util e bocais para manter hidrostatica fisica', () => {
@@ -207,6 +231,59 @@ test('mistura de fluidos pondera densidade e viscosidade por contribuicao', () =
     approx(mistura.composicao['Óleo leve'], 1 / 3, 1e-12, 'fracao de oleo leve na mistura');
 });
 
+test('mistura de fluidos conserva energia sensivel ao calcular temperatura', () => {
+    const fluidoFrio = {
+        nome: 'Fluido frio',
+        densidade: 1000,
+        temperatura: 20,
+        viscosidadeDinamicaPaS: 0.001,
+        calorEspecificoJkgK: 4000,
+        pressaoVaporBar: 0.02,
+        pressaoAtmosfericaBar: DEFAULT_ATMOSPHERIC_PRESSURE_BAR
+    };
+    const fluidoQuente = {
+        nome: 'Fluido quente',
+        densidade: 800,
+        temperatura: 100,
+        viscosidadeDinamicaPaS: 0.002,
+        calorEspecificoJkgK: 2000,
+        pressaoVaporBar: 0.01,
+        pressaoAtmosfericaBar: DEFAULT_ATMOSPHERIC_PRESSURE_BAR
+    };
+
+    const mistura = mixFluidos([
+        { fluido: fluidoFrio, volumeL: 1 },
+        { fluido: fluidoQuente, volumeL: 1 }
+    ]);
+    const capacidadeFrio = fluidoFrio.densidade * fluidoFrio.calorEspecificoJkgK;
+    const capacidadeQuente = fluidoQuente.densidade * fluidoQuente.calorEspecificoJkgK;
+    const temperaturaEsperada = (
+        (capacidadeFrio * fluidoFrio.temperatura)
+        + (capacidadeQuente * fluidoQuente.temperatura)
+    ) / (capacidadeFrio + capacidadeQuente);
+    const calorEspecificoEsperado = (capacidadeFrio + capacidadeQuente) / (fluidoFrio.densidade + fluidoQuente.densidade);
+
+    approx(mistura.temperatura, temperaturaEsperada, 1e-12, 'Temperatura por balanco de energia sensivel');
+    approx(mistura.calorEspecificoJkgK, calorEspecificoEsperado, 1e-12, 'Cp massico da mistura');
+});
+
+test('mistura do tanque considera volume que saiu no mesmo passo', () => {
+    const tanque = new TanqueLogico('T-MIX', 'Tanque-Mix', 0, 0);
+    const agua = FLUID_PRESETS.agua;
+    const oleo = FLUID_PRESETS.oleo_leve;
+
+    tanque.fluidoConteudo = mixFluidos([{ fluido: agua, volumeL: 100 }]);
+    tanque.volumeAtual = 70;
+    tanque.lastQin = 50;
+    tanque.lastQout = 80;
+    tanque.atualizarMisturaConteudo(1, oleo, 100);
+
+    const densidadeEsperada = ((20 * agua.densidade) + (50 * oleo.densidade)) / 70;
+    approx(tanque.fluidoConteudo.densidade, densidadeEsperada, 1e-9, 'Densidade apos entrada e saida simultaneas');
+    approx(tanque.fluidoConteudo.composicao[agua.nome], 20 / 70, 1e-12, 'Fracao retida de agua no tanque');
+    approx(tanque.fluidoConteudo.composicao[oleo.nome], 50 / 70, 1e-12, 'Fracao retida de oleo no tanque');
+});
+
 test('fonte preserva preset custom mesmo com propriedades iguais a um preset', () => {
     const fonte = new FonteLogica('F-02', 'inlet-02', 0, 0);
 
@@ -244,6 +321,15 @@ test('diâmetro sugerido usa vazão de projeto estável ao aplicar repetidas vez
 
     approx(connection.designFlowLps, 20, 1e-12, 'Vazão de projeto preservada');
     approx(secondSuggestion, firstSuggestion, 1e-12, 'Diâmetro sugerido deve permanecer estável');
+
+    connection.designFlowLps = getCurrentDesignFlowCandidateLps(connection, {
+        flowLps: 8,
+        targetFlowLps: 14
+    });
+    const updatedSuggestion = getSuggestedDiameterForConnection(connection, recalculatedStateAfterApply);
+
+    approx(connection.designFlowLps, 14, 1e-12, 'Vazão de projeto pode ser atualizada explicitamente pela vazão alvo atual');
+    approx(updatedSuggestion, diameterFromFlowVelocity(14, 2), 1e-12, 'Diâmetro sugerido deve refletir a nova vazão de projeto');
 });
 
 test('tempo de curso e rampa aceitam zero e respeitam a escala configurada', () => {
@@ -440,6 +526,14 @@ test('controle de nível escolhe perfil automaticamente e restaura perfil manual
     assert.equal(valvula.tipoCaracteristica, 'equal_percentage');
     assert.equal(valvula.rangeabilidade, 120);
     assert.equal(valvula.tempoCursoSegundos, 1.5);
+});
+
+test('fator de cavitação da bomba permanece finito com NPSHa inválido', () => {
+    const bomba = new BombaLogica('B-NPSH', 'B-NPSH', 0, 0);
+
+    approx(bomba.calcularFatorCavitacao(3, 2.5), 1, 1e-12, 'NPSHa suficiente não limita a bomba');
+    approx(bomba.calcularFatorCavitacao(-1, 2.5), 0.12, 1e-12, 'NPSHa negativo deve limitar sem NaN');
+    approx(bomba.calcularFatorCavitacao(Number.NaN, 2.5), 0.12, 1e-12, 'NPSHa inválido deve limitar sem NaN');
 });
 
 test('curva da bomba reflete alteração de NPSHr sem esconder a mudança pela escala', () => {

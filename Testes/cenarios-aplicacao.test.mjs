@@ -121,15 +121,21 @@ test('geometria de conexão considera altura relativa somente quando habilitada'
 
     engine.usarAlturaRelativa = true;
     const relativeGeometry = engine.getConnectionGeometry(connection);
+    tanque.rotacaoVisualGraus = 90;
+    const rotatedVisualGeometry = engine.getConnectionGeometry(connection);
 
     assert.equal(schematicGeometry.straightLengthM, 1);
     assert.equal(schematicGeometry.headGainM, 0);
     assert.notEqual(relativeGeometry.straightLengthM, schematicGeometry.straightLengthM);
     assert.notEqual(relativeGeometry.headGainM, 0);
+    assert.deepEqual(rotatedVisualGeometry, relativeGeometry, 'Rotação visual não deve alterar geometria física da conexão');
 });
 
-test('pausa da simulação zera vazões atuais do tanque sem alterar volume', () => {
+test('pausa da simulação preserva último estado hidráulico visível', () => {
+    const engine = createEngine();
     const tanque = new TanqueLogico('T-02', 'Tanque-02', 0, 0);
+    const dreno = new DrenoLogico('D-02', 'Dreno-02', 120, 0);
+    const connection = new ConnectionModel({ sourceId: tanque.id, targetId: dreno.id });
     const volumeAntesDaPausa = 420;
 
     tanque.volumeAtual = volumeAntesDaPausa;
@@ -139,18 +145,26 @@ test('pausa da simulação zera vazões atuais do tanque sem alterar volume', ()
     tanque.registrarEntrada(12, 1.2);
     tanque.registrarSaida(4, 1.1);
 
-    let ultimoEventoVolume = null;
-    tanque.subscribe((dados) => {
-        if (dados.tipo === 'volume') ultimoEventoVolume = dados;
-    });
+    engine.add(tanque);
+    engine.add(dreno);
+    engine.addConnection(connection);
+    const state = engine.getConnectionState(connection);
+    state.flowLps = 4;
+    state.targetFlowLps = 4.5;
+    state.velocityMps = 1.6;
+    connection.transientFlowLps = 4;
+    connection.lastResolvedFlowLps = 4.5;
 
-    tanque.onSimulationStop();
+    engine.stop();
 
+    assert.equal(engine.isRunning, false);
     assert.equal(tanque.volumeAtual, volumeAntesDaPausa);
-    assert.equal(tanque.lastQin, 0);
-    assert.equal(tanque.lastQout, 0);
-    assert.equal(tanque.estadoHidraulico.entradaVazaoLps, 0);
-    assert.equal(tanque.estadoHidraulico.saidaVazaoLps, 0);
-    assert.equal(ultimoEventoVolume.qIn, 0);
-    assert.equal(ultimoEventoVolume.qOut, 0);
+    assert.equal(tanque.lastQin, 12);
+    assert.equal(tanque.lastQout, 4);
+    assert.equal(tanque.estadoHidraulico.entradaVazaoLps, 12);
+    assert.equal(tanque.estadoHidraulico.saidaVazaoLps, 4);
+    assert.equal(engine.getConnectionState(connection).flowLps, 4);
+    assert.equal(engine.getConnectionState(connection).targetFlowLps, 4.5);
+    assert.equal(connection.transientFlowLps, 4);
+    assert.equal(connection.lastResolvedFlowLps, 4.5);
 });

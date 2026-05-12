@@ -2,8 +2,8 @@ import { ComponentEventPayloads, EngineEventPayloads } from '../../application/e
 import { COMPONENT_EVENTS, ENGINE_EVENTS } from '../../application/events/EventTypes.js';
 import { InputValidator, clearInputError, parseStrictNumber, showInputError } from '../validation/InputValidator.js';
 import { getPresentationEngine } from '../context/PresentationEngineContext.js';
-import { renderPropertyTabs } from '../../utils/PropertyTabs.js';
-import { TOOLTIPS } from '../../utils/Tooltips.js';
+import { renderPropertyTabs } from './PropertyTabs.js';
+import { TOOLTIPS } from './PropertyTooltips.js';
 import {
     bind,
     byId,

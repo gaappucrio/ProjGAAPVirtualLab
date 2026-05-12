@@ -213,8 +213,8 @@ export class HydraulicBranchModel {
             componentsFromDownstream.forEach((component) => {
                 if (!this.isPassThroughComponent(component)) return;
 
-                const inputConnections = this.context.conexoes.filter((conn) => conn.targetId === component.id);
-                const outputConnections = this.context.conexoes.filter((conn) => conn.sourceId === component.id);
+                const inputConnections = this.context.getInputConnections(component);
+                const outputConnections = this.context.getOutputConnections(component);
                 const inputFlowLps = inputConnections.reduce((sum, conn) => sum + this.context.getConnectionState(conn).flowLps, 0);
                 const outputFlowLps = outputConnections.reduce((sum, conn) => sum + this.context.getConnectionState(conn).flowLps, 0);
                 const imbalanceLps = Math.max(0, inputFlowLps - outputFlowLps);
@@ -232,11 +232,9 @@ export class HydraulicBranchModel {
         const residualImbalanceLps = componentsFromDownstream.reduce((maxImbalance, component) => {
             if (!this.isPassThroughComponent(component)) return maxImbalance;
 
-            const inputFlowLps = this.context.conexoes
-                .filter((conn) => conn.targetId === component.id)
+            const inputFlowLps = this.context.getInputConnections(component)
                 .reduce((sum, conn) => sum + this.context.getConnectionState(conn).flowLps, 0);
-            const outputFlowLps = this.context.conexoes
-                .filter((conn) => conn.sourceId === component.id)
+            const outputFlowLps = this.context.getOutputConnections(component)
                 .reduce((sum, conn) => sum + this.context.getConnectionState(conn).flowLps, 0);
 
             return Math.max(maxImbalance, Math.max(0, inputFlowLps - outputFlowLps));
