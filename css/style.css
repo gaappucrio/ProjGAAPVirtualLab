@@ -1365,6 +1365,7 @@
       /* Define o cursor como uma mão quando o mouse está sobre o componente, indicando que ele é movível */
       box-sizing: border-box;
       /* Inclui a borda e o preenchimento no cálculo do tamanho do componente */
+      transform-origin: center center;
   }
 
   .placed-component.dragging

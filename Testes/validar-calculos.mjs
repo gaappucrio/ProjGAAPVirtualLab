@@ -230,6 +230,42 @@ test('mistura de fluidos pondera densidade e viscosidade por contribuicao', () =
     approx(mistura.composicao['Óleo leve'], 1 / 3, 1e-12, 'fracao de oleo leve na mistura');
 });
 
+test('mistura de fluidos conserva energia sensivel ao calcular temperatura', () => {
+    const fluidoFrio = {
+        nome: 'Fluido frio',
+        densidade: 1000,
+        temperatura: 20,
+        viscosidadeDinamicaPaS: 0.001,
+        calorEspecificoJkgK: 4000,
+        pressaoVaporBar: 0.02,
+        pressaoAtmosfericaBar: DEFAULT_ATMOSPHERIC_PRESSURE_BAR
+    };
+    const fluidoQuente = {
+        nome: 'Fluido quente',
+        densidade: 800,
+        temperatura: 100,
+        viscosidadeDinamicaPaS: 0.002,
+        calorEspecificoJkgK: 2000,
+        pressaoVaporBar: 0.01,
+        pressaoAtmosfericaBar: DEFAULT_ATMOSPHERIC_PRESSURE_BAR
+    };
+
+    const mistura = mixFluidos([
+        { fluido: fluidoFrio, volumeL: 1 },
+        { fluido: fluidoQuente, volumeL: 1 }
+    ]);
+    const capacidadeFrio = fluidoFrio.densidade * fluidoFrio.calorEspecificoJkgK;
+    const capacidadeQuente = fluidoQuente.densidade * fluidoQuente.calorEspecificoJkgK;
+    const temperaturaEsperada = (
+        (capacidadeFrio * fluidoFrio.temperatura)
+        + (capacidadeQuente * fluidoQuente.temperatura)
+    ) / (capacidadeFrio + capacidadeQuente);
+    const calorEspecificoEsperado = (capacidadeFrio + capacidadeQuente) / (fluidoFrio.densidade + fluidoQuente.densidade);
+
+    approx(mistura.temperatura, temperaturaEsperada, 1e-12, 'Temperatura por balanco de energia sensivel');
+    approx(mistura.calorEspecificoJkgK, calorEspecificoEsperado, 1e-12, 'Cp massico da mistura');
+});
+
 test('mistura do tanque considera volume que saiu no mesmo passo', () => {
     const tanque = new TanqueLogico('T-MIX', 'Tanque-Mix', 0, 0);
     const agua = FLUID_PRESETS.agua;
@@ -480,6 +516,14 @@ test('controle de nível escolhe perfil automaticamente e restaura perfil manual
     assert.equal(valvula.tipoCaracteristica, 'equal_percentage');
     assert.equal(valvula.rangeabilidade, 120);
     assert.equal(valvula.tempoCursoSegundos, 1.5);
+});
+
+test('fator de cavitação da bomba permanece finito com NPSHa inválido', () => {
+    const bomba = new BombaLogica('B-NPSH', 'B-NPSH', 0, 0);
+
+    approx(bomba.calcularFatorCavitacao(3, 2.5), 1, 1e-12, 'NPSHa suficiente não limita a bomba');
+    approx(bomba.calcularFatorCavitacao(-1, 2.5), 0.12, 1e-12, 'NPSHa negativo deve limitar sem NaN');
+    approx(bomba.calcularFatorCavitacao(Number.NaN, 2.5), 0.12, 1e-12, 'NPSHa inválido deve limitar sem NaN');
 });
 
 test('curva da bomba reflete alteração de NPSHr sem esconder a mudança pela escala', () => {

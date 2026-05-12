@@ -22,6 +22,7 @@ import { setupCameraControl } from './presentation/controllers/CameraController.
 import { setupHelpController } from './presentation/controllers/HelpController.js';
 import { setupPipeControl, updateAllPipes, updateConnectionVisualStates } from './presentation/controllers/PipeController.js';
 import { setupDragDrop } from './presentation/controllers/DragDropController.js';
+import { setupComponentRotationController } from './presentation/controllers/ComponentRotationController.js';
 import { setupToolbar } from './presentation/controllers/ToolbarController.js';
 import { setupClipboardController } from './presentation/controllers/ClipboardController.js';
 import { createConnectionServiceRuntime } from './application/services/ConnectionServiceRuntime.js';
@@ -58,6 +59,7 @@ setupHelpController();
 setupCameraControl();
 setupPipeControl({ engine: ENGINE, connectionService });
 setupDragDrop();
+setupComponentRotationController({ engine: ENGINE, onRotate: updateAllPipes });
 setupClipboardController({ engine: ENGINE });
 
 setPortStateUpdater(() => updatePortStates());

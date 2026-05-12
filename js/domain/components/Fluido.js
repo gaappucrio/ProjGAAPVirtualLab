@@ -158,7 +158,7 @@ export function mixFluidos(contributions = [], fallback = null, { nome = 'Mistur
     const totalWeight = validContributions.reduce((sum, entry) => sum + entry.weight, 0);
     const composition = {};
     let density = 0;
-    let temperature = 0;
+    let thermalEnergyWeighted = 0;
     let logViscosity = 0;
     let heatCapacityMassWeight = 0;
     let heatCapacityWeighted = 0;
@@ -168,16 +168,20 @@ export function mixFluidos(contributions = [], fallback = null, { nome = 'Mistur
 
     validContributions.forEach(({ fluido, weight }) => {
         const fraction = weight / totalWeight;
-        density += fraction * positiveNumber(fluido.densidade, DEFAULT_FLUID_DENSITY, 1);
-        temperature += fraction * (Number.isFinite(Number(fluido.temperatura)) ? Number(fluido.temperatura) : DEFAULT_FLUID_TEMPERATURE);
-        logViscosity += fraction * Math.log(positiveNumber(fluido.viscosidadeDinamicaPaS, DEFAULT_FLUID_VISCOSITY_PA_S, 0.00001));
-        const massWeight = weight * positiveNumber(fluido.densidade, DEFAULT_FLUID_DENSITY, 1);
-        heatCapacityMassWeight += massWeight;
-        heatCapacityWeighted += massWeight * positiveNumber(
+        const fluidDensity = positiveNumber(fluido.densidade, DEFAULT_FLUID_DENSITY, 1);
+        const fluidTemperature = Number.isFinite(Number(fluido.temperatura)) ? Number(fluido.temperatura) : DEFAULT_FLUID_TEMPERATURE;
+        const fluidSpecificHeat = positiveNumber(
             fluido.calorEspecificoJkgK,
             DEFAULT_FLUID_SPECIFIC_HEAT_JKGK,
             1
         );
+        density += fraction * fluidDensity;
+        logViscosity += fraction * Math.log(positiveNumber(fluido.viscosidadeDinamicaPaS, DEFAULT_FLUID_VISCOSITY_PA_S, 0.00001));
+        const massWeight = weight * fluidDensity;
+        const heatCapacityContribution = massWeight * fluidSpecificHeat;
+        heatCapacityMassWeight += massWeight;
+        heatCapacityWeighted += heatCapacityContribution;
+        thermalEnergyWeighted += heatCapacityContribution * fluidTemperature;
         vaporPressure += fraction * positiveNumber(fluido.pressaoVaporBar, DEFAULT_FLUID_VAPOR_PRESSURE_BAR, 0.0001);
         atmosphericPressure += fraction * positiveNumber(fluido.pressaoAtmosfericaBar, DEFAULT_ATMOSPHERIC_PRESSURE_BAR, 0.5);
 
@@ -203,7 +207,9 @@ export function mixFluidos(contributions = [], fallback = null, { nome = 'Mistur
     return createFluidoFromProperties({
         nome: compositionNames.length > 1 ? `${nome}: ${compositionNames.join(' / ')}` : compositionNames[0]?.replace(/\s\d+%$/, '') || nome,
         densidade: density,
-        temperatura: temperature,
+        temperatura: heatCapacityWeighted > 0
+            ? thermalEnergyWeighted / heatCapacityWeighted
+            : DEFAULT_FLUID_TEMPERATURE,
         viscosidadeDinamicaPaS: Math.exp(logViscosity),
         calorEspecificoJkgK: heatCapacityMassWeight > 0
             ? heatCapacityWeighted / heatCapacityMassWeight

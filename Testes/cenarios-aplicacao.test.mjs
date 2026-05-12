@@ -121,11 +121,14 @@ test('geometria de conexão considera altura relativa somente quando habilitada'
 
     engine.usarAlturaRelativa = true;
     const relativeGeometry = engine.getConnectionGeometry(connection);
+    tanque.rotacaoVisualGraus = 90;
+    const rotatedVisualGeometry = engine.getConnectionGeometry(connection);
 
     assert.equal(schematicGeometry.straightLengthM, 1);
     assert.equal(schematicGeometry.headGainM, 0);
     assert.notEqual(relativeGeometry.straightLengthM, schematicGeometry.straightLengthM);
     assert.notEqual(relativeGeometry.headGainM, 0);
+    assert.deepEqual(rotatedVisualGeometry, relativeGeometry, 'Rotação visual não deve alterar geometria física da conexão');
 });
 
 test('pausa da simulação zera vazões atuais do tanque sem alterar volume', () => {

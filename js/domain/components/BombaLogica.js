@@ -27,8 +27,11 @@ export class BombaLogica extends ComponenteFisico {
 
     calcularFatorCavitacao(npshDisponivelM, npshRequeridoM = this.npshRequeridoAtualM ?? this.npshRequeridoM) {
         const npshRequeridoSeguroM = Math.max(0.05, npshRequeridoM);
-        if (npshDisponivelM >= npshRequeridoSeguroM) return 1;
-        return clamp(Math.pow(npshDisponivelM / npshRequeridoSeguroM, 1.7), 0.12, 1);
+        const npshDisponivelSeguroM = Number.isFinite(Number(npshDisponivelM))
+            ? Math.max(0, Number(npshDisponivelM))
+            : 0;
+        if (npshDisponivelSeguroM >= npshRequeridoSeguroM) return 1;
+        return clamp(Math.pow(npshDisponivelSeguroM / npshRequeridoSeguroM, 1.7), 0.12, 1);
     }
 
     toggle() {

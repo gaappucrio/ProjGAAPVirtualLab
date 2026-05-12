@@ -4,6 +4,7 @@ import test from 'node:test';
 const PRESENTATION_MODULES = [
     '../js/presentation/controllers/PresentationController.js',
     '../js/presentation/controllers/ClipboardController.js',
+    '../js/presentation/controllers/ComponentRotationController.js',
     '../js/presentation/controllers/DragDropController.js',
     '../js/presentation/controllers/HelpController.js',
     '../js/presentation/controllers/MonitorController.js',
@@ -94,6 +95,58 @@ test('prefixos visuais das fronteiras acompanham o idioma atual', async () => {
     setLanguage('pt');
 });
 
+test('rotação visual de componentes normaliza graus sem afetar propriedades físicas', async () => {
+    const {
+        applyComponentVisualRotation,
+        normalizeRotationDegrees,
+        rotateComponentVisualBy
+    } = await import('../js/infrastructure/dom/ComponentVisualTransform.js');
+    const {
+        registerComponentVisual,
+        unregisterComponentVisual
+    } = await import('../js/infrastructure/dom/ComponentVisualRegistry.js');
+    const {
+        rotateComponentsByWheelSteps
+    } = await import('../js/presentation/controllers/ComponentRotationController.js');
+    const { BombaLogica } = await import('../js/domain/components/BombaLogica.js');
+
+    const bomba = new BombaLogica('pump-rotation', 'P-Rot', 0, 0);
+    bomba.pressaoMaxima = 6;
+    bomba.vazaoNominal = 42;
+    const tagAttributes = { x: '40', y: '88' };
+    const tagEl = {
+        getAttribute: (name) => tagAttributes[name],
+        setAttribute: (name, value) => { tagAttributes[name] = value; },
+        removeAttribute: (name) => { delete tagAttributes[name]; }
+    };
+    const visualEl = {
+        style: {},
+        dataset: {},
+        querySelector: (selector) => (selector === `[id="tag-${bomba.id}"]` ? tagEl : null)
+    };
+
+    assert.equal(normalizeRotationDegrees(-90), 270);
+    assert.equal(normalizeRotationDegrees(450), 90);
+
+    registerComponentVisual(bomba, visualEl);
+    applyComponentVisualRotation(bomba, 45);
+    assert.equal(visualEl.style.transform, 'rotate(45deg)');
+    assert.equal(tagAttributes.transform, 'rotate(-45 40 88)');
+
+    rotateComponentVisualBy(bomba, -90);
+
+    assert.equal(bomba.rotacaoVisualGraus, 315);
+    assert.equal(bomba.pressaoMaxima, 6);
+    assert.equal(bomba.vazaoNominal, 42);
+
+    applyComponentVisualRotation(bomba, 0);
+    assert.equal(visualEl.style.transform, '');
+    assert.equal(tagAttributes.transform, undefined);
+    rotateComponentsByWheelSteps([bomba], 1);
+    assert.equal(bomba.rotacaoVisualGraus, 45);
+    unregisterComponentVisual(bomba);
+});
+
 test('clipboard de componentes preserva propriedades clonaveis e sufixo por idioma', async () => {
     const {
         applyComponentClipboardSnapshot,
@@ -108,6 +161,7 @@ test('clipboard de componentes preserva propriedades clonaveis e sufixo por idio
     setLanguage('pt');
 
     const fonte = new FonteLogica('source-01', 'Entrada-01', 20, 40);
+    fonte.rotacaoVisualGraus = 90;
     fonte.pressaoFonteBar = 4.2;
     fonte.vazaoMaxima = 88;
     fonte.atualizarFluidoEntrada({
@@ -125,6 +179,8 @@ test('clipboard de componentes preserva propriedades clonaveis e sufixo por idio
     });
 
     assert.equal(fonteClone.tag, 'Entrada-01 - copia');
+    assert.equal(fonteSnapshot.properties.rotacaoVisualGraus, 90);
+    assert.equal(fonteClone.rotacaoVisualGraus, 90);
     assert.equal(fonteClone.pressaoFonteBar, 4.2);
     assert.equal(fonteClone.vazaoMaxima, 88);
     assert.equal(fonteClone.fluidoEntrada.nome, 'Fluido teste');

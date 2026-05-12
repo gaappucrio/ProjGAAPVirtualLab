@@ -90,6 +90,7 @@ export class ComponenteFisico extends Observable {
         this.tag = tag;
         this.x = x;
         this.y = y;
+        this.rotacaoVisualGraus = 0;
         this.inputs = [];
         this.outputs = [];
         this.diametroConexaoM = DEFAULT_PIPE_DIAMETER_M;
