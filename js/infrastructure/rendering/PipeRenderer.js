@@ -43,9 +43,31 @@ function ensureFluidArrowMarker(svgElement, color) {
     return `url(#${markerId})`;
 }
 
-export function drawConnectionCurve(x1, y1, x2, y2) {
-    const dx = Math.abs(x2 - x1) * 0.5;
-    return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+function normalizeDirection(direction, fallback) {
+    const magnitude = Math.hypot(direction?.x || 0, direction?.y || 0);
+    if (magnitude < 0.0001) return fallback;
+    return {
+        x: direction.x / magnitude,
+        y: direction.y / magnitude
+    };
+}
+
+export function drawConnectionCurve(x1, y1, x2, y2, options = {}) {
+    if (!options.sourceDirection && !options.targetDirection) {
+        const dx = Math.abs(x2 - x1) * 0.5;
+        return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+    }
+
+    const distance = Math.hypot(x2 - x1, y2 - y1);
+    const controlDistance = Math.max(40, distance * 0.35);
+    const sourceDirection = normalizeDirection(options.sourceDirection, { x: 1, y: 0 });
+    const targetDirection = normalizeDirection(options.targetDirection, { x: 1, y: 0 });
+    const c1x = x1 + (sourceDirection.x * controlDistance);
+    const c1y = y1 + (sourceDirection.y * controlDistance);
+    const c2x = x2 - (targetDirection.x * controlDistance);
+    const c2y = y2 - (targetDirection.y * controlDistance);
+
+    return `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}`;
 }
 
 export function createConnectionVisual(pipeLayer, connection, handlers = {}) {
@@ -100,14 +122,20 @@ export function removeTransientConnectionVisual(pathEl) {
     pathEl?.remove();
 }
 
-export function updateConnectionVisualLayout(connection, sourcePoint, targetPoint, geometry, showRelativeHeight) {
+export function updateConnectionVisualLayout(connection, sourcePoint, targetPoint, geometry, showRelativeHeight, options = {}) {
     const visual = getConnectionVisual(connection);
     if (!visual) return;
 
     const midX = (sourcePoint.x + targetPoint.x) / 2;
     const midY = (sourcePoint.y + targetPoint.y) / 2;
 
-    visual.path.setAttribute('d', drawConnectionCurve(sourcePoint.x, sourcePoint.y, targetPoint.x, targetPoint.y));
+    visual.path.setAttribute('d', drawConnectionCurve(
+        sourcePoint.x,
+        sourcePoint.y,
+        targetPoint.x,
+        targetPoint.y,
+        options
+    ));
     visual.label?.setAttribute('x', midX);
     visual.label?.setAttribute('y', midY - 10);
     visual.labelHeight?.setAttribute('x', midX);

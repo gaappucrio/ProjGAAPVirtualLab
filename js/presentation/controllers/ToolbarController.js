@@ -7,7 +7,7 @@ import {
 } from '../../utils/LanguageManager.js';
 import { exportSimulationData } from '../export/SimulationDataExporter.js';
 
-export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange } = {}) {
+export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange, undoManager } = {}) {
     const btnRun = document.getElementById('btn-run');
     const btnClear = document.getElementById('btn-clear');
     const relativeHeightToggle = document.getElementById('toggle-relative-height');
@@ -72,6 +72,7 @@ export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange } =
     });
 
     relativeHeightToggle.addEventListener('change', (e) => {
+        undoManager?.record('toggle-relative-height');
         engine.setUsarAlturaRelativa(e.target.checked);
         updateRelativeHeightUI(engine.usarAlturaRelativa);
         onTopologyVisualChange?.();
@@ -86,6 +87,9 @@ export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange } =
     });
 
     btnClear.addEventListener('click', () => {
+        if (engine.componentes.length > 0 || engine.conexoes.length > 0) {
+            undoManager?.record('clear-canvas');
+        }
         onClearCanvas?.();
         engine.clear();
     });

@@ -34,6 +34,7 @@ import { createMonitorController } from './presentation/controllers/MonitorContr
 import { setupPipeControl, updateAllPipes, updateConnectionVisualStates } from './presentation/controllers/PipeController.js';
 import { setupPropertyPanelController } from './presentation/controllers/PropertyPanelController.js';
 import { setupToolbar } from './presentation/controllers/ToolbarController.js';
+import { setupUndoController } from './presentation/controllers/UndoController.js';
 import { setupWorkspaceSelectionController } from './presentation/controllers/WorkspaceSelectionController.js';
 
 function setupEnginePresentationBridges() {
@@ -77,6 +78,7 @@ function setupLanguageRuntime(engine) {
 export function setupVirtualLabRuntime({ engine } = {}) {
     const connectionService = createConnectionServiceRuntime(engine);
     const monitorController = createMonitorController({ engine });
+    const undoManager = setupUndoController({ engine });
 
     setupLanguageRuntime(engine);
     setupEnginePresentationBridges();
@@ -89,19 +91,21 @@ export function setupVirtualLabRuntime({ engine } = {}) {
     setupPropertyPanelController({ engine, monitorController });
     setupHelpController();
     setupCameraControl();
-    setupPipeControl({ engine, connectionService });
-    setupDragDrop();
-    setupComponentRotationController({ engine, onRotate: updateAllPipes });
-    setupClipboardController({ engine });
-    setupDeleteSelectionController({ engine, connectionService });
+    setupPipeControl({ engine, connectionService, undoManager });
+    setupDragDrop({ undoManager });
+    setupComponentRotationController({ engine, onRotate: updateAllPipes, undoManager });
+    setupClipboardController({ engine, undoManager });
+    setupDeleteSelectionController({ engine, connectionService, undoManager });
     setupToolbar({
         engine,
+        undoManager,
         onClearCanvas: () => removeAllComponentVisualElements(),
         onTopologyVisualChange: () => updateAllPipes()
     });
 
     return {
         connectionService,
-        monitorController
+        monitorController,
+        undoManager
     };
 }

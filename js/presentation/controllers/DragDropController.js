@@ -21,8 +21,8 @@ function getSelectedDragElements(fallbackElement) {
     return [fallbackElement];
 }
 
-export function makeComponentDraggable(element) {
-    let isDragging = false, startX, startY, dragTargets = [];
+export function makeComponentDraggable(element, { undoManager } = {}) {
+    let isDragging = false, startX, startY, dragTargets = [], undoRecorded = false;
     element.addEventListener('mousedown', e => {
         if (e.target.classList.contains('port-node')) return;
         isDragging = true;
@@ -37,6 +37,11 @@ export function makeComponentDraggable(element) {
 
     document.addEventListener('mousemove', e => {
         if (!isDragging) return;
+
+        if (!undoRecorded) {
+            undoManager?.record('move-components');
+            undoRecorded = true;
+        }
 
         dragTargets.forEach((target) => {
             const newX = target.initX + (e.clientX - startX) / camera.scale;
@@ -63,12 +68,13 @@ export function makeComponentDraggable(element) {
                 target.element.logica.notify(ComponentEventPayloads.positionUpdate());
             });
             dragTargets = [];
+            undoRecorded = false;
             updateAllPipes();
         }
     });
 }
 
-export function setupDragDrop() {
+export function setupDragDrop({ undoManager } = {}) {
     const workspaceContainer = document.getElementById('workspace');
     const workspaceCanvas = document.getElementById('workspace-canvas');
 
@@ -103,9 +109,10 @@ export function setupDragDrop() {
         const snapX = Math.round(dropX / GRID_SIZE) * GRID_SIZE;
         const snapY = Math.round(dropY / GRID_SIZE) * GRID_SIZE;
 
+        undoManager?.record('add-component');
         const novoVisual = FabricaDeEquipamentos.criar(t, snapX, snapY);
         workspaceCanvas.appendChild(novoVisual);
-        makeComponentDraggable(novoVisual);
+        makeComponentDraggable(novoVisual, { undoManager });
 
         updatePortStates();
     });

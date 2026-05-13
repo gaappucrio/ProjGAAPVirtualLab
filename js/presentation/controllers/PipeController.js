@@ -11,7 +11,8 @@ import { EPSILON_FLOW, formatUnitValue, getUnitSymbol } from '../../utils/Units.
 import { translateLiteral } from '../../utils/LanguageManager.js';
 import { updatePortStates } from '../../infrastructure/dom/PortStateManager.js';
 import {
-    getComponentPortElement
+    getComponentPortElement,
+    getComponentVisual
 } from '../../infrastructure/dom/ComponentVisualRegistry.js';
 import {
     createConnectionEndpointDefinition,
@@ -35,6 +36,7 @@ let pipeControlInitialized = false;
 let connectionEventAdapterInitialized = false;
 let engine = null;
 let connectionService = null;
+let undoManager = null;
 
 function getEngine() {
     if (!engine) throw new Error('Engine não foi injetado no controlador de tubos.');
@@ -118,6 +120,7 @@ function bindConnectionVisual(connection) {
             event.stopPropagation();
         },
         onDoubleClick: (currentConnection, event) => {
+            undoManager?.record('remove-connection');
             connectionService.remove(currentConnection);
             event.stopPropagation();
         }
@@ -125,6 +128,8 @@ function bindConnectionVisual(connection) {
 }
 
 function getConnectionRenderPoints(connection) {
+    const source = getEngine().getComponentById(connection.sourceId);
+    const target = getEngine().getComponentById(connection.targetId);
     const sourcePort = getComponentPortElement(connection.sourceId, connection.sourceEndpoint?.portType || 'out');
     const targetPort = getComponentPortElement(connection.targetId, connection.targetEndpoint?.portType || 'in');
 
@@ -132,8 +137,56 @@ function getConnectionRenderPoints(connection) {
 
     return {
         sourcePoint: getPortCoords(sourcePort),
-        targetPoint: getPortCoords(targetPort)
+        targetPoint: getPortCoords(targetPort),
+        sourceDirection: getPortOutwardDirection(source, connection.sourceEndpoint, 'out'),
+        targetDirection: invertDirection(getPortOutwardDirection(target, connection.targetEndpoint, 'in'))
     };
+}
+
+function normalizeVector(vector, fallback = { x: 1, y: 0 }) {
+    const magnitude = Math.hypot(vector?.x || 0, vector?.y || 0);
+    if (magnitude < 0.0001) return fallback;
+    return {
+        x: vector.x / magnitude,
+        y: vector.y / magnitude
+    };
+}
+
+function rotateVector(vector, rotationDeg = 0) {
+    const radians = (Number(rotationDeg) || 0) * Math.PI / 180;
+    const cos = Math.cos(radians);
+    const sin = Math.sin(radians);
+
+    return {
+        x: (vector.x * cos) - (vector.y * sin),
+        y: (vector.x * sin) + (vector.y * cos)
+    };
+}
+
+function invertDirection(vector) {
+    return {
+        x: -(vector?.x || 0),
+        y: -(vector?.y || 0)
+    };
+}
+
+function getPortOutwardDirection(component, endpoint, fallbackPortType) {
+    const visual = getComponentVisual(component);
+    const visualEl = visual?.visualEl;
+    const width = Number(visualEl?.dataset?.logW);
+    const height = Number(visualEl?.dataset?.logH);
+    const fallback = fallbackPortType === 'in' ? { x: -1, y: 0 } : { x: 1, y: 0 };
+
+    if (!Number.isFinite(width) || !Number.isFinite(height) || !endpoint) {
+        return rotateVector(fallback, component?.rotacaoVisualGraus || 0);
+    }
+
+    const baseDirection = normalizeVector({
+        x: Number(endpoint.offsetX) - (width / 2),
+        y: Number(endpoint.offsetY) - (height / 2)
+    }, fallback);
+
+    return rotateVector(baseDirection, component?.rotacaoVisualGraus || 0);
 }
 
 function syncConnectionLayout(connection) {
@@ -145,7 +198,11 @@ function syncConnectionLayout(connection) {
         renderPoints.sourcePoint,
         renderPoints.targetPoint,
         getEngine().getConnectionGeometry(connection),
-        getEngine().usarAlturaRelativa
+        getEngine().usarAlturaRelativa,
+        {
+            sourceDirection: renderPoints.sourceDirection,
+            targetDirection: renderPoints.targetDirection
+        }
     );
 }
 
@@ -226,10 +283,11 @@ function setupConnectionEventAdapter() {
     });
 }
 
-export function setupPipeControl({ engine: injectedEngine, connectionService: injectedConnectionService } = {}) {
+export function setupPipeControl({ engine: injectedEngine, connectionService: injectedConnectionService, undoManager: injectedUndoManager } = {}) {
     if (pipeControlInitialized) return;
     engine = injectedEngine;
     connectionService = injectedConnectionService;
+    undoManager = injectedUndoManager;
     pipeControlInitialized = true;
     setupConnectionEventAdapter();
 
@@ -304,6 +362,7 @@ export function setupPipeControl({ engine: injectedEngine, connectionService: in
         }
 
         const confirmedDraft = transientConnection.confirm();
+        undoManager?.record('add-connection');
         const connection = connectionService.connect(sourceComponent, sourcePort, targetComponent, dropTarget);
 
         if (!connection && confirmedDraft.active) {

@@ -97,7 +97,7 @@ function isFluidLike(value) {
         && 'pressaoVaporBar' in value;
 }
 
-function cloneSnapshotValue(value) {
+export function cloneSnapshotValue(value) {
     if (isFluidLike(value)) return cloneFluido(value);
     if (Array.isArray(value)) return value.map((item) => cloneSnapshotValue(item));
     if (value && typeof value === 'object') {
@@ -224,7 +224,7 @@ function clearVisualSelection() {
     });
 }
 
-function syncClonedComponentVisual(component) {
+export function syncComponentVisualState(component) {
     component.notify(ComponentEventPayloads.tagUpdate());
 
     if (component instanceof FonteLogica) {
@@ -297,7 +297,7 @@ function getSelectedComponents(engine) {
     return [];
 }
 
-function pasteComponentFromSnapshot({ engine, snapshot, pasteCount, selectAfterPaste = true }) {
+function pasteComponentFromSnapshot({ engine, snapshot, pasteCount, selectAfterPaste = true, undoManager = null }) {
     const workspaceCanvas = document.getElementById('workspace-canvas');
     if (!workspaceCanvas || !snapshot) return null;
 
@@ -316,8 +316,8 @@ function pasteComponentFromSnapshot({ engine, snapshot, pasteCount, selectAfterP
     applyComponentVisualRotation(visual.logica, visual.logica.rotacaoVisualGraus);
 
     workspaceCanvas.appendChild(visual);
-    makeComponentDraggable(visual);
-    syncClonedComponentVisual(visual.logica);
+    makeComponentDraggable(visual, { undoManager });
+    syncComponentVisualState(visual.logica);
 
     if (selectAfterPaste) {
         clearVisualSelection();
@@ -329,7 +329,7 @@ function pasteComponentFromSnapshot({ engine, snapshot, pasteCount, selectAfterP
     return visual.logica;
 }
 
-function pasteGroupFromSnapshot({ engine, snapshot, pasteCount }) {
+function pasteGroupFromSnapshot({ engine, snapshot, pasteCount, undoManager = null }) {
     if (!snapshot?.components?.length) return [];
 
     const clonedByOriginalId = new Map();
@@ -340,7 +340,8 @@ function pasteGroupFromSnapshot({ engine, snapshot, pasteCount }) {
             engine,
             snapshot: entry.snapshot,
             pasteCount,
-            selectAfterPaste: false
+            selectAfterPaste: false,
+            undoManager
         });
 
         if (!cloned) return;
@@ -376,15 +377,15 @@ function pasteGroupFromSnapshot({ engine, snapshot, pasteCount }) {
     return clonedComponents;
 }
 
-function pasteClipboardSnapshot({ engine, snapshot, pasteCount }) {
+function pasteClipboardSnapshot({ engine, snapshot, pasteCount, undoManager = null }) {
     if (snapshot?.kind === 'component-group') {
-        return pasteGroupFromSnapshot({ engine, snapshot, pasteCount });
+        return pasteGroupFromSnapshot({ engine, snapshot, pasteCount, undoManager });
     }
 
-    return pasteComponentFromSnapshot({ engine, snapshot, pasteCount });
+    return pasteComponentFromSnapshot({ engine, snapshot, pasteCount, undoManager });
 }
 
-export function setupClipboardController({ engine } = {}) {
+export function setupClipboardController({ engine, undoManager } = {}) {
     if (!engine || typeof document === 'undefined') return;
 
     let copiedSnapshot = null;
@@ -410,8 +411,9 @@ export function setupClipboardController({ engine } = {}) {
             if (!copiedSnapshot) return;
 
             event.preventDefault();
+            undoManager?.record('paste-components');
             pasteCount += 1;
-            pasteClipboardSnapshot({ engine, snapshot: copiedSnapshot, pasteCount });
+            pasteClipboardSnapshot({ engine, snapshot: copiedSnapshot, pasteCount, undoManager });
         }
     });
 }

@@ -10,13 +10,14 @@ function isEditableTarget(target) {
         || target.isContentEditable;
 }
 
-export function setupDeleteSelectionController({ engine, connectionService } = {}) {
+export function setupDeleteSelectionController({ engine, connectionService, undoManager } = {}) {
     document.addEventListener('keydown', (event) => {
         if (isEditableTarget(event.target)) return;
         if (event.key !== 'Delete' && event.key !== 'Backspace') return;
 
         const selectedComponentDivs = [...document.querySelectorAll('.placed-component.selected')];
         if (selectedComponentDivs.length > 0) {
+            undoManager?.record('delete-components');
             selectedComponentDivs.forEach((selectedCompDiv) => {
                 const compId = selectedCompDiv.dataset.id;
                 const comp = engine.componentes.find((component) => component.id === compId);
@@ -36,6 +37,7 @@ export function setupDeleteSelectionController({ engine, connectionService } = {
         const connection = findConnectionByPath(selectedPipe);
         if (!connection) return;
 
+        undoManager?.record('delete-connection');
         connectionService.remove(connection);
         engine.selectComponent(null);
         updatePortStates();

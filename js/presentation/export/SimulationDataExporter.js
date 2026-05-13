@@ -5,6 +5,7 @@ import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
 import { TrocadorCalorLogico } from '../../domain/components/TrocadorCalorLogico.js';
 import { ValvulaLogica } from '../../domain/components/ValvulaLogica.js';
 import { getFluidVisualStyle } from '../../infrastructure/rendering/FluidVisualStyle.js';
+import { formatUnitValue, getUnitPreferences, getUnitSymbol } from '../../utils/Units.js';
 
 const EXPORT_METADATA_COLUMNS = [
     'Data da exportação',
@@ -141,6 +142,72 @@ function numberValue(value, digits = null) {
     const numericValue = Number(value);
     if (!Number.isFinite(numericValue)) return '';
     return digits === null ? numericValue : numericValue.toFixed(digits);
+}
+
+function decimalPlaces(value) {
+    const text = String(value ?? '');
+    const [, decimals = ''] = text.split('.');
+    return decimals.length || null;
+}
+
+function getUnitRule(column) {
+    if (column.includes('(L/s)')) return { category: 'flow', sourceToBase: (value) => value };
+    if (column.includes('(bar)')) return { category: 'pressure', sourceToBase: (value) => value };
+    if (column.includes('(mm)')) return { category: 'length', sourceToBase: (value) => value / 1000 };
+    if (column.includes('(m)')) return { category: 'length', sourceToBase: (value) => value };
+    if (column.includes('(L)')) return { category: 'volume', sourceToBase: (value) => value };
+    if (column.includes('(°C)')) {
+        return {
+            category: 'temperature',
+            sourceToBase: (value) => value,
+            isDelta: column.includes('Delta T')
+        };
+    }
+
+    return null;
+}
+
+function displayColumnName(column) {
+    const rule = getUnitRule(column);
+    if (!rule) return column;
+
+    return column.replace(/\((L\/s|bar|mm|m|L|°C)\)/, `(${getUnitSymbol(rule.category)})`);
+}
+
+function formatTemperatureDelta(value, digits) {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return '';
+
+    const convertedValue = getUnitPreferences().temperature === 'f'
+        ? numericValue * (9 / 5)
+        : numericValue;
+
+    return convertedValue.toFixed(digits ?? 2);
+}
+
+function displayCellValue(column, value) {
+    const rule = getUnitRule(column);
+    if (!rule || value === '') return value;
+
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return value;
+
+    const digits = decimalPlaces(value);
+    if (rule.isDelta) return formatTemperatureDelta(numericValue, digits);
+    return formatUnitValue(rule.category, rule.sourceToBase(numericValue), digits);
+}
+
+function displayUnitRows(rows) {
+    return rows.map((row) => Object.fromEntries(
+        Object.entries(row).map(([column, value]) => [
+            displayColumnName(column),
+            displayCellValue(column, value)
+        ])
+    ));
+}
+
+function displayUnitColumns(columns) {
+    return columns.map((column) => displayColumnName(column));
 }
 
 function booleanValue(value) {
@@ -365,8 +432,10 @@ function renderTable(title, columns, rows) {
 export function buildExportHtml(engine) {
     const timestamp = new Date();
     const metadataRows = buildExportMetadataRows(engine, timestamp);
-    const componentRows = engine.componentes.map(buildComponentRow);
-    const connectionRows = engine.conexoes.map((connection, index) => buildConnectionRow(engine, connection, index));
+    const componentRows = displayUnitRows(engine.componentes.map(buildComponentRow));
+    const connectionRows = displayUnitRows(engine.conexoes.map((connection, index) => buildConnectionRow(engine, connection, index)));
+    const componentColumns = displayUnitColumns(COMPONENT_COLUMNS);
+    const connectionColumns = displayUnitColumns(CONNECTION_COLUMNS);
 
     return `<!DOCTYPE html>
 <html>
@@ -384,8 +453,8 @@ export function buildExportHtml(engine) {
 <body>
     <h1>Exportação de Dados - GAAP Virtual Lab</h1>
     ${renderTable('Resumo da exportação', EXPORT_METADATA_COLUMNS, metadataRows)}
-    ${renderTable('Componentes', COMPONENT_COLUMNS, componentRows)}
-    ${renderTable('Conexões', CONNECTION_COLUMNS, connectionRows)}
+    ${renderTable('Componentes', componentColumns, componentRows)}
+    ${renderTable('Conexões', connectionColumns, connectionRows)}
 </body>
 </html>`;
 }

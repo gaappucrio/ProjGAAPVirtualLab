@@ -66,7 +66,7 @@ export class FabricaDeEquipamentos {
         const visualSpec = getComponentVisualSpec(tipo);
         if (!spec || !visualSpec) return console.error("Componente não registrado:", tipo);
 
-        const id = createComponentId(tipo);
+        const id = options.id || createComponentId(tipo);
         const visual = document.createElement('div');
         visual.className = 'placed-component';
         visual.style.left = `${x}px`; visual.style.top = `${y}px`; visual.style.zIndex = '10';

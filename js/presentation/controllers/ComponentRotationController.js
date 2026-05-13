@@ -38,7 +38,7 @@ export function rotateComponentsByWheelSteps(components, wheelSteps) {
     });
 }
 
-export function setupComponentRotationController({ engine, onRotate } = {}) {
+export function setupComponentRotationController({ engine, onRotate, undoManager } = {}) {
     if (!engine || typeof document === 'undefined') return;
 
     const workspaceContainer = document.getElementById('workspace');
@@ -63,6 +63,7 @@ export function setupComponentRotationController({ engine, onRotate } = {}) {
         const wheelSteps = Math.trunc(wheelAccumulatorPx / WHEEL_STEP_THRESHOLD_PX);
         wheelAccumulatorPx -= wheelSteps * WHEEL_STEP_THRESHOLD_PX;
 
+        undoManager?.record('rotate-components');
         rotateComponentsByWheelSteps(selectedComponents, wheelSteps);
         onRotate?.();
     }, { capture: true, passive: false });
