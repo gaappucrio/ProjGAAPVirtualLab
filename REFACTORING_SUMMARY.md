@@ -24,7 +24,9 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Seleção múltipla de componentes por retângulo azul no workspace ou `Ctrl+clique`.
 - Remoção por tecla `Delete` ou `Backspace`, incluindo seleções múltiplas.
 - Clone de componentes selecionados por `Ctrl+C` e `Ctrl+V`, preservando propriedades configuráveis, conexões internas do grupo e criando a tag com sufixo `- copia` ou `- copy` conforme o idioma ativo.
+- Desfazer por `Ctrl+Z` para restaurar a última alteração do usuário no workspace, incluindo adição, remoção, movimentação, rotação, conexões, colagem, limpeza do canvas e edições de propriedades.
 - Renderização visual de tubos, rótulos de vazão e estados de portas.
+- Pontas das setas dos tubos acompanham a orientação da porta de entrada/saída quando componentes são rotacionados.
 - Opção de altura relativa para considerar desníveis entre componentes.
 - Identificação estável de fronteiras com tags `inlet-01`, `outlet-01` etc., independente do idioma da interface.
 - Exibição localizada dos nomes padrão de entrada e saída conforme o idioma ativo.
@@ -130,6 +132,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Tabela de resumo com data da exportação e estado de altura relativa.
 - Tabela de componentes com nome, tipo, identificadores, posição, conexões, pressões, vazões e parâmetros específicos de fontes, saídas, bombas, válvulas e tanques.
 - Tabela de conexões com origem, destino, diâmetro, rugosidade, perdas, vazões, pressões, geometria, Reynolds, fator de atrito, regime e fluido do trecho.
+- As unidades exibidas nas tabelas exportadas seguem as preferências selecionadas na interface para pressão, vazão, comprimento, volume e temperatura, em vez de expor apenas as unidades internas do motor.
 - A exportação foi mantida focada em dados tabulares para comparação com DWSIM, sem anexar gráficos ao arquivo.
 
 ## 3. Arquitetura Geral
@@ -222,6 +225,7 @@ Arquivos principais:
 - `presentation/controllers/CameraController.js`
 - `presentation/controllers/WorkspaceSelectionController.js`
 - `presentation/controllers/UnitsController.js`
+- `presentation/controllers/UndoController.js`
 - `presentation/export/SimulationDataExporter.js`
 - `presentation/properties/ComponentPropertiesPresenter.js`
 - `presentation/properties/ConnectionPropertiesPresenter.js`
@@ -242,9 +246,10 @@ Responsabilidades:
 - Manipular abas e memória de contexto do painel.
 - Gerenciar monitoramento compacto e detalhado.
 - Gerenciar atalhos de clipboard de componentes (`Ctrl+C`/`Ctrl+V`) na camada de apresentação, incluindo grupos com conexões internas.
+- Gerenciar histórico de desfazer (`Ctrl+Z`) por snapshots do workspace na camada de apresentação.
 - Controlar seleção por retângulo e `Ctrl+clique` no workspace.
 - Controlar popup de tutorial e comandos básicos da interface.
-- Exportar dados tabulares de componentes e conexões.
+- Exportar dados tabulares de componentes e conexões respeitando as unidades de exibição selecionadas.
 - Validar inputs digitados.
 
 ### 3.4 `infrastructure/`
@@ -770,6 +775,9 @@ Marcos concluídos:
 - `I18n.js` renomeado para `LanguageManager.js` e imports atualizados.
 - Helper de tutorial adicionado ao cabeçalho.
 - Seleção múltipla por retângulo azul, `Ctrl+clique`, arraste em grupo, remoção em lote e clipboard de sistemas inteiros.
+- Histórico de desfazer por `Ctrl+Z` implementado em controller dedicado, com restauração visual e lógica de componentes, conexões, configuração de altura relativa e seleção.
+- Curvas de conexão passaram a considerar a direção das portas após rotação visual dos componentes, mantendo as setas dos tubos coerentes com a entrada/saída.
+- Exportação tabular passou a converter cabeçalhos e valores para as mesmas unidades escolhidas pelo usuário no painel de unidades.
 - `js/Config.js` removido; constantes visuais migradas para `infrastructure/dom/ComponentVisualConfig.js`.
 - Dimensionamento de canos passou a expor vazão de dimensionamento manual e captura da vazão atual/alvo, deixando claro que ela não controla a vazão real da rede.
 - Pausa da simulação passou a congelar leituras hidráulicas em vez de zerar a UI.
@@ -836,4 +844,4 @@ Próximos passos recomendados:
 
 O projeto está em um estado estruturalmente muito melhor que a versão monolítica inicial. A física principal está concentrada no domínio, a aplicação orquestra o tick e a topologia, a apresentação foi dividida em controllers e presenters, e a infraestrutura visual está separada em adaptadores.
 
-O sistema já possui suporte funcional para montagem visual, seleção múltipla por retângulo, clonagem de componentes e sistemas por teclado, simulação hidráulica, bombas, válvulas, tanques, set point, monitoramento, unidades, tooltips, tutorial integrado, internacionalização, mistura de fluidos, cores visuais por fluido, exportação tabular de dados e testes automatizados. A base trata propriedades de fluido por entrada, composição por conexão e conteúdo misturado em tanques, desde que as fronteiras entre domínio, aplicação, apresentação e infraestrutura continuem sendo respeitadas.
+O sistema já possui suporte funcional para montagem visual, seleção múltipla por retângulo, clonagem de componentes e sistemas por teclado, desfazer por `Ctrl+Z`, simulação hidráulica, bombas, válvulas, tanques, set point, monitoramento, unidades, tooltips, tutorial integrado, internacionalização, mistura de fluidos, cores visuais por fluido, setas de tubos coerentes com componentes rotacionados, exportação tabular de dados nas unidades selecionadas pelo usuário e testes automatizados. A base trata propriedades de fluido por entrada, composição por conexão e conteúdo misturado em tanques, desde que as fronteiras entre domínio, aplicação, apresentação e infraestrutura continuem sendo respeitadas.
