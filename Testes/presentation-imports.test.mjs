@@ -73,6 +73,53 @@ test('exportação registra altura relativa sem anexar gráficos', async () => {
     assert.doesNotMatch(html, /export-chart-svg/);
 });
 
+test('exportação em inglês localiza rótulos sem alterar nomes definidos pelo usuário', async () => {
+    const { buildExportHtml } = await import('../js/presentation/export/SimulationDataExporter.js');
+    const { BombaLogica } = await import('../js/domain/components/BombaLogica.js');
+    const { FonteLogica } = await import('../js/domain/components/FonteLogica.js');
+    const { setLanguage } = await import('../js/utils/LanguageManager.js');
+
+    setLanguage('en');
+
+    try {
+        const bomba = new BombaLogica('pump-custom', 'Minha Bomba', 0, 0);
+        bomba.isOn = true;
+
+        const fonte = new FonteLogica('source-custom', 'Fonte Customizada', 80, 0);
+        fonte.atualizarFluidoEntrada({
+            nome: 'Fluido Azul',
+            densidade: 998,
+            temperatura: 25,
+            viscosidadeDinamicaPaS: 0.001,
+            pressaoVaporBar: 0.031,
+            corVisual: '#3366ff'
+        }, { presetId: 'custom' });
+
+        const html = buildExportHtml({
+            componentes: [bomba, fonte],
+            conexoes: [],
+            usarAlturaRelativa: true
+        });
+
+        assert.match(html, /Data Export - GAAP Virtual Lab/);
+        assert.match(html, /Export summary/);
+        assert.match(html, /Component name/);
+        assert.match(html, /Component type/);
+        assert.match(html, /Pump on/);
+        assert.match(html, /Enabled/);
+        assert.match(html, /Yes/);
+        assert.match(html, /Pump/);
+        assert.match(html, /Minha Bomba/);
+        assert.match(html, /Fonte Customizada/);
+        assert.match(html, /Fluido Azul/);
+        assert.doesNotMatch(html, /Resumo da exporta\u00e7\u00e3o/);
+        assert.doesNotMatch(html, /Nome do componente/);
+        assert.doesNotMatch(html, /Bomba ligada/);
+    } finally {
+        setLanguage('pt');
+    }
+});
+
 test('prefixos visuais das fronteiras acompanham o idioma atual', async () => {
     const {
         getComponentTagPrefix,

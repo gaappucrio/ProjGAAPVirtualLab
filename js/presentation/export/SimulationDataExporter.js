@@ -5,6 +5,7 @@ import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
 import { TrocadorCalorLogico } from '../../domain/components/TrocadorCalorLogico.js';
 import { ValvulaLogica } from '../../domain/components/ValvulaLogica.js';
 import { getFluidVisualStyle } from '../../infrastructure/rendering/FluidVisualStyle.js';
+import { isEnglishLanguage, translateFluidName, translateLiteral } from '../../utils/LanguageManager.js';
 import { formatUnitValue, getUnitPreferences, getUnitSymbol } from '../../utils/Units.js';
 
 const EXPORT_METADATA_COLUMNS = [
@@ -138,6 +139,173 @@ const CONNECTION_COLUMNS = [
     'Cor visual do fluido'
 ];
 
+const EXPORT_LABELS_EN = {
+    'Exportação de Dados - GAAP Virtual Lab': 'Data Export - GAAP Virtual Lab',
+    'Resumo da exportação': 'Export summary',
+    Componentes: 'Components',
+    Conexões: 'Connections',
+    'Data da exportação': 'Export date',
+    'Altura relativa': 'Relative height',
+    'Nome do componente': 'Component name',
+    'Tipo do componente': 'Component type',
+    'Posição X': 'X position',
+    'Posição Y': 'Y position',
+    'Entradas conectadas': 'Connected inputs',
+    'Saídas conectadas': 'Connected outputs',
+    'Diâmetro de conexão': 'Connection diameter',
+    'Pressão de entrada atual': 'Current inlet pressure',
+    'Pressão de saída atual': 'Current outlet pressure',
+    'Vazão de entrada atual': 'Current inlet flow',
+    'Vazão de saída atual': 'Current outlet flow',
+    'Pressão de alimentação': 'Feed pressure',
+    'Vazão máxima da fonte': 'Maximum source flow',
+    'Vazão entregue pela fonte': 'Flow delivered by source',
+    'Preset do fluido': 'Fluid preset',
+    'Nome do fluido': 'Fluid name',
+    'Densidade do fluido': 'Fluid density',
+    'Temperatura do fluido': 'Fluid temperature',
+    'Viscosidade dinâmica': 'Dynamic viscosity',
+    'Calor específico': 'Specific heat',
+    'Pressão de vapor': 'Vapor pressure',
+    'Pressão atmosférica': 'Atmospheric pressure',
+    'Cor visual do fluido': 'Fluid visual color',
+    'Pressão de descarga': 'Discharge pressure',
+    'Perda de entrada K': 'Inlet loss K',
+    'Vazão recebida': 'Received flow',
+    'Bomba ligada': 'Pump on',
+    'Acionamento desejado': 'Target drive',
+    'Acionamento efetivo': 'Effective drive',
+    'Vazão nominal da bomba': 'Pump nominal flow',
+    'Pressão máxima da bomba': 'Pump maximum pressure',
+    'Eficiência hidráulica nominal': 'Nominal hydraulic efficiency',
+    'Eficiência atual': 'Current efficiency',
+    'NPSHr referência': 'Reference NPSHr',
+    'NPSHr atual': 'Current NPSHr',
+    'NPSHa atual': 'Current NPSHa',
+    'Margem NPSH': 'NPSH margin',
+    'Fator de cavitação': 'Cavitation factor',
+    'Tempo de rampa': 'Ramp time',
+    'Carga gerada': 'Generated head',
+    'Pressão de sucção': 'Suction pressure',
+    'Pressão de descarga da bomba': 'Pump discharge pressure',
+    'Válvula aberta': 'Valve open',
+    'Abertura desejada': 'Target opening',
+    'Abertura efetiva': 'Effective opening',
+    'Coeficiente Cv': 'Cv coefficient',
+    'Coeficiente de perda K': 'K loss coefficient',
+    'Perfil da válvula': 'Valve profile',
+    'Característica da válvula': 'Valve characteristic',
+    Rangeabilidade: 'Rangeability',
+    'Tempo de curso': 'Stroke time',
+    'Queda de pressão na válvula': 'Valve pressure drop',
+    'Temperatura de serviço do trocador': 'Heat exchanger service temperature',
+    'UA do trocador': 'Heat exchanger UA',
+    'Perda local do trocador K': 'Heat exchanger local loss K',
+    'Efetividade máxima do trocador': 'Heat exchanger maximum effectiveness',
+    'Efetividade atual do trocador': 'Heat exchanger current effectiveness',
+    'Temperatura de entrada do trocador': 'Heat exchanger inlet temperature',
+    'Temperatura de saída do trocador': 'Heat exchanger outlet temperature',
+    'Delta T do trocador': 'Heat exchanger delta T',
+    'Carga térmica do trocador': 'Heat exchanger thermal duty',
+    'Vazão no trocador': 'Heat exchanger flow',
+    'Queda de pressão no trocador': 'Heat exchanger pressure drop',
+    'Capacidade máxima do tanque': 'Tank maximum capacity',
+    'Volume atual do tanque': 'Tank current volume',
+    'Nível do tanque': 'Tank level',
+    'Altura útil do tanque': 'Tank useful height',
+    'Altura líquida atual': 'Current liquid height',
+    'Elevação do bocal de entrada': 'Inlet nozzle elevation',
+    'Elevação do bocal de saída': 'Outlet nozzle elevation',
+    'Coeficiente de descarga do tanque': 'Tank discharge coefficient',
+    'Perda de entrada do tanque K': 'Tank inlet loss K',
+    'Pressão no fundo do tanque': 'Tank bottom pressure',
+    'Vazão de entrada do tanque': 'Tank inlet flow',
+    'Vazão de saída do tanque': 'Tank outlet flow',
+    'Fluido no tanque': 'Fluid in tank',
+    'Densidade do fluido no tanque': 'Tank fluid density',
+    'Temperatura do fluido no tanque': 'Tank fluid temperature',
+    'Viscosidade do fluido no tanque': 'Tank fluid viscosity',
+    'Cor visual do fluido no tanque': 'Tank fluid visual color',
+    'Set point ativo': 'Set point active',
+    'Set point': 'Set point',
+    'Ganho proporcional Kp': 'Proportional gain Kp',
+    'Ganho integral Ki': 'Integral gain Ki',
+    'Alerta de saturação ativo': 'Saturation alert active',
+    'Nome do trecho': 'Line name',
+    'Componente de origem': 'Source component',
+    'Tipo de origem': 'Source type',
+    'Componente de destino': 'Target component',
+    'Tipo de destino': 'Target type',
+    'ID da conexão': 'Connection ID',
+    'ID de origem': 'Source ID',
+    'ID de destino': 'Target ID',
+    'Diâmetro interno': 'Internal diameter',
+    'Rugosidade absoluta': 'Absolute roughness',
+    'Comprimento extra': 'Extra length',
+    'Perda local K': 'Local loss K',
+    'Velocidade de projeto': 'Design velocity',
+    'Vazão de projeto': 'Design flow',
+    'Vazão atual': 'Current flow',
+    'Vazão alvo': 'Target flow',
+    'Velocidade atual': 'Current velocity',
+    'Delta P no trecho': 'Line delta P',
+    'Perda total': 'Total loss',
+    'Pressão na origem': 'Source pressure',
+    'Pressão de chegada': 'Arrival pressure',
+    Contrapressão: 'Backpressure',
+    'Comprimento hidráulico total': 'Total hydraulic length',
+    'Comprimento reto/esquemático': 'Straight/schematic length',
+    'Desnível hidráulico': 'Hydraulic elevation difference',
+    'Tempo de resposta': 'Response time',
+    'Fator de atrito Darcy': 'Darcy friction factor',
+    'Rugosidade relativa': 'Relative roughness',
+    Regime: 'Regime',
+    'Fluido no trecho': 'Fluid in line',
+    'Viscosidade do fluido': 'Fluid viscosity'
+};
+
+const EXPORT_VALUE_TRANSLATIONS_EN = {
+    Sim: 'Yes',
+    Não: 'No',
+    Ligada: 'Enabled',
+    Desligada: 'Disabled',
+    Entrada: 'Inlet',
+    Saída: 'Outlet',
+    Bomba: 'Pump',
+    Válvula: 'Valve',
+    'Trocador de calor': 'Heat exchanger',
+    Tanque: 'Tank',
+    Componente: 'Component',
+    agua: 'Water',
+    oleo_leve: 'Light oil',
+    glicol_30: 'Glycol 30%',
+    custom: 'Custom',
+    equal_percentage: 'Equal percentage',
+    linear: 'Linear',
+    quick_opening: 'Quick opening'
+};
+
+const LOCALIZED_VALUE_COLUMNS = new Set([
+    'Altura relativa',
+    'Tipo do componente',
+    'Tipo de origem',
+    'Tipo de destino',
+    'Preset do fluido',
+    'Bomba ligada',
+    'Válvula aberta',
+    'Set point ativo',
+    'Alerta de saturação ativo',
+    'Perfil da válvula',
+    'Característica da válvula',
+    'Regime'
+]);
+
+const FLUID_NAME_COLUMNS = new Set([
+    'Nome do fluido',
+    'Fluido no tanque',
+    'Fluido no trecho'
+]);
+
 function numberValue(value, digits = null) {
     const numericValue = Number(value);
     if (!Number.isFinite(numericValue)) return '';
@@ -148,6 +316,31 @@ function decimalPlaces(value) {
     const text = String(value ?? '');
     const [, decimals = ''] = text.split('.');
     return decimals.length || null;
+}
+
+function translateExportLabel(label) {
+    if (!isEnglishLanguage()) return label;
+    return EXPORT_LABELS_EN[label] || translateLiteral(label);
+}
+
+function translateExportValue(value) {
+    if (!isEnglishLanguage()) return value;
+    return EXPORT_VALUE_TRANSLATIONS_EN[value] || translateLiteral(value);
+}
+
+function translateGeneratedLineName(value) {
+    if (!isEnglishLanguage()) return value;
+    const match = String(value ?? '').match(/^Trecho\s+(\d+)$/);
+    return match ? `Line ${match[1]}` : value;
+}
+
+function splitTrailingUnit(label) {
+    const match = String(label).match(/^(.+?)\s+\(([^)]+)\)$/);
+    if (!match) return null;
+    return {
+        base: match[1],
+        unit: match[2]
+    };
 }
 
 function getUnitRule(column) {
@@ -168,10 +361,14 @@ function getUnitRule(column) {
 }
 
 function displayColumnName(column) {
+    const unitParts = splitTrailingUnit(column);
     const rule = getUnitRule(column);
-    if (!rule) return column;
+    if (unitParts) {
+        const unitSymbol = rule ? getUnitSymbol(rule.category) : unitParts.unit;
+        return `${translateExportLabel(unitParts.base)} (${unitSymbol})`;
+    }
 
-    return column.replace(/\((L\/s|bar|mm|m|L|°C)\)/, `(${getUnitSymbol(rule.category)})`);
+    return translateExportLabel(column);
 }
 
 function formatTemperatureDelta(value, digits) {
@@ -187,7 +384,13 @@ function formatTemperatureDelta(value, digits) {
 
 function displayCellValue(column, value) {
     const rule = getUnitRule(column);
-    if (!rule || value === '') return value;
+    if (value === '') return value;
+
+    if (column === 'Nome do trecho') return translateGeneratedLineName(value);
+    if (FLUID_NAME_COLUMNS.has(column)) return translateFluidName(value);
+    if (LOCALIZED_VALUE_COLUMNS.has(column)) return translateExportValue(value);
+
+    if (!rule) return value;
 
     const numericValue = Number(value);
     if (!Number.isFinite(numericValue)) return value;
@@ -431,9 +634,10 @@ function renderTable(title, columns, rows) {
 
 export function buildExportHtml(engine) {
     const timestamp = new Date();
-    const metadataRows = buildExportMetadataRows(engine, timestamp);
+    const metadataRows = displayUnitRows(buildExportMetadataRows(engine, timestamp));
     const componentRows = displayUnitRows(engine.componentes.map(buildComponentRow));
     const connectionRows = displayUnitRows(engine.conexoes.map((connection, index) => buildConnectionRow(engine, connection, index)));
+    const metadataColumns = displayUnitColumns(EXPORT_METADATA_COLUMNS);
     const componentColumns = displayUnitColumns(COMPONENT_COLUMNS);
     const connectionColumns = displayUnitColumns(CONNECTION_COLUMNS);
 
@@ -451,10 +655,10 @@ export function buildExportHtml(engine) {
     </style>
 </head>
 <body>
-    <h1>Exportação de Dados - GAAP Virtual Lab</h1>
-    ${renderTable('Resumo da exportação', EXPORT_METADATA_COLUMNS, metadataRows)}
-    ${renderTable('Componentes', componentColumns, componentRows)}
-    ${renderTable('Conexões', connectionColumns, connectionRows)}
+    <h1>${translateExportLabel('Exportação de Dados - GAAP Virtual Lab')}</h1>
+    ${renderTable(translateExportLabel('Resumo da exportação'), metadataColumns, metadataRows)}
+    ${renderTable(translateExportLabel('Componentes'), componentColumns, componentRows)}
+    ${renderTable(translateExportLabel('Conexões'), connectionColumns, connectionRows)}
 </body>
 </html>`;
 }
