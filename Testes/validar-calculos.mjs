@@ -528,6 +528,52 @@ test('controle de nível escolhe perfil automaticamente e restaura perfil manual
     assert.equal(valvula.tempoCursoSegundos, 1.5);
 });
 
+test('controle de nível atua nas válvulas e mantem bomba operacional em 100%', () => {
+    const engine = createEngine();
+    engine.isRunning = true;
+
+    const fonte = new FonteLogica('F-SP', 'Entrada-SP', 0, 0);
+    const bomba = new BombaLogica('B-SP', 'Bomba-SP', 80, 0);
+    const tanque = new TanqueLogico('T-SP', 'Tanque-SP', 160, 0);
+    const valvula = new ValvulaLogica('V-SP', 'Valvula-SP', 240, 0);
+
+    fonte.conectarSaida(bomba);
+    bomba.conectarSaida(tanque);
+    tanque.conectarSaida(valvula);
+    [fonte, bomba, tanque, valvula].forEach((component) => engine.add(component));
+
+    bomba.grauAcionamento = 35;
+    bomba.acionamentoEfetivo = 35;
+    tanque.capacidadeMaxima = 1000;
+    tanque.volumeAtual = 800;
+    tanque.setpoint = 50;
+
+    const resultado = tanque.setSetpointAtivo(true);
+    assert.equal(resultado.ativado, true);
+    assert.equal(engine.isBombaBloqueadaPorSetpoint(bomba), true);
+    assert.equal(tanque.isBombaControladaPorSetpoint(bomba), true);
+    assert.equal(bomba.grauAcionamento, 35, 'Ativar set point não deve sobrescrever o comando manual armazenado');
+    assert.equal(bomba.getAcionamentoAlvo(), 100, 'Bomba associada ao set point deve operar com alvo fixo de 100%');
+
+    tanque._rodarControlador(0.1);
+    bomba.atualizarDinamica(0.8);
+
+    assert.equal(valvula.estaControladaPorSetpoint(), true, 'A válvula deve ficar sob controle do set point');
+    assert.ok(valvula.grauAbertura > 0, 'O PI deve modular a válvula de saída para reduzir nível alto');
+    assert.equal(bomba.grauAcionamento, 35, 'Rodar o PI não deve alterar parametros da bomba');
+    assert.ok(bomba.acionamentoEfetivo > 35, 'A dinâmica da bomba deve caminhar para 100% enquanto o set point está ativo');
+
+    assert.equal(bomba.setAcionamento(20), false);
+    assert.equal(bomba.grauAcionamento, 35, 'A bomba não deve aceitar comando manual enquanto está fixa em 100% pelo set point');
+    assert.equal(bomba.getAcionamentoAlvo(), 100);
+
+    tanque.setSetpointAtivo(false);
+    assert.equal(engine.isBombaBloqueadaPorSetpoint(bomba), false);
+    assert.equal(bomba.getAcionamentoAlvo(), 35, 'Ao desligar o set point, o alvo volta ao comando manual preservado');
+    assert.equal(bomba.setAcionamento(20), true);
+    assert.equal(bomba.grauAcionamento, 20, 'Ao desligar o set point, a bomba volta a aceitar comando manual');
+});
+
 test('fator de cavitação da bomba permanece finito com NPSHa inválido', () => {
     const bomba = new BombaLogica('B-NPSH', 'B-NPSH', 0, 0);
 
@@ -552,12 +598,17 @@ test('curva da bomba reflete alteração de NPSHr sem esconder a mudança pela e
     assert.equal(curvaBase.npshAxisMax, curvaAjustada.npshAxisMax);
 });
 
-test('resumo de ajuste de pressão no set point considera altura relativa ligada e desligada', () => {
+test('diagnóstico de saturação dimensiona bomba sem ajustar fonte de entrada', () => {
     const engine = createEngine();
-
     const fonte = new FonteLogica('F-01', 'Entrada-01', 0, 0);
-    const tanque = new TanqueLogico('T-01', 'Tanque-01', 0, 0);
-    fonte.conectarSaida(tanque);
+    const bomba = new BombaLogica('B-01', 'Bomba-01', 80, 0);
+    const tanque = new TanqueLogico('T-01', 'Tanque-01', 160, 0);
+    const valvula = new ValvulaLogica('V-01', 'Valvula-01', 240, 0);
+
+    fonte.conectarSaida(bomba);
+    bomba.conectarSaida(tanque);
+    tanque.conectarSaida(valvula);
+    [fonte, bomba, tanque, valvula].forEach((component) => engine.add(component));
 
     tanque.capacidadeMaxima = 1000;
     tanque.volumeAtual = 800;
@@ -569,39 +620,57 @@ test('resumo de ajuste de pressão no set point considera altura relativa ligada
     tanque.lastQout = 10;
     tanque.setpointAtivo = true;
     tanque._ultimoEstadoControle = { u: -1, erro: -0.3 };
-
     fonte.pressaoFonteBar = 1.5;
-    engine.add(fonte);
-    engine.add(tanque);
+    bomba.vazaoNominal = 45;
+    bomba.pressaoMaxima = 5;
 
     const densidade = engine.fluidoOperante.densidade;
     const pressaoSaidaAtualAtiva = pressureFromHeadBar(1.92 - 0.2, densidade);
     const pressaoSaidaSetpointAtiva = pressureFromHeadBar(1.2 - 0.2, densidade);
     const vazaoSetpointAtiva = 10 * Math.sqrt(pressaoSaidaSetpointAtiva / pressaoSaidaAtualAtiva);
-    const pressaoBaseAtualAtiva = pressureFromHeadBar(1.92 - 1.0, densidade);
-    const pressaoBaseSetpointAtiva = pressureFromHeadBar(1.2 - 1.0, densidade);
-    const fatorAtivo = Math.pow(vazaoSetpointAtiva / 20, 2);
-    const pressaoFonteAtivaEsperada = pressaoBaseSetpointAtiva + ((1.5 - pressaoBaseAtualAtiva) * fatorAtivo);
 
     const resumoAtivo = tanque.getResumoAjustePressaoSetpoint(engine.fluidoOperante, true);
     approx(resumoAtivo.vazaoSaidaLimiteSetpointLps, vazaoSetpointAtiva, 1e-9, 'Vazão limite no set point com altura relativa');
-    approx(resumoAtivo.ajustesFonte[0].pressaoRecomendadaBar, pressaoFonteAtivaEsperada, 1e-9, 'Pressão recomendada com altura relativa');
+    assert.equal(resumoAtivo.autoAjustavel, true);
+    assert.deepEqual(resumoAtivo.ajustesFonte, []);
+    assert.equal(resumoAtivo.ajustesBomba.length, 1);
+    approx(
+        resumoAtivo.ajustesBomba[0].vazaoNominalRecomendadaLps,
+        vazaoSetpointAtiva * 0.98,
+        1e-9,
+        'Bomba deve ser dimensionada abaixo da capacidade de saída no set point'
+    );
     tanque._atualizarAlertaSaturacao(engine.fluidoOperante);
     assert.equal(tanque.alertaSaturacao?.ativo, true, 'Alerta deve usar a capacidade de saída estimada no nível do set point');
+
+    tanque.lastQin = 10;
+    tanque.lastQout = 12;
+    tanque._atualizarAlertaSaturacao(engine.fluidoOperante);
+    assert.equal(tanque.alertaSaturacao, null, 'Alerta não deve aparecer durante drenagem transitória em direção ao set point');
+    tanque.lastQin = 20;
+    tanque.lastQout = 10;
 
     const pressaoSaidaAtualSemAltura = pressureFromHeadBar(1.92, densidade);
     const pressaoSaidaSetpointSemAltura = pressureFromHeadBar(1.2, densidade);
     const vazaoSetpointSemAltura = 10 * Math.sqrt(pressaoSaidaSetpointSemAltura / pressaoSaidaAtualSemAltura);
-    const fatorSemAltura = Math.pow(vazaoSetpointSemAltura / 20, 2);
-    const pressaoFonteSemAlturaEsperada = 1.5 * fatorSemAltura;
 
     const resumoSemAltura = tanque.getResumoAjustePressaoSetpoint(engine.fluidoOperante, false);
     approx(resumoSemAltura.pressaoBaseEntradaSetpointBar, 0, 1e-9, 'Contrapressão de entrada sem altura relativa');
     approx(resumoSemAltura.vazaoSaidaLimiteSetpointLps, vazaoSetpointSemAltura, 1e-9, 'Vazão limite no set point sem altura relativa');
-    approx(resumoSemAltura.ajustesFonte[0].pressaoRecomendadaBar, pressaoFonteSemAlturaEsperada, 1e-9, 'Pressão recomendada sem altura relativa');
+    assert.equal(resumoSemAltura.autoAjustavel, true);
+    approx(
+        resumoSemAltura.ajustesBomba[0].vazaoNominalRecomendadaLps,
+        vazaoSetpointSemAltura * 0.98,
+        1e-9,
+        'Dimensionamento também deve existir sem altura relativa'
+    );
 
     engine.usarAlturaRelativa = false;
     const resultado = tanque.aplicarAjustePressaoSetpoint();
-    assert.equal(resultado.aplicado, true, 'O ajuste automático deveria ser aplicado');
-    approx(fonte.pressaoFonteBar, pressaoFonteSemAlturaEsperada, 1e-9, 'Aplicação automática da pressão recomendada');
+
+    assert.equal(resultado.aplicado, true);
+    assert.equal(resultado.quantidadeBombas, 1);
+    approx(bomba.vazaoNominal, vazaoSetpointSemAltura * 0.98, 1e-9, 'Vazão nominal da bomba deve receber o dimensionamento');
+    approx(bomba.pressaoMaxima, 5, 1e-12, 'Pressão máxima já suficiente deve ser preservada');
+    approx(fonte.pressaoFonteBar, 1.5, 1e-12, 'Pressão da fonte deve permanecer manual');
 });

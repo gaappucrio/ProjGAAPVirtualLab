@@ -50,24 +50,26 @@ export class SimulationTickPipeline {
             if (!(component instanceof TanqueLogico) || !component.setpointAtivo) return;
 
             const notificarEstado = (equipment) => {
-                if (equipment instanceof ValvulaLogica) {
-                    equipment.notify(ComponentEventPayloads.state({
-                        aberta: equipment.aberta,
-                        grau: equipment.grauAbertura
-                    }));
-                    return;
-                }
-
-                if (equipment instanceof BombaLogica) {
-                    equipment.notify(ComponentEventPayloads.state({
-                        isOn: equipment.isOn,
-                        grau: equipment.grauAcionamento
-                    }));
-                }
+                if (!(equipment instanceof ValvulaLogica)) return;
+                equipment.notify(ComponentEventPayloads.state({
+                    aberta: equipment.aberta,
+                    grau: equipment.grauAbertura
+                }));
+            };
+            const notificarBombaMantida = (equipment) => {
+                if (!(equipment instanceof BombaLogica)) return;
+                equipment.notify(ComponentEventPayloads.state({
+                    isOn: equipment.isOn,
+                    grau: equipment.getAcionamentoAlvo?.() ?? 100,
+                    grauManual: equipment.grauAcionamento,
+                    grauEfetivo: equipment.acionamentoEfetivo,
+                    bloqueadaPorSetpoint: true
+                }));
             };
 
             component.inputs.forEach(notificarEstado);
             component.outputs.forEach(notificarEstado);
+            component.getAtuadoresControleNivel?.().bombas.forEach(notificarBombaMantida);
         });
     }
 

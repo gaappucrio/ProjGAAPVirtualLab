@@ -24,7 +24,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Seleção múltipla de componentes por retângulo azul no workspace ou `Ctrl+clique`.
 - Remoção por tecla `Delete` ou `Backspace`, incluindo seleções múltiplas.
 - Clone de componentes selecionados por `Ctrl+C` e `Ctrl+V`, preservando propriedades configuráveis, conexões internas do grupo e criando a tag com sufixo `- copia` ou `- copy` conforme o idioma ativo.
-- Desfazer por `Ctrl+Z` para restaurar a última alteração do usuário no workspace, incluindo adição, remoção, movimentação, rotação, conexões, colagem, limpeza do canvas e edições de propriedades.
+- Desfazer por `Ctrl+Z` e refazer por `Ctrl+Y` / `Ctrl+Shift+Z` para restaurar a última alteração do usuário no workspace, incluindo adição, remoção, movimentação, rotação, conexões, colagem, limpeza do canvas e edições de propriedades.
 - Renderização visual de tubos, rótulos de vazão e estados de portas.
 - Pontas das setas dos tubos acompanham a orientação da porta de entrada/saída quando componentes são rotacionados.
 - Opção de altura relativa para considerar desníveis entre componentes.
@@ -82,7 +82,8 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Controle de nível por set point.
 - Bloqueio de ativação do controle caso não exista válvula conectada diretamente à saída do tanque.
 - Alerta de saturação quando o set point não é alcançável com a capacidade hidráulica atual.
-- Ajuste automático recomendado para pressão das fontes de entrada.
+- O alerta considera drenagem transitória em direção ao set point e evita disparar em condição temporária de ajuste.
+- Ajuste automático recomendado para pressão das fontes de entrada e dimensionamento didático de bombas a montante quando o set point não pode ser mantido.
 - Fluido de conteúdo persistente, atualizado por mistura volumétrica das entradas.
 
 ### 2.6 Conexões e Tubulações
@@ -600,7 +601,7 @@ O painel de propriedades é composto por presenters.
 
 Tipos:
 
-- `DefaultPropertiesPresenter`: estado global e unidades, sem edição de fluido global.
+- `DefaultPropertiesPresenter`: estado global e unidades, sem edição de fluido global. Inclui controle de velocidade de simulação para alternar o passo do tick em tempo real (1x), acelerado (2x), rápido (5x) e muito rápido (10x).
 - `ConnectionPropertiesPresenter`: edição de tubo/conexão.
 - `ComponentPropertiesPresenter`: roteia para presenter por tipo.
 - `PumpComponentPropertiesPresenter`.
@@ -775,7 +776,7 @@ Marcos concluídos:
 - `I18n.js` renomeado para `LanguageManager.js` e imports atualizados.
 - Helper de tutorial adicionado ao cabeçalho.
 - Seleção múltipla por retângulo azul, `Ctrl+clique`, arraste em grupo, remoção em lote e clipboard de sistemas inteiros.
-- Histórico de desfazer por `Ctrl+Z` implementado em controller dedicado, com restauração visual e lógica de componentes, conexões, configuração de altura relativa e seleção.
+- Histórico de desfazer por `Ctrl+Z` e refazer por `Ctrl+Y` / `Ctrl+Shift+Z` implementado em controller dedicado, com restauração visual e lógica de componentes, conexões, configuração de altura relativa e seleção.
 - Curvas de conexão passaram a considerar a direção das portas após rotação visual dos componentes, mantendo as setas dos tubos coerentes com a entrada/saída.
 - Exportação tabular passou a converter cabeçalhos e valores para as mesmas unidades escolhidas pelo usuário no painel de unidades.
 - Exportação tabular passou a localizar títulos, cabeçalhos e valores gerados pelo sistema conforme o idioma ativo, preservando nomes, tags e fluidos personalizados definidos pelo usuário.

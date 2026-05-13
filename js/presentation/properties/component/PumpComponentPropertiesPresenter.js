@@ -25,6 +25,9 @@ export const PUMP_PROPERTIES_PRESENTER = {
         const engine = getPresentationEngine();
         const bloqueadaPorSetpoint = engine.isBombaBloqueadaPorSetpoint?.(comp) === true;
         const bloqueioAttr = bloqueadaPorSetpoint ? 'disabled' : '';
+        const acionamentoExibido = Math.round(bloqueadaPorSetpoint
+            ? (comp.getAcionamentoAlvo?.() ?? 100)
+            : comp.grauAcionamento);
         const npshRequeridoAtualM = comp.npshRequeridoAtualM ?? comp.npshRequeridoM;
         const margemNpshM = comp.getMargemNpshAtualM?.() ?? (comp.npshDisponivelM - npshRequeridoAtualM);
         const condicaoSucao = comp.getCondicaoSucaoAtual?.()
@@ -34,11 +37,11 @@ export const PUMP_PROPERTIES_PRESENTER = {
             <div class="prop-group">
                 <label ${hintAttr(TOOLTIP.pumpDrive)}>Acionamento do motor
                     <span style="display:flex; align-items:center; gap:2px;">
-                        <input type="number" id="val-acionamento" class="val-display-input" ${hintAttr(TOOLTIP.pumpDrive)} value="${Math.round(comp.grauAcionamento)}" ${bloqueioAttr}> %
+                        <input type="number" id="val-acionamento" class="val-display-input" ${hintAttr(TOOLTIP.pumpDrive)} value="${acionamentoExibido}" ${bloqueioAttr}> %
                     </span>
                 </label>
-                <input type="range" id="input-acionamento" min="0" max="100" value="${Math.round(comp.grauAcionamento)}" ${hintAttr(TOOLTIP.pumpDrive)} ${bloqueioAttr}>
-                ${bloqueadaPorSetpoint ? '<p style="margin:6px 0 0; font-size:11px; color:#c0392b;">Bomba mantida ligada pelo controlador de nível do tanque.</p>' : ''}
+                <input type="range" id="input-acionamento" min="0" max="100" value="${acionamentoExibido}" ${hintAttr(TOOLTIP.pumpDrive)} ${bloqueioAttr}>
+                ${bloqueadaPorSetpoint ? '<p style="margin:6px 0 0; font-size:11px; color:#c0392b;">Bomba fixa em 100% durante o set point; o PI ajusta apenas válvulas.</p>' : ''}
             </div>
             <div class="prop-group">
                 ${makeUnitLabel('Vazão nominal máx.', 'flow', TOOLTIP.pumpFlow)}
@@ -129,11 +132,13 @@ export const PUMP_PROPERTIES_PRESENTER = {
             if (numInput) numInput.disabled = bloqueada;
         };
         const refreshPumpPanel = () => {
+            const bloqueada = bombaBloqueadaPorSetpoint();
             comp.notify(ComponentEventPayloads.state({
                 isOn: comp.isOn,
-                grau: comp.grauAcionamento,
+                grau: bloqueada ? (comp.getAcionamentoAlvo?.() ?? 100) : comp.grauAcionamento,
+                grauManual: comp.grauAcionamento,
                 grauEfetivo: comp.acionamentoEfetivo,
-                bloqueadaPorSetpoint: bombaBloqueadaPorSetpoint()
+                bloqueadaPorSetpoint: bloqueada
             }));
             notifyPanelRefresh();
         };

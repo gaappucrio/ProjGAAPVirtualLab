@@ -198,6 +198,49 @@ test('bomba ativa na saida do tanque aumenta vazao sem pressao incoerente', () =
     });
 });
 
+test('vazao em bomba responde a pressao de entrada sem interferencia do set point', () => {
+    const medirVazaoComPressaoEntrada = (pressaoFonteBar) => {
+        const engine = createEngine();
+        const fonte = new FonteLogica(`F-${pressaoFonteBar}`, `Fonte-${pressaoFonteBar}`, 0, 0);
+        const bomba = new BombaLogica(`B-${pressaoFonteBar}`, `Bomba-${pressaoFonteBar}`, 120, 0);
+        const dreno = new DrenoLogico(`D-${pressaoFonteBar}`, `Dreno-${pressaoFonteBar}`, 240, 0);
+
+        fonte.pressaoFonteBar = pressaoFonteBar;
+        fonte.vazaoMaxima = 500;
+        bomba.vazaoNominal = 90;
+        bomba.pressaoMaxima = 2;
+        bomba.grauAcionamento = 100;
+        bomba.acionamentoEfetivo = 100;
+        dreno.pressaoSaidaBar = 0;
+
+        fonte.conectarSaida(bomba);
+        bomba.conectarSaida(dreno);
+        const entradaBomba = new ConnectionModel({ sourceId: fonte.id, targetId: bomba.id });
+        const saidaBomba = new ConnectionModel({ sourceId: bomba.id, targetId: dreno.id });
+
+        [fonte, bomba, dreno].forEach((component) => engine.add(component));
+        [entradaBomba, saidaBomba].forEach((connection) => engine.addConnection(connection));
+        runPhysicsSteps(engine, 40, 0.1);
+
+        return {
+            vazao: engine.getConnectionState(saidaBomba).flowLps,
+            bomba
+        };
+    };
+
+    const baixaPressao = medirVazaoComPressaoEntrada(0.1);
+    const altaPressao = medirVazaoComPressaoEntrada(1.5);
+
+    assert.ok(
+        altaPressao.vazao > baixaPressao.vazao * 1.05,
+        `A vazao deve crescer com maior pressao de entrada: baixa=${baixaPressao.vazao}, alta=${altaPressao.vazao}`
+    );
+    assert.ok(
+        altaPressao.bomba.pressaoSucaoAtualBar > baixaPressao.bomba.pressaoSucaoAtualBar,
+        'A pressao de succao da bomba deve refletir a pressao imposta na entrada'
+    );
+});
+
 test('valvula totalmente aberta com Cv alto se aproxima de tubo equivalente', () => {
     const buildTank = (id) => {
         const tanque = new TanqueLogico(id, id, 0, 0);

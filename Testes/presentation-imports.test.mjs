@@ -320,6 +320,39 @@ test('clipboard de grupo preserva componentes selecionados e conexoes internas',
     assert.equal(snapshot.connections[0].extraLengthM, 3);
 });
 
+test('historico de workspace refaz alteracoes apos desfazer', async () => {
+    const { createUndoRedoHistory } = await import('../js/presentation/controllers/UndoController.js');
+
+    let currentState = { value: 'A' };
+    const capture = () => JSON.parse(JSON.stringify(currentState));
+    const restoredStates = [];
+    const history = createUndoRedoHistory({
+        captureSnapshot: capture,
+        restoreSnapshot: (snapshot) => {
+            currentState = JSON.parse(JSON.stringify(snapshot));
+            restoredStates.push(currentState.value);
+            return true;
+        }
+    });
+
+    history.record('initial');
+    currentState = { value: 'B' };
+    history.record('second');
+    currentState = { value: 'C' };
+
+    assert.equal(history.undo(), true);
+    assert.equal(currentState.value, 'B');
+    assert.equal(history.undo(), true);
+    assert.equal(currentState.value, 'A');
+    assert.equal(history.redo(), true);
+    assert.equal(currentState.value, 'B');
+    assert.deepEqual(restoredStates, ['B', 'A', 'B']);
+
+    currentState = { value: 'D' };
+    assert.equal(history.record('branch'), true);
+    assert.equal(history.redo(), false, 'Novo registro deve limpar a pilha de redo');
+});
+
 test('cores visuais acompanham os presets de fluido', async () => {
     const { FLUID_PRESETS } = await import('../js/application/config/FluidPresets.js');
     const { createFluidoFromProperties, mixFluidos } = await import('../js/domain/components/Fluido.js');

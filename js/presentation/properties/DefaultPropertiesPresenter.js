@@ -21,6 +21,7 @@ export function renderDefaultProperties({
                 <option value="1">1x (Tempo real)</option>
                 <option value="2">2x (Acelerado)</option>
                 <option value="5">5x (Rápido)</option>
+                <option value="10">10x (Muito rápido)</option>
             </select>
         </div>
         <p title="${TOOLTIPS.painel.estadoVazio}" style="font-size: 12px; color:#95a5a6; text-align:center;">${TOOLTIPS.painel.estadoVazio}</p>

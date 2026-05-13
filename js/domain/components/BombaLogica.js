@@ -42,6 +42,14 @@ export class BombaLogica extends ComponenteFisico {
         return clamp(this.acionamentoEfetivo / 100.0, 0, 1);
     }
 
+    estaBloqueadaPorSetpoint() {
+        return this.getSimulationContext().queries.isBombaBloqueadaPorSetpoint(this) === true;
+    }
+
+    getAcionamentoAlvo() {
+        return this.estaBloqueadaPorSetpoint() ? 100 : this.grauAcionamento;
+    }
+
     getCurvaPressaoBar(flowLps, drive = 1) {
         const driveClamped = clamp(drive, 0, 1);
         const qMax = Math.max(EPSILON_FLOW, this.vazaoNominal * Math.max(driveClamped, 0.05));
@@ -112,30 +120,46 @@ export class BombaLogica extends ComponenteFisico {
     setAcionamento(valor) {
         const context = this.getSimulationContext();
         const comandoSolicitado = clamp(Number(valor) || 0, 0, 100);
-        const bloqueadaPorSetpoint = context.queries.isBombaBloqueadaPorSetpoint(this) === true;
+        const bloqueadaPorSetpoint = this.estaBloqueadaPorSetpoint();
 
-        this.grauAcionamento = bloqueadaPorSetpoint ? 100 : comandoSolicitado;
+        if (bloqueadaPorSetpoint) {
+            this.notify(ComponentEventPayloads.state({
+                isOn: this.isOn,
+                grau: this.getAcionamentoAlvo(),
+                grauManual: this.grauAcionamento,
+                grauEfetivo: this.acionamentoEfetivo,
+                bloqueadaPorSetpoint: true
+            }));
+            return false;
+        }
+
+        this.grauAcionamento = comandoSolicitado;
         if (!context.isRunning) this.acionamentoEfetivo = 0;
         this.isOn = context.isRunning && this.acionamentoEfetivo > 0.5;
         this.notify(ComponentEventPayloads.state({
             isOn: this.isOn,
             grau: this.grauAcionamento,
+            grauManual: this.grauAcionamento,
             grauEfetivo: this.acionamentoEfetivo,
-            bloqueadaPorSetpoint
+            bloqueadaPorSetpoint: false
         }));
+        return true;
     }
 
     atualizarDinamica(dt) {
         const previousDrive = this.acionamentoEfetivo;
-        this.acionamentoEfetivo = rampToTarget(previousDrive, this.grauAcionamento, dt, this.tempoRampaSegundos);
+        const acionamentoAlvo = this.getAcionamentoAlvo();
+        const bloqueadaPorSetpoint = this.estaBloqueadaPorSetpoint();
+        this.acionamentoEfetivo = rampToTarget(previousDrive, acionamentoAlvo, dt, this.tempoRampaSegundos);
         this.isOn = this.acionamentoEfetivo > 0.5;
 
         if (Math.abs(this.acionamentoEfetivo - previousDrive) > 0.05) {
             this.notify(ComponentEventPayloads.state({
                 isOn: this.isOn,
-                grau: this.grauAcionamento,
+                grau: acionamentoAlvo,
+                grauManual: this.grauAcionamento,
                 grauEfetivo: this.acionamentoEfetivo,
-                bloqueadaPorSetpoint: this.getSimulationContext().queries.isBombaBloqueadaPorSetpoint(this) === true
+                bloqueadaPorSetpoint
             }));
         }
     }
@@ -153,9 +177,10 @@ export class BombaLogica extends ComponenteFisico {
         this.fatorCavitacaoAtual = 1;
         this.notify(ComponentEventPayloads.state({
             isOn: false,
-            grau: this.grauAcionamento,
+            grau: this.getAcionamentoAlvo(),
+            grauManual: this.grauAcionamento,
             grauEfetivo: 0,
-            bloqueadaPorSetpoint: this.getSimulationContext().queries.isBombaBloqueadaPorSetpoint(this) === true
+            bloqueadaPorSetpoint: this.estaBloqueadaPorSetpoint()
         }));
     }
 

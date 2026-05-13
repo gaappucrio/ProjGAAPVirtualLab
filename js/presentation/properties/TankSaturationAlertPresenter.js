@@ -9,20 +9,15 @@ import {
 import { t, translateLiteral } from '../../utils/LanguageManager.js';
 import { formatMeasuredValue } from './PropertyValueFormatters.js';
 
-function getRecommendedSourcePressureText(alerta) {
-    if (!alerta?.autoAjustavel || !Array.isArray(alerta.ajustesFonte) || alerta.ajustesFonte.length === 0) {
-        return null;
-    }
+function formatPumpSizingText(alerta) {
+    const ajustes = alerta.ajustesBomba || [];
+    if (ajustes.length === 0) return '';
 
-    const valores = alerta.ajustesFonte.map((ajuste) => ajuste.pressaoRecomendadaBar);
-    const menor = Math.min(...valores);
-    const maior = Math.max(...valores);
-
-    if (Math.abs(maior - menor) < 0.0005) {
-        return formatMeasuredValue('pressure', maior, 2);
-    }
-
-    return `${formatMeasuredValue('pressure', menor, 2)}${t('common.rangeSeparator')}${formatMeasuredValue('pressure', maior, 2)}`;
+    return t('saturation.pumpSizing', {
+        count: ajustes.length,
+        flow: formatMeasuredValue('flow', ajustes[0].vazaoNominalRecomendadaLps, 2),
+        pressure: formatMeasuredValue('pressure', ajustes[0].pressaoMaximaRecomendadaBar, 2)
+    });
 }
 
 export function updateTankSaturationAlert(component) {
@@ -43,7 +38,6 @@ export function updateTankSaturationAlert(component) {
         return;
     }
 
-    const pressaoRecomendada = getRecommendedSourcePressureText(alerta);
     const textoModoAltura = alerta.usarAlturaRelativa
         ? t('saturation.heightOn', {
             baseInlet: formatMeasuredValue('pressure', alerta.pressaoBaseEntradaSetpointBar, 2),
@@ -52,36 +46,37 @@ export function updateTankSaturationAlert(component) {
         : t('saturation.heightOff', {
             outlet: formatMeasuredValue('pressure', alerta.pressaoSaidaSetpointBar, 2)
         });
-    const textoPressao = pressaoRecomendada
-        ? t('saturation.pressure', { setpoint: component.setpoint, pressure: pressaoRecomendada })
-        : t('saturation.noSource');
     const textoBombas = alerta.possuiBombasMontante
         ? t('saturation.pumps', { count: alerta.quantidadeBombasMontante })
         : '';
+    const textoDimensionamento = formatPumpSizingText(alerta);
 
     setDisplay('painel-alerta-saturacao', 'block');
     setHtml('texto-alerta-saturacao', t('saturation.message', {
-        pressureText: textoPressao,
+        setpoint: component.setpoint,
         flow: formatMeasuredValue('flow', alerta.vazaoSaidaLimiteSetpointLps, 2),
         heightText: textoModoAltura,
-        pumpText: textoBombas
+        pumpText: textoBombas,
+        sizingText: textoDimensionamento
     }));
 
     if (btnAjuste) {
-        btnAjuste.style.display = 'inline-flex';
-        btnAjuste.disabled = !alerta.autoAjustavel;
-        btnAjuste.textContent = alerta.autoAjustavel
-            ? (alerta.ajustesFonte.length === 1
-                ? t('saturation.applyOne')
-                : t('saturation.applyMany', { count: alerta.ajustesFonte.length }))
-            : t('saturation.unavailable');
+        const quantidadeBombasAjustaveis = alerta.ajustesBomba?.length ?? 0;
+        btnAjuste.style.display = quantidadeBombasAjustaveis > 0 ? 'inline-flex' : 'none';
+        btnAjuste.disabled = quantidadeBombasAjustaveis === 0;
+        btnAjuste.textContent = quantidadeBombasAjustaveis > 1
+            ? t('saturation.applyMany', { count: quantidadeBombasAjustaveis })
+            : t('saturation.applyOne');
     }
 
-    if (feedbackAjuste && !alerta.autoAjustavel && !feedbackAjuste.dataset.state) {
-        setText('texto-acao-alerta-saturacao', t('saturation.connectSource'));
+    if (feedbackAjuste && !feedbackAjuste.dataset.state) {
+        setText(
+            'texto-acao-alerta-saturacao',
+            alerta.ajustesBomba?.length > 0
+                ? t('saturation.pumpSizingAvailable')
+                : (alerta.possuiBombasMontante ? t('saturation.pumpLimited') : t('saturation.valveOnly'))
+        );
         feedbackAjuste.style.color = '#a84300';
-    } else if (feedbackAjuste && alerta.autoAjustavel && !feedbackAjuste.dataset.state) {
-        setText('texto-acao-alerta-saturacao', '');
     }
 }
 
@@ -94,17 +89,13 @@ export function bindTankSaturationAlertActions(component, { onAdjustmentApplied 
 
     bind('btn-aplicar-alerta-saturacao', 'click', () => {
         const resultado = component.aplicarAjustePressaoSetpoint();
-        if (resultado.aplicado) {
-            feedbackAjuste.textContent = resultado.quantidadeFontes === 1
-                ? t('saturation.successOne')
-                : t('saturation.successMany', { count: resultado.quantidadeFontes });
-            feedbackAjuste.style.color = '#1e8449';
-            feedbackAjuste.dataset.state = 'success';
-        } else {
-            feedbackAjuste.textContent = translateLiteral(resultado.motivo);
-            feedbackAjuste.style.color = '#a84300';
-            feedbackAjuste.dataset.state = 'warning';
-        }
+        feedbackAjuste.textContent = resultado.aplicado
+            ? t(resultado.quantidadeBombas > 1 ? 'saturation.successMany' : 'saturation.successOne', {
+                count: resultado.quantidadeBombas
+            })
+            : translateLiteral(resultado.motivo);
+        feedbackAjuste.style.color = resultado.aplicado ? '#1e8449' : '#a84300';
+        feedbackAjuste.dataset.state = resultado.aplicado ? 'success' : 'warning';
 
         onAdjustmentApplied?.(resultado);
     });

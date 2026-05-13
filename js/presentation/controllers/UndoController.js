@@ -24,6 +24,95 @@ function snapshotSignature(snapshot) {
     return JSON.stringify(snapshot);
 }
 
+function trimStack(stack, maxSize) {
+    while (stack.length > maxSize) stack.shift();
+}
+
+export function createUndoRedoHistory({
+    captureSnapshot,
+    restoreSnapshot,
+    signatureFactory = snapshotSignature,
+    maxHistorySize = MAX_HISTORY_SIZE
+} = {}) {
+    const undoStack = [];
+    const redoStack = [];
+    let restoring = false;
+
+    const createEntry = (label, snapshot) => ({
+        label,
+        snapshot,
+        signature: signatureFactory(snapshot)
+    });
+
+    const pushUndo = (entry) => {
+        undoStack.push(entry);
+        trimStack(undoStack, maxHistorySize);
+    };
+
+    const pushRedo = (entry) => {
+        redoStack.push(entry);
+        trimStack(redoStack, maxHistorySize);
+    };
+
+    const restoreEntry = (entry) => {
+        restoring = true;
+        try {
+            return restoreSnapshot(entry.snapshot);
+        } finally {
+            restoring = false;
+        }
+    };
+
+    return {
+        record(label = 'change') {
+            if (restoring || typeof captureSnapshot !== 'function') return false;
+
+            const snapshot = captureSnapshot();
+            const entry = createEntry(label, snapshot);
+            const latest = undoStack[undoStack.length - 1];
+            if (latest?.signature === entry.signature) return false;
+
+            pushUndo(entry);
+            redoStack.length = 0;
+            return true;
+        },
+        undo() {
+            if (restoring || undoStack.length === 0 || typeof captureSnapshot !== 'function') return false;
+
+            const current = createEntry('redo-current', captureSnapshot());
+            let entry = undoStack.pop();
+            while (entry && entry.signature === current.signature) {
+                entry = undoStack.pop();
+            }
+
+            if (!entry) return false;
+
+            pushRedo(current);
+            return restoreEntry(entry);
+        },
+        redo() {
+            if (restoring || redoStack.length === 0 || typeof captureSnapshot !== 'function') return false;
+
+            const current = createEntry('undo-current', captureSnapshot());
+            let entry = redoStack.pop();
+            while (entry && entry.signature === current.signature) {
+                entry = redoStack.pop();
+            }
+
+            if (!entry) return false;
+
+            pushUndo(current);
+            return restoreEntry(entry);
+        },
+        isRestoring() {
+            return restoring;
+        },
+        canRedo() {
+            return redoStack.length > 0;
+        }
+    };
+}
+
 function removeWorkspaceComponentVisuals() {
     document.querySelectorAll('#workspace-canvas .placed-component').forEach((element) => element.remove());
 }
@@ -159,52 +248,25 @@ export function restoreWorkspaceSnapshot(engine, snapshot, { undoManager } = {})
 export function setupUndoController({ engine } = {}) {
     if (!engine || typeof document === 'undefined') return null;
 
-    const history = [];
-    let restoring = false;
     let propertyEditActive = false;
     let activePropertyTarget = null;
 
-    const undoManager = {
-        record(label = 'change') {
-            if (restoring) return false;
-
-            const snapshot = createWorkspaceSnapshot(engine);
-            const signature = snapshotSignature(snapshot);
-            const latest = history[history.length - 1];
-            if (latest?.signature === signature) return false;
-
-            history.push({ label, snapshot, signature });
-            if (history.length > MAX_HISTORY_SIZE) history.shift();
-            return true;
-        },
-        undo() {
-            if (restoring || history.length === 0) return false;
-
-            const currentSignature = snapshotSignature(createWorkspaceSnapshot(engine));
-            let entry = history.pop();
-            while (entry && entry.signature === currentSignature) {
-                entry = history.pop();
-            }
-
-            if (!entry) return false;
-
-            restoring = true;
-            try {
-                return restoreWorkspaceSnapshot(engine, entry.snapshot, { undoManager });
-            } finally {
-                restoring = false;
-            }
-        },
-        isRestoring() {
-            return restoring;
-        }
-    };
+    const undoManager = createUndoRedoHistory({
+        captureSnapshot: () => createWorkspaceSnapshot(engine),
+        restoreSnapshot: (snapshot) => restoreWorkspaceSnapshot(engine, snapshot, { undoManager })
+    });
 
     document.addEventListener('keydown', (event) => {
         const key = String(event.key || '').toLowerCase();
-        if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey || key !== 'z') return;
+        if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
 
-        if (undoManager.undo()) {
+        const shouldUndo = !event.shiftKey && key === 'z';
+        const shouldRedo = key === 'y' || (event.shiftKey && key === 'z');
+        if (!shouldUndo && !shouldRedo) return;
+
+        const handled = shouldUndo ? undoManager.undo() : undoManager.redo();
+
+        if (handled) {
             event.preventDefault();
             event.stopPropagation();
         }

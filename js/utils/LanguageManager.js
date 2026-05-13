@@ -34,7 +34,7 @@ const TOOLTIP_TEXTS = {
             tagComponente: 'Identificação visual do equipamento no diagrama.',
             estadoVazio: 'Clique em um componente ou em um cano para editar os parâmetros físicos da planta.',
             alertaSaturacao: 'Aviso exibido quando a saída do tanque limita o controle de nível no ponto de ajuste configurado.',
-            aplicarAjusteSaturacao: 'Aplica automaticamente a pressão recomendada nas fontes de entrada disponíveis para tentar estabilizar o tanque no ponto de ajuste.'
+            aplicarAjusteSaturacao: 'Aplica um dimensionamento didático na bomba a montante. O set point automático continua atuando somente nas válvulas.'
         },
         fluido: {
             velocidadeSimulacao: 'Multiplicador de tempo da simulação física.',
@@ -135,11 +135,11 @@ const TOOLTIP_TEXTS = {
             tankLiquidLevel: 'Altura atual do espelho de líquido em relação ao fundo.',
             tankInletFlow: 'Vazão de entrada atual no tanque.',
             tankOutletFlow: 'Vazão de saída atual no tanque.',
-            tankSpActive: 'Liga ou desliga o controlador automático de nível do tanque. Enquanto ativo, bombas associadas ficam ligadas e o PI modula apenas válvulas.',
+            tankSpActive: 'Liga ou desliga o controlador automático de nível do tanque. Enquanto ativo, o PI modula apenas válvulas e bombas associadas operam fixas em 100%.',
             tankSetpoint: 'Nível desejado para o controlador automático em percentual da capacidade útil.',
             tankKp: 'Ganho proporcional do controlador de nível.',
             tankKi: 'Ganho integral do controlador de nível.',
-            tankPiController: 'Controle automático do nível do tanque por sinal proporcional e integral, mantendo bombas ligadas e atuando nas válvulas.'
+            tankPiController: 'Controle automático do nível do tanque por sinal proporcional e integral, atuando somente nas válvulas e mantendo bombas associadas fixas em 100%.'
         }
     },
     en: {
@@ -173,7 +173,7 @@ const TOOLTIP_TEXTS = {
             tagComponente: 'Visual equipment identifier in the diagram.',
             estadoVazio: 'Click a component or a pipe to edit the plant physical parameters.',
             alertaSaturacao: 'Warning shown when the tank outlet limits level control at the configured set point.',
-            aplicarAjusteSaturacao: 'Automatically applies the recommended pressure to available inlet sources to try to stabilize the tank at the set point.'
+            aplicarAjusteSaturacao: 'Applies didactic sizing to the upstream pump. Automatic set point control still actuates valves only.'
         },
         fluido: {
             velocidadeSimulacao: 'Time multiplier for the physical simulation.',
@@ -274,11 +274,11 @@ const TOOLTIP_TEXTS = {
             tankLiquidLevel: 'Current liquid surface height relative to the bottom.',
             tankInletFlow: 'Current inlet flow into the tank.',
             tankOutletFlow: 'Current outlet flow from the tank.',
-            tankSpActive: 'Turns the automatic tank level controller on or off. While active, associated pumps stay on and the PI modulates valves only.',
+            tankSpActive: 'Turns the automatic tank level controller on or off. While active, the PI modulates valves only and associated pumps run fixed at 100%.',
             tankSetpoint: 'Desired level for the automatic controller as a percentage of usable capacity.',
             tankKp: 'Proportional gain of the level controller.',
             tankKi: 'Integral gain of the level controller.',
-            tankPiController: 'Automatic tank level control by proportional and integral signal, keeping pumps on and actuating valves.'
+            tankPiController: 'Automatic tank level control by proportional and integral signal, actuating valves only and keeping associated pumps fixed at 100%.'
         }
     }
 };
@@ -340,23 +340,27 @@ const TEXTS = {
             heat_exchanger: 'TC'
         },
         saturation: {
-            heightOn: ({ baseInlet, outlet }) => `Com a altura relativa ativa, a recomendação considera a contrapressão no bocal de entrada no set point (${baseInlet}) e a pressão disponível de saída nesse mesmo nível (${outlet}).`,
-            heightOff: ({ outlet }) => `Com a altura relativa desativada, a entrada do tanque não considera contrapressão hidrostática; o ajuste usa somente a capacidade de saída estimada para o set point (${outlet}).`,
-            pressure: ({ setpoint, pressure }) => `Para estabilizar no set point de <b>${setpoint}%</b>, ajuste a pressão de alimentação para <b>${pressure}</b>.`,
-            noSource: 'Nenhuma fonte de entrada foi encontrada para aplicar o ajuste automaticamente.',
-            pumps: ({ count }) => ` Há ${count} bomba(s) no trecho de entrada; o ajuste automático atua apenas nas fontes de alimentação.`,
-            message: ({ pressureText, flow, heightText, pumpText }) => `
+            heightOn: ({ baseInlet, outlet }) => `Com a altura relativa ativa, o diagnóstico considera a contrapressão no bocal de entrada no set point (${baseInlet}) e a pressão disponível de saída nesse mesmo nível (${outlet}).`,
+            heightOff: ({ outlet }) => `Com a altura relativa desativada, o diagnóstico usa a capacidade de saída estimada para o set point (${outlet}).`,
+            pressure: ({ setpoint }) => `Para estabilizar no set point de <b>${setpoint}%</b>, o controlador continuará atuando somente na válvula.`,
+            noSource: 'O set point automático não altera fontes de entrada.',
+            pumps: ({ count }) => ` Há ${count} bomba(s) no trecho de entrada; elas ficam fixas em 100% e não são moduladas pelo PI.`,
+            valveOnly: 'Sem bomba a montante para dimensionar. Revise manualmente a alimentação, adicione uma válvula de entrada controlável ou aumente a capacidade da saída.',
+            pumpLimited: 'Com bomba a montante fixa em 100%, reduzir a pressão da fonte não é uma variável de controle confiável para o PA. O ajuste didático deve dimensionar a bomba ou a planta fora da malha de controle.',
+            pumpSizingAvailable: 'Dimensionamento de bomba disponível. A ação ajusta a vazão nominal da bomba para a capacidade física estimada no set point; o PA segue atuando somente nas válvulas.',
+            pumpSizing: ({ count, flow, pressure }) => ` Dimensionamento sugerido para ${count} bomba(s): vazão nominal de ${flow} por bomba, com pressão máxima mínima de ${pressure}.`,
+            message: ({ setpoint, flow, heightText, pumpText, sizingText }) => `
         A saída do tanque atingiu o limite físico para o controle de nível.
-        ${pressureText}
+        Para o set point de <b>${setpoint}%</b>, o PA só pode continuar abrindo a válvula; ele não altera pressão de entrada nem parâmetros de bomba.
         A vazão máxima estimada de saída no set point é <b>${flow}</b>.
-        ${heightText}${pumpText}
+        ${heightText}${pumpText}${sizingText}
     `,
-            applyOne: 'Aplicar na fonte de entrada',
-            applyMany: ({ count }) => `Aplicar nas ${count} fontes de entrada`,
+            applyOne: 'Dimensionar bomba',
+            applyMany: ({ count }) => `Dimensionar ${count} bombas`,
             unavailable: 'Ajuste automático indisponível',
-            connectSource: 'Conecte uma fonte de entrada para permitir o ajuste automático.',
-            successOne: 'Pressão de alimentação ajustada automaticamente.',
-            successMany: ({ count }) => `Pressão ajustada automaticamente em ${count} fontes de entrada.`
+            connectSource: 'O set point automático atua somente nas válvulas.',
+            successOne: 'Bomba dimensionada para o limite físico do set point.',
+            successMany: ({ count }) => `${count} bombas dimensionadas para o limite físico do set point.`
         },
         common: {
             rangeSeparator: ' a '
@@ -418,23 +422,27 @@ const TEXTS = {
             heat_exchanger: 'HX'
         },
         saturation: {
-            heightOn: ({ baseInlet, outlet }) => `With relative height enabled, the recommendation considers inlet nozzle backpressure at the set point (${baseInlet}) and outlet available pressure at that same level (${outlet}).`,
-            heightOff: ({ outlet }) => `With relative height disabled, the tank inlet does not consider hydrostatic backpressure; the adjustment uses only the estimated outlet capacity at the set point (${outlet}).`,
-            pressure: ({ setpoint, pressure }) => `To stabilize at a <b>${setpoint}%</b> set point, adjust feed pressure to <b>${pressure}</b>.`,
-            noSource: 'No inlet source was found to apply the adjustment automatically.',
-            pumps: ({ count }) => ` There ${count === 1 ? 'is' : 'are'} ${count} pump(s) in the inlet line; the automatic adjustment acts only on feed sources.`,
-            message: ({ pressureText, flow, heightText, pumpText }) => `
+            heightOn: ({ baseInlet, outlet }) => `With relative height enabled, the diagnosis considers inlet nozzle backpressure at the set point (${baseInlet}) and outlet available pressure at that same level (${outlet}).`,
+            heightOff: ({ outlet }) => `With relative height disabled, the diagnosis uses the estimated outlet capacity at the set point (${outlet}).`,
+            pressure: ({ setpoint }) => `To stabilize at a <b>${setpoint}%</b> set point, the controller will keep actuating valves only.`,
+            noSource: 'Automatic set point control does not change inlet sources.',
+            pumps: ({ count }) => ` There ${count === 1 ? 'is' : 'are'} ${count} pump(s) in the inlet line; they stay fixed at 100% and are not PI-modulated.`,
+            valveOnly: 'No upstream pump is available for sizing. Manually review feed conditions, add a controllable inlet valve, or increase outlet capacity.',
+            pumpLimited: 'With an upstream pump fixed at 100%, reducing source pressure is not a reliable PA control variable. The didactic adjustment should size the pump or plant outside the control loop.',
+            pumpSizingAvailable: 'Pump sizing is available. The action adjusts pump nominal flow to the estimated physical capacity at the set point; PA still actuates valves only.',
+            pumpSizing: ({ count, flow, pressure }) => ` Suggested sizing for ${count} pump(s): nominal flow ${flow} per pump, with minimum maximum pressure ${pressure}.`,
+            message: ({ setpoint, flow, heightText, pumpText, sizingText }) => `
         The tank outlet reached the physical limit for level control.
-        ${pressureText}
+        For the <b>${setpoint}%</b> set point, automatic control can only keep opening the valve; it does not change inlet pressure or pump parameters.
         The maximum estimated outlet flow at the set point is <b>${flow}</b>.
-        ${heightText}${pumpText}
+        ${heightText}${pumpText}${sizingText}
     `,
-            applyOne: 'Apply to inlet source',
-            applyMany: ({ count }) => `Apply to ${count} inlet sources`,
+            applyOne: 'Size pump',
+            applyMany: ({ count }) => `Size ${count} pumps`,
             unavailable: 'Automatic adjustment unavailable',
-            connectSource: 'Connect an inlet source to allow automatic adjustment.',
-            successOne: 'Feed pressure adjusted automatically.',
-            successMany: ({ count }) => `Pressure adjusted automatically in ${count} inlet sources.`
+            connectSource: 'Automatic set point control actuates valves only.',
+            successOne: 'Pump sized to the physical set point limit.',
+            successMany: ({ count }) => `${count} pumps sized to the physical set point limit.`
         },
         common: {
             rangeSeparator: ' to '
@@ -517,6 +525,7 @@ const LEGACY_PT_TO_EN = {
     '1x (Tempo real)': '1x (Real time)',
     '2x (Acelerado)': '2x (Accelerated)',
     '5x (Rápido)': '5x (Fast)',
+    '10x (Muito rápido)': '10x (Very fast)',
     'Predefinição do Fluido': 'Fluid Preset',
     'Nome do Fluido': 'Fluid Name',
     'Fluido': 'Fluid',
@@ -558,7 +567,7 @@ const LEGACY_PT_TO_EN = {
     'Pressão de descarga': 'Discharge pressure',
     'Vazão recebida': 'Received flow',
     'Acionamento do motor': 'Motor drive',
-    'Bomba mantida ligada pelo controlador de nível do tanque.': 'Pump kept on by the tank level controller.',
+    'Bomba fixa em 100% durante o set point; o PI ajusta apenas válvulas.': 'Pump fixed at 100% during set point; the PI adjusts valves only.',
     'Vazão nominal máx.': 'Max. nominal flow',
     'Pressão máxima': 'Maximum pressure',
     'Pressão de sucção': 'Suction pressure',

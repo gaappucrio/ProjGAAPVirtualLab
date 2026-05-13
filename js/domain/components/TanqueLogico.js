@@ -10,6 +10,10 @@ const TOLERANCIA_ERRO_SATURACAO = -0.02;
 const FATOR_EXCESSO_ENTRADA = 1.02;
 const U_SAIDA_TOTALMENTE_ABERTA = -0.99;
 const ALTURA_UTIL_MINIMA_M = 0.5;
+const FATOR_SEGURANCA_VAZAO_BOMBA_SETPOINT = 0.98;
+const FATOR_DRENAGEM_TRANSITORIA_SETPOINT = 1.01;
+const PRESSAO_MINIMA_DIMENSIONAMENTO_BOMBA_BAR = 0.5;
+const PRESSAO_MAXIMA_DIMENSIONAMENTO_BOMBA_BAR = 20;
 
 export class TanqueLogico extends ComponenteFisico {
     constructor(id, tag, x, y) {
@@ -35,6 +39,7 @@ export class TanqueLogico extends ComponenteFisico {
         this._lastErro = 0;
         this._ultimoEstadoControle = { u: 0, erro: 0 };
         this._valvulasControleNivel = new Set();
+        this._bombasMantidasControleNivel = new Map();
     }
 
     getNivelNormalizado() {
@@ -202,6 +207,43 @@ export class TanqueLogico extends ComponenteFisico {
         };
     }
 
+    _criarAjustesDimensionamentoBombas(bombas, resumoBase) {
+        const vazaoLimiteSetpointLps = Math.max(0, resumoBase.vazaoSaidaLimiteSetpointLps);
+        if (bombas.length === 0 || vazaoLimiteSetpointLps <= EPSILON_FLOW) return [];
+
+        const vazaoTotalAlvoLps = Math.max(
+            EPSILON_FLOW,
+            vazaoLimiteSetpointLps * FATOR_SEGURANCA_VAZAO_BOMBA_SETPOINT
+        );
+        const vazaoPorBombaLps = vazaoTotalAlvoLps / bombas.length;
+        const pressaoMinimaPorAlturaBar = Math.max(
+            PRESSAO_MINIMA_DIMENSIONAMENTO_BOMBA_BAR,
+            resumoBase.pressaoBaseEntradaSetpointBar * 1.2
+        );
+
+        return bombas.map((bomba) => {
+            const vazaoNominalAtualLps = Math.max(EPSILON_FLOW, Number(bomba.vazaoNominal) || 0);
+            const pressaoMaximaAtualBar = Math.max(0, Number(bomba.pressaoMaxima) || 0);
+            const pressaoMaximaRecomendadaBar = clamp(
+                Math.max(pressaoMaximaAtualBar, pressaoMinimaPorAlturaBar),
+                PRESSAO_MINIMA_DIMENSIONAMENTO_BOMBA_BAR,
+                PRESSAO_MAXIMA_DIMENSIONAMENTO_BOMBA_BAR
+            );
+
+            return {
+                bomba,
+                bombaId: bomba.id,
+                tag: bomba.tag,
+                vazaoNominalAtualLps,
+                vazaoNominalRecomendadaLps: clamp(vazaoPorBombaLps, EPSILON_FLOW, 500),
+                pressaoMaximaAtualBar,
+                pressaoMaximaRecomendadaBar,
+                acionamentoOperacional: 100,
+                motivo: 'A bomba fica operacionalmente fixa em 100%; o dimensionamento limita a vazao que ela consegue entregar ao tanque, sem transformar a bomba em atuador do PA.'
+            };
+        });
+    }
+
     getValvulasDiretasSaidaControleNivel() {
         return this.outputs.filter((componente) => componente instanceof ValvulaLogica);
     }
@@ -248,7 +290,8 @@ export class TanqueLogico extends ComponenteFisico {
             nivelSetpoint,
             usarAlturaRelativa
         );
-        const { fontes, bombas } = this._coletarComponentesMontanteEntrada();
+        const { bombas } = this._coletarComponentesMontanteEntrada();
+        const possuiBombasMontante = bombas.length > 0;
         const fatorReducaoSaida = pressaoSaidaAtualBar > EPSILON_FLOW
             ? Math.sqrt(Math.max(0, pressaoSaidaSetpointBar / pressaoSaidaAtualBar))
             : 0;
@@ -256,25 +299,8 @@ export class TanqueLogico extends ComponenteFisico {
         const fatorReducaoEntrada = qEntradaAtualLps > EPSILON_FLOW
             ? clamp(vazaoSaidaLimiteSetpointLps / qEntradaAtualLps, 0, 1)
             : 0;
-        const fatorPressao = fatorReducaoEntrada * fatorReducaoEntrada;
-        const ajustesFonte = fontes.map((fonte) => {
-            const pressaoExcedenteAtualBar = Math.max(0, fonte.pressaoFonteBar - pressaoBaseEntradaAtualBar);
-            const pressaoRecomendadaBar = clamp(
-                pressaoBaseEntradaSetpointBar + (pressaoExcedenteAtualBar * fatorPressao),
-                0,
-                100
-            );
 
-            return {
-                fonte,
-                id: fonte.id,
-                tag: fonte.tag,
-                pressaoAtualBar: fonte.pressaoFonteBar,
-                pressaoRecomendadaBar
-            };
-        });
-
-        return {
+        const resumoBase = {
             usarAlturaRelativa: usarAlturaRelativa === true,
             nivelAtual,
             nivelSetpoint,
@@ -288,37 +314,56 @@ export class TanqueLogico extends ComponenteFisico {
             pressaoBaseEntradaAtualBar,
             pressaoBaseEntradaSetpointBar,
             fatorReducaoEntrada,
-            ajustesFonte,
-            autoAjustavel: ajustesFonte.length > 0,
-            possuiBombasMontante: bombas.length > 0,
+            possuiBombasMontante,
             quantidadeBombasMontante: bombas.length
+        };
+        const ajustesBomba = this._criarAjustesDimensionamentoBombas(bombas, resumoBase);
+
+        return {
+            ...resumoBase,
+            ajustesFonte: [],
+            ajustesBomba,
+            autoAjustavel: ajustesBomba.length > 0,
+            motivoAutoAjuste: ajustesBomba.length > 0
+                ? 'Dimensionamento didatico disponivel: o PA continua atuando somente nas valvulas, e a bomba a montante permanece operacionalmente em 100%, mas sua vazao nominal pode ser ajustada para a capacidade fisica da saida no set point.'
+                : 'O set point atua somente nas valvulas. Para estabilizar, conecte uma bomba dimensionavel a montante, adicione uma valvula de entrada controlavel ou aumente a capacidade de saida.'
         };
     }
 
     aplicarAjustePressaoSetpoint() {
         const resumo = this.getResumoAjustePressaoSetpoint();
-        if (!resumo.autoAjustavel) {
+        if (resumo.ajustesBomba?.length > 0) {
+            resumo.ajustesBomba.forEach((ajuste) => {
+                ajuste.bomba.vazaoNominal = ajuste.vazaoNominalRecomendadaLps;
+                ajuste.bomba.pressaoMaxima = ajuste.pressaoMaximaRecomendadaBar;
+                ajuste.bomba.recalcularMetricasDerivadasCurva?.();
+                ajuste.bomba.notify(ComponentEventPayloads.state({
+                    isOn: ajuste.bomba.isOn,
+                    grau: ajuste.bomba.getAcionamentoAlvo?.() ?? ajuste.bomba.grauAcionamento,
+                    grauManual: ajuste.bomba.grauAcionamento,
+                    grauEfetivo: ajuste.bomba.acionamentoEfetivo,
+                    bloqueadaPorSetpoint: ajuste.bomba.estaBloqueadaPorSetpoint?.() === true
+                }));
+            });
+
+            this.notify(ComponentEventPayloads.setpointAutoPressure({
+                tipoAjuste: 'dimensionamento_bomba',
+                quantidadeBombas: resumo.ajustesBomba.length
+            }));
+
             return {
-                aplicado: false,
-                motivo: 'Nenhuma fonte de entrada foi encontrada para aplicar o ajuste automaticamente.',
+                aplicado: true,
+                quantidadeBombas: resumo.ajustesBomba.length,
+                motivo: resumo.ajustesBomba.length === 1
+                    ? 'Bomba dimensionada para a capacidade fisica de saida no set point.'
+                    : 'Bombas dimensionadas para a capacidade fisica de saida no set point.',
                 resumo
             };
         }
 
-        resumo.ajustesFonte.forEach(({ fonte, pressaoRecomendadaBar }) => {
-            fonte.pressaoFonteBar = pressaoRecomendadaBar;
-            fonte.notify(ComponentEventPayloads.pressureUpdate({
-                pressaoFonteBar: fonte.pressaoFonteBar
-            }));
-        });
-
-        this.notify(ComponentEventPayloads.setpointAutoPressure({
-            quantidadeFontes: resumo.ajustesFonte.length
-        }));
-
         return {
-            aplicado: true,
-            quantidadeFontes: resumo.ajustesFonte.length,
+            aplicado: false,
+            motivo: resumo.motivoAutoAjuste,
             resumo
         };
     }
@@ -336,13 +381,17 @@ export class TanqueLogico extends ComponenteFisico {
         );
         const entradaExcedeCapacidadeNoSetpoint = resumo.vazaoEntradaAtualLps
             > (resumo.vazaoSaidaLimiteSetpointLps * FATOR_EXCESSO_ENTRADA);
+        const drenandoEmDirecaoAoSetpoint = erro < TOLERANCIA_ERRO_SATURACAO
+            && resumo.vazaoSaidaAtualLps > (resumo.vazaoEntradaAtualLps * FATOR_DRENAGEM_TRANSITORIA_SETPOINT);
         const saturado = u <= U_SAIDA_TOTALMENTE_ABERTA
             && erro < TOLERANCIA_ERRO_SATURACAO
-            && entradaExcedeCapacidadeNoSetpoint;
+            && entradaExcedeCapacidadeNoSetpoint
+            && !drenandoEmDirecaoAoSetpoint;
 
         this.alertaSaturacao = saturado
             ? {
                 ativo: true,
+                drenandoEmDirecaoAoSetpoint,
                 ...resumo
             }
             : null;
@@ -350,19 +399,13 @@ export class TanqueLogico extends ComponenteFisico {
 
     isBombaControladaPorSetpoint(bomba) {
         if (!this.setpointAtivo || !(bomba instanceof BombaLogica)) return false;
-        return this.getAtuadoresControleNivel().bombas.includes(bomba);
+        return this._bombasMantidasControleNivel.has(bomba.id);
     }
 
     isValvulaControladaPorSetpoint(valvula) {
         if (!this.setpointAtivo || !(valvula instanceof ValvulaLogica)) return false;
         const atuadores = this.getAtuadoresControleNivel();
         return atuadores.valvulasEntrada.includes(valvula) || atuadores.valvulasSaida.includes(valvula);
-    }
-
-    _manterBombasControleLigadas(bombas = this.getAtuadoresControleNivel().bombas) {
-        bombas.forEach((bomba) => {
-            if (bomba.grauAcionamento < 100) bomba.setAcionamento(100);
-        });
     }
 
     _sincronizarValvulasControleNivel(valvulas) {
@@ -373,10 +416,41 @@ export class TanqueLogico extends ComponenteFisico {
         this._valvulasControleNivel = valvulasAtuais;
     }
 
+    _sincronizarBombasMantidasControleNivel(bombas) {
+        const bombasAtuais = new Set(bombas.map((bomba) => bomba.id));
+        [...this._bombasMantidasControleNivel.keys()].forEach((bombaId) => {
+            if (!bombasAtuais.has(bombaId)) this._bombasMantidasControleNivel.delete(bombaId);
+        });
+
+        bombas.forEach((bomba) => {
+            if (this._bombasMantidasControleNivel.has(bomba.id)) return;
+            this._bombasMantidasControleNivel.set(bomba.id, true);
+            bomba.notify(ComponentEventPayloads.state({
+                isOn: bomba.isOn,
+                grau: bomba.getAcionamentoAlvo?.() ?? 100,
+                grauManual: bomba.grauAcionamento,
+                grauEfetivo: bomba.acionamentoEfetivo,
+                bloqueadaPorSetpoint: true
+            }));
+        });
+    }
+
     _liberarValvulasControleNivel(valvulasExtras = []) {
         const valvulas = new Set([...this._valvulasControleNivel, ...valvulasExtras]);
         valvulas.forEach((valvula) => valvula.liberarControleNivel(this.id));
         this._valvulasControleNivel.clear();
+    }
+
+    _liberarBombasControleNivel() {
+        const bombas = this.getAtuadoresControleNivel().bombas;
+        this._bombasMantidasControleNivel.clear();
+        bombas.forEach((bomba) => bomba.notify(ComponentEventPayloads.state({
+            isOn: bomba.isOn,
+            grau: bomba.grauAcionamento,
+            grauManual: bomba.grauAcionamento,
+            grauEfetivo: bomba.acionamentoEfetivo,
+            bloqueadaPorSetpoint: false
+        })));
     }
 
     _desativarControleNivel(atuadoresAntes = this.getAtuadoresControleNivel(), payload = {}) {
@@ -386,6 +460,7 @@ export class TanqueLogico extends ComponenteFisico {
             ...atuadoresAntes.valvulasEntrada,
             ...atuadoresAntes.valvulasSaida
         ]);
+        this._liberarBombasControleNivel();
 
         this.notify(ComponentEventPayloads.setpointUpdate({
             ativo: false,
@@ -427,12 +502,13 @@ export class TanqueLogico extends ComponenteFisico {
         this.resetControlador();
 
         if (this.setpointAtivo) {
-            this._manterBombasControleLigadas(atuadoresAntes.bombas);
+            this._sincronizarBombasMantidasControleNivel(atuadoresAntes.bombas);
         } else {
             this._liberarValvulasControleNivel([
                 ...atuadoresAntes.valvulasEntrada,
                 ...atuadoresAntes.valvulasSaida
             ]);
+            this._liberarBombasControleNivel();
         }
 
         this.notify(ComponentEventPayloads.setpointUpdate({
@@ -470,7 +546,7 @@ export class TanqueLogico extends ComponenteFisico {
 
         this._ultimoEstadoControle = { u, erro };
         this._sincronizarValvulasControleNivel(valvulasControle);
-        this._manterBombasControleLigadas(atuadores.bombas);
+        this._sincronizarBombasMantidasControleNivel(atuadores.bombas);
 
         atuadores.valvulasEntrada.forEach((valvula) => valvula.aplicarControleNivel({
             abertura: grauEntrada,
@@ -490,7 +566,7 @@ export class TanqueLogico extends ComponenteFisico {
             grauSaida,
             intensidadeEntrada,
             intensidadeSaida,
-            bombasLigadas: atuadores.bombas.length
+            bombasFixas100: atuadores.bombas.length
         }));
     }
 
@@ -577,6 +653,7 @@ export class TanqueLogico extends ComponenteFisico {
             ...atuadores.valvulasEntrada,
             ...atuadores.valvulasSaida
         ]);
+        this._liberarBombasControleNivel();
         super.destroy();
     }
 }
