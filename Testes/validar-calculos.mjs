@@ -578,8 +578,8 @@ test('fator de cavitação da bomba permanece finito com NPSHa inválido', () =>
     const bomba = new BombaLogica('B-NPSH', 'B-NPSH', 0, 0);
 
     approx(bomba.calcularFatorCavitacao(3, 2.5), 1, 1e-12, 'NPSHa suficiente não limita a bomba');
-    approx(bomba.calcularFatorCavitacao(-1, 2.5), 0.12, 1e-12, 'NPSHa negativo deve limitar sem NaN');
-    approx(bomba.calcularFatorCavitacao(Number.NaN, 2.5), 0.12, 1e-12, 'NPSHa inválido deve limitar sem NaN');
+    approx(bomba.calcularFatorCavitacao(-1, 2.5), 0, 1e-12, 'NPSHa negativo deve zerar sem NaN');
+    approx(bomba.calcularFatorCavitacao(Number.NaN, 2.5), 0, 1e-12, 'NPSHa inválido deve zerar sem NaN');
 });
 
 test('curva da bomba reflete alteração de NPSHr sem esconder a mudança pela escala', () => {
@@ -673,4 +673,66 @@ test('diagnóstico de saturação dimensiona bomba sem ajustar fonte de entrada'
     approx(bomba.vazaoNominal, vazaoSetpointSemAltura * 0.98, 1e-9, 'Vazão nominal da bomba deve receber o dimensionamento');
     approx(bomba.pressaoMaxima, 5, 1e-12, 'Pressão máxima já suficiente deve ser preservada');
     approx(fonte.pressaoFonteBar, 1.5, 1e-12, 'Pressão da fonte deve permanecer manual');
+});
+
+test('diagnóstico de saturação ajusta pressão da fonte quando não há bomba', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-01', 'Entrada-01', 0, 0);
+    const tanque = new TanqueLogico('T-01', 'Tanque-01', 160, 0);
+    const valvula = new ValvulaLogica('V-01', 'Valvula-01', 240, 0);
+
+    fonte.conectarSaida(tanque);
+    tanque.conectarSaida(valvula);
+    [fonte, tanque, valvula].forEach((component) => engine.add(component));
+
+    tanque.capacidadeMaxima = 1000;
+    tanque.volumeAtual = 800;
+    tanque.alturaUtilMetros = 2.4;
+    tanque.alturaBocalEntradaM = 1.0;
+    tanque.alturaBocalSaidaM = 0.2;
+    tanque.setpoint = 50;
+    tanque.lastQin = 20;
+    tanque.lastQout = 10;
+    tanque.setpointAtivo = true;
+    tanque._ultimoEstadoControle = { u: -1, erro: -0.3 };
+    fonte.pressaoFonteBar = 1.5;
+
+    const densidade = engine.fluidoOperante.densidade;
+    const pressaoSaidaAtual = pressureFromHeadBar(1.92 - 0.2, densidade);
+    const pressaoSaidaSetpoint = pressureFromHeadBar(1.2 - 0.2, densidade);
+    const vazaoSetpoint = 10 * Math.sqrt(pressaoSaidaSetpoint / pressaoSaidaAtual);
+    const fatorVazao = (vazaoSetpoint * 0.98) / 20;
+    const pressaoBaseAtual = pressureFromHeadBar(1.92 - 1.0, densidade);
+    const pressaoBaseSetpoint = pressureFromHeadBar(1.2 - 1.0, densidade);
+    const pressaoFonteEsperada = pressaoBaseSetpoint + ((1.5 - pressaoBaseAtual) * fatorVazao * fatorVazao);
+
+    const resumo = tanque.getResumoAjustePressaoSetpoint(engine.fluidoOperante, true);
+    assert.equal(resumo.autoAjustavel, true);
+    assert.equal(resumo.ajustesBomba.length, 0);
+    assert.equal(resumo.ajustesFonte.length, 1);
+    approx(
+        resumo.ajustesFonte[0].pressaoRecomendadaBar,
+        pressaoFonteEsperada,
+        1e-9,
+        'Pressão recomendada da fonte deve reduzir a pressão motora pela razão quadrática de vazão'
+    );
+    assert.ok(
+        resumo.ajustesFonte[0].pressaoRecomendadaBar < fonte.pressaoFonteBar,
+        'Ajuste de fonte deve reduzir a alimentação quando a entrada excede a saída no set point'
+    );
+
+    tanque._atualizarAlertaSaturacao(engine.fluidoOperante);
+    assert.equal(tanque.alertaSaturacao?.ajustesFonte.length, 1);
+
+    const resultado = tanque.aplicarAjustePressaoSetpoint();
+
+    assert.equal(resultado.aplicado, true);
+    assert.equal(resultado.tipoAjuste, 'pressao_fonte');
+    assert.equal(resultado.quantidadeFontes, 1);
+    approx(
+        fonte.pressaoFonteBar,
+        resultado.resumo.ajustesFonte[0].pressaoRecomendadaBar,
+        1e-12,
+        'Pressão da fonte deve receber o ajuste recomendado'
+    );
 });

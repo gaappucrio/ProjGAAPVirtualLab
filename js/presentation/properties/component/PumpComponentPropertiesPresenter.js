@@ -20,6 +20,130 @@ import {
     validateInputWithFeedback
 } from '../PropertyPresenterShared.js';
 
+function getThemeAwareAlertColors(isDark, severity) {
+    if (severity === 'error') {
+        return isDark ? {
+            border: '#e74c3c',
+            background: '#2d1b1b',
+            color: '#ff6b6b'
+        } : {
+            border: '#c0392b',
+            background: '#fdeaea',
+            color: '#922b21'
+        };
+    }
+    if (severity === 'warning') {
+        return isDark ? {
+            border: '#f39c12',
+            background: '#2d2418',
+            color: '#f0b36b'
+        } : {
+            border: '#e67e22',
+            background: '#fff3e6',
+            color: '#a84300'
+        };
+    }
+    if (severity === 'caution') {
+        return isDark ? {
+            border: '#f1c40f',
+            background: '#2d2a18',
+            color: '#f4d03f'
+        } : {
+            border: '#f39c12',
+            background: '#fff8e5',
+            color: '#8a5a00'
+        };
+    }
+    if (severity === 'success') {
+        return isDark ? {
+            border: '#27ae60',
+            background: '#1b2d1f',
+            color: '#58d68d'
+        } : {
+            border: '#27ae60',
+            background: '#edf8f1',
+            color: '#1e8449'
+        };
+    }
+    // neutral
+    return isDark ? {
+        border: '#7f8c8d',
+        background: '#1a252f',
+        color: '#95a5a6'
+    } : {
+        border: '#95a5a6',
+        background: '#ecf0f1',
+        color: '#34495e'
+    };
+}
+
+function getPumpSuctionAlertState(condition) {
+    const isDark = document.body.classList.contains('theme-dark');
+    
+    if (condition === 'Sem líquido suficiente') {
+        const colors = getThemeAwareAlertColors(isDark, 'error');
+        return {
+            title: 'Sem líquido suficiente na sucção',
+            message: 'A bomba está acionada, mas não recebeu fluido suficiente. Verifique o nível do tanque, o bocal de saída e as conexões a montante.',
+            ...colors
+        };
+    }
+    if (condition === 'Cavitando') {
+        const colors = getThemeAwareAlertColors(isDark, 'error');
+        return {
+            title: 'Bomba cavitando',
+            message: 'O NPSHa está abaixo do NPSHr e o desempenho já foi reduzido pelo solver. A bomba não deve conseguir sustentar essa vazão sem melhorar a sucção.',
+            ...colors
+        };
+    }
+    if (condition === 'Risco de cavitação') {
+        const colors = getThemeAwareAlertColors(isDark, 'warning');
+        return {
+            title: 'Risco de cavitação',
+            message: 'O NPSHa está menor que o NPSHr. Aumente a pressão ou o nível na sucção, reduza perdas a montante ou diminua a vazão da bomba.',
+            ...colors
+        };
+    }
+    if (condition === 'No limite') {
+        const colors = getThemeAwareAlertColors(isDark, 'caution');
+        return {
+            title: 'Sucção no limite',
+            message: 'A folga entre NPSHa e NPSHr está baixa. A bomba ainda opera, mas pequenas perdas ou queda de nível podem levar à cavitação.',
+            ...colors
+        };
+    }
+    if (condition === 'Sem bombeamento') {
+        const colors = getThemeAwareAlertColors(isDark, 'neutral');
+        return {
+            title: 'Sem bombeamento',
+            message: 'A bomba está sem acionamento efetivo. As condições de sucção serão avaliadas quando houver bombeamento.',
+            ...colors
+        };
+    }
+    const colors = getThemeAwareAlertColors(isDark, 'success');
+    return {
+        title: 'Sucção com folga',
+        message: 'A bomba possui líquido e margem positiva entre NPSHa e NPSHr nas condições atuais.',
+        ...colors
+    };
+}
+
+function renderPumpSuctionAlert(comp, condition, marginM) {
+    const state = getPumpSuctionAlertState(condition);
+    const npsha = displayUnitValue('length', comp.npshDisponivelM, 2);
+    const npshr = displayUnitValue('length', comp.npshRequeridoAtualM ?? comp.npshRequeridoM, 2);
+    const margin = displayUnitValue('length', marginM, 2);
+    return `
+        <div id="painel-alerta-succao-bomba" class="prop-group" style="border-left:4px solid ${state.border}; border-color:${state.border}; background:${state.background}; padding:10px 12px;">
+            <h4 id="titulo-alerta-succao-bomba" style="margin:0 0 6px; color:${state.color}; font-size:13px;">${state.title}</h4>
+            <p id="texto-alerta-succao-bomba" style="margin:0; font-size:11px; line-height:1.45; color:#34495e;">${state.message}</p>
+            <p id="metricas-alerta-succao-bomba" style="margin:8px 0 0; font-size:11px; color:${state.color};">
+                NPSHa: ${npsha} | NPSHr: ${npshr} | Folga: ${margin}
+            </p>
+        </div>
+    `;
+}
+
 export const PUMP_PROPERTIES_PRESENTER = {
     render: (comp) => {
         const engine = getPresentationEngine();
@@ -34,6 +158,7 @@ export const PUMP_PROPERTIES_PRESENTER = {
             ?? (margemNpshM < 0 ? 'Risco de cavitação' : margemNpshM < 0.5 ? 'No limite' : 'Com folga');
 
         const basicContent = `
+            ${renderPumpSuctionAlert(comp, condicaoSucao, margemNpshM)}
             <div class="prop-group">
                 <label ${hintAttr(TOOLTIP.pumpDrive)}>Acionamento do motor
                     <span style="display:flex; align-items:center; gap:2px;">
@@ -66,13 +191,6 @@ export const PUMP_PROPERTIES_PRESENTER = {
         `;
 
         const advancedContent = `
-            <div class="prop-group" style="background:#f7fbff; border:1px solid #d6eaf8; border-radius:8px; padding:10px 12px;">
-                <p style="margin:0; font-size:11px; line-height:1.5; color:#5d6d7e;">
-                    <strong>NPSHa atual</strong> mostra o que o sistema está entregando na sucção agora.
-                    <strong>NPSHr atual</strong> mostra o que a bomba está exigindo agora no ponto de operação.
-                    <strong>Folga contra cavitação</strong> é a diferença entre os dois; valor negativo indica risco de cavitação.
-                </p>
-            </div>
             <div class="prop-group">
                 ${makeLabel('Eficiência hidráulica (%)', TOOLTIP.pumpEfficiency)}
                 <input type="number" id="input-eficiencia-bomba" ${hintAttr(TOOLTIP.pumpEfficiency)} value="${(comp.eficienciaHidraulica * 100).toFixed(0)}" step="1" min="20" max="100">
@@ -100,10 +218,6 @@ export const PUMP_PROPERTIES_PRESENTER = {
             <div class="prop-group">
                 ${makeUnitLabel('Folga contra cavitação', 'length', TOOLTIP.pumpNpshMargin)}
                 <input type="text" id="disp-margem-npsh-bomba" ${hintAttr(TOOLTIP.pumpNpshMargin)} value="${displayUnitValue('length', margemNpshM, 2)}" disabled>
-            </div>
-            <div class="prop-group">
-                <label ${hintAttr(TOOLTIP.pumpNpshCondition)}>Condição de sucção</label>
-                <input type="text" id="disp-condicao-npsh-bomba" ${hintAttr(TOOLTIP.pumpNpshCondition)} value="${condicaoSucao}" disabled>
             </div>
             <div class="prop-group">
                 ${makeLabel('Saúde hidráulica', TOOLTIP.pumpHydraulicHealth)}

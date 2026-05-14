@@ -3,19 +3,191 @@
    Ficheiro: css/style.css
    ============================== */
 
+  :root {
+      --gaap-bg: #fdfdfd;
+      --gaap-surface: #ffffff;
+      --gaap-surface-soft: #f4f7f6;
+      --gaap-surface-muted: #f9fbfb;
+      --gaap-border: #e1e8ed;
+      --gaap-border-soft: #eeeeee;
+      --gaap-text: #2c3e50;
+      --gaap-text-muted: #6c8392;
+      --gaap-grid: #e1e8ed;
+      --gaap-toolbar-bg: rgba(255, 255, 255, 0.95);
+      --gaap-shadow: rgba(0, 0, 0, 0.06);
+      --gaap-input-bg: #ffffff;
+      --gaap-input-disabled-bg: #f2f4f4;
+      --gaap-input-disabled-text: #7f8c8d;
+  }
+
+  /* DARK MODE */
+  body.theme-dark .sandbox-container,
+  body.theme-dark .side-panel,
+  body.theme-dark .properties-panel,
+  body.theme-dark .help-dialog,
+  body.theme-dark .chart-container,
+  body.theme-dark .chart-compare-card,
+   body.theme-dark .chart-compare-empty {
+      background: var(--gaap-surface) !important;
+      border-color: var(--gaap-border) !important;
+      color: var(--gaap-text) !important;
+      box-shadow: 0 10px 24px var(--gaap-shadow);
+  }
+
+  body.theme-dark .side-panel,
+  body.theme-dark .palette-panel {
+      background: var(--gaap-surface-soft) !important;
+  }
+
+  body.theme-dark .gaap-header {
+      border-bottom-color: var(--gaap-border) !important;
+  }
+
+  body.theme-dark .gaap-header h2,
+  body.theme-dark h3.panel-title,
+  body.theme-dark .help-dialog-header h3,
+  body.theme-dark .help-command b,
+  body.theme-dark .chart-compare-card-copy h4,
+  body.theme-dark label {
+      color: var(--gaap-text) !important;
+  }
+
+  body.theme-dark .help-command,
+  body.theme-dark .gaap-header p,
+  body.theme-dark .chart-max-status,
+  body.theme-dark .chart-compare-card-copy p {
+      color: var(--gaap-text-muted) !important;
+  }
+
+  body.theme-dark .help-dialog-header,
+  body.theme-dark .help-command,
+  body.theme-dark h3.panel-title,
+  body.theme-dark .chart-max-header,
+  body.theme-dark .chart-compare-card-header {
+      border-color: var(--gaap-border-soft) !important;
+      background: var(--gaap-surface) !important;
+  }
+
+  body.theme-dark .help-backdrop {
+      background: rgba(3, 8, 13, 0.62);
+  }
+
+  body.theme-dark .top-toolbar {
+      background: var(--gaap-toolbar-bg) !important;
+      border-color: var(--gaap-border) !important;
+      box-shadow: 0 8px 22px var(--gaap-shadow);
+  }
+
+  body.theme-dark .toolbar-toggle,
+  body.theme-dark .export-data-button,
+  body.theme-dark .help-trigger,
+  body.theme-dark .help-close,
+  body.theme-dark .panel-toggle,
+  body.theme-dark .btn-maximize-chart {
+      background: var(--gaap-surface-muted) !important;
+      border-color: var(--gaap-border) !important;
+      color: var(--gaap-text) !important;
+  }
+
+  body.theme-dark .gaap-btn:not(.success):not(.danger) {
+      background: var(--gaap-surface-muted) !important;
+      border-color: var(--gaap-border) !important;
+      color: var(--gaap-text) !important;
+  }
+
+  body.theme-dark .toolbar-note {
+      background: #2d2418 !important;
+      border-color: #6d4d27 !important;
+      color: #f0b36b !important;
+  }
+
+  body.theme-dark .palette-item,
+  body.theme-dark .prop-group,
+  body.theme-dark .prop-tab-bar,
+  body.theme-dark .prop-tab-description,
+  body.theme-dark .chart-height-control,
+  body.theme-dark .chart-max-badge {
+      background: var(--gaap-surface-muted) !important;
+      border-color: var(--gaap-border) !important;
+      color: var(--gaap-text) !important;
+  }
+
+  body.theme-dark .palette-item:hover {
+      background: #203447 !important;
+      border-color: #3498db !important;
+  }
+
+  body.theme-dark .prop-group input[type="text"],
+  body.theme-dark .prop-group input[type="number"],
+  body.theme-dark .prop-group select,
+  body.theme-dark .val-display-input {
+      background: var(--gaap-input-bg) !important;
+      border-color: var(--gaap-border) !important;
+      color: var(--gaap-text) !important;
+  }
+
+  body.theme-dark .prop-group input:disabled,
+  body.theme-dark .prop-group select:disabled {
+      background: var(--gaap-input-disabled-bg) !important;
+      color: var(--gaap-input-disabled-text) !important;
+      border-color: var(--gaap-border-soft) !important;
+  }
+
+  body.theme-dark .workspace-panel {
+      background-color: #101923 !important;
+      background-image:
+          linear-gradient(to right, var(--gaap-grid) 1px, transparent 1px),
+          linear-gradient(to bottom, var(--gaap-grid) 1px, transparent 1px) !important;
+  }
+
+  body.theme-dark .pipe-flow-label {
+      fill: #d9e7ef;
+      stroke: #0f1720;
+  }
+
+  body.theme-dark .placed-component.selected svg {
+      filter: drop-shadow(0 0 10px rgba(52, 152, 219, 0.65));
+  }
+
+  body.theme-dark .workspace-selection-marquee {
+      background: rgba(52, 152, 219, 0.2);
+      border-color: #5dade2;
+  }
+
+  body.theme-dark * {
+      scrollbar-color: #7f8c8d #101923;
+  }
+
+  body.theme-dark {
+      --gaap-bg: #0f1720;
+      --gaap-surface: #17212b;
+      --gaap-surface-soft: #121c26;
+      --gaap-surface-muted: #1d2a35;
+      --gaap-border: #2d3d4b;
+      --gaap-border-soft: #263744;
+      --gaap-text: #d8e4ec;
+      --gaap-text-muted: #93a8b8;
+      --gaap-grid: #263846;
+      --gaap-toolbar-bg: rgba(23, 33, 43, 0.94);
+      --gaap-shadow: rgba(0, 0, 0, 0.36);
+      --gaap-input-bg: #101923;
+      --gaap-input-disabled-bg: #111a22;
+      --gaap-input-disabled-text: #8ea2b1;
+  }
+
   body
 
   /* FONTE, CORES, LAYOUT FLEXÍVEL, GRID DE FUNDO, SELEÇÃO E OVERFLOW */
       {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       /*Fonte principal*/
-      background: #fdfdfd;
+      background: var(--gaap-bg);
       /*Cor de fundo clara para um visual limpo e moderno*/
       margin: 0;
       /*Remover margens padrão do navegador para que o layout ocupe toda a tela*/
       padding: 20px;
       /*Espaçamento interno para evitar que o conteúdo encoste nas bordas da janela*/
-      color: #2c3e50;
+      color: var(--gaap-text);
       /*Cor do texto principal para boa legibilidade*/
       display: flex;
       /*Layout flexível para organizar o header e o container principal*/
@@ -29,6 +201,7 @@
       /* Evitar seleção de texto acidental durante a interação com os componentes da sandbox */
       overflow: hidden;
       /* Evitar barras de rolagem indesejadas, garantindo que o layout se mantenha limpo e organizado mesmo em telas menores */
+      transition: background-color 0.35s ease, color 0.35s ease;
   }
 
   .language-window-control {
@@ -44,6 +217,87 @@
 
   .language-window-control .toolbar-toggle {
       pointer-events: auto;
+  }
+
+  .theme-window-control {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+  }
+
+  .theme-toggle-button {
+      width: 42px;
+      height: 42px;
+      display: inline-grid;
+      place-items: center;
+      border: 1px solid var(--gaap-border);
+      border-radius: 999px;
+      background: var(--gaap-surface);
+      color: var(--gaap-text);
+      cursor: pointer;
+      box-shadow: 0 4px 12px var(--gaap-shadow);
+      transition: background-color 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease, transform 0.2s ease;
+      outline: none;
+  }
+
+  .theme-toggle-button:hover {
+      border-color: #3498db;
+      transform: translateY(-1px);
+  }
+
+  .theme-toggle-button:focus-visible {
+      outline: 2px solid #3498db;
+      outline-offset: 2px;
+  }
+
+  .theme-toggle-orbit {
+      position: relative;
+      width: 22px;
+      height: 22px;
+      display: block;
+  }
+
+  .theme-toggle-sun,
+  .theme-toggle-moon {
+      position: absolute;
+      inset: 3px;
+      border-radius: 50%;
+      transition: opacity 0.35s ease, transform 0.35s ease;
+  }
+
+  .theme-toggle-sun {
+      background: #f39c12;
+      box-shadow:
+          0 -9px 0 -6px #f39c12,
+          0 9px 0 -6px #f39c12,
+          9px 0 0 -6px #f39c12,
+          -9px 0 0 -6px #f39c12,
+          6px 6px 0 -6px #f39c12,
+          -6px -6px 0 -6px #f39c12,
+          6px -6px 0 -6px #f39c12,
+          -6px 6px 0 -6px #f39c12;
+      opacity: 1;
+      transform: scale(1) rotate(0deg);
+  }
+
+  .theme-toggle-moon {
+      background: #85c1e9;
+      box-shadow: inset -5px 1px 0 0 var(--gaap-surface);
+      opacity: 0;
+      transform: scale(0.75) rotate(-18deg);
+  }
+
+  .theme-toggle-button.is-dark .theme-toggle-sun {
+      opacity: 0;
+      transform: scale(0.72) rotate(45deg);
+  }
+
+  .theme-toggle-button.is-dark .theme-toggle-moon {
+      opacity: 1;
+      transform: scale(1) rotate(0deg);
   }
 
   .gaap-header

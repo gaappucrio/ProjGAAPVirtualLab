@@ -57,7 +57,8 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Curva de eficiência.
 - Curva de NPSHr.
 - Cálculo de NPSHa, NPSHr atual, margem contra cavitação e condição de sucção.
-- Fator de cavitação reduzindo desempenho quando NPSHa é insuficiente.
+- Fator de cavitação reduzindo desempenho quando NPSHa é insuficiente, podendo zerar a capacidade efetiva quando a sucção é fisicamente inviável.
+- Estado `Cavitando` separado do aviso preventivo de risco quando o solver já reduziu o desempenho da bomba por NPSH insuficiente.
 - Detecção explícita de falta de líquido na sucção da bomba, separada do cálculo de cavitação por NPSH.
 - Monitoramento por gráfico de curva com ponto de operação.
 
@@ -402,6 +403,7 @@ Quando a altura relativa está ligada:
 - A geometria lógica considera desníveis entre portas.
 - A carga estática influencia pressão e vazão.
 - Bocais do tanque influenciam contrapressão e disponibilidade de saída.
+- A interface mostra `Elev.` e `Δy` com a convenção física de `y` positivo para cima, enquanto o solver mantém internamente a convenção do canvas, onde `y` positivo aponta para baixo.
 
 Quando está desligada:
 
@@ -517,9 +519,11 @@ Comportamento:
 - A pressão gerada depende do acionamento e da vazão.
 - A eficiência varia ao redor do ponto de melhor eficiência.
 - O NPSHr varia com vazão e acionamento.
-- Se NPSHa for menor que NPSHr, o fator de cavitação reduz desempenho.
+- Se NPSHa for menor que NPSHr, o fator de cavitação reduz desempenho. Quando NPSHa colapsa para zero, não existe mais piso artificial de desempenho: a bomba não deve sustentar vazão apenas por estar acionada.
 - Quando instalada na saída de um tanque, a bomba pode produzir pressão de sucção manométrica negativa; isso é esperado em cenários de sucção e é limitado por NPSH/cavitação.
+- Em sucção com líquido disponível, mas NPSHa abaixo do NPSHr e fator de cavitação menor que 100%, a condição passa a indicar `Cavitando`, diferenciando falha física de um aviso preventivo.
 - Quando a bomba está acionada mas a sucção não possui líquido disponível, por exemplo com tanque vazio ou bocal de saída descoberto, a condição passa a indicar `Sem líquido suficiente` em vez de reaproveitar uma folga de NPSH antiga.
+- No diagnóstico de saturação do set point, quando há bomba a montante, o ajuste didático dimensiona a bomba. Quando não há bomba, o mesmo botão pode reduzir a pressão da fonte uma única vez para aproximar a vazão de entrada da capacidade física de saída no set point.
 
 ### 8.4 `ValvulaLogica`
 
@@ -822,7 +826,53 @@ Ao alterar UI:
 4. Evitar duplicar lógica física na interface.
 5. Rodar `npm.cmd test`.
 
-## 18. Riscos Técnicos e Próximos Passos
+## 18. Relatório Sobre Solver Nodal Para Malhas Fechadas
+
+O solver atual é `push-based`: fontes e tanques iniciam uma emissão de vazão, e a rede propaga essa disponibilidade pelos ramos. Essa abordagem é adequada para cenários educacionais dirigidos, como fonte -> tanque -> bomba -> saída, séries de componentes, bifurcações simples e redes com orientação visual clara. Ela também é mais simples de explicar e depurar.
+
+Para malhas fechadas mais realistas, porém, a física passa a depender de equilíbrio simultâneo. Em uma rede com recirculação, bypass, bombas em paralelo, válvulas em ramos concorrentes ou possibilidade de reversão de fluxo, a vazão não pode ser determinada apenas empurrando fluido a partir das fronteiras. O sistema precisa resolver pressões ou cargas nos nós internos e encontrar vazões que satisfaçam, ao mesmo tempo:
+
+1. Conservação de massa em cada nó.
+2. Relação entre vazão e perda de carga em cada ramo.
+3. Ganho de carga de bombas.
+4. Altura relativa entre nós.
+5. Restrições de tanques, fontes, saídas, válvulas e NPSH.
+
+A recomendação é não substituir diretamente o solver atual. O caminho mais seguro é adicionar um solver nodal como segunda implementação, por trás de uma interface comum de solver. O modo `push-based` continuaria sendo o padrão estável para redes abertas e didáticas; o modo nodal começaria experimental, ativado por opção avançada ou por detecção de malha fechada.
+
+Estrutura sugerida:
+
+```text
+domain/services/
+  HydraulicSolverInterface.js
+  HydraulicNetworkAssembler.js
+  HydraulicNetworkSolver.js        # push-based atual
+  NodalHydraulicSolver.js          # novo solver experimental
+```
+
+O `HydraulicNetworkAssembler` ficaria responsável por transformar componentes e conexões em um grafo hidráulico com nós, ramos, condições de contorno e propriedades de fluido. O `NodalHydraulicSolver` poderia usar Newton amortecido ou método iterativo equivalente, reaproveitando o resultado do tick anterior como chute inicial para melhorar estabilidade.
+
+Ordem recomendada de implementação:
+
+1. Criar detector de malhas fechadas e avisar o usuário quando a topologia excede o modelo push-based.
+2. Criar o assembler de rede sem trocar o solver existente.
+3. Implementar solver nodal mínimo para tubos, fontes e saídas.
+4. Adicionar válvulas e perdas locais.
+5. Adicionar bombas e curvas de bomba.
+6. Adicionar tanques como fronteiras dinâmicas de nível.
+7. Integrar NPSH, falta de líquido na sucção e mistura de fluidos.
+8. Comparar solver push-based e solver nodal em casos simples onde ambos devem coincidir.
+
+Riscos principais:
+
+- Convergência numérica em redes mal condicionadas.
+- Diagnósticos ruins quando o usuário monta uma rede fisicamente impossível.
+- Misturar cedo demais os dois modelos e quebrar cenários que hoje funcionam.
+- Aumentar a percepção de precisão industrial sem deixar claro que o simulador ainda é didático.
+
+Conclusão: o solver nodal é uma evolução desejável para malhas fechadas, mas deve nascer isolado, testado por cenários pequenos e introduzido como modo experimental. A prioridade imediata é detectar malhas fechadas e evitar erro silencioso.
+
+## 19. Riscos Técnicos e Próximos Passos
 
 Riscos atuais:
 
@@ -834,12 +884,12 @@ Riscos atuais:
 Próximos passos recomendados:
 
 - Criar um teste visual/smoke em navegador para fluxo básico de UI.
-- Avaliar um solver nodal para malhas fechadas mais realistas.
+- Criar detector de malhas fechadas antes de ativar um solver nodal experimental.
 - Criar documentação curta para usuários finais além deste relatório técnico.
 - Adicionar exemplos de cenários prontos.
 - Criar importação/exportação de fluxogramas completos, caso o objetivo seja uso em laboratório. A exportação tabular de dados da simulação já existe.
 
-## 19. Resumo Executivo
+## 20. Resumo Executivo
 
 O projeto está em um estado estruturalmente muito melhor que a versão monolítica inicial. A física principal está concentrada no domínio, a aplicação orquestra o tick e a topologia, a apresentação foi dividida em controllers e presenters, e a infraestrutura visual está separada em adaptadores.
 

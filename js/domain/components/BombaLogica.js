@@ -31,8 +31,9 @@ export class BombaLogica extends ComponenteFisico {
         const npshDisponivelSeguroM = Number.isFinite(Number(npshDisponivelM))
             ? Math.max(0, Number(npshDisponivelM))
             : 0;
+        if (npshDisponivelSeguroM <= EPSILON_FLOW) return 0;
         if (npshDisponivelSeguroM >= npshRequeridoSeguroM) return 1;
-        return clamp(Math.pow(npshDisponivelSeguroM / npshRequeridoSeguroM, 1.7), 0.12, 1);
+        return clamp(Math.pow(npshDisponivelSeguroM / npshRequeridoSeguroM, 1.7), 0, 1);
     }
 
     toggle() {
@@ -96,6 +97,7 @@ export class BombaLogica extends ComponenteFisico {
             return 'Sem bombeamento';
         }
         if (this.sucaoSemLiquido) return 'Sem líquido suficiente';
+        if (this.margemNpshM < 0 && this.fatorCavitacaoAtual < 1) return 'Cavitando';
         if (this.margemNpshM < 0) return 'Risco de cavitação';
         if (this.margemNpshM < 0.5) return 'No limite';
         return 'Com folga';

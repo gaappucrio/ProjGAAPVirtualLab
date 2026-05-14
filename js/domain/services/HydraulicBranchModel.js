@@ -364,7 +364,7 @@ export class HydraulicBranchModel {
             const npshRequiredM = comp.getCurvaNpshRequeridoM(suctionFlowReference, drive);
             const cavitationFactor = comp.calcularFatorCavitacao(npshAvailableM, npshRequiredM);
             const boostBar = comp.pressaoMaxima * drive * drive * Math.max(0.05, curveFrac) * cavitationFactor;
-            const effectiveQRemaining = qRemaining * Math.max(0.25, cavitationFactor);
+            const effectiveQRemaining = qRemaining * cavitationFactor;
 
             comp.npshDisponivelM = npshAvailableM;
             comp.npshRequeridoAtualM = npshRequiredM;

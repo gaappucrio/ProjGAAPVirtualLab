@@ -4,6 +4,14 @@ import { t } from '../../presentation/i18n/LanguageManager.js';
 const DEFAULT_PRESSURE_AXIS_MAX_BAR = 10;
 const DEFAULT_NPSH_AXIS_MAX_M = 5;
 
+function getGridColors() {
+    const isDark = document.body.classList.contains('theme-dark');
+    return {
+        grid: isDark ? '#3a4a5c' : '#e1e8ed',
+        tick: isDark ? '#93a8b8' : '#6c8392'
+    };
+}
+
 export function buildPumpCurveDatasets(component) {
     const qMax = Math.max(1, component.vazaoNominal);
     const pressureUnit = getUnitSymbol('pressure');
@@ -70,6 +78,8 @@ export function applyPumpChartPresentation(chart, datasets, { expanded = false }
     chart.options.scales.x.title.font = { size: profile.titleFontSize };
     chart.options.scales.x.ticks.font = { size: profile.tickFontSize };
     chart.options.scales.x.ticks.maxTicksLimit = profile.maxTicksX;
+    chart.options.scales.x.ticks.color = getGridColors().tick;
+    chart.options.scales.x.grid.color = getGridColors().grid;
 
     chart.options.scales.yHead.title.text = `${t('chart.head')} (${datasets.pressureUnit})`;
     chart.options.scales.yHead.title.font = { size: profile.titleFontSize };
@@ -77,12 +87,15 @@ export function applyPumpChartPresentation(chart, datasets, { expanded = false }
     chart.options.scales.yHead.ticks.maxTicksLimit = profile.maxTicksY;
     chart.options.scales.yHead.min = 0;
     chart.options.scales.yHead.suggestedMax = datasets.pressureAxisMax;
+    chart.options.scales.yHead.ticks.color = getGridColors().tick;
+    chart.options.scales.yHead.grid.color = getGridColors().grid;
 
     chart.options.scales.yEff.title.display = profile.showSecondaryTitles;
     chart.options.scales.yEff.title.text = `${t('chart.efficiency')} (%)`;
     chart.options.scales.yEff.title.font = { size: profile.titleFontSize };
     chart.options.scales.yEff.ticks.font = { size: profile.secondaryTickFontSize };
     chart.options.scales.yEff.ticks.maxTicksLimit = profile.maxTicksY;
+    chart.options.scales.yEff.ticks.color = getGridColors().tick;
 
     chart.options.scales.yNpsh.title.display = profile.showSecondaryTitles;
     chart.options.scales.yNpsh.title.text = `NPSHr (${datasets.lengthUnit})`;
@@ -91,6 +104,7 @@ export function applyPumpChartPresentation(chart, datasets, { expanded = false }
     chart.options.scales.yNpsh.ticks.maxTicksLimit = profile.maxTicksY;
     chart.options.scales.yNpsh.min = 0;
     chart.options.scales.yNpsh.suggestedMax = datasets.npshAxisMax;
+    chart.options.scales.yNpsh.ticks.color = getGridColors().tick;
 
     chart.data.datasets[3].pointRadius = profile.pointRadius;
     chart.data.datasets[3].pointHoverRadius = profile.pointHoverRadius;
@@ -189,13 +203,15 @@ export function createPumpChart(ctx, component, { expanded = false } = {}) {
                 x: {
                     type: 'linear',
                     title: { display: true, text: `${t('chart.flow')} (${datasets.flowUnit})` },
-                    ticks: { maxTicksLimit: 6 }
+                    ticks: { maxTicksLimit: 6, color: getGridColors().tick },
+                    grid: { color: getGridColors().grid }
                 },
                 yHead: {
                     type: 'linear',
                     position: 'left',
                     title: { display: true, text: `${t('chart.head')} (${datasets.pressureUnit})` },
-                    ticks: { maxTicksLimit: 5 }
+                    ticks: { maxTicksLimit: 5, color: getGridColors().tick },
+                    grid: { color: getGridColors().grid }
                 },
                 yEff: {
                     type: 'linear',
@@ -206,7 +222,8 @@ export function createPumpChart(ctx, component, { expanded = false } = {}) {
                     title: { display: false, text: `${t('chart.efficiency')} (%)` },
                     ticks: {
                         maxTicksLimit: 5,
-                        callback: (value) => `${value}%`
+                        callback: (value) => `${value}%`,
+                        color: getGridColors().tick
                     }
                 },
                 yNpsh: {
@@ -215,7 +232,7 @@ export function createPumpChart(ctx, component, { expanded = false } = {}) {
                     offset: true,
                     grid: { drawOnChartArea: false },
                     title: { display: false, text: `NPSHr (${datasets.lengthUnit})` },
-                    ticks: { maxTicksLimit: 5 }
+                    ticks: { maxTicksLimit: 5, color: getGridColors().tick }
                 }
             }
         }

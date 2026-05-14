@@ -30,12 +30,6 @@ export function renderComponentProperties({
     const propertiesPresenter = getComponentPropertyPresenter(tipoChave);
 
     propContent.innerHTML = `
-        <div id="painel-alerta-saturacao" style="display: none; background-color: #fdeaea; border-left: 4px solid #e74c3c; padding: 10px; margin-bottom: 15px; border-radius: 4px;">
-            <h4 title="${TOOLTIPS.painel.alertaSaturacao}" style="margin: 0 0 5px 0; color: #c0392b; font-size: 13px;">Saída Saturada no Set Point</h4>
-            <p id="texto-alerta-saturacao" style="margin: 0; font-size: 11px; color: #333;"></p>
-            <button id="btn-aplicar-alerta-saturacao" type="button" title="${TOOLTIPS.painel.aplicarAjusteSaturacao}" style="display:none; margin-top:10px; padding:7px 10px; border:1px solid #c0392b; border-radius:4px; background:#fff; color:#c0392b; font-size:12px; font-weight:600; cursor:pointer;"></button>
-            <p id="texto-acao-alerta-saturacao" style="margin:8px 0 0; font-size:11px;"></p>
-        </div>
         ${renderUnitControls()}
         <div class="prop-group">
             <label title="${TOOLTIPS.painel.tagComponente}">Tag (Nome)</label>

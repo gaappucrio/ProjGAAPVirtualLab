@@ -295,6 +295,8 @@ const TEXTS = {
             relativeHeight: 'Altura relativa',
             language: 'Inglês',
             languageTitle: 'Alterna os textos do laboratório entre português e inglês.',
+            themeLightTitle: 'Ativar modo escuro',
+            themeDarkTitle: 'Ativar modo claro',
             heightEnabled: 'Desníveis entre componentes afetam a pressão e a vazão.',
             heightDisabled: 'Modo sem altura relativa: a bomba perde utilidade para vencer desníveis.'
         },
@@ -349,18 +351,24 @@ const TEXTS = {
             pumpLimited: 'Com bomba a montante fixa em 100%, reduzir a pressão da fonte não é uma variável de controle confiável para o PA. O ajuste didático deve dimensionar a bomba ou a planta fora da malha de controle.',
             pumpSizingAvailable: 'Dimensionamento de bomba disponível. A ação ajusta a vazão nominal da bomba para a capacidade física estimada no set point; o PA segue atuando somente nas válvulas.',
             pumpSizing: ({ count, flow, pressure }) => ` Dimensionamento sugerido para ${count} bomba(s): vazão nominal de ${flow} por bomba, com pressão máxima mínima de ${pressure}.`,
+            sourcePressureAvailable: 'Ajuste de fonte disponível. A ação reduz a pressão de alimentação uma única vez para aproximar a entrada da capacidade física estimada no set point; o PA segue atuando somente nas válvulas.',
+            sourcePressureSizing: ({ count, pressure }) => ` Ajuste sugerido para ${count} fonte(s): pressão de alimentação de ${pressure}.`,
             message: ({ setpoint, flow, heightText, pumpText, sizingText }) => `
         A saída do tanque atingiu o limite físico para o controle de nível.
-        Para o set point de <b>${setpoint}%</b>, o PA só pode continuar abrindo a válvula; ele não altera pressão de entrada nem parâmetros de bomba.
+        Para o set point de <b>${setpoint}%</b>, o PA em si só pode continuar abrindo a válvula; ele não altera continuamente pressão de entrada nem parâmetros de bomba.
         A vazão máxima estimada de saída no set point é <b>${flow}</b>.
         ${heightText}${pumpText}${sizingText}
     `,
             applyOne: 'Dimensionar bomba',
             applyMany: ({ count }) => `Dimensionar ${count} bombas`,
+            applySourceOne: 'Ajustar fonte',
+            applySourceMany: ({ count }) => `Ajustar ${count} fontes`,
             unavailable: 'Ajuste automático indisponível',
             connectSource: 'O set point automático atua somente nas válvulas.',
             successOne: 'Bomba dimensionada para o limite físico do set point.',
-            successMany: ({ count }) => `${count} bombas dimensionadas para o limite físico do set point.`
+            successMany: ({ count }) => `${count} bombas dimensionadas para o limite físico do set point.`,
+            successSourceOne: 'Fonte ajustada para o limite físico do set point.',
+            successSourceMany: ({ count }) => `${count} fontes ajustadas para o limite físico do set point.`
         },
         common: {
             rangeSeparator: ' a '
@@ -377,6 +385,8 @@ const TEXTS = {
             relativeHeight: 'Relative height',
             language: 'English',
             languageTitle: 'Switches the lab text between Portuguese and English.',
+            themeLightTitle: 'Turn on dark mode',
+            themeDarkTitle: 'Turn on light mode',
             heightEnabled: 'Height differences between components affect pressure and flow.',
             heightDisabled: 'Without relative height: the pump is less useful for overcoming elevation changes.'
         },
@@ -431,18 +441,24 @@ const TEXTS = {
             pumpLimited: 'With an upstream pump fixed at 100%, reducing source pressure is not a reliable PA control variable. The didactic adjustment should size the pump or plant outside the control loop.',
             pumpSizingAvailable: 'Pump sizing is available. The action adjusts pump nominal flow to the estimated physical capacity at the set point; PA still actuates valves only.',
             pumpSizing: ({ count, flow, pressure }) => ` Suggested sizing for ${count} pump(s): nominal flow ${flow} per pump, with minimum maximum pressure ${pressure}.`,
+            sourcePressureAvailable: 'Source adjustment is available. The action reduces feed pressure once to approach the estimated physical capacity at the set point; PA still actuates valves only.',
+            sourcePressureSizing: ({ count, pressure }) => ` Suggested adjustment for ${count} source(s): feed pressure ${pressure}.`,
             message: ({ setpoint, flow, heightText, pumpText, sizingText }) => `
         The tank outlet reached the physical limit for level control.
-        For the <b>${setpoint}%</b> set point, automatic control can only keep opening the valve; it does not change inlet pressure or pump parameters.
+        For the <b>${setpoint}%</b> set point, automatic control itself can only keep opening the valve; it does not continuously change inlet pressure or pump parameters.
         The maximum estimated outlet flow at the set point is <b>${flow}</b>.
         ${heightText}${pumpText}${sizingText}
     `,
             applyOne: 'Size pump',
             applyMany: ({ count }) => `Size ${count} pumps`,
+            applySourceOne: 'Adjust source',
+            applySourceMany: ({ count }) => `Adjust ${count} sources`,
             unavailable: 'Automatic adjustment unavailable',
             connectSource: 'Automatic set point control actuates valves only.',
             successOne: 'Pump sized to the physical set point limit.',
-            successMany: ({ count }) => `${count} pumps sized to the physical set point limit.`
+            successMany: ({ count }) => `${count} pumps sized to the physical set point limit.`,
+            successSourceOne: 'Source adjusted to the physical set point limit.',
+            successSourceMany: ({ count }) => `${count} sources adjusted to the physical set point limit.`
         },
         common: {
             rangeSeparator: ' to '
@@ -658,9 +674,20 @@ const LEGACY_PT_TO_EN = {
     'Viscosidade e pressões absolutas influenciam atrito, cavitação e disponibilidade de sucção. Em usos mais simples, a aba Geral costuma bastar.': 'Viscosity and absolute pressures influence friction, cavitation, and suction availability. For simpler uses, the General tab is usually enough.',
     'Sem bombeamento': 'No pumping',
     'Sem líquido suficiente': 'Not enough liquid',
+    'Cavitando': 'Cavitating',
     'Risco de cavitação': 'Cavitation risk',
     'No limite': 'At the limit',
     'Com folga': 'With margin',
+    'Sem líquido suficiente na sucção': 'Not enough liquid at suction',
+    'A bomba está acionada, mas não recebeu fluido suficiente. Verifique o nível do tanque, o bocal de saída e as conexões a montante.': 'The pump is driven, but it did not receive enough fluid. Check the tank level, outlet nozzle, and upstream connections.',
+    'Bomba cavitando': 'Pump cavitating',
+    'O NPSHa está abaixo do NPSHr e o desempenho já foi reduzido pelo solver. A bomba não deve conseguir sustentar essa vazão sem melhorar a sucção.': 'NPSHa is below NPSHr and the solver has already reduced performance. The pump should not sustain this flow without improving suction.',
+    'O NPSHa está menor que o NPSHr. Aumente a pressão ou o nível na sucção, reduza perdas a montante ou diminua a vazão da bomba.': 'NPSHa is lower than NPSHr. Increase suction pressure or level, reduce upstream losses, or lower the pump flow.',
+    'Sucção no limite': 'Suction at the limit',
+    'A folga entre NPSHa e NPSHr está baixa. A bomba ainda opera, mas pequenas perdas ou queda de nível podem levar à cavitação.': 'The margin between NPSHa and NPSHr is low. The pump still operates, but small losses or a level drop can lead to cavitation.',
+    'A bomba está sem acionamento efetivo. As condições de sucção serão avaliadas quando houver bombeamento.': 'The pump has no effective drive. Suction conditions will be evaluated when there is pumping.',
+    'Sucção com folga': 'Suction with margin',
+    'A bomba possui líquido e margem positiva entre NPSHa e NPSHr nas condições atuais.': 'The pump has liquid and positive margin between NPSHa and NPSHr under current conditions.',
     'Sem leitura': 'No reading',
     'sem fluxo': 'no flow',
     'laminar': 'laminar',

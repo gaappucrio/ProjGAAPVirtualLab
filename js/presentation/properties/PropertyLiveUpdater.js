@@ -11,7 +11,7 @@ import {
 import { toDisplayValue } from '../units/DisplayUnits.js';
 import { localizeElement, translateLiteral } from '../i18n/LanguageManager.js';
 import { byId, isActive, setValue } from './PropertyDomAdapter.js';
-import { setFieldValue } from './PropertyValueFormatters.js';
+import { formatMeasuredValue, setFieldValue } from './PropertyValueFormatters.js';
 import {
     updateTankControlAvailabilityUI,
     updateTankSaturationAlert
@@ -24,6 +24,86 @@ function getPumpNpshMargin(component) {
 
 function getPumpNpshCondition(component) {
     return component.getCondicaoSucaoAtual?.() ?? 'Sem leitura';
+}
+
+function getPumpSuctionAlertState(condition) {
+    if (condition === 'Sem líquido suficiente') {
+        return {
+            title: 'Sem líquido suficiente na sucção',
+            message: 'A bomba está acionada, mas não recebeu fluido suficiente. Verifique o nível do tanque, o bocal de saída e as conexões a montante.',
+            border: '#c0392b',
+            background: '#fdeaea',
+            color: '#922b21'
+        };
+    }
+    if (condition === 'Cavitando') {
+        return {
+            title: 'Bomba cavitando',
+            message: 'O NPSHa está abaixo do NPSHr e o desempenho já foi reduzido pelo solver. A bomba não deve conseguir sustentar essa vazão sem melhorar a sucção.',
+            border: '#c0392b',
+            background: '#fdeaea',
+            color: '#922b21'
+        };
+    }
+    if (condition === 'Risco de cavitação') {
+        return {
+            title: 'Risco de cavitação',
+            message: 'O NPSHa está menor que o NPSHr. Aumente a pressão ou o nível na sucção, reduza perdas a montante ou diminua a vazão da bomba.',
+            border: '#e67e22',
+            background: '#fff3e6',
+            color: '#a84300'
+        };
+    }
+    if (condition === 'No limite') {
+        return {
+            title: 'Sucção no limite',
+            message: 'A folga entre NPSHa e NPSHr está baixa. A bomba ainda opera, mas pequenas perdas ou queda de nível podem levar à cavitação.',
+            border: '#f39c12',
+            background: '#fff8e5',
+            color: '#8a5a00'
+        };
+    }
+    if (condition === 'Sem bombeamento') {
+        return {
+            title: 'Sem bombeamento',
+            message: 'A bomba está sem acionamento efetivo. As condições de sucção serão avaliadas quando houver bombeamento.',
+            border: '#bdc3c7',
+            background: '#f8fafb',
+            color: '#5f6f7f'
+        };
+    }
+    return {
+        title: 'Sucção com folga',
+        message: 'A bomba possui líquido e margem positiva entre NPSHa e NPSHr nas condições atuais.',
+        border: '#27ae60',
+        background: '#edf8f1',
+        color: '#1e8449'
+    };
+}
+
+function updatePumpSuctionAlert(component) {
+    const alertEl = byId('painel-alerta-succao-bomba');
+    if (!alertEl) return;
+
+    const condition = getPumpNpshCondition(component);
+    const state = getPumpSuctionAlertState(condition);
+    const margin = getPumpNpshMargin(component);
+    const titleEl = byId('titulo-alerta-succao-bomba');
+    const textEl = byId('texto-alerta-succao-bomba');
+    const metricsEl = byId('metricas-alerta-succao-bomba');
+
+    alertEl.style.borderLeftColor = state.border;
+    alertEl.style.borderColor = state.border;
+    alertEl.style.background = state.background;
+    if (titleEl) {
+        titleEl.textContent = state.title;
+        titleEl.style.color = state.color;
+    }
+    if (textEl) textEl.textContent = state.message;
+    if (metricsEl) {
+        metricsEl.style.color = state.color;
+        metricsEl.textContent = `NPSHa: ${formatMeasuredValue('length', component.npshDisponivelM, 2)} | NPSHr: ${formatMeasuredValue('length', component.npshRequeridoAtualM ?? component.npshRequeridoM, 2)} | Folga: ${formatMeasuredValue('length', margin, 2)}`;
+    }
 }
 
 function updateConnectionValues(engine, connection) {
@@ -126,7 +206,7 @@ function updatePumpValues(component, { monitorController } = {}) {
     setFieldValue('disp-npsha-bomba', component.npshDisponivelM, 'length', 2);
     setFieldValue('disp-npshr-atual-bomba', component.npshRequeridoAtualM ?? component.npshRequeridoM, 'length', 2);
     setFieldValue('disp-margem-npsh-bomba', getPumpNpshMargin(component), 'length', 2);
-    setValue('disp-condicao-npsh-bomba', translateLiteral(getPumpNpshCondition(component)));
+    updatePumpSuctionAlert(component);
     setValue('disp-eficiencia-bomba', `${(component.eficienciaAtual * 100).toFixed(0)}%`);
     monitorController?.refreshPump(component);
 }

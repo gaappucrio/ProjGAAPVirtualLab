@@ -88,7 +88,7 @@ export function setupVirtualLabRuntime({ engine } = {}) {
     });
     monitorController.setup();
     setupWorkspaceSelectionController({ engine });
-    setupPropertyPanelController({ engine, monitorController });
+    const propertyPanelController = setupPropertyPanelController({ engine, monitorController });
     setupHelpController();
     setupCameraControl();
     setupPipeControl({ engine, connectionService, undoManager });
@@ -100,7 +100,11 @@ export function setupVirtualLabRuntime({ engine } = {}) {
         engine,
         undoManager,
         onClearCanvas: () => removeAllComponentVisualElements(),
-        onTopologyVisualChange: () => updateAllPipes()
+        onTopologyVisualChange: () => updateAllPipes(),
+        onThemeChange: () => {
+            monitorController.updateLayout();
+            propertyPanelController.renderCurrentProperties();
+        }
     });
 
     return {

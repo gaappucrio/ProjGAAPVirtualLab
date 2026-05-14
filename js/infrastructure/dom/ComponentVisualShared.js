@@ -37,7 +37,7 @@ export function createElevationUpdater({ visual, logica, id, offsetY }) {
             if (ENGINE.usarAlturaRelativa) {
                 const cy = parseFloat(el.getAttribute('data-cy'));
                 const logicalY = logica.y + offsetY + cy;
-                const elevM = (logicalY / 80).toFixed(2);
+                const elevM = (-logicalY / 80).toFixed(2);
                 el.textContent = `${t('visual.elevation')}: ${elevM} m`;
                 el.setAttribute('opacity', '1');
             } else {

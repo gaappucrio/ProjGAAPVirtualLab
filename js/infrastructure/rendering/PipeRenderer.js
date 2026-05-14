@@ -144,8 +144,9 @@ export function updateConnectionVisualLayout(connection, sourcePoint, targetPoin
     if (!visual.labelHeight) return;
 
     if (showRelativeHeight && Math.abs(geometry.headGainM) > 0.01) {
-        const signal = geometry.headGainM > 0 ? '+' : '';
-        visual.labelHeight.textContent = `Δy: ${signal}${geometry.headGainM.toFixed(2)} m`;
+        const displayHeadGainM = -geometry.headGainM;
+        const signal = displayHeadGainM > 0 ? '+' : '';
+        visual.labelHeight.textContent = `Δy: ${signal}${displayHeadGainM.toFixed(2)} m`;
     } else {
         visual.labelHeight.textContent = '';
     }

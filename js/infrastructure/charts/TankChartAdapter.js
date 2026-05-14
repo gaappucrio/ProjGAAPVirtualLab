@@ -4,6 +4,14 @@ import { getFluidVisualStyle } from '../rendering/FluidVisualStyle.js';
 
 const DEFAULT_TANK_CHART_LINE_COLOR = '#3498db';
 
+function getGridColors() {
+    const isDark = document.body.classList.contains('theme-dark');
+    return {
+        grid: isDark ? '#3a4a5c' : '#e1e8ed',
+        tick: isDark ? '#93a8b8' : '#6c8392'
+    };
+}
+
 function volumeTickLabel(value) {
     return toDisplayValue('volume', value).toFixed(1);
 }
@@ -78,14 +86,20 @@ export function createEmptyMonitorChart(ctx) {
                 }
             },
             scales: {
-                x: { title: { display: true, text: `${t('chart.time')} (s)` } },
+                x: { 
+                    title: { display: true, text: `${t('chart.time')} (s)` },
+                    ticks: { color: getGridColors().tick },
+                    grid: { color: getGridColors().grid }
+                },
                 y: {
                     min: 0,
                     max: 1000,
                     title: { display: true, text: `${t('chart.volume')} (${getUnitSymbol('volume')})` },
                     ticks: {
-                        callback: (value) => volumeTickLabel(value)
-                    }
+                        callback: (value) => volumeTickLabel(value),
+                        color: getGridColors().tick
+                    },
+                    grid: { color: getGridColors().grid }
                 }
             }
         }
@@ -130,14 +144,20 @@ export function createTankVolumeChart(ctx, component, series) {
                 }
             },
             scales: {
-                x: { title: { display: true, text: `${t('chart.time')} (s)` } },
+                x: { 
+                    title: { display: true, text: `${t('chart.time')} (s)` },
+                    ticks: { color: getGridColors().tick },
+                    grid: { color: getGridColors().grid }
+                },
                 y: {
                     min: 0,
                     max: component.capacidadeMaxima,
                     title: { display: true, text: `${t('chart.volume')} (${getUnitSymbol('volume')})` },
                     ticks: {
-                        callback: (value) => volumeTickLabel(value)
-                    }
+                        callback: (value) => volumeTickLabel(value),
+                        color: getGridColors().tick
+                    },
+                    grid: { color: getGridColors().grid }
                 }
             }
         }
@@ -154,6 +174,10 @@ export function refreshEmptyMonitorChartPresentation(chart) {
     chart.options.plugins.tooltip.callbacks.label = (context) =>
         `${t('chart.volume')}: ${toDisplayValue('volume', context.parsed.y).toFixed(1)} ${getUnitSymbol('volume')}`;
     chart.options.scales.y.ticks.callback = (value) => volumeTickLabel(value);
+    chart.options.scales.x.ticks.color = getGridColors().tick;
+    chart.options.scales.x.grid.color = getGridColors().grid;
+    chart.options.scales.y.ticks.color = getGridColors().tick;
+    chart.options.scales.y.grid.color = getGridColors().grid;
     chart.update();
 }
 
@@ -170,6 +194,10 @@ export function refreshTankVolumeChart(chart, component, series, { update = true
     chart.options.plugins.tooltip.callbacks.label = (context) =>
         `${t('chart.volume')}: ${toDisplayValue('volume', context.parsed.y).toFixed(1)} ${getUnitSymbol('volume')}`;
     chart.options.scales.y.ticks.callback = (value) => volumeTickLabel(value);
+    chart.options.scales.x.ticks.color = getGridColors().tick;
+    chart.options.scales.x.grid.color = getGridColors().grid;
+    chart.options.scales.y.ticks.color = getGridColors().tick;
+    chart.options.scales.y.grid.color = getGridColors().grid;
 
     if (update) chart.update();
 }

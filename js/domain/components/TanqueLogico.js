@@ -11,9 +11,11 @@ const FATOR_EXCESSO_ENTRADA = 1.02;
 const U_SAIDA_TOTALMENTE_ABERTA = -0.99;
 const ALTURA_UTIL_MINIMA_M = 0.5;
 const FATOR_SEGURANCA_VAZAO_BOMBA_SETPOINT = 0.98;
+const FATOR_SEGURANCA_VAZAO_FONTE_SETPOINT = 0.98;
 const FATOR_DRENAGEM_TRANSITORIA_SETPOINT = 1.01;
 const PRESSAO_MINIMA_DIMENSIONAMENTO_BOMBA_BAR = 0.5;
 const PRESSAO_MAXIMA_DIMENSIONAMENTO_BOMBA_BAR = 20;
+const PRESSAO_MAXIMA_AJUSTE_FONTE_BAR = 20;
 
 export class TanqueLogico extends ComponenteFisico {
     constructor(id, tag, x, y) {
@@ -251,6 +253,48 @@ export class TanqueLogico extends ComponenteFisico {
         });
     }
 
+    _criarAjustesPressaoFontes(fontes, resumoBase) {
+        if (
+            fontes.length === 0
+            || resumoBase.possuiBombasMontante
+            || resumoBase.vazaoEntradaAtualLps <= EPSILON_FLOW
+        ) {
+            return [];
+        }
+
+        const vazaoAlvoEntradaLps = Math.max(
+            0,
+            resumoBase.vazaoSaidaLimiteSetpointLps * FATOR_SEGURANCA_VAZAO_FONTE_SETPOINT
+        );
+        const fatorVazao = clamp(vazaoAlvoEntradaLps / resumoBase.vazaoEntradaAtualLps, 0, 1);
+        if (fatorVazao >= 0.999) return [];
+
+        return fontes.map((fonte) => {
+            const pressaoAtualBar = Math.max(0, Number(fonte.pressaoFonteBar) || 0);
+            const pressaoMotoraAtualBar = Math.max(
+                0,
+                pressaoAtualBar - resumoBase.pressaoBaseEntradaAtualBar
+            );
+            const pressaoMotoraRecomendadaBar = pressaoMotoraAtualBar * fatorVazao * fatorVazao;
+            const pressaoRecomendadaBar = clamp(
+                resumoBase.pressaoBaseEntradaSetpointBar + pressaoMotoraRecomendadaBar,
+                0,
+                Math.min(pressaoAtualBar, PRESSAO_MAXIMA_AJUSTE_FONTE_BAR)
+            );
+
+            return {
+                fonte,
+                fonteId: fonte.id,
+                tag: fonte.tag,
+                pressaoAtualBar,
+                pressaoRecomendadaBar,
+                fatorReducaoEntrada: fatorVazao,
+                vazaoAlvoEntradaLps,
+                motivo: 'Sem bomba a montante, o ajuste didatico reduz a pressao da fonte uma unica vez para aproximar a entrada da capacidade fisica de saida no set point.'
+            };
+        }).filter((ajuste) => ajuste.pressaoRecomendadaBar < ajuste.pressaoAtualBar - 1e-6);
+    }
+
     getValvulasDiretasSaidaControleNivel() {
         return this.outputs.filter((componente) => componente instanceof ValvulaLogica);
     }
@@ -297,7 +341,7 @@ export class TanqueLogico extends ComponenteFisico {
             nivelSetpoint,
             usarAlturaRelativa
         );
-        const { bombas } = this._coletarComponentesMontanteEntrada();
+        const { fontes, bombas } = this._coletarComponentesMontanteEntrada();
         const possuiBombasMontante = bombas.length > 0;
         const fatorReducaoSaida = pressaoSaidaAtualBar > EPSILON_FLOW
             ? Math.sqrt(Math.max(0, pressaoSaidaSetpointBar / pressaoSaidaAtualBar))
@@ -322,18 +366,25 @@ export class TanqueLogico extends ComponenteFisico {
             pressaoBaseEntradaSetpointBar,
             fatorReducaoEntrada,
             possuiBombasMontante,
-            quantidadeBombasMontante: bombas.length
+            quantidadeBombasMontante: bombas.length,
+            quantidadeFontesMontante: fontes.length
         };
         const ajustesBomba = this._criarAjustesDimensionamentoBombas(bombas, resumoBase);
+        const ajustesFonte = ajustesBomba.length > 0
+            ? []
+            : this._criarAjustesPressaoFontes(fontes, resumoBase);
+        const autoAjustavel = ajustesBomba.length > 0 || ajustesFonte.length > 0;
 
         return {
             ...resumoBase,
-            ajustesFonte: [],
+            ajustesFonte,
             ajustesBomba,
-            autoAjustavel: ajustesBomba.length > 0,
+            autoAjustavel,
             motivoAutoAjuste: ajustesBomba.length > 0
                 ? 'Dimensionamento didatico disponivel: o PA continua atuando somente nas valvulas, e a bomba a montante permanece operacionalmente em 100%, mas sua vazao nominal pode ser ajustada para a capacidade fisica da saida no set point.'
-                : 'O set point atua somente nas valvulas. Para estabilizar, conecte uma bomba dimensionavel a montante, adicione uma valvula de entrada controlavel ou aumente a capacidade de saida.'
+                : ajustesFonte.length > 0
+                    ? 'Ajuste didatico disponivel: sem bomba a montante, a pressao da fonte pode ser reduzida uma unica vez para aproximar a entrada da capacidade fisica da saida no set point.'
+                    : 'O set point atua somente nas valvulas. Para estabilizar, conecte uma bomba dimensionavel a montante, adicione uma valvula de entrada controlavel ou aumente a capacidade de saida.'
         };
     }
 
@@ -360,7 +411,9 @@ export class TanqueLogico extends ComponenteFisico {
 
             return {
                 aplicado: true,
+                tipoAjuste: 'dimensionamento_bomba',
                 quantidadeBombas: resumo.ajustesBomba.length,
+                quantidadeFontes: 0,
                 motivo: resumo.ajustesBomba.length === 1
                     ? 'Bomba dimensionada para a capacidade fisica de saida no set point.'
                     : 'Bombas dimensionadas para a capacidade fisica de saida no set point.',
@@ -368,8 +421,37 @@ export class TanqueLogico extends ComponenteFisico {
             };
         }
 
+        if (resumo.ajustesFonte?.length > 0) {
+            resumo.ajustesFonte.forEach((ajuste) => {
+                ajuste.fonte.pressaoFonteBar = ajuste.pressaoRecomendadaBar;
+                ajuste.fonte.sincronizarMetricasFisicas?.();
+                ajuste.fonte.notify(ComponentEventPayloads.state({
+                    pressaoFonteBar: ajuste.fonte.pressaoFonteBar
+                }));
+            });
+
+            this.notify(ComponentEventPayloads.setpointAutoPressure({
+                tipoAjuste: 'pressao_fonte',
+                quantidadeFontes: resumo.ajustesFonte.length
+            }));
+
+            return {
+                aplicado: true,
+                tipoAjuste: 'pressao_fonte',
+                quantidadeBombas: 0,
+                quantidadeFontes: resumo.ajustesFonte.length,
+                motivo: resumo.ajustesFonte.length === 1
+                    ? 'Pressao da fonte ajustada para a capacidade fisica de saida no set point.'
+                    : 'Pressoes das fontes ajustadas para a capacidade fisica de saida no set point.',
+                resumo
+            };
+        }
+
         return {
             aplicado: false,
+            tipoAjuste: 'nenhum',
+            quantidadeBombas: 0,
+            quantidadeFontes: 0,
             motivo: resumo.motivoAutoAjuste,
             resumo
         };

@@ -238,6 +238,40 @@ test('bomba na saida de tanque vazio indica falta de liquido na succao', () => {
     assert.equal(bomba.getCondicaoSucaoAtual(), 'Sem líquido suficiente');
 });
 
+test('bomba sem NPSHa suficiente entra em cavitacao e nao sustenta succao impossivel', () => {
+    const engine = createEngine();
+    engine.usarAlturaRelativa = true;
+
+    const fonte = new FonteLogica('F-HIGH-LIFT', 'inlet-high-lift', 0, 1000);
+    const bomba = new BombaLogica('P-HIGH-LIFT', 'P-HIGH-LIFT', 160, -1000);
+    const dreno = new DrenoLogico('D-HIGH-LIFT', 'outlet-high-lift', 320, -900);
+
+    fonte.pressaoFonteBar = 0.5;
+    fonte.vazaoMaxima = 500;
+    bomba.vazaoNominal = 45;
+    bomba.pressaoMaxima = 5;
+    bomba.grauAcionamento = 100;
+    bomba.acionamentoEfetivo = 100;
+    dreno.pressaoSaidaBar = 0;
+
+    fonte.conectarSaida(bomba);
+    bomba.conectarSaida(dreno);
+
+    const entradaBomba = new ConnectionModel({ sourceId: fonte.id, targetId: bomba.id });
+    const saidaBomba = new ConnectionModel({ sourceId: bomba.id, targetId: dreno.id });
+
+    [fonte, bomba, dreno].forEach((component) => engine.add(component));
+    [entradaBomba, saidaBomba].forEach((connection) => engine.addConnection(connection));
+
+    runPhysicsSteps(engine, 20, 0.1);
+
+    assert.equal(engine.getConnectionState(saidaBomba).flowLps, 0);
+    assert.equal(bomba.fluxoReal, 0);
+    assert.equal(bomba.fatorCavitacaoAtual, 0);
+    assert.ok(bomba.margemNpshM < 0, `Bomba sem NPSHa deve ter margem negativa: ${bomba.margemNpshM}`);
+    assert.equal(bomba.getCondicaoSucaoAtual(), 'Cavitando');
+});
+
 test('vazao em bomba responde a pressao de entrada sem interferencia do set point', () => {
     const medirVazaoComPressaoEntrada = (pressaoFonteBar) => {
         const engine = createEngine();
