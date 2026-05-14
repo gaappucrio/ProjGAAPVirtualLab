@@ -6,7 +6,7 @@ import { ValvulaLogica } from '../../domain/components/ValvulaLogica.js';
 import { ComponentEventPayloads } from '../../application/events/EventPayloads.js';
 import { bindPropertyTabs } from './PropertyTabs.js';
 import { TOOLTIPS } from './PropertyTooltips.js';
-import { localizeElement } from '../../utils/LanguageManager.js';
+import { localizeElement } from '../i18n/LanguageManager.js';
 import { getComponentPropertyPresenter } from './component/ComponentPropertyPresenterRegistry.js';
 import { bind } from './PropertyDomAdapter.js';
 import { bindUnitControls, renderUnitControls } from './PropertyUnitsPresenter.js';

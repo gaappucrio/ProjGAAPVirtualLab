@@ -4,7 +4,7 @@ import {
     getUnitOptions,
     getUnitPreferences,
     setUnitPreference
-} from '../../utils/Units.js';
+} from '../units/DisplayUnits.js';
 
 export function renderUnitControls() {
     return renderUnitsPanel({

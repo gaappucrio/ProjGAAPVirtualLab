@@ -3,7 +3,7 @@ import {
     DEFAULT_FLUID_SPECIFIC_HEAT_JKGK,
     EPSILON_FLOW,
     lpsToM3s
-} from '../../utils/Units.js';
+} from '../units/HydraulicUnits.js';
 import { clamp, ComponenteFisico, pressureLossFromFlow } from './BaseComponente.js';
 import { cloneFluido } from './Fluido.js';
 

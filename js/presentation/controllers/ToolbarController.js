@@ -4,7 +4,7 @@ import {
     setLanguage,
     subscribeLanguageChanges,
     t
-} from '../../utils/LanguageManager.js';
+} from '../i18n/LanguageManager.js';
 import { exportSimulationData } from '../export/SimulationDataExporter.js';
 
 export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange, undoManager } = {}) {

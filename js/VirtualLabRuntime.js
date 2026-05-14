@@ -22,7 +22,7 @@ import {
     applyLanguageToDocument,
     subscribeLanguageChanges,
     translateDefaultComponentTag
-} from './utils/LanguageManager.js';
+} from './presentation/i18n/LanguageManager.js';
 import { setupCameraControl } from './presentation/controllers/CameraController.js';
 import { setupClipboardController } from './presentation/controllers/ClipboardController.js';
 import { setupComponentRotationController } from './presentation/controllers/ComponentRotationController.js';

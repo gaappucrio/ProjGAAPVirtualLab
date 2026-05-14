@@ -13,7 +13,7 @@ import {
     DEFAULT_DESIGN_VELOCITY_MPS,
     areaFromDiameter,
     lpsToM3s
-} from '../../utils/Units.js';
+} from '../units/HydraulicUnits.js';
 import { clamp } from '../components/BaseComponente.js';
 import { calculateConnectionGeometry } from './PortPositionCalculator.js';
 

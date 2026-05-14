@@ -4,7 +4,7 @@ import { ComponentEventPayloads } from '../../application/events/EventPayloads.j
 import { FonteLogica } from './FonteLogica.js';
 import { ValvulaLogica } from './ValvulaLogica.js';
 import { cloneFluido, createFluidoFromProperties, mixFluidos } from './Fluido.js';
-import { EPSILON_FLOW, pressureFromHeadBar } from '../../utils/Units.js';
+import { EPSILON_FLOW, pressureFromHeadBar } from '../units/HydraulicUnits.js';
 
 const TOLERANCIA_ERRO_SATURACAO = -0.02;
 const FATOR_EXCESSO_ENTRADA = 1.02;
@@ -64,6 +64,13 @@ export class TanqueLogico extends ComponenteFisico {
 
     getAlturaLiquidoM() {
         return this.getAlturaLiquidoParaNivelM(this.getNivelNormalizado());
+    }
+
+    temLiquidoDisponivelSaida(considerarAlturaBocal = true) {
+        if (this.volumeAtual <= EPSILON_FLOW || this.capacidadeMaxima <= 0) return false;
+        if (!considerarAlturaBocal) return true;
+        this.normalizarAlturasBocais();
+        return this.getAlturaLiquidoM() > this.alturaBocalSaidaM;
     }
 
     normalizarAlturasBocais() {

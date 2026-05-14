@@ -6,7 +6,7 @@ import {
     setHtml,
     setText
 } from './PropertyDomAdapter.js';
-import { t, translateLiteral } from '../../utils/LanguageManager.js';
+import { t, translateLiteral } from '../i18n/LanguageManager.js';
 import { formatMeasuredValue } from './PropertyValueFormatters.js';
 
 function formatPumpSizingText(alerta) {

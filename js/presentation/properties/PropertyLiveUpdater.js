@@ -8,8 +8,8 @@ import {
     getCurrentDesignFlowCandidateLps,
     getSuggestedDiameterForConnection
 } from '../../domain/services/PipeHydraulics.js';
-import { toDisplayValue } from '../../utils/Units.js';
-import { localizeElement, translateLiteral } from '../../utils/LanguageManager.js';
+import { toDisplayValue } from '../units/DisplayUnits.js';
+import { localizeElement, translateLiteral } from '../i18n/LanguageManager.js';
 import { byId, isActive, setValue } from './PropertyDomAdapter.js';
 import { setFieldValue } from './PropertyValueFormatters.js';
 import {

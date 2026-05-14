@@ -58,6 +58,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Curva de NPSHr.
 - Cálculo de NPSHa, NPSHr atual, margem contra cavitação e condição de sucção.
 - Fator de cavitação reduzindo desempenho quando NPSHa é insuficiente.
+- Detecção explícita de falta de líquido na sucção da bomba, separada do cálculo de cavitação por NPSH.
 - Monitoramento por gráfico de curva com ponto de operação.
 
 ### 2.4 Válvula
@@ -148,7 +149,6 @@ index.html
       -> domain/
       -> presentation/
       -> infrastructure/
-      -> utils/
 ```
 
 O arquivo `js/App.js` atua como ponto de entrada minimo. A ordem de inicializacao do navegador fica concentrada em `js/VirtualLabRuntime.js`, que conecta o motor de simulacao aos controladores de apresentacao, adaptadores visuais e servicos de conexao.
@@ -281,17 +281,15 @@ Responsabilidades:
 - Atualizar gráficos.
 - Conectar tecnologias visuais externas à aplicação.
 
-### 3.5 `utils/`
+### 3.5 Unidades, idioma e diagnóstico
 
-Contém utilidades compartilhadas ainda mantidas fora das camadas principais.
+Os utilitários restantes foram realocados para camadas explícitas:
 
-Arquivos relevantes:
+- `domain/units/HydraulicUnits.js`: constantes físicas, conversões hidráulicas e padrões usados pelo domínio.
+- `presentation/units/DisplayUnits.js`: preferências de unidade e conversões de exibição da interface.
+- `presentation/i18n/LanguageManager.js`: idioma, traduções, nomes padrão e localização de elementos da UI.
 
-- `utils/Units.js`
-- `utils/LanguageManager.js`
-- `utils/PerformanceProfiler.js`
-
-Observação: os utilitários visuais de abas, tooltips e estado de portas já foram realocados para `presentation/` e `infrastructure/`.
+Com isso, não há mais utilitários visuais residindo em `utils/`.
 
 ## 4. Fluxo de Inicialização
 
@@ -521,6 +519,7 @@ Comportamento:
 - O NPSHr varia com vazão e acionamento.
 - Se NPSHa for menor que NPSHr, o fator de cavitação reduz desempenho.
 - Quando instalada na saída de um tanque, a bomba pode produzir pressão de sucção manométrica negativa; isso é esperado em cenários de sucção e é limitado por NPSH/cavitação.
+- Quando a bomba está acionada mas a sucção não possui líquido disponível, por exemplo com tanque vazio ou bocal de saída descoberto, a condição passa a indicar `Sem líquido suficiente` em vez de reaproveitar uma folga de NPSH antiga.
 
 ### 8.4 `ValvulaLogica`
 
@@ -621,14 +620,10 @@ Características:
 
 ## 11. Sistema de Unidades
 
-O arquivo `utils/Units.js` centraliza:
+O sistema de unidades foi dividido para preservar a arquitetura:
 
-- Conversões de pressão.
-- Conversões de vazão.
-- Conversões de comprimento.
-- Conversões de volume.
-- Conversões de temperatura.
-- Constantes hidráulicas padrão.
+- `domain/units/HydraulicUnits.js` centraliza constantes hidráulicas, conversões físicas e padrões do domínio.
+- `presentation/units/DisplayUnits.js` centraliza unidades selecionáveis, símbolos, passos de edição e conversões para exibição.
 
 Unidades internas principais:
 
@@ -638,7 +633,7 @@ Unidades internas principais:
 - Volume: L.
 - Temperatura: °C.
 
-O painel pode exibir valores em outras unidades, como kPa, m³/s, m³/h, mca e psi.
+O painel pode exibir valores em outras unidades, como kPa, m³/s, m³/h, mca e psi, sem contaminar o domínio com preferências visuais.
 
 ## 12. Monitoramento
 
@@ -663,7 +658,7 @@ Funcionalidades:
 
 ## 13. Internacionalização e Ajuda
 
-O sistema possui suporte a alternância de idioma entre português e inglês via `utils/LanguageManager.js`. Os nomes padrão de componentes e os textos de interface são atualizados no DOM sem reinicializar a aplicação.
+O sistema possui suporte a alternância de idioma entre português e inglês via `presentation/i18n/LanguageManager.js`. Os nomes padrão de componentes e os textos de interface são atualizados no DOM sem reinicializar a aplicação.
 
 Pontos atuais:
 
@@ -785,6 +780,9 @@ Marcos concluídos:
 - Pausa da simulação passou a congelar leituras hidráulicas em vez de zerar a UI.
 - `Tooltips.js` e `PropertyTabs.js` saíram de `utils/` e foram realocados para `presentation/properties`.
 - `PortStateManager.js` saiu de `utils/` e foi realocado para `infrastructure/dom`.
+- `LanguageManager.js` saiu de `utils/` e foi realocado para `presentation/i18n`.
+- `PerformanceProfiler.js` foi removido por não existir fluxo real de ativação/uso no programa.
+- `Units.js` foi dividido entre `domain/units/HydraulicUnits.js` e `presentation/units/DisplayUnits.js`.
 - Atalho global de remoção e limpeza visual do canvas saíram de `App.js` e foram movidos para controller/infraestrutura dedicados.
 - `PresentationController.js` deixou de coordenar a apresentacao completa e passou a ser uma fachada de compatibilidade para `PropertyPanelController.js`.
 - `App.js` foi reduzido ao ponto de entrada; a ordem de inicializacao da UI foi movida para `VirtualLabRuntime.js`.
@@ -831,13 +829,12 @@ Riscos atuais:
 - O solver push-based é adequado para cenários educacionais e fluxos dirigidos, mas não é um solver nodal não linear completo.
 - Redes muito complexas, com recirculação ou malhas fechadas reais, podem exigir um solver iterativo por nós.
 - A UI ainda é manual, então mudanças grandes de DOM exigem cuidado com bindings.
-- Alguns utilitários visuais ainda vivem em `utils/`, embora `LanguageManager.js` agora deixe mais clara a responsabilidade de idioma/tradução.
+- As unidades agora estão divididas entre domínio e apresentação; futuras mudanças devem evitar recriar módulos genéricos em `utils/`.
 
 Próximos passos recomendados:
 
 - Criar um teste visual/smoke em navegador para fluxo básico de UI.
 - Avaliar um solver nodal para malhas fechadas mais realistas.
-- Migrar utilitários visuais restantes para `presentation` ou `infrastructure`.
 - Criar documentação curta para usuários finais além deste relatório técnico.
 - Adicionar exemplos de cenários prontos.
 - Criar importação/exportação de fluxogramas completos, caso o objetivo seja uso em laboratório. A exportação tabular de dados da simulação já existe.

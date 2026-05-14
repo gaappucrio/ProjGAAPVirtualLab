@@ -3,7 +3,7 @@ import { FonteLogica } from '../components/FonteLogica.js';
 import { TanqueLogico } from '../components/TanqueLogico.js';
 import { TrocadorCalorLogico } from '../components/TrocadorCalorLogico.js';
 import { ValvulaLogica } from '../components/ValvulaLogica.js';
-import { EPSILON_FLOW } from '../../utils/Units.js';
+import { EPSILON_FLOW } from '../units/HydraulicUnits.js';
 
 const MAX_QUEUE_STEPS = 512;
 const MAX_COMPONENT_VISITS = 8;

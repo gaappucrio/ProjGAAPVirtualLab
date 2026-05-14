@@ -1,6 +1,6 @@
 import { clamp, ComponenteFisico, rampToTarget } from './BaseComponente.js';
 import { ComponentEventPayloads } from '../../application/events/EventPayloads.js';
-import { EPSILON_FLOW } from '../../utils/Units.js';
+import { EPSILON_FLOW } from '../units/HydraulicUnits.js';
 
 export class BombaLogica extends ComponenteFisico {
     constructor(id, tag, x, y) {
@@ -23,6 +23,7 @@ export class BombaLogica extends ComponenteFisico {
         this.pressaoSucaoAtualBar = 0;
         this.pressaoDescargaAtualBar = 0;
         this.cargaGeradaBar = 0;
+        this.sucaoSemLiquido = false;
     }
 
     calcularFatorCavitacao(npshDisponivelM, npshRequeridoM = this.npshRequeridoAtualM ?? this.npshRequeridoM) {
@@ -94,9 +95,20 @@ export class BombaLogica extends ComponenteFisico {
         if (this.getDriveAtual() <= 0.01 && Math.abs(this.fluxoReal) <= EPSILON_FLOW) {
             return 'Sem bombeamento';
         }
+        if (this.sucaoSemLiquido) return 'Sem líquido suficiente';
         if (this.margemNpshM < 0) return 'Risco de cavitação';
         if (this.margemNpshM < 0.5) return 'No limite';
         return 'Com folga';
+    }
+
+    marcarSucaoSemLiquido() {
+        this.sucaoSemLiquido = true;
+        this.npshDisponivelM = 0;
+        this.fatorCavitacaoAtual = 0;
+    }
+
+    limparSucaoSemLiquido() {
+        this.sucaoSemLiquido = false;
     }
 
     recalcularMetricasDerivadasCurva() {
@@ -109,6 +121,16 @@ export class BombaLogica extends ComponenteFisico {
         this.npshRequeridoAtualM = semBombeamento
             ? this.npshRequeridoM
             : this.getCurvaNpshRequeridoM(this.fluxoReal, drive);
+        if (this.sucaoSemLiquido && drive > 0.01) {
+            this.eficienciaAtual = 0;
+            this.npshDisponivelM = 0;
+            this.margemNpshM = -this.npshRequeridoAtualM;
+            this.fatorCavitacaoAtual = 0;
+            this.cargaGeradaBar = 0;
+            this.pressaoDescargaAtualBar = this.pressaoSucaoAtualBar;
+            this.pressaoSaidaAtualBar = this.pressaoDescargaAtualBar;
+            return;
+        }
         this.margemNpshM = this.npshDisponivelM - this.npshRequeridoAtualM;
         this.cargaGeradaBar = drive > 0
             ? this.pressaoMaxima * drive * drive * Math.max(0.05, curveFrac) * this.fatorCavitacaoAtual
@@ -171,6 +193,7 @@ export class BombaLogica extends ComponenteFisico {
         this.pressaoSucaoAtualBar = 0;
         this.pressaoDescargaAtualBar = 0;
         this.cargaGeradaBar = 0;
+        this.sucaoSemLiquido = false;
         this.npshRequeridoAtualM = this.npshRequeridoM;
         this.npshDisponivelM = 0;
         this.margemNpshM = 0;
@@ -188,6 +211,9 @@ export class BombaLogica extends ComponenteFisico {
         super.sincronizarMetricasFisicas();
         this.fluxoReal = this.estadoHidraulico.saidaVazaoLps;
         this.pressaoSucaoAtualBar = this.getPressaoEntradaBar();
+        if (this.estadoHidraulico.entradaVazaoLps > EPSILON_FLOW) {
+            this.limparSucaoSemLiquido();
+        }
         this.recalcularMetricasDerivadasCurva();
     }
 

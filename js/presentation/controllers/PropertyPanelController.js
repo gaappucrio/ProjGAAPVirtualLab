@@ -8,7 +8,7 @@ import {
     getPropertyTabsState,
     restorePropertyTabsState
 } from '../properties/PropertyTabs.js';
-import { subscribeLanguageChanges } from '../../utils/LanguageManager.js';
+import { subscribeLanguageChanges } from '../i18n/LanguageManager.js';
 import { createPropertyPanelContextStore } from './PropertyPanelContextController.js';
 import { renderConnectionProperties as renderConnectionPropertiesPresenter } from '../properties/ConnectionPropertiesPresenter.js';
 import { renderComponentProperties as renderComponentPropertiesPresenter } from '../properties/ComponentPropertiesPresenter.js';

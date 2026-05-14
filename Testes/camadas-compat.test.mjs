@@ -20,6 +20,8 @@ const DOMAIN_SERVICES_ROOT = path.resolve('js/domain/services');
 const additionalPropsHook = ['propriedades', 'Adicionais'].join('');
 const setupPropsHook = ['setup', 'Props'].join('');
 const removedFiles = [
+    ['js', 'utils'],
+    ['js', 'infrastructure', 'diagnostics', 'PerformanceProfiler.js'],
     ['js', ['Motor', 'Fisico.js'].join('')],
     ['js', ['Registro', 'Componentes.js'].join('')],
     ['js', ['Fabrica', 'Equipamentos.js'].join('')],

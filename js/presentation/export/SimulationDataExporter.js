@@ -5,8 +5,8 @@ import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
 import { TrocadorCalorLogico } from '../../domain/components/TrocadorCalorLogico.js';
 import { ValvulaLogica } from '../../domain/components/ValvulaLogica.js';
 import { getFluidVisualStyle } from '../../infrastructure/rendering/FluidVisualStyle.js';
-import { isEnglishLanguage, translateFluidName, translateLiteral } from '../../utils/LanguageManager.js';
-import { formatUnitValue, getUnitPreferences, getUnitSymbol } from '../../utils/Units.js';
+import { isEnglishLanguage, translateFluidName, translateLiteral } from '../i18n/LanguageManager.js';
+import { formatUnitValue, getUnitPreferences, getUnitSymbol } from '../units/DisplayUnits.js';
 
 const EXPORT_METADATA_COLUMNS = [
     'Data da exportação',

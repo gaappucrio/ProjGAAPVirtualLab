@@ -1,6 +1,6 @@
 import { ComponenteFisico } from './BaseComponente.js';
 import { createFluidoFromProperties, updateFluidoProperties } from './Fluido.js';
-import { DEFAULT_SOURCE_PRESSURE_BAR, MAX_NETWORK_FLOW_LPS } from '../../utils/Units.js';
+import { DEFAULT_SOURCE_PRESSURE_BAR, MAX_NETWORK_FLOW_LPS } from '../units/HydraulicUnits.js';
 
 export class FonteLogica extends ComponenteFisico {
     constructor(id, tag, x, y) {

@@ -1,5 +1,5 @@
-import { getUnitSymbol, toDisplayValue } from '../../utils/Units.js';
-import { t } from '../../utils/LanguageManager.js';
+import { getUnitSymbol, toDisplayValue } from '../../presentation/units/DisplayUnits.js';
+import { t } from '../../presentation/i18n/LanguageManager.js';
 import { getFluidVisualStyle } from '../rendering/FluidVisualStyle.js';
 
 const DEFAULT_TANK_CHART_LINE_COLOR = '#3498db';

@@ -1,4 +1,4 @@
-import { subscribeLanguageChanges, t } from '../../utils/LanguageManager.js';
+import { subscribeLanguageChanges, t } from '../i18n/LanguageManager.js';
 
 const MIN_MONITOR_HEIGHT_PX = 260;
 const DESKTOP_MONITOR_MARGIN_PX = 24;

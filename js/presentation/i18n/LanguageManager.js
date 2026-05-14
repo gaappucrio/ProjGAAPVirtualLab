@@ -657,6 +657,7 @@ const LEGACY_PT_TO_EN = {
     'Os parâmetros desta aba refinam perdas distribuídas, perdas locais e a resposta transitória da linha. São úteis quando você quer aproximar melhor a hidráulica do trecho.': 'Parameters in this tab refine distributed losses, minor losses, and the transient response of the line. They are useful when you want a closer approximation of line hydraulics.',
     'Viscosidade e pressões absolutas influenciam atrito, cavitação e disponibilidade de sucção. Em usos mais simples, a aba Geral costuma bastar.': 'Viscosity and absolute pressures influence friction, cavitation, and suction availability. For simpler uses, the General tab is usually enough.',
     'Sem bombeamento': 'No pumping',
+    'Sem líquido suficiente': 'Not enough liquid',
     'Risco de cavitação': 'Cavitation risk',
     'No limite': 'At the limit',
     'Com folga': 'With margin',

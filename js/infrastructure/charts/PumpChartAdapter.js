@@ -1,5 +1,5 @@
-import { getUnitSymbol, toDisplayValue } from '../../utils/Units.js';
-import { t } from '../../utils/LanguageManager.js';
+import { getUnitSymbol, toDisplayValue } from '../../presentation/units/DisplayUnits.js';
+import { t } from '../../presentation/i18n/LanguageManager.js';
 
 const DEFAULT_PRESSURE_AXIS_MAX_BAR = 10;
 const DEFAULT_NPSH_AXIS_MAX_M = 5;

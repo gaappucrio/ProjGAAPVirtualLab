@@ -198,6 +198,46 @@ test('bomba ativa na saida do tanque aumenta vazao sem pressao incoerente', () =
     });
 });
 
+test('bomba na saida de tanque vazio indica falta de liquido na succao', () => {
+    const engine = createEngine();
+    engine.usarAlturaRelativa = true;
+
+    const tanque = new TanqueLogico('T-01', 'T-01', 180, 120);
+    const bomba = new BombaLogica('P-01', 'P-01', 360, 180);
+    const dreno = new DrenoLogico('D-01', 'outlet-01', 520, 240);
+
+    tanque.volumeAtual = 0;
+    tanque.capacidadeMaxima = 1000;
+    tanque.alturaUtilMetros = 2.4;
+    tanque.alturaBocalSaidaM = 0.1;
+    tanque.fluidoConteudo = { ...FLUID_PRESETS.agua };
+    bomba.vazaoNominal = 45;
+    bomba.pressaoMaxima = 5;
+    bomba.grauAcionamento = 100;
+    bomba.acionamentoEfetivo = 100;
+
+    tanque.conectarSaida(bomba);
+    bomba.conectarSaida(dreno);
+
+    const tankPump = new ConnectionModel({ sourceId: tanque.id, targetId: bomba.id });
+    const pumpDrain = new ConnectionModel({ sourceId: bomba.id, targetId: dreno.id });
+
+    engine.add(tanque);
+    engine.add(bomba);
+    engine.add(dreno);
+    engine.addConnection(tankPump);
+    engine.addConnection(pumpDrain);
+
+    runPhysicsSteps(engine, 5, 0.1);
+
+    assert.equal(tanque.volumeAtual, 0);
+    assert.equal(bomba.fluxoReal, 0);
+    assert.equal(bomba.npshDisponivelM, 0);
+    assert.ok(bomba.margemNpshM < 0, `Bomba sem liquido deve ter margem negativa: ${bomba.margemNpshM}`);
+    assert.equal(bomba.fatorCavitacaoAtual, 0);
+    assert.equal(bomba.getCondicaoSucaoAtual(), 'Sem líquido suficiente');
+});
+
 test('vazao em bomba responde a pressao de entrada sem interferencia do set point', () => {
     const medirVazaoComPressaoEntrada = (pressaoFonteBar) => {
         const engine = createEngine();

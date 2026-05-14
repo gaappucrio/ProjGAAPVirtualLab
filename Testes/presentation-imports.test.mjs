@@ -77,7 +77,7 @@ test('exportação em inglês localiza rótulos sem alterar nomes definidos pelo
     const { buildExportHtml } = await import('../js/presentation/export/SimulationDataExporter.js');
     const { BombaLogica } = await import('../js/domain/components/BombaLogica.js');
     const { FonteLogica } = await import('../js/domain/components/FonteLogica.js');
-    const { setLanguage } = await import('../js/utils/LanguageManager.js');
+    const { setLanguage } = await import('../js/presentation/i18n/LanguageManager.js');
 
     setLanguage('en');
 
@@ -125,7 +125,7 @@ test('prefixos visuais das fronteiras acompanham o idioma atual', async () => {
         getComponentTagPrefix,
         setLanguage,
         translateDefaultComponentTag
-    } = await import('../js/utils/LanguageManager.js');
+    } = await import('../js/presentation/i18n/LanguageManager.js');
 
     setLanguage('pt');
     assert.equal(getComponentTagPrefix('source'), 'Entrada');
@@ -205,7 +205,7 @@ test('clipboard de componentes preserva propriedades clonaveis e sufixo por idio
     const { FonteLogica } = await import('../js/domain/components/FonteLogica.js');
     const { BombaLogica } = await import('../js/domain/components/BombaLogica.js');
     const { TrocadorCalorLogico } = await import('../js/domain/components/TrocadorCalorLogico.js');
-    const { setLanguage } = await import('../js/utils/LanguageManager.js');
+    const { setLanguage } = await import('../js/presentation/i18n/LanguageManager.js');
 
     setLanguage('pt');
 

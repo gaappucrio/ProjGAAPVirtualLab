@@ -5,8 +5,8 @@ import {
     formatUnitValue,
     getUnitSymbol,
     subscribeUnitPreferences
-} from '../../utils/Units.js';
-import { subscribeLanguageChanges, t } from '../../utils/LanguageManager.js';
+} from '../../presentation/units/DisplayUnits.js';
+import { subscribeLanguageChanges, t } from '../../presentation/i18n/LanguageManager.js';
 
 export {
     ENGINE,

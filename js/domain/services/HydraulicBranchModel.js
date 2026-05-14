@@ -17,7 +17,7 @@ import {
     areaFromDiameter,
     lpsToM3s,
     pressureFromHeadBar
-} from '../../utils/Units.js';
+} from '../units/HydraulicUnits.js';
 import { getConnectionResponseTimeS as calculateConnectionResponseTimeS } from './PipeHydraulics.js';
 
 export class HydraulicBranchModel {
@@ -136,6 +136,30 @@ export class HydraulicBranchModel {
             source.registrarSaida(state.flowLps, state.sourcePressureBar || state.pressureBar || 0, fluid);
             target.registrarEntrada(state.flowLps, state.outletPressureBar || state.pressureBar || 0, fluid);
         });
+
+        this.context.componentes.forEach((component) => {
+            if (!(component instanceof BombaLogica)) return;
+            if (component.getDriveAtual() <= 0.01) {
+                component.limparSucaoSemLiquido?.();
+                return;
+            }
+            if (component.estadoHidraulico.entradaVazaoLps > EPSILON_FLOW) {
+                component.limparSucaoSemLiquido?.();
+                return;
+            }
+            const hasLiquidSupply = component.inputs.some((input) => this.componentCanSupplyLiquidToPump(input));
+            if (!hasLiquidSupply) component.marcarSucaoSemLiquido?.();
+        });
+    }
+
+    componentCanSupplyLiquidToPump(component) {
+        if (!component) return false;
+        if (component instanceof FonteLogica) return component.vazaoMaxima > EPSILON_FLOW;
+        if (component instanceof TanqueLogico) {
+            return component.temLiquidoDisponivelSaida?.(this.context.usarAlturaRelativa) ?? component.volumeAtual > EPSILON_FLOW;
+        }
+        return (component.estadoHidraulico?.saidaVazaoLps || 0) > EPSILON_FLOW
+            || (component.getFluxoPendenteLps?.() || 0) > EPSILON_FLOW;
     }
 
     getTargetBackPressureBar(target, fluid = this.context.getComponentFluid(target)) {
@@ -313,6 +337,7 @@ export class HydraulicBranchModel {
             const qRemaining = Math.max(0, qMax - comp.estadoHidraulico.saidaVazaoLps);
             const incomingFlow = estimating ? limitedFlow(qRemaining) : comp.getFluxoPendenteLps();
             if (incomingFlow <= EPSILON_FLOW || qRemaining <= EPSILON_FLOW) return null;
+            comp.limparSucaoSemLiquido?.();
 
             const inletPressure = inletPressureBar ?? comp.getPressaoEntradaBar();
             const fluid = inletFluid || comp.getFluidoEntradaMisturado?.(this.context.getComponentFluid(comp)) || this.context.getComponentFluid(comp);

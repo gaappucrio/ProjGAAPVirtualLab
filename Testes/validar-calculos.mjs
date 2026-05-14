@@ -22,7 +22,7 @@ import {
     getSuggestedDiameterForConnection
 } from '../js/domain/services/PipeHydraulics.js';
 import { buildPumpCurveDatasets } from '../js/infrastructure/charts/PumpChartAdapter.js';
-import { DEFAULT_ATMOSPHERIC_PRESSURE_BAR, pressureFromHeadBar } from '../js/utils/Units.js';
+import { DEFAULT_ATMOSPHERIC_PRESSURE_BAR, pressureFromHeadBar } from '../js/domain/units/HydraulicUnits.js';
 
 function approx(actual, expected, tolerance, label) {
     assert.ok(

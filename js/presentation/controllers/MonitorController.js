@@ -8,8 +8,8 @@ import {
     refreshTankVolumeChart
 } from '../../infrastructure/charts/TankChartAdapter.js';
 import { createMonitorSlotHistory } from '../monitoring/MonitorSlotHistory.js';
-import { getUnitSymbol } from '../../utils/Units.js';
-import { t } from '../../utils/LanguageManager.js';
+import { getUnitSymbol } from '../units/DisplayUnits.js';
+import { t } from '../i18n/LanguageManager.js';
 
 const MAX_MONITOR_CHART_HISTORY = 2;
 const MONITOR_LIVE_REFRESH_INTERVAL_S = 0.1;

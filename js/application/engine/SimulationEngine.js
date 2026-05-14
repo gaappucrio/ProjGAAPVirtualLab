@@ -22,8 +22,7 @@ import {
     EPSILON_FLOW,
     MAX_NETWORK_FLOW_LPS,
     pressureFromHeadBar
-} from '../../utils/Units.js';
-import { profiler } from '../../utils/PerformanceProfiler.js';
+} from '../../domain/units/HydraulicUnits.js';
 import { FLUID_PRESETS } from '../config/FluidPresets.js';
 import { EngineEventPayloads } from '../events/EventPayloads.js';
 import { HydraulicNetworkContext } from './HydraulicNetworkContext.js';
@@ -103,7 +102,7 @@ export class SistemaSimulacao extends Observable {
         this.hydraulicContext = new HydraulicNetworkContext(this);
         this.hydraulicBranchModel = new HydraulicBranchModel(this.hydraulicContext);
         this.hydraulicSolver = new HydraulicNetworkSolver(this.hydraulicContext, this.hydraulicBranchModel);
-        this.tickPipeline = new SimulationTickPipeline({ engine: this, profiler });
+        this.tickPipeline = new SimulationTickPipeline({ engine: this });
         this.isRunning = false;
         this.lastTime = 0;
         this.elapsedTime = 0;

@@ -18,7 +18,7 @@ import {
     setValue,
     validateInputWithFeedback
 } from '../PropertyPresenterShared.js';
-import { translateLiteral } from '../../../utils/LanguageManager.js';
+import { translateLiteral } from '../../i18n/LanguageManager.js';
 
 export const TANK_PROPERTIES_PRESENTER = {
     render: (comp) => {

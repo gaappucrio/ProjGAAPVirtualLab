@@ -6,9 +6,8 @@ import { ComponentEventPayloads, EngineEventPayloads } from '../events/EventPayl
 const MAX_FRAME_DT_SECONDS = 0.1;
 
 export class SimulationTickPipeline {
-    constructor({ engine, profiler }) {
+    constructor({ engine }) {
         this.engine = engine;
-        this.profiler = profiler;
     }
 
     calculateDeltaTime(timestamp) {
@@ -76,8 +75,6 @@ export class SimulationTickPipeline {
     run(timestamp) {
         if (!this.engine.isRunning) return;
 
-        this.profiler.startTick();
-
         const dt = this.calculateDeltaTime(timestamp);
         this.engine.elapsedTime += dt;
 
@@ -89,6 +86,5 @@ export class SimulationTickPipeline {
         this.engine.updatePipesVisual();
         this.engine.notify(EngineEventPayloads.panelUpdate(dt));
 
-        this.profiler.endTick(this.engine.getSolverMetrics());
     }
 }
