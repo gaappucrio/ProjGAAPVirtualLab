@@ -1,4 +1,4 @@
-import { ComponentEventPayloads } from '../../application/events/EventPayloads.js';
+import { ComponentEventPayloads } from '../events/ComponentEventPayloads.js';
 import {
     DEFAULT_FLUID_SPECIFIC_HEAT_JKGK,
     EPSILON_FLOW,

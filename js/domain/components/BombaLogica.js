@@ -1,5 +1,5 @@
 import { clamp, ComponenteFisico, rampToTarget } from './BaseComponente.js';
-import { ComponentEventPayloads } from '../../application/events/EventPayloads.js';
+import { ComponentEventPayloads } from '../events/ComponentEventPayloads.js';
 import { EPSILON_FLOW } from '../units/HydraulicUnits.js';
 
 export class BombaLogica extends ComponenteFisico {

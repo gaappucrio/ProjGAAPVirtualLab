@@ -15,7 +15,6 @@ import {
     lpsToM3s
 } from '../units/HydraulicUnits.js';
 import { clamp } from '../components/BaseComponente.js';
-import { calculateConnectionGeometry } from './PortPositionCalculator.js';
 
 function finiteNumber(value) {
     const numericValue = Number(value);
@@ -115,13 +114,6 @@ export function darcyFrictionFactor(reynolds, relativeRoughness) {
     }
 
     return clamp(turbulent, 0.008, 0.15);
-}
-
-/**
- * Calcula a geometria da conexão usando pontos lógicos pré-calculados.
- */
-export function getConnectionGeometryFromPoints(sourcePoint, targetPoint, conn, usarAlturaRelativa) {
-    return calculateConnectionGeometry(sourcePoint, targetPoint, conn, usarAlturaRelativa);
 }
 
 /**

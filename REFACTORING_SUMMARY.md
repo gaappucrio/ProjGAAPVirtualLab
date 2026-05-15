@@ -179,6 +179,8 @@ Arquivos principais:
 - `domain/components/ValvulaLogica.js`
 - `domain/components/TanqueLogico.js`
 - `domain/components/Fluido.js`
+- `domain/events/ComponentEventPayloads.js`
+- `domain/events/ComponentEventTypes.js`
 - `domain/models/ConnectionModel.js`
 - `domain/services/HydraulicNetworkSolver.js`
 - `domain/services/HydraulicBranchModel.js`
@@ -190,6 +192,7 @@ Responsabilidades:
 - Representar componentes físicos.
 - Calcular vazões, perdas e propriedades hidráulicas.
 - Modelar conexões puramente lógicas.
+- Emitir eventos de componentes lógicos sem depender da camada de aplicação.
 - Preservar regras de controle e comportamento físico sem acesso visual.
 
 ### 3.2 `application/`
@@ -208,6 +211,7 @@ Arquivos principais:
 - `application/stores/TransientConnectionStore.js`
 - `application/services/ConnectionService.js`
 - `application/services/ConnectionGeometryService.js`
+- `application/services/ConnectionGeometryCalculator.js`
 - `application/events/EventTypes.js`
 - `application/events/EventPayloads.js`
 - `application/config/FluidPresets.js`
@@ -220,6 +224,7 @@ Responsabilidades:
 - Injetar contexto hidráulico no solver.
 - Emitir eventos formais para a UI.
 - Centralizar presets de fluido.
+- Converter geometria visual já resolvida em geometria hidráulica sem acessar DOM diretamente.
 
 ### 3.3 `presentation/`
 
@@ -284,6 +289,7 @@ Arquivos principais:
 - `infrastructure/rendering/FluidVisualStyle.js`
 - `infrastructure/rendering/PipeRenderer.js`
 - `infrastructure/rendering/ConnectionVisualRegistry.js`
+- `infrastructure/rendering/ConnectionServiceRuntimeAdapter.js`
 
 Responsabilidades:
 
@@ -293,6 +299,7 @@ Responsabilidades:
 - Registrar posições visuais.
 - Renderizar tubos.
 - Resolver cores visuais de fluidos para componentes, tubos e tanques.
+- Transformar portas DOM em endpoints de conexão por meio de adapter de runtime.
 - Atualizar gráficos.
 - Conectar tecnologias visuais externas à aplicação.
 
@@ -301,8 +308,10 @@ Responsabilidades:
 Os utilitários restantes foram realocados para camadas explícitas:
 
 - `domain/units/HydraulicUnits.js`: constantes físicas, conversões hidráulicas e padrões usados pelo domínio.
+- `domain/events/ComponentEventPayloads.js`: payloads de eventos de componentes, mantendo o domínio independente de `application/events`.
 - `presentation/units/DisplayUnits.js`: preferências de unidade e conversões de exibição da interface.
 - `presentation/i18n/LanguageManager.js`: idioma, traduções, nomes padrão e localização de elementos da UI.
+- `application/services/ConnectionGeometryCalculator.js`: ponte entre coordenadas do workspace e geometria hidráulica, removida do domínio por depender de pixels e modo visual de altura relativa.
 
 Com isso, não há mais utilitários visuais residindo em `utils/`.
 
@@ -311,7 +320,7 @@ Com isso, não há mais utilitários visuais residindo em `utils/`.
 1. `index.html` carrega `js/App.js`.
 2. `App.js` importa o singleton `ENGINE`.
 3. `App.js` chama `setupVirtualLabRuntime({ engine: ENGINE })`.
-4. O runtime cria o servico de conexoes e inicializa os controllers de apresentacao.
+4. O runtime cria o adapter visual de conexões sobre `ConnectionService` e inicializa os controllers de apresentacao.
 5. O engine é injetado na camada de apresentação via `PresentationEngineContext`.
 6. São inicializados:
    - Câmera.
@@ -341,7 +350,7 @@ Etapas:
 5. Sincronizar métricas físicas dos componentes.
 6. Atualizar tubos e estados visuais.
 7. Publicar evento de atualização do painel.
-8. Atualizar métricas de performance do solver.
+8. Atualizar métricas internas do solver.
 
 Esse fluxo deixa o motor mais legível e evita concentrar toda a lógica dentro de `SimulationEngine.js`.
 
@@ -746,6 +755,8 @@ Coberturas importantes:
 - Snapshot e aplicação de propriedades clonáveis no clipboard de componentes.
 - Snapshot de grupos selecionados, preservando conexões internas ao copiar e colar sistemas inteiros.
 - Regras de camadas.
+- Domínio sem imports de aplicação, apresentação, infraestrutura visual, DOM, Chart.js ou APIs globais do navegador.
+- Aplicação sem imports de apresentação ou infraestrutura visual.
 - Importação da apresentação sem DOM global.
 - Tags de fronteira `inlet`/`outlet` independentes do idioma.
 - Cores visuais de presets e fluidos personalizados.
@@ -765,7 +776,7 @@ Coberturas importantes:
 Auditoria dos testes:
 
 - A suite executada por `npm.cmd test` cobre os 6 arquivos listados acima.
-- Esses arquivos contem 60 blocos `test(...)` executados pelo Node e 262 chamadas de `assert`.
+- A execução atual possui 69 testes passantes. Os arquivos de teste contêm 337 ocorrências de `assert.*` na suíte principal.
 - Nao foi encontrado padrao trivial como `assert.ok(true)`, `assert.equal(true, true)`, `print(true)` ou `console.log` usado como teste na suite principal.
 - Os testes exercitam resultados observaveis: valores numericos, estado de stores, eventos, HTML gerado, regras de camadas, ausencia de dependencias indevidas e comportamento do solver.
 - `test-phase1.mjs` e os HTMLs em `Testes/VERTESTE/` sao artefatos auxiliares/manuais; eles nao fazem parte do script `npm test`.
@@ -806,12 +817,16 @@ Marcos concluídos:
 - `Tooltips.js` e `PropertyTabs.js` saíram de `utils/` e foram realocados para `presentation/properties`.
 - `PortStateManager.js` saiu de `utils/` e foi realocado para `infrastructure/dom`.
 - `LanguageManager.js` saiu de `utils/` e foi realocado para `presentation/i18n`.
+- `PortPositionCalculator.js` saiu de `domain/services`; a parte de geometria dependente de coordenadas/pixels agora vive em `application/services/ConnectionGeometryCalculator.js`.
+- `ConnectionServiceRuntime.js` saiu de `application/services`; o adapter que lê portas visuais agora vive em `infrastructure/rendering/ConnectionServiceRuntimeAdapter.js`.
+- Payloads e tipos de eventos de componentes foram movidos para `domain/events`, removendo a dependência invertida do domínio para `application/events`.
 - `PerformanceProfiler.js` foi removido por não existir fluxo real de ativação/uso no programa.
 - `Units.js` foi dividido entre `domain/units/HydraulicUnits.js` e `presentation/units/DisplayUnits.js`.
 - Atalho global de remoção e limpeza visual do canvas saíram de `App.js` e foram movidos para controller/infraestrutura dedicados.
 - `PresentationController.js` deixou de coordenar a apresentacao completa e passou a ser uma fachada de compatibilidade para `PropertyPanelController.js`.
 - `App.js` foi reduzido ao ponto de entrada; a ordem de inicializacao da UI foi movida para `VirtualLabRuntime.js`.
 - Testes de arquitetura e comportamento adicionados.
+- Testes de arquitetura passaram a impedir regressões em que `domain/` importe camadas externas ou `application/` importe apresentação/infraestrutura visual.
 - Verificação final de consistência física adicionou validação numérica estrita, normalização segura de parâmetros de tubulação e proteção contra altura útil inválida em tanques.
 
 Pontos ainda observáveis:

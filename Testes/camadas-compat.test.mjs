@@ -15,6 +15,8 @@ import { InputValidator } from '../js/presentation/validation/InputValidator.js'
 
 const REGISTRY_ROOT = path.resolve('js/presentation/registry');
 const REGISTRY_SPECS_ROOT = path.resolve('js/presentation/registry/specs');
+const APPLICATION_ROOT = path.resolve('js/application');
+const DOMAIN_ROOT = path.resolve('js/domain');
 const PRESENTATION_ROOT = path.resolve('js/presentation');
 const DOMAIN_SERVICES_ROOT = path.resolve('js/domain/services');
 const additionalPropsHook = ['propriedades', 'Adicionais'].join('');
@@ -32,6 +34,8 @@ const removedFiles = [
     ['js', 'utils', 'PropertyTabs.js'],
     ['js', 'utils', 'Tooltips.js'],
     ['js', 'utils', 'PortStateManager.js'],
+    ['js', 'application', 'services', 'ConnectionServiceRuntime.js'],
+    ['js', 'domain', 'services', 'PortPositionCalculator.js'],
     ['js', 'presentation', 'properties', 'component', 'PumpValveComponentPropertiesPresenter.js']
 ];
 
@@ -139,6 +143,44 @@ test('solver de domínio depende de contexto hidráulico estreito', () => {
 
         assert.ok(!content.includes('this.engine'), `${filePath} não deve depender do objeto engine inteiro`);
         assert.ok(!content.includes('constructor(engine)'), `${filePath} não deve receber engine cru no construtor`);
+    });
+});
+
+test('domínio não depende das camadas externas', () => {
+    listJsFiles(DOMAIN_ROOT).forEach((filePath) => {
+        const content = fs.readFileSync(filePath, 'utf8');
+
+        assert.ok(
+            !content.includes('/application/') && !content.includes('../../application/'),
+            `${filePath} não deve importar application`
+        );
+        assert.ok(
+            !content.includes('/presentation/') && !content.includes('../../presentation/'),
+            `${filePath} não deve importar presentation`
+        );
+        assert.ok(
+            !content.includes('/infrastructure/') && !content.includes('../../infrastructure/'),
+            `${filePath} não deve importar infrastructure`
+        );
+        assert.ok(
+            !/(document|window|HTMLElement|SVGElement|Chart|getBoundingClientRect|\.style\b)/.test(content),
+            `${filePath} não deve acessar APIs visuais ou globais do navegador`
+        );
+    });
+});
+
+test('aplicação não importa apresentação nem infraestrutura visual', () => {
+    listJsFiles(APPLICATION_ROOT).forEach((filePath) => {
+        const content = fs.readFileSync(filePath, 'utf8');
+
+        assert.ok(
+            !content.includes('/presentation/') && !content.includes('../../presentation/'),
+            `${filePath} não deve importar presentation`
+        );
+        assert.ok(
+            !content.includes('/infrastructure/') && !content.includes('../../infrastructure/'),
+            `${filePath} não deve importar infrastructure`
+        );
     });
 });
 

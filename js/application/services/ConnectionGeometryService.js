@@ -1,5 +1,7 @@
-import { calculatePortPosition } from '../../domain/services/PortPositionCalculator.js';
-import { getConnectionGeometryFromPoints } from '../../domain/services/PipeHydraulics.js';
+import {
+    calculateConnectionGeometry,
+    calculatePortPosition
+} from './ConnectionGeometryCalculator.js';
 
 const defaultVisualPosition = (component) => ({
     x: typeof component?.x === 'number' ? component.x : 0,
@@ -59,6 +61,6 @@ export class ConnectionGeometryService {
             usarAlturaRelativa
         );
 
-        return getConnectionGeometryFromPoints(sourcePoint, targetPoint, connection, usarAlturaRelativa);
+        return calculateConnectionGeometry(sourcePoint, targetPoint, connection, usarAlturaRelativa);
     }
 }

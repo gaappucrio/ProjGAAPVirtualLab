@@ -10,7 +10,7 @@ import {
     setPortStateUpdater
 } from './application/engine/SimulationEngine.js';
 import { ComponentEventPayloads, EngineEventPayloads } from './application/events/EventPayloads.js';
-import { createConnectionServiceRuntime } from './application/services/ConnectionServiceRuntime.js';
+import { createConnectionServiceRuntime } from './infrastructure/rendering/ConnectionServiceRuntimeAdapter.js';
 import {
     clearComponentVisualRegistry,
     getRegisteredComponentVisualPosition,

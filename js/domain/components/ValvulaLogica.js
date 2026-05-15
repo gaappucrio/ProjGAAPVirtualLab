@@ -1,5 +1,5 @@
 import { clamp, ComponenteFisico, pressureLossFromFlow, rampToTarget } from './BaseComponente.js';
-import { ComponentEventPayloads } from '../../application/events/EventPayloads.js';
+import { ComponentEventPayloads } from '../events/ComponentEventPayloads.js';
 
 const FATOR_MINIMO_AREA = 0.12;
 const BASE_PERDA_POR_CV = 25;

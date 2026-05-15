@@ -1,6 +1,6 @@
 import { BombaLogica } from './BombaLogica.js';
 import { clamp, ComponenteFisico, flowFromBernoulli } from './BaseComponente.js';
-import { ComponentEventPayloads } from '../../application/events/EventPayloads.js';
+import { ComponentEventPayloads } from '../events/ComponentEventPayloads.js';
 import { FonteLogica } from './FonteLogica.js';
 import { ValvulaLogica } from './ValvulaLogica.js';
 import { cloneFluido, createFluidoFromProperties, mixFluidos } from './Fluido.js';
