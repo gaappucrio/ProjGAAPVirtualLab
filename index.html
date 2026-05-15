@@ -28,6 +28,22 @@
         </label>
     </div>
 
+    <div id="tank-saturation-popup" class="tank-saturation-popup" aria-live="polite">
+        <div id="painel-alerta-saturacao" class="prop-group gaap-alert gaap-alert--danger tank-saturation-alert" data-alert-severity="danger" style="display:none; opacity:0; transform:translateY(-6px); max-height:0; overflow:hidden; pointer-events:none; transition:opacity 0.5s ease, transform 0.5s ease, max-height 0.5s ease, margin 0.5s ease, padding 0.5s ease; background-color:#fdeaea; border-left:4px solid #e74c3c; border-color:#e74c3c; padding:0 10px; margin:0; border-radius:4px;">
+            <button id="btn-ignorar-alerta-saturacao" class="gaap-alert__close" type="button" title="Ocultar aviso" aria-label="Ocultar aviso" style="display:inline-grid; place-items:center; width:24px; height:24px; border:1px solid #d9a09a; border-radius:50%; background:#fff; color:#922b21; font-size:12px; font-weight:800; cursor:pointer;">&#10006;</button>
+            <h4 class="gaap-alert__title" title="Aviso exibido quando a saída do tanque limita o controle de nível no ponto de ajuste configurado." style="margin:0 0 5px 0; color:#c0392b; font-size:13px;">Saída Saturada no Set Point</h4>
+            <div class="gaap-alert__content">
+                <p id="texto-alerta-saturacao" class="gaap-alert__body" style="margin:0; font-size:11px; color:#333;"></p>
+                <div class="gaap-alert__side">
+                    <div class="gaap-alert__actions">
+                        <button id="btn-aplicar-alerta-saturacao" class="gaap-alert__action" type="button" title="Aplica um dimensionamento didático na bomba a montante. O set point automático continua atuando somente nas válvulas." style="display:none; margin-top:10px; padding:7px 10px; border:1px solid #c0392b; border-radius:4px; background:#fff; color:#c0392b; font-size:12px; font-weight:600; cursor:pointer;"></button>
+                    </div>
+                    <p id="texto-acao-alerta-saturacao" class="gaap-alert__feedback" hidden style="margin:8px 0 0; font-size:11px;"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="gaap-header">
         <div class="gaap-title-row">
             <h2>Sandbox Modular GAAP - Fronteiras de Controle</h2>

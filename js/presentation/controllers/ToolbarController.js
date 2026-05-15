@@ -73,6 +73,7 @@ export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange, on
 
     function updateRelativeHeightUI(enabled) {
         if (relativeHeightText) relativeHeightText.textContent = t('toolbar.relativeHeight');
+        if (relativeHeightNote) relativeHeightNote.dataset.state = enabled ? 'enabled' : 'disabled';
 
         if (enabled) {
             relativeHeightNote.textContent = t('toolbar.heightEnabled');

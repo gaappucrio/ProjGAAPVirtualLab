@@ -342,23 +342,18 @@ const TEXTS = {
             heat_exchanger: 'TC'
         },
         saturation: {
-            heightOn: ({ baseInlet, outlet }) => `Com a altura relativa ativa, o diagnóstico considera a contrapressão no bocal de entrada no set point (${baseInlet}) e a pressão disponível de saída nesse mesmo nível (${outlet}).`,
-            heightOff: ({ outlet }) => `Com a altura relativa desativada, o diagnóstico usa a capacidade de saída estimada para o set point (${outlet}).`,
+            heightOn: ({ baseInlet, outlet }) => ` Altura relativa ativa: entrada ${baseInlet}, saída ${outlet}.`,
+            heightOff: ({ outlet }) => ` Altura relativa desligada: saída estimada no set point (${outlet}).`,
             pressure: ({ setpoint }) => `Para estabilizar no set point de <b>${setpoint}%</b>, o controlador continuará atuando somente na válvula.`,
             noSource: 'O set point automático não altera fontes de entrada.',
-            pumps: ({ count }) => ` Há ${count} bomba(s) no trecho de entrada; elas ficam fixas em 100% e não são moduladas pelo PI.`,
+            pumps: ({ count }) => ` ${count} bomba(s) a montante ficam fixas em 100%.`,
             valveOnly: 'Sem bomba a montante para dimensionar. Revise manualmente a alimentação, adicione uma válvula de entrada controlável ou aumente a capacidade da saída.',
             pumpLimited: 'Com bomba a montante fixa em 100%, reduzir a pressão da fonte não é uma variável de controle confiável para o PA. O ajuste didático deve dimensionar a bomba ou a planta fora da malha de controle.',
             pumpSizingAvailable: 'Dimensionamento de bomba disponível. A ação ajusta a vazão nominal da bomba para a capacidade física estimada no set point; o PA segue atuando somente nas válvulas.',
-            pumpSizing: ({ count, flow, pressure }) => ` Dimensionamento sugerido para ${count} bomba(s): vazão nominal de ${flow} por bomba, com pressão máxima mínima de ${pressure}.`,
+            pumpSizing: ({ count, flow, pressure }) => ` Sugestão: dimensionar ${count} bomba(s) para ${flow}/bomba e pressão mínima ${pressure}; o botão aplica esse ajuste didático.`,
             sourcePressureAvailable: 'Ajuste de fonte disponível. A ação reduz a pressão de alimentação uma única vez para aproximar a entrada da capacidade física estimada no set point; o PA segue atuando somente nas válvulas.',
-            sourcePressureSizing: ({ count, pressure }) => ` Ajuste sugerido para ${count} fonte(s): pressão de alimentação de ${pressure}.`,
-            message: ({ setpoint, flow, heightText, pumpText, sizingText }) => `
-        A saída do tanque atingiu o limite físico para o controle de nível.
-        Para o set point de <b>${setpoint}%</b>, o PA em si só pode continuar abrindo a válvula; ele não altera continuamente pressão de entrada nem parâmetros de bomba.
-        A vazão máxima estimada de saída no set point é <b>${flow}</b>.
-        ${heightText}${pumpText}${sizingText}
-    `,
+            sourcePressureSizing: ({ count, pressure }) => ` Sugestão: ajustar ${count} fonte(s) para ${pressure} uma única vez; o PA segue só nas válvulas.`,
+            message: ({ setpoint, flow, heightText, pumpText, sizingText }) => `Set point <b>${setpoint}%</b> limitado pela saída: vazão máxima estimada <b>${flow}</b>. O PA só modula a válvula; fonte e bomba não são alteradas continuamente.${heightText}${pumpText}${sizingText}`,
             applyOne: 'Dimensionar bomba',
             applyMany: ({ count }) => `Dimensionar ${count} bombas`,
             applySourceOne: 'Ajustar fonte',
@@ -432,23 +427,18 @@ const TEXTS = {
             heat_exchanger: 'HX'
         },
         saturation: {
-            heightOn: ({ baseInlet, outlet }) => `With relative height enabled, the diagnosis considers inlet nozzle backpressure at the set point (${baseInlet}) and outlet available pressure at that same level (${outlet}).`,
-            heightOff: ({ outlet }) => `With relative height disabled, the diagnosis uses the estimated outlet capacity at the set point (${outlet}).`,
+            heightOn: ({ baseInlet, outlet }) => ` Relative height on: inlet ${baseInlet}, outlet ${outlet}.`,
+            heightOff: ({ outlet }) => ` Relative height off: outlet estimated at the set point (${outlet}).`,
             pressure: ({ setpoint }) => `To stabilize at a <b>${setpoint}%</b> set point, the controller will keep actuating valves only.`,
             noSource: 'Automatic set point control does not change inlet sources.',
-            pumps: ({ count }) => ` There ${count === 1 ? 'is' : 'are'} ${count} pump(s) in the inlet line; they stay fixed at 100% and are not PI-modulated.`,
+            pumps: ({ count }) => ` ${count} upstream pump(s) stay fixed at 100%.`,
             valveOnly: 'No upstream pump is available for sizing. Manually review feed conditions, add a controllable inlet valve, or increase outlet capacity.',
             pumpLimited: 'With an upstream pump fixed at 100%, reducing source pressure is not a reliable PA control variable. The didactic adjustment should size the pump or plant outside the control loop.',
             pumpSizingAvailable: 'Pump sizing is available. The action adjusts pump nominal flow to the estimated physical capacity at the set point; PA still actuates valves only.',
-            pumpSizing: ({ count, flow, pressure }) => ` Suggested sizing for ${count} pump(s): nominal flow ${flow} per pump, with minimum maximum pressure ${pressure}.`,
+            pumpSizing: ({ count, flow, pressure }) => ` Suggestion: size ${count} pump(s) for ${flow}/pump and minimum pressure ${pressure}; the button applies this didactic adjustment.`,
             sourcePressureAvailable: 'Source adjustment is available. The action reduces feed pressure once to approach the estimated physical capacity at the set point; PA still actuates valves only.',
-            sourcePressureSizing: ({ count, pressure }) => ` Suggested adjustment for ${count} source(s): feed pressure ${pressure}.`,
-            message: ({ setpoint, flow, heightText, pumpText, sizingText }) => `
-        The tank outlet reached the physical limit for level control.
-        For the <b>${setpoint}%</b> set point, automatic control itself can only keep opening the valve; it does not continuously change inlet pressure or pump parameters.
-        The maximum estimated outlet flow at the set point is <b>${flow}</b>.
-        ${heightText}${pumpText}${sizingText}
-    `,
+            sourcePressureSizing: ({ count, pressure }) => ` Suggestion: adjust ${count} source(s) to ${pressure} once; PA still actuates valves only.`,
+            message: ({ setpoint, flow, heightText, pumpText, sizingText }) => `Set point <b>${setpoint}%</b> is outlet-limited: estimated maximum flow <b>${flow}</b>. PA only modulates the valve; source and pump settings are not changed continuously.${heightText}${pumpText}${sizingText}`,
             applyOne: 'Size pump',
             applyMany: ({ count }) => `Size ${count} pumps`,
             applySourceOne: 'Adjust source',
@@ -536,6 +526,7 @@ const LEGACY_PT_TO_EN = {
     'Comprimento': 'Length',
     'Temperatura': 'Temperature',
     'Tag (Nome)': 'Tag (Name)',
+    'Ocultar aviso': 'Dismiss warning',
     'Saída Saturada no Set Point': 'Outlet Saturated at Set Point',
     'Velocidade da Simulação': 'Simulation Speed',
     '1x (Tempo real)': '1x (Real time)',

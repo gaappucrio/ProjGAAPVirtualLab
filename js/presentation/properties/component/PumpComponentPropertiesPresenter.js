@@ -23,57 +23,77 @@ import {
 function getThemeAwareAlertColors(isDark, severity) {
     if (severity === 'error') {
         return isDark ? {
+            severity: 'danger',
             border: '#e74c3c',
             background: '#2d1b1b',
-            color: '#ff6b6b'
+            color: '#ff6b6b',
+            bodyColor: '#f7d8d4'
         } : {
+            severity: 'danger',
             border: '#c0392b',
             background: '#fdeaea',
-            color: '#922b21'
+            color: '#922b21',
+            bodyColor: '#34495e'
         };
     }
     if (severity === 'warning') {
         return isDark ? {
+            severity: 'warning',
             border: '#f39c12',
             background: '#2d2418',
-            color: '#f0b36b'
+            color: '#f0b36b',
+            bodyColor: '#f6dfbd'
         } : {
+            severity: 'warning',
             border: '#e67e22',
             background: '#fff3e6',
-            color: '#a84300'
+            color: '#a84300',
+            bodyColor: '#34495e'
         };
     }
     if (severity === 'caution') {
         return isDark ? {
+            severity: 'caution',
             border: '#f1c40f',
             background: '#2d2a18',
-            color: '#f4d03f'
+            color: '#f4d03f',
+            bodyColor: '#f5eac2'
         } : {
+            severity: 'caution',
             border: '#f39c12',
             background: '#fff8e5',
-            color: '#8a5a00'
+            color: '#8a5a00',
+            bodyColor: '#34495e'
         };
     }
     if (severity === 'success') {
         return isDark ? {
+            severity: 'success',
             border: '#27ae60',
             background: '#1b2d1f',
-            color: '#58d68d'
+            color: '#58d68d',
+            bodyColor: '#d4f3df'
         } : {
+            severity: 'success',
             border: '#27ae60',
             background: '#edf8f1',
-            color: '#1e8449'
+            color: '#1e8449',
+            bodyColor: '#34495e'
         };
     }
     // neutral
     return isDark ? {
+        severity: 'neutral',
         border: '#7f8c8d',
         background: '#1a252f',
-        color: '#95a5a6'
+        color: '#95a5a6',
+        bodyColor: '#d8e4ec'
     } : {
+        severity: 'neutral',
         border: '#95a5a6',
         background: '#ecf0f1',
-        color: '#34495e'
+        color: '#34495e',
+        bodyColor: '#34495e'
     };
 }
 
@@ -134,10 +154,10 @@ function renderPumpSuctionAlert(comp, condition, marginM) {
     const npshr = displayUnitValue('length', comp.npshRequeridoAtualM ?? comp.npshRequeridoM, 2);
     const margin = displayUnitValue('length', marginM, 2);
     return `
-        <div id="painel-alerta-succao-bomba" class="prop-group" style="border-left:4px solid ${state.border}; border-color:${state.border}; background:${state.background}; padding:10px 12px;">
-            <h4 id="titulo-alerta-succao-bomba" style="margin:0 0 6px; color:${state.color}; font-size:13px;">${state.title}</h4>
-            <p id="texto-alerta-succao-bomba" style="margin:0; font-size:11px; line-height:1.45; color:#34495e;">${state.message}</p>
-            <p id="metricas-alerta-succao-bomba" style="margin:8px 0 0; font-size:11px; color:${state.color};">
+        <div id="painel-alerta-succao-bomba" class="prop-group gaap-alert gaap-alert--${state.severity}" data-alert-severity="${state.severity}" style="border-left:4px solid ${state.border}; border-color:${state.border}; background:${state.background}; padding:10px 12px;">
+            <h4 id="titulo-alerta-succao-bomba" class="gaap-alert__title" style="margin:0 0 6px; color:${state.color}; font-size:13px;">${state.title}</h4>
+            <p id="texto-alerta-succao-bomba" class="gaap-alert__body" style="margin:0; font-size:11px; line-height:1.45; color:${state.bodyColor};">${state.message}</p>
+            <p id="metricas-alerta-succao-bomba" class="gaap-alert__metrics" style="margin:8px 0 0; font-size:11px; color:${state.color};">
                 NPSHa: ${npsha} | NPSHr: ${npshr} | Folga: ${margin}
             </p>
         </div>

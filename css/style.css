@@ -163,16 +163,237 @@
       --gaap-surface: #17212b;
       --gaap-surface-soft: #121c26;
       --gaap-surface-muted: #1d2a35;
-      --gaap-border: #2d3d4b;
-      --gaap-border-soft: #263744;
+      --gaap-border: #3b4e5d;
+      --gaap-border-soft: #304351;
       --gaap-text: #d8e4ec;
-      --gaap-text-muted: #93a8b8;
+      --gaap-text-muted: #a8bbc9;
       --gaap-grid: #263846;
       --gaap-toolbar-bg: rgba(23, 33, 43, 0.94);
       --gaap-shadow: rgba(0, 0, 0, 0.36);
       --gaap-input-bg: #101923;
       --gaap-input-disabled-bg: #111a22;
-      --gaap-input-disabled-text: #8ea2b1;
+      --gaap-input-disabled-text: #9fb1bf;
+      --gaap-accent: #5dade2;
+      --gaap-accent-soft: rgba(93, 173, 226, 0.18);
+      --gaap-danger-bg: #3a1d1d;
+      --gaap-danger-border: #ff7f73;
+      --gaap-danger-title: #ff9f94;
+      --gaap-danger-text: #f7d8d4;
+      --gaap-warning-bg: #332613;
+      --gaap-warning-border: #f0b36b;
+      --gaap-warning-title: #ffd08a;
+      --gaap-warning-text: #f6dfbd;
+      --gaap-caution-bg: #302c16;
+      --gaap-caution-border: #f4d03f;
+      --gaap-caution-title: #ffe27a;
+      --gaap-caution-text: #f5eac2;
+      --gaap-success-bg: #173020;
+      --gaap-success-border: #58d68d;
+      --gaap-success-title: #7de3a6;
+      --gaap-success-text: #d4f3df;
+      --gaap-neutral-bg: #1b2833;
+      --gaap-neutral-border: #788a99;
+      --gaap-neutral-title: #bed0dd;
+      --gaap-neutral-text: #d8e4ec;
+  }
+
+  body.theme-dark .palette-item span {
+      color: var(--gaap-text) !important;
+  }
+
+  body.theme-dark .palette-item:hover span {
+      color: #8ed0ff !important;
+  }
+
+  body.theme-dark .prop-tab-button {
+      color: var(--gaap-text-muted) !important;
+  }
+
+  body.theme-dark .prop-tab-button:hover {
+      background: var(--gaap-accent-soft) !important;
+      color: var(--gaap-text) !important;
+  }
+
+  body.theme-dark .prop-tab-button.is-active {
+      background: #243645 !important;
+      color: #f2f8fb !important;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+  }
+
+  body.theme-dark .chart-height-control span,
+  body.theme-dark .chart-height-control output,
+  body.theme-dark .chart-max-resize-tip,
+  body.theme-dark #prop-content p[style*="#95a5a6"],
+  body.theme-dark #prop-content p[style*="#7f8c8d"],
+  body.theme-dark #prop-content p[style*="#5f6f7f"],
+  body.theme-dark #prop-content label[style*="#7f8c8d"] {
+      color: var(--gaap-text-muted) !important;
+  }
+
+  body.theme-dark #prop-content p[style*="#c0392b"] {
+      color: var(--gaap-danger-title) !important;
+  }
+
+  body.theme-dark #chart-max-header h3 {
+      color: var(--gaap-text) !important;
+  }
+
+  body.theme-dark .chart-compare-dismiss {
+      background: var(--gaap-input-bg) !important;
+      border-color: var(--gaap-border) !important;
+      color: var(--gaap-text) !important;
+  }
+
+  body.theme-dark .chart-compare-dismiss:hover,
+  body.theme-dark .chart-compare-dismiss:focus-visible {
+      background: var(--gaap-danger-bg) !important;
+      border-color: var(--gaap-danger-border) !important;
+      color: var(--gaap-danger-title) !important;
+  }
+
+  body.theme-dark .chart-container.maximized .chart-resize-handle::after {
+      background: #617384 !important;
+  }
+
+  body.theme-dark #btn-use-current-design-flow,
+  body.theme-dark #btn-apply-pipe-suggested-diameter {
+      background: var(--gaap-input-bg) !important;
+      border-color: var(--gaap-border) !important;
+      color: var(--gaap-text) !important;
+  }
+
+  body.theme-dark #btn-use-current-design-flow:disabled,
+  body.theme-dark #btn-apply-pipe-suggested-diameter:disabled {
+      background: var(--gaap-input-disabled-bg) !important;
+      color: var(--gaap-input-disabled-text) !important;
+      border-color: var(--gaap-border-soft) !important;
+  }
+
+  body.theme-dark .toolbar-note[data-state="enabled"] {
+      background: var(--gaap-neutral-bg) !important;
+      border-color: var(--gaap-neutral-border) !important;
+      color: var(--gaap-neutral-title) !important;
+  }
+
+  body.theme-dark .toolbar-note[data-state="disabled"] {
+      background: var(--gaap-warning-bg) !important;
+      border-color: var(--gaap-warning-border) !important;
+      color: var(--gaap-warning-title) !important;
+  }
+
+  body.theme-dark .tank-control-panel {
+      background: var(--gaap-surface-muted) !important;
+      border-color: var(--gaap-border) !important;
+      color: var(--gaap-text) !important;
+  }
+
+  body.theme-dark .tank-control-panel.is-active {
+      background: var(--gaap-danger-bg) !important;
+      border-color: var(--gaap-danger-border) !important;
+  }
+
+  body.theme-dark .tank-control-panel.is-blocked {
+      background: var(--gaap-warning-bg) !important;
+      border-color: var(--gaap-warning-border) !important;
+  }
+
+  body.theme-dark .tank-control-title {
+      color: var(--gaap-danger-title) !important;
+  }
+
+  body.theme-dark .tank-control-panel.is-blocked .tank-control-title,
+  body.theme-dark .tank-control-panel.is-blocked #tank-sp-status-text {
+      color: var(--gaap-warning-title) !important;
+  }
+
+  body.theme-dark .tank-control-panel.is-ready #tank-sp-status-text {
+      color: var(--gaap-text-muted) !important;
+  }
+
+  body.theme-dark .gaap-alert {
+      --gaap-alert-bg: var(--gaap-neutral-bg);
+      --gaap-alert-border: var(--gaap-neutral-border);
+      --gaap-alert-title: var(--gaap-neutral-title);
+      --gaap-alert-body: var(--gaap-neutral-text);
+      --gaap-alert-support: var(--gaap-neutral-title);
+      background: var(--gaap-alert-bg) !important;
+      border-color: var(--gaap-alert-border) !important;
+      border-left-color: var(--gaap-alert-border) !important;
+      color: var(--gaap-alert-body) !important;
+  }
+
+  body.theme-dark .gaap-alert--danger {
+      --gaap-alert-bg: var(--gaap-danger-bg);
+      --gaap-alert-border: var(--gaap-danger-border);
+      --gaap-alert-title: var(--gaap-danger-title);
+      --gaap-alert-body: var(--gaap-danger-text);
+      --gaap-alert-support: var(--gaap-warning-title);
+  }
+
+  body.theme-dark .gaap-alert--warning {
+      --gaap-alert-bg: var(--gaap-warning-bg);
+      --gaap-alert-border: var(--gaap-warning-border);
+      --gaap-alert-title: var(--gaap-warning-title);
+      --gaap-alert-body: var(--gaap-warning-text);
+      --gaap-alert-support: var(--gaap-warning-title);
+  }
+
+  body.theme-dark .gaap-alert--caution {
+      --gaap-alert-bg: var(--gaap-caution-bg);
+      --gaap-alert-border: var(--gaap-caution-border);
+      --gaap-alert-title: var(--gaap-caution-title);
+      --gaap-alert-body: var(--gaap-caution-text);
+      --gaap-alert-support: var(--gaap-caution-title);
+  }
+
+  body.theme-dark .gaap-alert--success {
+      --gaap-alert-bg: var(--gaap-success-bg);
+      --gaap-alert-border: var(--gaap-success-border);
+      --gaap-alert-title: var(--gaap-success-title);
+      --gaap-alert-body: var(--gaap-success-text);
+      --gaap-alert-support: var(--gaap-success-title);
+  }
+
+  body.theme-dark .gaap-alert--neutral {
+      --gaap-alert-bg: var(--gaap-neutral-bg);
+      --gaap-alert-border: var(--gaap-neutral-border);
+      --gaap-alert-title: var(--gaap-neutral-title);
+      --gaap-alert-body: var(--gaap-neutral-text);
+      --gaap-alert-support: var(--gaap-neutral-title);
+  }
+
+  body.theme-dark .gaap-alert__title {
+      color: var(--gaap-alert-title) !important;
+  }
+
+  body.theme-dark .gaap-alert__body {
+      color: var(--gaap-alert-body) !important;
+  }
+
+  body.theme-dark .gaap-alert__metrics,
+  body.theme-dark .gaap-alert__feedback {
+      color: var(--gaap-alert-support) !important;
+  }
+
+  body.theme-dark .gaap-alert__feedback[data-state="success"] {
+      color: var(--gaap-success-title) !important;
+  }
+
+  body.theme-dark .gaap-alert__feedback[data-state="warning"] {
+      color: var(--gaap-warning-title) !important;
+  }
+
+  body.theme-dark .gaap-alert__action {
+      background: rgba(16, 25, 35, 0.86) !important;
+      border-color: var(--gaap-alert-border) !important;
+      color: var(--gaap-alert-title) !important;
+  }
+
+  body.theme-dark .gaap-alert__action:hover:not(:disabled),
+  body.theme-dark .gaap-alert__action:focus-visible {
+      background: rgba(255, 255, 255, 0.08) !important;
+      outline: 2px solid var(--gaap-alert-border);
+      outline-offset: 2px;
   }
 
   body
@@ -217,6 +438,158 @@
 
   .language-window-control .toolbar-toggle {
       pointer-events: auto;
+  }
+
+  .tank-saturation-popup {
+      position: fixed;
+      top: 82px;
+      left: var(--tank-popup-left, 20px);
+      right: var(--tank-popup-right, 20px);
+      z-index: 1600;
+      width: auto;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-8px);
+      transition: opacity 0.24s ease, transform 0.24s ease;
+  }
+
+  .tank-saturation-popup.is-visible {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
+  }
+
+  .tank-saturation-popup .tank-saturation-alert {
+      margin: 0 !important;
+      padding: 12px 46px 12px 16px !important;
+      max-height: calc(100vh - 120px);
+      overflow: auto;
+      border-left-width: 4px !important;
+      border-radius: 8px !important;
+      box-shadow: 0 16px 36px rgba(44, 62, 80, 0.22);
+      box-sizing: border-box;
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(152px, max-content) minmax(0, 1fr) minmax(230px, max-content);
+      align-items: center;
+      gap: 8px 16px;
+  }
+
+  .tank-saturation-popup .gaap-alert__content {
+      display: contents;
+  }
+
+  .tank-saturation-popup .gaap-alert__title {
+      margin: 0 !important;
+      font-size: 13px !important;
+  }
+
+  .tank-saturation-popup .gaap-alert__body {
+      margin: 0 !important;
+      font-size: 12px !important;
+      line-height: 1.32;
+  }
+
+  .tank-saturation-popup .gaap-alert__side {
+      display: grid;
+      justify-items: end;
+      gap: 8px;
+      align-self: center;
+  }
+
+  .tank-saturation-popup .gaap-alert__actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 8px;
+  }
+
+  .tank-saturation-popup .gaap-alert__action {
+      align-items: center;
+      justify-content: center;
+      margin-top: 0 !important;
+      white-space: nowrap;
+  }
+
+  .tank-saturation-popup .gaap-alert__close {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      width: 24px;
+      height: 24px;
+      display: inline-grid;
+      place-items: center;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: 1px solid #d9a09a !important;
+      border-radius: 50% !important;
+      background: #fff !important;
+      color: #922b21 !important;
+      cursor: pointer;
+      font-size: 12px !important;
+      font-weight: 800;
+      line-height: 1;
+  }
+
+  .tank-saturation-popup .gaap-alert__close:hover,
+  .tank-saturation-popup .gaap-alert__close:focus-visible {
+      border-color: #c0392b !important;
+      color: #c0392b !important;
+      outline: 2px solid rgba(231, 76, 60, 0.28);
+      outline-offset: 2px;
+  }
+
+  .tank-saturation-popup .gaap-alert__feedback {
+      display: none !important;
+  }
+
+  body.theme-dark .tank-saturation-popup .tank-saturation-alert {
+      box-shadow: 0 18px 42px rgba(0, 0, 0, 0.5);
+  }
+
+  body.theme-dark .tank-saturation-popup .gaap-alert__close {
+      background: rgba(16, 25, 35, 0.86) !important;
+      border-color: var(--gaap-alert-border) !important;
+      color: var(--gaap-alert-body) !important;
+  }
+
+  body.theme-dark .tank-saturation-popup .gaap-alert__close:hover,
+  body.theme-dark .tank-saturation-popup .gaap-alert__close:focus-visible {
+      background: rgba(255, 255, 255, 0.08) !important;
+      color: var(--gaap-alert-title) !important;
+      outline-color: var(--gaap-alert-border);
+  }
+
+  @media (max-width: 900px) {
+      .tank-saturation-popup {
+          top: 74px;
+          left: 12px;
+          right: 12px;
+      }
+
+      .tank-saturation-popup .tank-saturation-alert {
+          display: block;
+          padding-right: 44px !important;
+      }
+
+      .tank-saturation-popup .gaap-alert__content {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 10px;
+      }
+
+      .tank-saturation-popup .gaap-alert__title {
+          margin: 0 0 6px !important;
+      }
+
+      .tank-saturation-popup .gaap-alert__side {
+          justify-items: stretch;
+      }
+
+      .tank-saturation-popup .gaap-alert__actions {
+          justify-content: flex-start;
+      }
   }
 
   .theme-window-control {
@@ -853,8 +1226,8 @@
   .chart-container.maximized {
       position: absolute;
       bottom: 0px;
-      left: 290px;
-      right: 350px;
+      left: var(--chart-max-left, 290px);
+      right: var(--chart-max-right, 350px);
       width: auto;
       height: var(--chart-max-height, 44vh);
       max-height: calc(100vh - 24px);

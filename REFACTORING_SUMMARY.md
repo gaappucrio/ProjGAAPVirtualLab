@@ -33,6 +33,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Helper de tutorial no cabeçalho, abrindo um popup com os principais comandos de uso do simulador.
 - Toggle de idioma posicionado no canto superior direito da janela, fora da toolbar principal.
 - Botão `Exportar dados` no controle superior da janela, ao lado do seletor de idioma.
+- Toggle de tema claro/escuro no canto superior esquerdo da janela, com preferência persistida em `localStorage`.
 
 ### 2.2 Simulação Hidráulica
 
@@ -84,6 +85,8 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Controle de nível por set point.
 - Bloqueio de ativação do controle caso não exista válvula conectada diretamente à saída do tanque.
 - Alerta de saturação quando o set point não é alcançável com a capacidade hidráulica atual.
+- O alerta de saturação do set point é exibido como popup fixo no topo da tela, fora do painel de definição do set point, para aumentar visibilidade.
+- O popup de saturação mantém a ação de dimensionamento/ajuste, usa texto técnico sintetizado, é centralizado no workspace disponível e pode ser dispensado por um botão `x`; o aviso volta a aparecer quando a condição física ou o set point mudam.
 - O alerta considera drenagem transitória em direção ao set point e evita disparar em condição temporária de ajuste.
 - Ajuste automático recomendado para pressão das fontes de entrada e dimensionamento didático de bombas a montante quando o set point não pode ser mantido.
 - Fluido de conteúdo persistente, atualizado por mistura volumétrica das entradas.
@@ -110,6 +113,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Comparação com até dois gráficos simultâneos.
 - Cada gráfico no monitor detalhado pode ser removido individualmente, permitindo voltar de comparação dupla para análise única.
 - A altura do monitor detalhado pode ser ajustada arrastando a borda superior, com limites responsivos para não quebrar o layout.
+- O monitor detalhado expande horizontalmente para aproveitar o espaço liberado quando uma lateral é recolhida.
 - Histórico por componente para tanque.
 - Reabertura de componente já monitorado sem reinicializar a série do gráfico, inclusive após pausar a simulação.
 - Gráfico de curva e ponto de operação para bomba.
@@ -128,6 +132,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Não existe mais edição de fluido global quando nenhum componente de entrada está selecionado.
 - O preset `custom`/`personalizado` é preservado durante troca de idioma, mesmo quando seus valores coincidem com um preset conhecido.
 - Fluido personalizado permite escolher uma cor visual entre opções pré-definidas, incluindo cinza, roxo, rosa, vermelho, azul claro, laranja, verde escuro, magenta, ciano e verde.
+- Estados visuais de alertas, abas, inputs, botões auxiliares e cartões do painel foram ajustados para preservar contraste no modo escuro.
 
 ### 2.9 Exportação de Dados
 
@@ -137,6 +142,13 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Tabela de conexões com origem, destino, diâmetro, rugosidade, perdas, vazões, pressões, geometria, Reynolds, fator de atrito, regime e fluido do trecho.
 - As unidades exibidas nas tabelas exportadas seguem as preferências selecionadas na interface para pressão, vazão, comprimento, volume e temperatura, em vez de expor apenas as unidades internas do motor.
 - A exportação foi mantida focada em dados tabulares para comparação com DWSIM, sem anexar gráficos ao arquivo.
+
+### 2.10 Aparência e Acessibilidade
+
+- Modo escuro aplicado à estrutura principal da interface, incluindo canvas, painéis laterais, toolbar, propriedades, monitoramento, modal de tutorial e controles fixos.
+- Paleta de cores do modo escuro ampliada com tokens de alerta para perigo, aviso, cautela, sucesso e estados neutros.
+- Alertas de bomba, aviso de saturação de tanque e estados do controle de set point usam classes visuais compartilhadas (`gaap-alert`) para manter legibilidade e contraste.
+- O aviso de saturação foi redesenhado como uma faixa horizontal no topo da tela, com botão `x` de dispensa no canto, inspirado no fechamento do tutorial.
 
 ## 3. Arquitetura Geral
 
@@ -251,6 +263,8 @@ Responsabilidades:
 - Gerenciar histórico de desfazer (`Ctrl+Z`) por snapshots do workspace na camada de apresentação.
 - Controlar seleção por retângulo e `Ctrl+clique` no workspace.
 - Controlar popup de tutorial e comandos básicos da interface.
+- Controlar tema claro/escuro, notas da toolbar e atualização visual dos alertas sem mover lógica física para a UI.
+- Apresentar o alerta de saturação do set point em popup global, mantendo o ajuste didático e a dispensa visual do aviso.
 - Exportar dados tabulares de componentes e conexões respeitando as unidades de exibição selecionadas.
 - Validar inputs digitados.
 
@@ -574,6 +588,7 @@ Comportamento:
 - O controle de nível atua em válvulas de entrada e saída.
 - O set point só pode ser ativado se houver válvula diretamente conectada à saída.
 - O alerta de saturação compara a vazão de entrada com a capacidade estimada de saída no nível do set point.
+- A apresentação do alerta de saturação fica em `TankSaturationAlertPresenter`, usando popup global no topo, botão de ação de dimensionamento e botão `x` para dispensar o aviso atual.
 - Entradas simultâneas com fluidos diferentes atualizam a composição armazenada.
 
 ## 9. Conexões
@@ -621,6 +636,7 @@ Características:
 - Validação com feedback visual.
 - Atualização ao vivo por `PropertyLiveUpdater`.
 - Acesso ao DOM concentrado em `PropertyDomAdapter`.
+- `PropertyLiveUpdater` também atualiza os estados visuais dos alertas em modo escuro, sem alterar as regras físicas dos componentes.
 
 ## 11. Sistema de Unidades
 
@@ -668,6 +684,7 @@ Pontos atuais:
 
 - O antigo utilitário `I18n.js` foi renomeado para `LanguageManager.js`, deixando a função do arquivo mais explícita.
 - O toggle de idioma fica fixo no canto superior direito da janela.
+- O toggle de tema claro/escuro é localizado junto com os demais textos de toolbar e reaplica a atualização visual dos gráficos quando muda.
 - As fronteiras usam tags técnicas estáveis (`inlet` e `outlet`) internamente, mas os nomes padrão exibidos acompanham o idioma (`Entrada`/`Saída` em português e `inlet`/`outlet` em inglês).
 - Textos do tutorial, botões e títulos participam do mesmo fluxo de tradução.
 - A seleção `custom`/`personalizado` de fluido é preservada como intenção do usuário, mesmo se os parâmetros forem iguais aos de um preset.
@@ -772,6 +789,7 @@ Marcos concluídos:
 - Exportação tabular de dados da rede implementada para comparação externa.
 - Monitoramento detalhado com remoção individual de gráficos e redimensionamento por arraste.
 - Toggle de idioma movido para controle fixo no canto superior direito.
+- Toggle de tema claro/escuro adicionado com persistência local e atualização visual dos gráficos.
 - `I18n.js` renomeado para `LanguageManager.js` e imports atualizados.
 - Helper de tutorial adicionado ao cabeçalho.
 - Seleção múltipla por retângulo azul, `Ctrl+clique`, arraste em grupo, remoção em lote e clipboard de sistemas inteiros.
@@ -781,6 +799,9 @@ Marcos concluídos:
 - Exportação tabular passou a localizar títulos, cabeçalhos e valores gerados pelo sistema conforme o idioma ativo, preservando nomes, tags e fluidos personalizados definidos pelo usuário.
 - `js/Config.js` removido; constantes visuais migradas para `infrastructure/dom/ComponentVisualConfig.js`.
 - Dimensionamento de canos passou a expor vazão de dimensionamento manual e captura da vazão atual/alvo, deixando claro que ela não controla a vazão real da rede.
+- Modo escuro revisado em profundidade para melhorar contraste de painéis, abas, botões, inputs, alertas, notas da toolbar e monitoramento.
+- Aviso de saturação do set point movido do painel do tanque para um popup global no topo, com texto sintetizado, centralização dinâmica no workspace, layout horizontal, botão de dimensionamento preservado e dispensa por `x`.
+- Monitoramento detalhado passou a recalcular suas margens laterais quando painéis são recolhidos, aproveitando o espaço horizontal disponível.
 - Pausa da simulação passou a congelar leituras hidráulicas em vez de zerar a UI.
 - `Tooltips.js` e `PropertyTabs.js` saíram de `utils/` e foram realocados para `presentation/properties`.
 - `PortStateManager.js` saiu de `utils/` e foi realocado para `infrastructure/dom`.
@@ -893,4 +914,4 @@ Próximos passos recomendados:
 
 O projeto está em um estado estruturalmente muito melhor que a versão monolítica inicial. A física principal está concentrada no domínio, a aplicação orquestra o tick e a topologia, a apresentação foi dividida em controllers e presenters, e a infraestrutura visual está separada em adaptadores.
 
-O sistema já possui suporte funcional para montagem visual, seleção múltipla por retângulo, clonagem de componentes e sistemas por teclado, desfazer por `Ctrl+Z`, simulação hidráulica, bombas, válvulas, tanques, set point, monitoramento, unidades, tooltips, tutorial integrado, internacionalização, mistura de fluidos, cores visuais por fluido, setas de tubos coerentes com componentes rotacionados, exportação tabular de dados nas unidades selecionadas pelo usuário e testes automatizados. A base trata propriedades de fluido por entrada, composição por conexão e conteúdo misturado em tanques, desde que as fronteiras entre domínio, aplicação, apresentação e infraestrutura continuem sendo respeitadas.
+O sistema já possui suporte funcional para montagem visual, seleção múltipla por retângulo, clonagem de componentes e sistemas por teclado, desfazer por `Ctrl+Z`, simulação hidráulica, bombas, válvulas, tanques, set point, monitoramento, unidades, tooltips, tutorial integrado, internacionalização, modo escuro, mistura de fluidos, cores visuais por fluido, setas de tubos coerentes com componentes rotacionados, popup de saturação do set point, exportação tabular de dados nas unidades selecionadas pelo usuário e testes automatizados. A base trata propriedades de fluido por entrada, composição por conexão e conteúdo misturado em tanques, desde que as fronteiras entre domínio, aplicação, apresentação e infraestrutura continuem sendo respeitadas.

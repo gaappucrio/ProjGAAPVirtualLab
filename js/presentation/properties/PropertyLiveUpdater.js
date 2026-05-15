@@ -26,58 +26,75 @@ function getPumpNpshCondition(component) {
     return component.getCondicaoSucaoAtual?.() ?? 'Sem leitura';
 }
 
+function getThemeAwarePumpAlertColors(isDark, severity) {
+    if (severity === 'danger') {
+        return isDark
+            ? { severity, border: '#e74c3c', background: '#2d1b1b', color: '#ff6b6b', bodyColor: '#f7d8d4' }
+            : { severity, border: '#c0392b', background: '#fdeaea', color: '#922b21', bodyColor: '#34495e' };
+    }
+    if (severity === 'warning') {
+        return isDark
+            ? { severity, border: '#f39c12', background: '#2d2418', color: '#f0b36b', bodyColor: '#f6dfbd' }
+            : { severity, border: '#e67e22', background: '#fff3e6', color: '#a84300', bodyColor: '#34495e' };
+    }
+    if (severity === 'caution') {
+        return isDark
+            ? { severity, border: '#f1c40f', background: '#2d2a18', color: '#f4d03f', bodyColor: '#f5eac2' }
+            : { severity, border: '#f39c12', background: '#fff8e5', color: '#8a5a00', bodyColor: '#34495e' };
+    }
+    if (severity === 'success') {
+        return isDark
+            ? { severity, border: '#27ae60', background: '#1b2d1f', color: '#58d68d', bodyColor: '#d4f3df' }
+            : { severity, border: '#27ae60', background: '#edf8f1', color: '#1e8449', bodyColor: '#34495e' };
+    }
+
+    return isDark
+        ? { severity: 'neutral', border: '#7f8c8d', background: '#1a252f', color: '#95a5a6', bodyColor: '#d8e4ec' }
+        : { severity: 'neutral', border: '#95a5a6', background: '#ecf0f1', color: '#34495e', bodyColor: '#34495e' };
+}
+
 function getPumpSuctionAlertState(condition) {
+    const isDark = document.body.classList.contains('theme-dark');
+
     if (condition === 'Sem líquido suficiente') {
         return {
             title: 'Sem líquido suficiente na sucção',
             message: 'A bomba está acionada, mas não recebeu fluido suficiente. Verifique o nível do tanque, o bocal de saída e as conexões a montante.',
-            border: '#c0392b',
-            background: '#fdeaea',
-            color: '#922b21'
+            ...getThemeAwarePumpAlertColors(isDark, 'danger')
         };
     }
     if (condition === 'Cavitando') {
         return {
             title: 'Bomba cavitando',
             message: 'O NPSHa está abaixo do NPSHr e o desempenho já foi reduzido pelo solver. A bomba não deve conseguir sustentar essa vazão sem melhorar a sucção.',
-            border: '#c0392b',
-            background: '#fdeaea',
-            color: '#922b21'
+            ...getThemeAwarePumpAlertColors(isDark, 'danger')
         };
     }
     if (condition === 'Risco de cavitação') {
         return {
             title: 'Risco de cavitação',
             message: 'O NPSHa está menor que o NPSHr. Aumente a pressão ou o nível na sucção, reduza perdas a montante ou diminua a vazão da bomba.',
-            border: '#e67e22',
-            background: '#fff3e6',
-            color: '#a84300'
+            ...getThemeAwarePumpAlertColors(isDark, 'warning')
         };
     }
     if (condition === 'No limite') {
         return {
             title: 'Sucção no limite',
             message: 'A folga entre NPSHa e NPSHr está baixa. A bomba ainda opera, mas pequenas perdas ou queda de nível podem levar à cavitação.',
-            border: '#f39c12',
-            background: '#fff8e5',
-            color: '#8a5a00'
+            ...getThemeAwarePumpAlertColors(isDark, 'caution')
         };
     }
     if (condition === 'Sem bombeamento') {
         return {
             title: 'Sem bombeamento',
             message: 'A bomba está sem acionamento efetivo. As condições de sucção serão avaliadas quando houver bombeamento.',
-            border: '#bdc3c7',
-            background: '#f8fafb',
-            color: '#5f6f7f'
+            ...getThemeAwarePumpAlertColors(isDark, 'neutral')
         };
     }
     return {
         title: 'Sucção com folga',
         message: 'A bomba possui líquido e margem positiva entre NPSHa e NPSHr nas condições atuais.',
-        border: '#27ae60',
-        background: '#edf8f1',
-        color: '#1e8449'
+        ...getThemeAwarePumpAlertColors(isDark, 'success')
     };
 }
 
@@ -92,15 +109,30 @@ function updatePumpSuctionAlert(component) {
     const textEl = byId('texto-alerta-succao-bomba');
     const metricsEl = byId('metricas-alerta-succao-bomba');
 
+    alertEl.classList.remove(
+        'gaap-alert--danger',
+        'gaap-alert--warning',
+        'gaap-alert--caution',
+        'gaap-alert--success',
+        'gaap-alert--neutral'
+    );
+    alertEl.classList.add('gaap-alert', `gaap-alert--${state.severity}`);
+    alertEl.dataset.alertSeverity = state.severity;
     alertEl.style.borderLeftColor = state.border;
     alertEl.style.borderColor = state.border;
     alertEl.style.background = state.background;
     if (titleEl) {
+        titleEl.classList.add('gaap-alert__title');
         titleEl.textContent = state.title;
         titleEl.style.color = state.color;
     }
-    if (textEl) textEl.textContent = state.message;
+    if (textEl) {
+        textEl.classList.add('gaap-alert__body');
+        textEl.textContent = state.message;
+        textEl.style.color = state.bodyColor;
+    }
     if (metricsEl) {
+        metricsEl.classList.add('gaap-alert__metrics');
         metricsEl.style.color = state.color;
         metricsEl.textContent = `NPSHa: ${formatMeasuredValue('length', component.npshDisponivelM, 2)} | NPSHr: ${formatMeasuredValue('length', component.npshRequeridoAtualM ?? component.npshRequeridoM, 2)} | Folga: ${formatMeasuredValue('length', margin, 2)}`;
     }

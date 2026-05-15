@@ -2,7 +2,6 @@ import {
     COMPONENT_EVENTS,
     ComponentEventPayloads,
     InputValidator,
-    TOOLTIPS,
     TOOLTIP,
     baseFromDisplay,
     bind,
@@ -20,6 +19,20 @@ import {
     validateInputWithFeedback
 } from '../PropertyPresenterShared.js';
 import { translateLiteral } from '../../i18n/LanguageManager.js';
+
+function getTankControlVisualState(active, available) {
+    if (active) return 'active';
+    return available ? 'ready' : 'blocked';
+}
+
+function syncTankControlVisualState(groupEl, state) {
+    if (!groupEl) return;
+
+    groupEl.dataset.controlState = state;
+    groupEl.classList.toggle('is-active', state === 'active');
+    groupEl.classList.toggle('is-ready', state === 'ready');
+    groupEl.classList.toggle('is-blocked', state === 'blocked');
+}
 
 export const TANK_PROPERTIES_PRESENTER = {
     render: (comp) => {
@@ -46,6 +59,7 @@ export const TANK_PROPERTIES_PRESENTER = {
         const corStatusControle = controleNivelDisponivel 
             ? (isDark ? '#93a8b8' : '#5f6f7f') 
             : (isDark ? '#ff6b6b' : '#c0392b');
+        const estadoVisualControle = getTankControlVisualState(comp.setpointAtivo, controleNivelDisponivel);
         const fluidoConteudo = comp.getFluidoConteudo?.() || comp.fluidoConteudo;
 
         const basicContent = `
@@ -85,19 +99,13 @@ export const TANK_PROPERTIES_PRESENTER = {
                 <label title="Densidade do fluido ou mistura armazenado no tanque.">Densidade do Fluido (kg/m³)</label>
                 <input type="text" id="disp-tank-fluid-density" title="Densidade do fluido ou mistura armazenado no tanque." value="${(fluidoConteudo?.densidade || 0).toFixed(1)}" disabled>
             </div>
-            <div id="painel-alerta-saturacao" class="prop-group" style="display: none; opacity:0; transform:translateY(-6px); max-height:0; overflow:hidden; pointer-events:none; transition:opacity 0.5s ease, transform 0.5s ease, max-height 0.5s ease, margin 0.5s ease, padding 0.5s ease; ${document.body.classList.contains('theme-dark') ? 'background-color: #2d1b1b; border-left: 4px solid #e74c3c; border-color:#e74c3c;' : 'background-color: #fdeaea; border-left: 4px solid #e74c3c; border-color:#e74c3c;'} padding: 0 10px; margin:0; border-radius: 4px;">
-                <h4 title="${TOOLTIPS.painel.alertaSaturacao}" style="margin: 0 0 5px 0; ${document.body.classList.contains('theme-dark') ? 'color: #ff6b6b;' : 'color: #c0392b;'} font-size: 13px;">Saída Saturada no Set Point</h4>
-                <p id="texto-alerta-saturacao" style="margin: 0; font-size: 11px; ${document.body.classList.contains('theme-dark') ? 'color: #d8e4ec;' : 'color: #333;'}"></p>
-                <button id="btn-aplicar-alerta-saturacao" type="button" title="${TOOLTIPS.painel.aplicarAjusteSaturacao}" style="display:none; margin-top:10px; padding:7px 10px; ${document.body.classList.contains('theme-dark') ? 'border:1px solid #e74c3c; border-radius:4px; background:#2d1b1b; color:#ff6b6b;' : 'border:1px solid #c0392b; border-radius:4px; background:#fff; color:#c0392b;'} font-size:12px; font-weight:600; cursor:pointer;"></button>
-                <p id="texto-acao-alerta-saturacao" style="margin:8px 0 0; font-size:11px;"></p>
-            </div>
-            <div class="prop-group" id="grp-sp-main" style="border-color:${corBordaControle}; background:${fundoControle};">
-                <label ${hintAttr(TOOLTIP.tankPiController)} style="color:#c0392b; font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">
+            <div class="prop-group tank-control-panel is-${estadoVisualControle}" id="grp-sp-main" data-control-state="${estadoVisualControle}" style="border-color:${corBordaControle}; background:${fundoControle};">
+                <label class="tank-control-title" ${hintAttr(TOOLTIP.tankPiController)} style="color:#c0392b; font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">
                     Controlador de nível (PI)
                 </label>
                 <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
                     <input type="checkbox" id="input-sp-ativo" ${hintAttr(TOOLTIP.tankSpActive)} ${comp.setpointAtivo ? 'checked' : ''} ${bloqueioControleAttr} style="width:16px; height:16px; cursor:pointer;">
-                    <span ${hintAttr(TOOLTIP.tankSpActive)} style="font-size:13px; font-weight:bold;">Ativar controle automático</span>
+                    <span class="tank-control-switch-label" ${hintAttr(TOOLTIP.tankSpActive)} style="font-size:13px; font-weight:bold;">Ativar controle automático</span>
                 </div>
                 <p id="tank-sp-status-text" ${hintAttr(TOOLTIP.tankSpActive)} style="margin:0 0 10px; font-size:11px; color:${corStatusControle};">${textoStatusControle}</p>
                 <label ${hintAttr(TOOLTIP.tankSetpoint)}>Ponto de ajuste
@@ -170,6 +178,8 @@ export const TANK_PROPERTIES_PRESENTER = {
             }
 
             if (grp) {
+                syncTankControlVisualState(grp, getTankControlVisualState(comp.setpointAtivo, diagnostico.podeAtivar));
+
                 if (comp.setpointAtivo) {
                     grp.style.borderColor = isDark ? '#e74c3c' : '#e74c3c';
                     grp.style.background = isDark ? '#2d1b1b' : '#fdf5f4';
