@@ -31,7 +31,7 @@ export class SimulationTickPipeline {
     }
 
     solveHydraulicNetwork(dt) {
-        this.engine.resolvePushBasedNetwork(dt);
+        this.engine.resolveHydraulicNetwork(dt);
     }
 
     syncPhysicalMetrics(dt) {

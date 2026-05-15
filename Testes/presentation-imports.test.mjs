@@ -9,6 +9,7 @@ const PRESENTATION_MODULES = [
     '../js/presentation/controllers/DragDropController.js',
     '../js/presentation/controllers/HelpController.js',
     '../js/presentation/controllers/MonitorController.js',
+    '../js/presentation/controllers/TankSaturationAlertController.js',
     '../js/presentation/export/SimulationDataExporter.js',
     '../js/presentation/controllers/PropertyPanelController.js',
     '../js/presentation/properties/ComponentPropertiesPresenter.js',
@@ -71,6 +72,126 @@ test('exportação registra altura relativa sem anexar gráficos', async () => {
     assert.match(html, /Bomba-01/);
     assert.doesNotMatch(html, /Gr\u00e1ficos dos componentes/);
     assert.doesNotMatch(html, /export-chart-svg/);
+});
+
+test('alerta global de saturacao independe do painel de propriedades selecionado', async () => {
+    const hadDocument = Object.hasOwn(globalThis, 'document');
+    const hadWindow = Object.hasOwn(globalThis, 'window');
+    const originalDocument = globalThis.document;
+    const originalWindow = globalThis.window;
+
+    class FakeClassList {
+        constructor() {
+            this.values = new Set();
+        }
+
+        add(...classes) {
+            classes.forEach((className) => this.values.add(className));
+        }
+
+        remove(...classes) {
+            classes.forEach((className) => this.values.delete(className));
+        }
+
+        toggle(className, force) {
+            if (force === false) this.values.delete(className);
+            else this.values.add(className);
+        }
+
+        contains(className) {
+            return this.values.has(className);
+        }
+    }
+
+    const createElement = () => ({
+        style: {},
+        dataset: {},
+        attributes: {},
+        classList: new FakeClassList(),
+        textContent: '',
+        innerHTML: '',
+        value: '',
+        disabled: false,
+        hidden: false,
+        scrollHeight: 180,
+        setAttribute(name, value) {
+            this.attributes[name] = value;
+        },
+        closest() {
+            return null;
+        },
+        querySelector() {
+            return null;
+        }
+    });
+
+    const popup = createElement();
+    const panel = createElement();
+    const title = createElement();
+    const text = createElement();
+    const applyButton = createElement();
+    const closeButton = createElement();
+    const feedback = createElement();
+    panel.closest = (selector) => (selector === '.tank-saturation-popup' ? popup : null);
+    panel.querySelector = (selector) => (selector === 'h4' ? title : null);
+
+    const elements = new Map([
+        ['painel-alerta-saturacao', panel],
+        ['texto-alerta-saturacao', text],
+        ['btn-aplicar-alerta-saturacao', applyButton],
+        ['btn-ignorar-alerta-saturacao', closeButton],
+        ['texto-acao-alerta-saturacao', feedback]
+    ]);
+
+    globalThis.document = {
+        body: { classList: new FakeClassList() },
+        getElementById: (id) => elements.get(id) || null
+    };
+    globalThis.window = {
+        clearTimeout: () => {},
+        requestAnimationFrame: (callback) => callback()
+    };
+
+    try {
+        const { TanqueLogico } = await import('../js/domain/components/TanqueLogico.js');
+        const { refreshTankSaturationAlertForComponents } = await import('../js/presentation/properties/TankSaturationAlertPresenter.js');
+
+        const tank = new TanqueLogico('tank-alert', 'Tank Alert', 0, 0);
+        tank.setpoint = 72;
+        tank.alertaSaturacao = {
+            ativo: true,
+            usarAlturaRelativa: false,
+            vazaoSaidaLimiteSetpointLps: 12.5,
+            pressaoBaseEntradaSetpointBar: 0,
+            pressaoSaidaSetpointBar: 0.14,
+            possuiBombasMontante: true,
+            quantidadeBombasMontante: 1,
+            ajustesBomba: [{
+                vazaoNominalRecomendadaLps: 10,
+                pressaoMaximaRecomendadaBar: 2.5
+            }],
+            ajustesFonte: []
+        };
+
+        const visibleTank = refreshTankSaturationAlertForComponents([tank]);
+
+        assert.equal(visibleTank, tank);
+        assert.equal(panel.dataset.visible, 'true');
+        assert.equal(popup.classList.contains('is-visible'), true);
+        assert.match(text.innerHTML, /Set point/);
+
+        tank.alertaSaturacao = null;
+        const hiddenTank = refreshTankSaturationAlertForComponents([tank]);
+
+        assert.equal(hiddenTank, null);
+        assert.equal(panel.dataset.visible, 'false');
+        assert.equal(panel.style.display, 'none');
+    } finally {
+        if (hadDocument) globalThis.document = originalDocument;
+        else Reflect.deleteProperty(globalThis, 'document');
+        if (hadWindow) globalThis.window = originalWindow;
+        else Reflect.deleteProperty(globalThis, 'window');
+    }
 });
 
 test('exportação em inglês localiza rótulos sem alterar nomes definidos pelo usuário', async () => {

@@ -33,6 +33,7 @@ import { setupLayoutController } from './presentation/controllers/LayoutControll
 import { createMonitorController } from './presentation/controllers/MonitorController.js';
 import { setupPipeControl, updateAllPipes, updateConnectionVisualStates } from './presentation/controllers/PipeController.js';
 import { setupPropertyPanelController } from './presentation/controllers/PropertyPanelController.js';
+import { setupTankSaturationAlertController } from './presentation/controllers/TankSaturationAlertController.js';
 import { setupToolbar } from './presentation/controllers/ToolbarController.js';
 import { setupUndoController } from './presentation/controllers/UndoController.js';
 import { setupWorkspaceSelectionController } from './presentation/controllers/WorkspaceSelectionController.js';
@@ -89,6 +90,7 @@ export function setupVirtualLabRuntime({ engine } = {}) {
     monitorController.setup();
     setupWorkspaceSelectionController({ engine });
     const propertyPanelController = setupPropertyPanelController({ engine, monitorController });
+    const tankSaturationAlertController = setupTankSaturationAlertController({ engine });
     setupHelpController();
     setupCameraControl();
     setupPipeControl({ engine, connectionService, undoManager });
@@ -104,12 +106,14 @@ export function setupVirtualLabRuntime({ engine } = {}) {
         onThemeChange: () => {
             monitorController.updateLayout();
             propertyPanelController.renderCurrentProperties();
+            tankSaturationAlertController.refresh();
         }
     });
 
     return {
         connectionService,
         monitorController,
-        undoManager
+        undoManager,
+        tankSaturationAlertController
     };
 }

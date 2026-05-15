@@ -13,7 +13,9 @@ import {
 } from '../../domain/components/BaseComponente.js';
 import { createFluidoFromProperties } from '../../domain/components/Fluido.js';
 import { HydraulicBranchModel } from '../../domain/services/HydraulicBranchModel.js';
+import { analyzeHydraulicNetwork } from '../../domain/services/HydraulicNetworkAnalyzer.js';
 import { HydraulicNetworkSolver } from '../../domain/services/HydraulicNetworkSolver.js';
+import { NodalHydraulicSolver } from '../../domain/services/NodalHydraulicSolver.js';
 import { ensureConnectionProperties as ensurePipeConnectionProperties } from '../../domain/services/PipeHydraulics.js';
 import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
 import { createSimulationContext } from '../../domain/context/SimulationContext.js';
@@ -102,6 +104,9 @@ export class SistemaSimulacao extends Observable {
         this.hydraulicContext = new HydraulicNetworkContext(this);
         this.hydraulicBranchModel = new HydraulicBranchModel(this.hydraulicContext);
         this.hydraulicSolver = new HydraulicNetworkSolver(this.hydraulicContext, this.hydraulicBranchModel);
+        this.nodalHydraulicSolver = new NodalHydraulicSolver(this.hydraulicContext, this.hydraulicBranchModel);
+        this.lastHydraulicAnalysis = null;
+        this.activeHydraulicSolverMode = 'push';
         this.tickPipeline = new SimulationTickPipeline({ engine: this });
         this.isRunning = false;
         this.lastTime = 0;
@@ -244,7 +249,15 @@ export class SistemaSimulacao extends Observable {
     }
 
     getSolverMetrics() {
-        return this.hydraulicSolver.getMetrics();
+        const activeSolver = this.activeHydraulicSolverMode === 'nodal'
+            ? this.nodalHydraulicSolver
+            : this.hydraulicSolver;
+
+        return {
+            mode: this.activeHydraulicSolverMode,
+            networkAnalysis: this.lastHydraulicAnalysis,
+            ...activeSolver.getMetrics()
+        };
     }
 
     clear() {
@@ -400,7 +413,27 @@ export class SistemaSimulacao extends Observable {
     }
 
     resolvePushBasedNetwork(dt) {
+        this.activeHydraulicSolverMode = 'push';
         return this.hydraulicSolver.resolve(dt);
+    }
+
+    resolveNodalNetwork(dt, analysis = null) {
+        this.activeHydraulicSolverMode = 'nodal';
+        return this.nodalHydraulicSolver.resolve(dt, analysis);
+    }
+
+    resolveHydraulicNetwork(dt) {
+        const analysis = analyzeHydraulicNetwork({
+            componentes: this.componentes,
+            conexoes: this.conexoes
+        });
+        this.lastHydraulicAnalysis = analysis;
+
+        if (analysis.shouldUseNodalSolver) {
+            return this.resolveNodalNetwork(dt, analysis);
+        }
+
+        return this.resolvePushBasedNetwork(dt);
     }
 
     updatePipesVisual() {

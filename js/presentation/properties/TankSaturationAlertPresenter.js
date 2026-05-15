@@ -138,7 +138,7 @@ export function updateTankSaturationAlert(component) {
     const btnIgnorar = byId('btn-ignorar-alerta-saturacao');
     const feedbackAjuste = byId('texto-acao-alerta-saturacao');
 
-    if (!painelAlerta || !textoAlerta || !(component instanceof TanqueLogico)) return;
+    if (!painelAlerta || !textoAlerta || !(component instanceof TanqueLogico)) return false;
 
     // Update colors based on current theme
     const isDark = document.body.classList.contains('theme-dark');
@@ -193,13 +193,13 @@ export function updateTankSaturationAlert(component) {
             feedbackAjuste.textContent = '';
             feedbackAjuste.dataset.state = '';
         }
-        return;
+        return false;
     }
 
     const alertSignature = getSaturationAlertSignature(component, alerta);
     if (ignoredSaturationAlerts.get(component) === alertSignature) {
         setTankSaturationAlertVisible(painelAlerta, false);
-        return;
+        return false;
     }
 
     const textoModoAltura = alerta.usarAlturaRelativa
@@ -239,15 +239,16 @@ export function updateTankSaturationAlert(component) {
     }
 
     setTankSaturationAlertVisible(painelAlerta, true);
+    return true;
 }
 
 export function bindTankSaturationAlertActions(component, { onAdjustmentApplied } = {}) {
-    if (!(component instanceof TanqueLogico)) return;
+    if (!(component instanceof TanqueLogico)) return false;
 
     const btnAjuste = byId('btn-aplicar-alerta-saturacao');
     const btnIgnorar = byId('btn-ignorar-alerta-saturacao');
     const feedbackAjuste = byId('texto-acao-alerta-saturacao');
-    if (!btnAjuste || !feedbackAjuste) return;
+    if (!btnAjuste || !feedbackAjuste) return false;
 
     btnAjuste.onclick = () => {
         const resultado = component.aplicarAjustePressaoSetpoint();
@@ -262,6 +263,7 @@ export function bindTankSaturationAlertActions(component, { onAdjustmentApplied 
             : translateLiteral(resultado.motivo);
         feedbackAjuste.style.color = resultado.aplicado ? '#1e8449' : '#a84300';
         feedbackAjuste.dataset.state = resultado.aplicado ? 'success' : 'warning';
+        feedbackAjuste.hidden = false;
 
         onAdjustmentApplied?.(resultado);
     };
@@ -276,7 +278,25 @@ export function bindTankSaturationAlertActions(component, { onAdjustmentApplied 
         };
     }
 
-    updateTankSaturationAlert(component);
+    return updateTankSaturationAlert(component);
+}
+
+export function refreshTankSaturationAlertForComponents(components = [], { onAdjustmentApplied } = {}) {
+    const tanks = components.filter((component) => component instanceof TanqueLogico);
+
+    for (const tank of tanks) {
+        if (!tank.alertaSaturacao?.ativo) {
+            ignoredSaturationAlerts.delete(tank);
+            continue;
+        }
+
+        if (bindTankSaturationAlertActions(tank, { onAdjustmentApplied })) {
+            return tank;
+        }
+    }
+
+    hideTankSaturationAlert();
+    return null;
 }
 
 export function updateTankControlAvailabilityUI(component) {

@@ -12,10 +12,7 @@ import { toDisplayValue } from '../units/DisplayUnits.js';
 import { localizeElement, translateLiteral } from '../i18n/LanguageManager.js';
 import { byId, isActive, setValue } from './PropertyDomAdapter.js';
 import { formatMeasuredValue, setFieldValue } from './PropertyValueFormatters.js';
-import {
-    updateTankControlAvailabilityUI,
-    updateTankSaturationAlert
-} from './TankSaturationAlertPresenter.js';
+import { updateTankControlAvailabilityUI } from './TankSaturationAlertPresenter.js';
 
 function getPumpNpshMargin(component) {
     const npshRequeridoAtualM = component.npshRequeridoAtualM ?? component.npshRequeridoM ?? 0;
@@ -181,7 +178,6 @@ function updateTankValues(component) {
     const fluid = component.getFluidoConteudo?.() || component.fluidoConteudo;
     setValue('disp-tank-fluid', fluid?.nome || '-');
     setValue('disp-tank-fluid-density', fluid?.densidade ? fluid.densidade.toFixed(1) : '0.0');
-    updateTankSaturationAlert(component);
     updateTankControlAvailabilityUI(component);
 }
 

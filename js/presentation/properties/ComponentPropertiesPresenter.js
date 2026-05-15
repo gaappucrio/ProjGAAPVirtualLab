@@ -10,7 +10,6 @@ import { localizeElement } from '../i18n/LanguageManager.js';
 import { getComponentPropertyPresenter } from './component/ComponentPropertyPresenterRegistry.js';
 import { bind } from './PropertyDomAdapter.js';
 import { bindUnitControls, renderUnitControls } from './PropertyUnitsPresenter.js';
-import { bindTankSaturationAlertActions } from './TankSaturationAlertPresenter.js';
 
 export function getComponentTypeKey(component) {
     if (component instanceof DrenoLogico) return 'sink';
@@ -23,8 +22,7 @@ export function getComponentTypeKey(component) {
 
 export function renderComponentProperties({
     propContent,
-    component,
-    onTankAdjustmentApplied
+    component
 }) {
     const tipoChave = getComponentTypeKey(component);
     const propertiesPresenter = getComponentPropertyPresenter(tipoChave);
@@ -47,10 +45,4 @@ export function renderComponentProperties({
     });
 
     propertiesPresenter.bind(component);
-
-    if (component instanceof TanqueLogico) {
-        bindTankSaturationAlertActions(component, {
-            onAdjustmentApplied: onTankAdjustmentApplied
-        });
-    }
 }

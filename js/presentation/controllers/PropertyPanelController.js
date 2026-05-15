@@ -3,8 +3,6 @@
 // Arquivo: js/presentation/controllers/PropertyPanelController.js
 // ====================================
 
-import { EngineEventPayloads } from '../../application/events/EventPayloads.js';
-import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
 import {
     getPropertyTabsState,
     restorePropertyTabsState
@@ -15,7 +13,6 @@ import { renderConnectionProperties as renderConnectionPropertiesPresenter } fro
 import { renderComponentProperties as renderComponentPropertiesPresenter } from '../properties/ComponentPropertiesPresenter.js';
 import { renderDefaultProperties as renderDefaultPropertiesPresenter } from '../properties/DefaultPropertiesPresenter.js';
 import { updatePropertyPanelValues } from '../properties/PropertyLiveUpdater.js';
-import { hideTankSaturationAlert } from '../properties/TankSaturationAlertPresenter.js';
 import { setPresentationEngine } from '../context/PresentationEngineContext.js';
 
 const propertyPanelContext = createPropertyPanelContextStore({
@@ -73,8 +70,7 @@ export function setupPropertyPanelController({ engine, monitorController } = {})
     function renderComponentProperties(component) {
         renderComponentPropertiesPresenter({
             propContent: getPropContent(),
-            component,
-            onTankAdjustmentApplied: () => getEngine().notify(EngineEventPayloads.panelUpdate(0))
+            component
         });
     }
 
@@ -85,10 +81,6 @@ export function setupPropertyPanelController({ engine, monitorController } = {})
         const component = currentEngine.selectedComponent;
         const connection = currentEngine.selectedConnection;
         const nextContextKey = getPropertyContextKey(component, connection);
-
-        if (!(component instanceof TanqueLogico) || connection) {
-            hideTankSaturationAlert();
-        }
 
         monitorController?.refreshSelection(component, connection);
         monitorController?.refreshPresentation();
