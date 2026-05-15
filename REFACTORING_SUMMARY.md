@@ -352,6 +352,33 @@ Etapas:
 7. Publicar evento de atualização do painel.
 8. Atualizar métricas internas do solver.
 
+### 5.1 Passo de Integração
+
+O passo de integração da simulação é o `dt` calculado a cada chamada de `requestAnimationFrame` em `SimulationTickPipeline.calculateDeltaTime()`.
+
+Ele não é fixo. O cálculo usa o tempo real decorrido entre frames, em segundos, multiplicado pela velocidade configurada da simulação:
+
+```text
+dt = ((timestamp_atual - timestamp_anterior) / 1000) * velocidade
+```
+
+Em `1x`, numa tela rodando perto de 60 FPS, o passo típico fica em torno de:
+
+```text
+dt ≈ 1 / 60 s ≈ 0,0167 s
+```
+
+Com os modos de velocidade, o passo efetivo por frame fica aproximadamente:
+
+```text
+1x  -> 0,0167 s
+2x  -> 0,0333 s
+5x  -> 0,0833 s
+10x -> limitado a 0,1 s
+```
+
+O `dt` é limitado por `MAX_FRAME_DT_SECONDS = 0.1`. Esse limite evita saltos numéricos grandes quando a aba fica travada, o navegador pausa frames ou a máquina sofre uma queda momentânea de desempenho.
+
 Esse fluxo deixa o motor mais legível e evita concentrar toda a lógica dentro de `SimulationEngine.js`.
 
 ## 6. Modelo Hidráulico

@@ -27,7 +27,7 @@
   body.theme-dark .help-dialog,
   body.theme-dark .chart-container,
   body.theme-dark .chart-compare-card,
-   body.theme-dark .chart-compare-empty {
+  body.theme-dark .chart-compare-empty {
       background: var(--gaap-surface) !important;
       border-color: var(--gaap-border) !important;
       color: var(--gaap-text) !important;
@@ -60,12 +60,16 @@
   }
 
   body.theme-dark .help-dialog-header,
-  body.theme-dark .help-command,
+  body.theme-dark .help-command {
+      border-color: var(--gaap-border-soft) !important;
+      background: var(--gaap-surface) !important;
+  }
+
   body.theme-dark h3.panel-title,
   body.theme-dark .chart-max-header,
   body.theme-dark .chart-compare-card-header {
+      background: transparent !important;
       border-color: var(--gaap-border-soft) !important;
-      background: var(--gaap-surface) !important;
   }
 
   body.theme-dark .help-backdrop {
@@ -89,10 +93,51 @@
       color: var(--gaap-text) !important;
   }
 
+  body.theme-dark .btn-maximize-chart.is-close-mode {
+      background: var(--gaap-surface-muted) !important;
+      border: 1px solid var(--gaap-danger-border) !important;
+      border-color: var(--gaap-danger-border) !important;
+      color: var(--gaap-danger-title) !important;
+  }
+
+  body.theme-dark .btn-maximize-chart.is-close-mode:hover,
+  body.theme-dark .btn-maximize-chart.is-close-mode:focus-visible {
+      background: var(--gaap-danger-bg) !important;
+      border: 1px solid var(--gaap-danger-border) !important;
+      border-color: var(--gaap-danger-border) !important;
+      color: var(--gaap-danger-text) !important;
+  }
+
   body.theme-dark .gaap-btn:not(.success):not(.danger) {
       background: var(--gaap-surface-muted) !important;
       border-color: var(--gaap-border) !important;
       color: var(--gaap-text) !important;
+  }
+
+  body.theme-dark #btn-clear {
+      background: var(--gaap-surface-muted) !important;
+      border-color: var(--gaap-danger-border) !important;
+      color: var(--gaap-danger-title) !important;
+  }
+
+  body.theme-dark #btn-clear:hover,
+  body.theme-dark #btn-clear:focus-visible {
+      background: var(--gaap-danger-bg) !important;
+      border-color: var(--gaap-danger-border) !important;
+      color: var(--gaap-danger-text) !important;
+  }
+
+  body.theme-dark .gaap-btn.danger {
+      background: #e74c3c !important;
+      border-color: var(--gaap-danger-border) !important;
+      color: #ffffff !important;
+  }
+
+  body.theme-dark .gaap-btn.danger:hover,
+  body.theme-dark .gaap-btn.danger:focus-visible {
+      background: #c0392b !important;
+      border-color: var(--gaap-danger-title) !important;
+      color: #ffffff !important;
   }
 
   body.theme-dark .toolbar-note {
@@ -423,6 +468,42 @@
       overflow: hidden;
       /* Evitar barras de rolagem indesejadas, garantindo que o layout se mantenha limpo e organizado mesmo em telas menores */
       transition: background-color 0.35s ease, color 0.35s ease;
+  }
+
+  .gaap-header,
+  .sandbox-container,
+  .side-panel,
+  .properties-panel,
+  .side-panel-content,
+  .workspace-panel,
+  .top-toolbar,
+  .toolbar-toggle,
+  .toolbar-note,
+  .help-dialog,
+  .help-dialog-header,
+  .help-command,
+  h3.panel-title,
+  .palette-item,
+  .prop-group,
+  .prop-tab-bar,
+  .prop-tab-button,
+  .prop-tab-description,
+  .chart-container,
+  .chart-max-header,
+  .chart-max-badge,
+  .chart-height-control,
+  .chart-compare-card,
+  .chart-compare-card-header,
+  .chart-compare-empty,
+  .panel-toggle,
+  .btn-maximize-chart,
+  .gaap-btn,
+  .val-display-input,
+  .prop-group input,
+  .prop-group select {
+      transition-property: background-color, border-color, color, box-shadow, opacity, transform;
+      transition-duration: 0.35s;
+      transition-timing-function: ease;
   }
 
   .language-window-control {
@@ -857,7 +938,12 @@
       /* Organizar os elementos dentro dos painéis laterais em uma coluna, facilitando a leitura e a navegação pelo conteúdo, além de criar um visual mais estruturado e profissional */
       z-index: 10;
       /* Garantir que os painéis laterais fiquem acima do workspace principal, permitindo que eles sejam facilmente acessíveis e visíveis para os usuários, mesmo quando o workspace estiver cheio de componentes e conexões */
-      transition: transform 0.5s ease, width 0.5s ease;
+      transition:
+          transform 0.5s ease,
+          width 0.5s ease,
+          background-color 0.35s ease,
+          border-color 0.35s ease,
+          color 0.35s ease;
       /* Transição suave para animações de colapsar/expandir os painéis laterais */
       flex-shrink: 0;
       /* Impedir que os painéis laterais encolham quando a janela for redimensionada, garantindo que eles mantenham sua largura e proporção adequados em diferentes tamanhos de tela, especialmente em telas maiores onde o workspace principal pode se expandir significativamente */
@@ -889,7 +975,11 @@
       /* Permitir rolagem vertical quando o conteúdo interno dos painéis laterais exceder a altura do painel, garantindo que os usuários possam acessar todas as informações e funcionalidades disponíveis, mesmo em telas menores ou quando muitos componentes estiverem selecionados com muitas propriedades para exibir */
       opacity: 1;
       /* Opacidade total para o conteúdo interno dos painéis laterais, garantindo que ele seja completamente visível e legível para os usuários, além de permitir que as transições de colapsar/expandir sejam suaves e visualmente agradáveis, especialmente quando combinadas com a transição de largura do painel lateral */
-      transition: opacity 0.2s;
+      transition:
+          opacity 0.2s,
+          background-color 0.35s ease,
+          border-color 0.35s ease,
+          color 0.35s ease;
       /* Transição suave para a opacidade do conteúdo interno dos painéis laterais, permitindo que ele desapareça gradualmente quando os painéis forem colapsados, criando um efeito visual mais elegante e profissional, além de melhorar a experiência do usuário ao interagir com os painéis laterais */
       box-sizing: border-box;
       /* Incluir padding no cálculo total de largura e altura do conteúdo interno dos painéis laterais para evitar estouros de layout e garantir que o conteúdo seja exibido corretamente dentro dos limites do painel, especialmente quando combinado com a transição de largura do painel lateral durante as animações de colapsar/expandir */
@@ -1238,9 +1328,52 @@
       box-shadow: 0 18px 48px rgba(20, 50, 80, 0.18);
       display: flex;
       flex-direction: column;
-      transition: left 0.5s ease, right 0.5s ease;
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      transition:
+          left 0.5s ease,
+          right 0.5s ease,
+          opacity 0.24s ease,
+          transform 0.24s ease,
+          background-color 0.35s ease,
+          border-color 0.35s ease,
+          box-shadow 0.35s ease;
       isolation: isolate;
       touch-action: none;
+  }
+
+  .chart-container.maximized.is-opening {
+      animation: monitor-detailed-open 0.24s ease both;
+      pointer-events: none;
+  }
+
+  .chart-container.maximized.is-closing {
+      animation: monitor-detailed-close 0.24s ease both;
+      pointer-events: none;
+  }
+
+  @keyframes monitor-detailed-open {
+      from {
+          opacity: 0;
+          transform: translateY(14px) scale(0.985);
+      }
+
+      to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+      }
+  }
+
+  @keyframes monitor-detailed-close {
+      from {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+      }
+
+      to {
+          opacity: 0;
+          transform: translateY(14px) scale(0.985);
+      }
   }
 
   .chart-resize-handle {
@@ -1849,6 +1982,20 @@
       {
       background: #bdc3c7;
       /* Fundo cinza médio para o botão de maximizar o gráfico quando o mouse está sobre ele, criando um efeito de destaque que melhora a experiência do usuário e proporciona uma interação mais intuitiva com o botão */
+  }
+
+  .btn-maximize-chart.is-close-mode {
+      background: #fff;
+      border: 1px solid #e74c3c;
+      color: #c0392b;
+  }
+
+  .btn-maximize-chart.is-close-mode:hover,
+  .btn-maximize-chart.is-close-mode:focus-visible {
+      background: #fff0ee;
+      border-color: #c0392b;
+      color: #922b21;
+      outline: none;
   }
 
   /* WORKSPACE & CAMERA */

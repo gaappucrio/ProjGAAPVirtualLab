@@ -10,6 +10,7 @@ const EXPANDED_MONITOR_GAP_PX = 10;
 const COLLAPSED_MONITOR_GAP_PX = 16;
 const POPUP_WORKSPACE_INSET_PX = 24;
 const POPUP_MOBILE_INSET_PX = 12;
+const MONITOR_TRANSITION_MS = 240;
 
 export function setupLayoutController({ onChartLayoutChange } = {}) {
     const toggleLeft = document.getElementById('toggle-left');
@@ -81,6 +82,7 @@ export function setupLayoutController({ onChartLayoutChange } = {}) {
     let resizeHandle = null;
     let resizeState = null;
     let resizeFrame = 0;
+    let monitorTransitionTimer = 0;
 
     const getMonitorViewportMargin = () => (
         window.innerWidth <= 960 ? MOBILE_MONITOR_MARGIN_PX : DESKTOP_MONITOR_MARGIN_PX
@@ -167,21 +169,64 @@ export function setupLayoutController({ onChartLayoutChange } = {}) {
 
     const updateChartButtonLabels = () => {
         const isMax = chartWrapper?.classList.contains('maximized') === true;
-        if (btnMaxChart) btnMaxChart.textContent = isMax ? t('chart.close') : t('chart.expand');
+        if (btnMaxChart) {
+            btnMaxChart.textContent = isMax ? t('chart.close') : t('chart.expand');
+            btnMaxChart.classList.toggle('is-close-mode', isMax);
+        }
         if (btnCloseMaxChart) btnCloseMaxChart.textContent = t('chart.closeChart');
         if (resizeHandle) resizeHandle.title = t('chart.resizeMonitor');
     };
 
-    const toggleChartMaximize = () => {
-        const isMax = chartWrapper?.classList.toggle('maximized') === true;
+    const clearMonitorTransitionTimer = () => {
+        window.clearTimeout(monitorTransitionTimer);
+        monitorTransitionTimer = 0;
+    };
+
+    const openDetailedMonitor = () => {
+        if (!chartWrapper || chartWrapper.classList.contains('maximized')) return;
+
+        clearMonitorTransitionTimer();
         ensureResizeHandle();
+        chartWrapper.classList.remove('is-closing');
+        chartWrapper.classList.add('maximized', 'is-opening');
+        sandboxContainer?.classList.add('monitor-detailed-open');
+        if (chartMaxHeader) chartMaxHeader.style.display = 'flex';
         updateChartButtonLabels();
-        if (chartMaxHeader) chartMaxHeader.style.display = isMax ? 'flex' : 'none';
-        if (isMax) clampCurrentMonitorHeight();
-        else finishResize();
-        requestAnimationFrame(() => {
+        clampCurrentMonitorHeight();
+
+        monitorTransitionTimer = window.setTimeout(() => {
+            chartWrapper.classList.remove('is-opening');
+            monitorTransitionTimer = 0;
             onChartLayoutChange?.();
-        });
+        }, MONITOR_TRANSITION_MS);
+    };
+
+    const closeDetailedMonitor = () => {
+        if (!chartWrapper?.classList.contains('maximized')) return;
+
+        clearMonitorTransitionTimer();
+        finishResize();
+        chartWrapper.classList.remove('is-opening');
+        chartWrapper.classList.add('is-closing');
+        updateChartButtonLabels();
+        onChartLayoutChange?.();
+
+        monitorTransitionTimer = window.setTimeout(() => {
+            chartWrapper.classList.remove('maximized', 'is-closing');
+            sandboxContainer?.classList.remove('monitor-detailed-open');
+            if (chartMaxHeader) chartMaxHeader.style.display = 'none';
+            updateChartButtonLabels();
+            onChartLayoutChange?.();
+        }, MONITOR_TRANSITION_MS);
+    };
+
+    const toggleChartMaximize = () => {
+        if (chartWrapper?.classList.contains('maximized')) {
+            closeDetailedMonitor();
+            return;
+        }
+
+        openDetailedMonitor();
     };
 
     btnMaxChart?.addEventListener('click', toggleChartMaximize);
