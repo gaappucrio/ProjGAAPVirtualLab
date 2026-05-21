@@ -3,7 +3,7 @@ import {
     getUnitSymbol,
     toBaseValue,
     toDisplayValue
-} from '../../utils/Units.js';
+} from '../units/DisplayUnits.js';
 import { parseStrictNumber } from '../validation/InputValidator.js';
 import { byId, valueOf } from './PropertyDomAdapter.js';
 

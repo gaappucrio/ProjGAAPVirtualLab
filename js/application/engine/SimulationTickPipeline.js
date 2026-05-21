@@ -6,9 +6,8 @@ import { ComponentEventPayloads, EngineEventPayloads } from '../events/EventPayl
 const MAX_FRAME_DT_SECONDS = 0.1;
 
 export class SimulationTickPipeline {
-    constructor({ engine, profiler }) {
+    constructor({ engine }) {
         this.engine = engine;
-        this.profiler = profiler;
     }
 
     calculateDeltaTime(timestamp) {
@@ -32,7 +31,7 @@ export class SimulationTickPipeline {
     }
 
     solveHydraulicNetwork(dt) {
-        this.engine.resolvePushBasedNetwork(dt);
+        this.engine.resolveHydraulicNetwork(dt);
     }
 
     syncPhysicalMetrics(dt) {
@@ -50,31 +49,31 @@ export class SimulationTickPipeline {
             if (!(component instanceof TanqueLogico) || !component.setpointAtivo) return;
 
             const notificarEstado = (equipment) => {
-                if (equipment instanceof ValvulaLogica) {
-                    equipment.notify(ComponentEventPayloads.state({
-                        aberta: equipment.aberta,
-                        grau: equipment.grauAbertura
-                    }));
-                    return;
-                }
-
-                if (equipment instanceof BombaLogica) {
-                    equipment.notify(ComponentEventPayloads.state({
-                        isOn: equipment.isOn,
-                        grau: equipment.grauAcionamento
-                    }));
-                }
+                if (!(equipment instanceof ValvulaLogica)) return;
+                equipment.notify(ComponentEventPayloads.state({
+                    aberta: equipment.aberta,
+                    grau: equipment.grauAbertura
+                }));
+            };
+            const notificarBombaMantida = (equipment) => {
+                if (!(equipment instanceof BombaLogica)) return;
+                equipment.notify(ComponentEventPayloads.state({
+                    isOn: equipment.isOn,
+                    grau: equipment.getAcionamentoAlvo?.() ?? 100,
+                    grauManual: equipment.grauAcionamento,
+                    grauEfetivo: equipment.acionamentoEfetivo,
+                    bloqueadaPorSetpoint: true
+                }));
             };
 
             component.inputs.forEach(notificarEstado);
             component.outputs.forEach(notificarEstado);
+            component.getAtuadoresControleNivel?.().bombas.forEach(notificarBombaMantida);
         });
     }
 
     run(timestamp) {
         if (!this.engine.isRunning) return;
-
-        this.profiler.startTick();
 
         const dt = this.calculateDeltaTime(timestamp);
         this.engine.elapsedTime += dt;
@@ -87,6 +86,5 @@ export class SimulationTickPipeline {
         this.engine.updatePipesVisual();
         this.engine.notify(EngineEventPayloads.panelUpdate(dt));
 
-        this.profiler.endTick(this.engine.getSolverMetrics());
     }
 }

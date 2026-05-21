@@ -10,7 +10,7 @@ import {
     setPortStateUpdater
 } from './application/engine/SimulationEngine.js';
 import { ComponentEventPayloads, EngineEventPayloads } from './application/events/EventPayloads.js';
-import { createConnectionServiceRuntime } from './application/services/ConnectionServiceRuntime.js';
+import { createConnectionServiceRuntime } from './infrastructure/rendering/ConnectionServiceRuntimeAdapter.js';
 import {
     clearComponentVisualRegistry,
     getRegisteredComponentVisualPosition,
@@ -22,7 +22,7 @@ import {
     applyLanguageToDocument,
     subscribeLanguageChanges,
     translateDefaultComponentTag
-} from './utils/LanguageManager.js';
+} from './presentation/i18n/LanguageManager.js';
 import { setupCameraControl } from './presentation/controllers/CameraController.js';
 import { setupClipboardController } from './presentation/controllers/ClipboardController.js';
 import { setupComponentRotationController } from './presentation/controllers/ComponentRotationController.js';
@@ -33,7 +33,9 @@ import { setupLayoutController } from './presentation/controllers/LayoutControll
 import { createMonitorController } from './presentation/controllers/MonitorController.js';
 import { setupPipeControl, updateAllPipes, updateConnectionVisualStates } from './presentation/controllers/PipeController.js';
 import { setupPropertyPanelController } from './presentation/controllers/PropertyPanelController.js';
+import { setupTankSaturationAlertController } from './presentation/controllers/TankSaturationAlertController.js';
 import { setupToolbar } from './presentation/controllers/ToolbarController.js';
+import { setupUndoController } from './presentation/controllers/UndoController.js';
 import { setupWorkspaceSelectionController } from './presentation/controllers/WorkspaceSelectionController.js';
 
 function setupEnginePresentationBridges() {
@@ -77,6 +79,7 @@ function setupLanguageRuntime(engine) {
 export function setupVirtualLabRuntime({ engine } = {}) {
     const connectionService = createConnectionServiceRuntime(engine);
     const monitorController = createMonitorController({ engine });
+    const undoManager = setupUndoController({ engine });
 
     setupLanguageRuntime(engine);
     setupEnginePresentationBridges();
@@ -86,22 +89,31 @@ export function setupVirtualLabRuntime({ engine } = {}) {
     });
     monitorController.setup();
     setupWorkspaceSelectionController({ engine });
-    setupPropertyPanelController({ engine, monitorController });
+    const propertyPanelController = setupPropertyPanelController({ engine, monitorController });
+    const tankSaturationAlertController = setupTankSaturationAlertController({ engine });
     setupHelpController();
     setupCameraControl();
-    setupPipeControl({ engine, connectionService });
-    setupDragDrop();
-    setupComponentRotationController({ engine, onRotate: updateAllPipes });
-    setupClipboardController({ engine });
-    setupDeleteSelectionController({ engine, connectionService });
+    setupPipeControl({ engine, connectionService, undoManager });
+    setupDragDrop({ undoManager });
+    setupComponentRotationController({ engine, onRotate: updateAllPipes, undoManager });
+    setupClipboardController({ engine, undoManager });
+    setupDeleteSelectionController({ engine, connectionService, undoManager });
     setupToolbar({
         engine,
+        undoManager,
         onClearCanvas: () => removeAllComponentVisualElements(),
-        onTopologyVisualChange: () => updateAllPipes()
+        onTopologyVisualChange: () => updateAllPipes(),
+        onThemeChange: () => {
+            monitorController.updateLayout();
+            propertyPanelController.renderCurrentProperties();
+            tankSaturationAlertController.refresh();
+        }
     });
 
     return {
         connectionService,
-        monitorController
+        monitorController,
+        undoManager,
+        tankSaturationAlertController
     };
 }

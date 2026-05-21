@@ -3,12 +3,11 @@
 // Arquivo: js/presentation/controllers/PropertyPanelController.js
 // ====================================
 
-import { EngineEventPayloads } from '../../application/events/EventPayloads.js';
 import {
     getPropertyTabsState,
     restorePropertyTabsState
 } from '../properties/PropertyTabs.js';
-import { subscribeLanguageChanges } from '../../utils/LanguageManager.js';
+import { subscribeLanguageChanges } from '../i18n/LanguageManager.js';
 import { createPropertyPanelContextStore } from './PropertyPanelContextController.js';
 import { renderConnectionProperties as renderConnectionPropertiesPresenter } from '../properties/ConnectionPropertiesPresenter.js';
 import { renderComponentProperties as renderComponentPropertiesPresenter } from '../properties/ComponentPropertiesPresenter.js';
@@ -71,8 +70,7 @@ export function setupPropertyPanelController({ engine, monitorController } = {})
     function renderComponentProperties(component) {
         renderComponentPropertiesPresenter({
             propContent: getPropContent(),
-            component,
-            onTankAdjustmentApplied: () => getEngine().notify(EngineEventPayloads.panelUpdate(0))
+            component
         });
     }
 

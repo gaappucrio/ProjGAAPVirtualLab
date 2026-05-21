@@ -4,10 +4,29 @@ import {
     setLanguage,
     subscribeLanguageChanges,
     t
-} from '../../utils/LanguageManager.js';
+} from '../i18n/LanguageManager.js';
 import { exportSimulationData } from '../export/SimulationDataExporter.js';
 
-export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange } = {}) {
+const THEME_STORAGE_KEY = 'gaap-lab-theme';
+const DARK_THEME_CLASS = 'theme-dark';
+
+function readStoredTheme() {
+    try {
+        return globalThis.localStorage?.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light';
+    } catch {
+        return 'light';
+    }
+}
+
+function storeTheme(theme) {
+    try {
+        globalThis.localStorage?.setItem(THEME_STORAGE_KEY, theme);
+    } catch {
+        // Ignora ambientes sem localStorage.
+    }
+}
+
+export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange, onThemeChange, undoManager } = {}) {
     const btnRun = document.getElementById('btn-run');
     const btnClear = document.getElementById('btn-clear');
     const relativeHeightToggle = document.getElementById('toggle-relative-height');
@@ -17,8 +36,27 @@ export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange } =
     const languageToggle = document.getElementById('toggle-language');
     const languageLabel = languageToggle?.closest('label');
     const languageText = languageLabel?.querySelector('span');
+    const themeButton = document.getElementById('btn-theme-toggle');
     const btnExportData = document.getElementById('btn-export-data');
     const exportDataText = btnExportData?.querySelector('span');
+    let currentTheme = readStoredTheme();
+
+    function applyTheme(theme) {
+        currentTheme = theme === 'dark' ? 'dark' : 'light';
+        document.body.classList.toggle(DARK_THEME_CLASS, currentTheme === 'dark');
+        document.documentElement.dataset.theme = currentTheme;
+        storeTheme(currentTheme);
+
+        onThemeChange?.();
+
+        if (themeButton) {
+            const dark = currentTheme === 'dark';
+            themeButton.classList.toggle('is-dark', dark);
+            themeButton.setAttribute('aria-pressed', String(dark));
+            themeButton.title = dark ? t('toolbar.themeDarkTitle') : t('toolbar.themeLightTitle');
+            themeButton.setAttribute('aria-label', themeButton.title);
+        }
+    }
 
     function updateRunButtonUI(isRunning) {
         if (isRunning) {
@@ -35,6 +73,7 @@ export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange } =
 
     function updateRelativeHeightUI(enabled) {
         if (relativeHeightText) relativeHeightText.textContent = t('toolbar.relativeHeight');
+        if (relativeHeightNote) relativeHeightNote.dataset.state = enabled ? 'enabled' : 'disabled';
 
         if (enabled) {
             relativeHeightNote.textContent = t('toolbar.heightEnabled');
@@ -57,8 +96,15 @@ export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange } =
         if (languageToggle) languageToggle.checked = isEnglishLanguage();
         if (languageLabel) languageLabel.title = t('toolbar.languageTitle');
         if (languageText) languageText.textContent = t('toolbar.language');
+        if (themeButton) {
+            themeButton.title = currentTheme === 'dark'
+                ? t('toolbar.themeDarkTitle')
+                : t('toolbar.themeLightTitle');
+            themeButton.setAttribute('aria-label', themeButton.title);
+        }
     }
 
+    applyTheme(currentTheme);
     updateRunButtonUI(engine.isRunning);
     relativeHeightToggle.checked = engine.usarAlturaRelativa;
     updateRelativeHeightUI(engine.usarAlturaRelativa);
@@ -72,6 +118,7 @@ export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange } =
     });
 
     relativeHeightToggle.addEventListener('change', (e) => {
+        undoManager?.record('toggle-relative-height');
         engine.setUsarAlturaRelativa(e.target.checked);
         updateRelativeHeightUI(engine.usarAlturaRelativa);
         onTopologyVisualChange?.();
@@ -81,11 +128,18 @@ export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange } =
         setLanguage(event.target.checked ? 'en' : 'pt');
     });
 
+    themeButton?.addEventListener('click', () => {
+        applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
+    });
+
     btnExportData?.addEventListener('click', () => {
         exportSimulationData(engine);
     });
 
     btnClear.addEventListener('click', () => {
+        if (engine.componentes.length > 0 || engine.conexoes.length > 0) {
+            undoManager?.record('clear-canvas');
+        }
         onClearCanvas?.();
         engine.clear();
     });

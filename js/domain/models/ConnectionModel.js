@@ -5,7 +5,7 @@ import {
     DEFAULT_PIPE_ROUGHNESS_MM,
     DEFAULT_DESIGN_VELOCITY_MPS,
     areaFromDiameter
-} from '../../utils/Units.js';
+} from '../units/HydraulicUnits.js';
 
 let nextConnectionSequence = 1;
 

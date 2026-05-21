@@ -22,7 +22,7 @@ import {
     subscribeUnitPreferences,
     toBaseValue,
     toDisplayValue
-} from '../../utils/Units.js';
+} from '../units/DisplayUnits.js';
 
 export {
     getPresentationEngine,

@@ -24,13 +24,16 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Seleção múltipla de componentes por retângulo azul no workspace ou `Ctrl+clique`.
 - Remoção por tecla `Delete` ou `Backspace`, incluindo seleções múltiplas.
 - Clone de componentes selecionados por `Ctrl+C` e `Ctrl+V`, preservando propriedades configuráveis, conexões internas do grupo e criando a tag com sufixo `- copia` ou `- copy` conforme o idioma ativo.
+- Desfazer por `Ctrl+Z` e refazer por `Ctrl+Y` / `Ctrl+Shift+Z` para restaurar a última alteração do usuário no workspace, incluindo adição, remoção, movimentação, rotação, conexões, colagem, limpeza do canvas e edições de propriedades.
 - Renderização visual de tubos, rótulos de vazão e estados de portas.
+- Pontas das setas dos tubos acompanham a orientação da porta de entrada/saída quando componentes são rotacionados.
 - Opção de altura relativa para considerar desníveis entre componentes.
 - Identificação estável de fronteiras com tags `inlet-01`, `outlet-01` etc., independente do idioma da interface.
 - Exibição localizada dos nomes padrão de entrada e saída conforme o idioma ativo.
 - Helper de tutorial no cabeçalho, abrindo um popup com os principais comandos de uso do simulador.
 - Toggle de idioma posicionado no canto superior direito da janela, fora da toolbar principal.
 - Botão `Exportar dados` no controle superior da janela, ao lado do seletor de idioma.
+- Toggle de tema claro/escuro no canto superior esquerdo da janela, com preferência persistida em `localStorage`.
 
 ### 2.2 Simulação Hidráulica
 
@@ -55,7 +58,9 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Curva de eficiência.
 - Curva de NPSHr.
 - Cálculo de NPSHa, NPSHr atual, margem contra cavitação e condição de sucção.
-- Fator de cavitação reduzindo desempenho quando NPSHa é insuficiente.
+- Fator de cavitação reduzindo desempenho quando NPSHa é insuficiente, podendo zerar a capacidade efetiva quando a sucção é fisicamente inviável.
+- Estado `Cavitando` separado do aviso preventivo de risco quando o solver já reduziu o desempenho da bomba por NPSH insuficiente.
+- Detecção explícita de falta de líquido na sucção da bomba, separada do cálculo de cavitação por NPSH.
 - Monitoramento por gráfico de curva com ponto de operação.
 
 ### 2.4 Válvula
@@ -80,7 +85,10 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Controle de nível por set point.
 - Bloqueio de ativação do controle caso não exista válvula conectada diretamente à saída do tanque.
 - Alerta de saturação quando o set point não é alcançável com a capacidade hidráulica atual.
-- Ajuste automático recomendado para pressão das fontes de entrada.
+- O alerta de saturação do set point é exibido como popup fixo no topo da tela, fora do painel de definição do set point, para aumentar visibilidade.
+- O popup de saturação mantém a ação de dimensionamento/ajuste, usa texto técnico sintetizado, é centralizado no workspace disponível e pode ser dispensado por um botão `x`; o aviso volta a aparecer quando a condição física ou o set point mudam.
+- O alerta considera drenagem transitória em direção ao set point e evita disparar em condição temporária de ajuste.
+- Ajuste automático recomendado para pressão das fontes de entrada e dimensionamento didático de bombas a montante quando o set point não pode ser mantido.
 - Fluido de conteúdo persistente, atualizado por mistura volumétrica das entradas.
 
 ### 2.6 Conexões e Tubulações
@@ -105,6 +113,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Comparação com até dois gráficos simultâneos.
 - Cada gráfico no monitor detalhado pode ser removido individualmente, permitindo voltar de comparação dupla para análise única.
 - A altura do monitor detalhado pode ser ajustada arrastando a borda superior, com limites responsivos para não quebrar o layout.
+- O monitor detalhado expande horizontalmente para aproveitar o espaço liberado quando uma lateral é recolhida.
 - Histórico por componente para tanque.
 - Reabertura de componente já monitorado sem reinicializar a série do gráfico, inclusive após pausar a simulação.
 - Gráfico de curva e ponto de operação para bomba.
@@ -123,6 +132,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Não existe mais edição de fluido global quando nenhum componente de entrada está selecionado.
 - O preset `custom`/`personalizado` é preservado durante troca de idioma, mesmo quando seus valores coincidem com um preset conhecido.
 - Fluido personalizado permite escolher uma cor visual entre opções pré-definidas, incluindo cinza, roxo, rosa, vermelho, azul claro, laranja, verde escuro, magenta, ciano e verde.
+- Estados visuais de alertas, abas, inputs, botões auxiliares e cartões do painel foram ajustados para preservar contraste no modo escuro.
 
 ### 2.9 Exportação de Dados
 
@@ -130,7 +140,15 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Tabela de resumo com data da exportação e estado de altura relativa.
 - Tabela de componentes com nome, tipo, identificadores, posição, conexões, pressões, vazões e parâmetros específicos de fontes, saídas, bombas, válvulas e tanques.
 - Tabela de conexões com origem, destino, diâmetro, rugosidade, perdas, vazões, pressões, geometria, Reynolds, fator de atrito, regime e fluido do trecho.
+- As unidades exibidas nas tabelas exportadas seguem as preferências selecionadas na interface para pressão, vazão, comprimento, volume e temperatura, em vez de expor apenas as unidades internas do motor.
 - A exportação foi mantida focada em dados tabulares para comparação com DWSIM, sem anexar gráficos ao arquivo.
+
+### 2.10 Aparência e Acessibilidade
+
+- Modo escuro aplicado à estrutura principal da interface, incluindo canvas, painéis laterais, toolbar, propriedades, monitoramento, modal de tutorial e controles fixos.
+- Paleta de cores do modo escuro ampliada com tokens de alerta para perigo, aviso, cautela, sucesso e estados neutros.
+- Alertas de bomba, aviso de saturação de tanque e estados do controle de set point usam classes visuais compartilhadas (`gaap-alert`) para manter legibilidade e contraste.
+- O aviso de saturação foi redesenhado como uma faixa horizontal no topo da tela, com botão `x` de dispensa no canto, inspirado no fechamento do tutorial.
 
 ## 3. Arquitetura Geral
 
@@ -144,7 +162,6 @@ index.html
       -> domain/
       -> presentation/
       -> infrastructure/
-      -> utils/
 ```
 
 O arquivo `js/App.js` atua como ponto de entrada minimo. A ordem de inicializacao do navegador fica concentrada em `js/VirtualLabRuntime.js`, que conecta o motor de simulacao aos controladores de apresentacao, adaptadores visuais e servicos de conexao.
@@ -162,6 +179,8 @@ Arquivos principais:
 - `domain/components/ValvulaLogica.js`
 - `domain/components/TanqueLogico.js`
 - `domain/components/Fluido.js`
+- `domain/events/ComponentEventPayloads.js`
+- `domain/events/ComponentEventTypes.js`
 - `domain/models/ConnectionModel.js`
 - `domain/services/HydraulicNetworkSolver.js`
 - `domain/services/HydraulicBranchModel.js`
@@ -173,6 +192,7 @@ Responsabilidades:
 - Representar componentes físicos.
 - Calcular vazões, perdas e propriedades hidráulicas.
 - Modelar conexões puramente lógicas.
+- Emitir eventos de componentes lógicos sem depender da camada de aplicação.
 - Preservar regras de controle e comportamento físico sem acesso visual.
 
 ### 3.2 `application/`
@@ -191,6 +211,7 @@ Arquivos principais:
 - `application/stores/TransientConnectionStore.js`
 - `application/services/ConnectionService.js`
 - `application/services/ConnectionGeometryService.js`
+- `application/services/ConnectionGeometryCalculator.js`
 - `application/events/EventTypes.js`
 - `application/events/EventPayloads.js`
 - `application/config/FluidPresets.js`
@@ -203,6 +224,7 @@ Responsabilidades:
 - Injetar contexto hidráulico no solver.
 - Emitir eventos formais para a UI.
 - Centralizar presets de fluido.
+- Converter geometria visual já resolvida em geometria hidráulica sem acessar DOM diretamente.
 
 ### 3.3 `presentation/`
 
@@ -222,6 +244,7 @@ Arquivos principais:
 - `presentation/controllers/CameraController.js`
 - `presentation/controllers/WorkspaceSelectionController.js`
 - `presentation/controllers/UnitsController.js`
+- `presentation/controllers/UndoController.js`
 - `presentation/export/SimulationDataExporter.js`
 - `presentation/properties/ComponentPropertiesPresenter.js`
 - `presentation/properties/ConnectionPropertiesPresenter.js`
@@ -242,9 +265,12 @@ Responsabilidades:
 - Manipular abas e memória de contexto do painel.
 - Gerenciar monitoramento compacto e detalhado.
 - Gerenciar atalhos de clipboard de componentes (`Ctrl+C`/`Ctrl+V`) na camada de apresentação, incluindo grupos com conexões internas.
+- Gerenciar histórico de desfazer (`Ctrl+Z`) por snapshots do workspace na camada de apresentação.
 - Controlar seleção por retângulo e `Ctrl+clique` no workspace.
 - Controlar popup de tutorial e comandos básicos da interface.
-- Exportar dados tabulares de componentes e conexões.
+- Controlar tema claro/escuro, notas da toolbar e atualização visual dos alertas sem mover lógica física para a UI.
+- Apresentar o alerta de saturação do set point em popup global, mantendo o ajuste didático e a dispensa visual do aviso.
+- Exportar dados tabulares de componentes e conexões respeitando as unidades de exibição selecionadas.
 - Validar inputs digitados.
 
 ### 3.4 `infrastructure/`
@@ -263,6 +289,7 @@ Arquivos principais:
 - `infrastructure/rendering/FluidVisualStyle.js`
 - `infrastructure/rendering/PipeRenderer.js`
 - `infrastructure/rendering/ConnectionVisualRegistry.js`
+- `infrastructure/rendering/ConnectionServiceRuntimeAdapter.js`
 
 Responsabilidades:
 
@@ -272,27 +299,28 @@ Responsabilidades:
 - Registrar posições visuais.
 - Renderizar tubos.
 - Resolver cores visuais de fluidos para componentes, tubos e tanques.
+- Transformar portas DOM em endpoints de conexão por meio de adapter de runtime.
 - Atualizar gráficos.
 - Conectar tecnologias visuais externas à aplicação.
 
-### 3.5 `utils/`
+### 3.5 Unidades, idioma e diagnóstico
 
-Contém utilidades compartilhadas ainda mantidas fora das camadas principais.
+Os utilitários restantes foram realocados para camadas explícitas:
 
-Arquivos relevantes:
+- `domain/units/HydraulicUnits.js`: constantes físicas, conversões hidráulicas e padrões usados pelo domínio.
+- `domain/events/ComponentEventPayloads.js`: payloads de eventos de componentes, mantendo o domínio independente de `application/events`.
+- `presentation/units/DisplayUnits.js`: preferências de unidade e conversões de exibição da interface.
+- `presentation/i18n/LanguageManager.js`: idioma, traduções, nomes padrão e localização de elementos da UI.
+- `application/services/ConnectionGeometryCalculator.js`: ponte entre coordenadas do workspace e geometria hidráulica, removida do domínio por depender de pixels e modo visual de altura relativa.
 
-- `utils/Units.js`
-- `utils/LanguageManager.js`
-- `utils/PerformanceProfiler.js`
-
-Observação: os utilitários visuais de abas, tooltips e estado de portas já foram realocados para `presentation/` e `infrastructure/`.
+Com isso, não há mais utilitários visuais residindo em `utils/`.
 
 ## 4. Fluxo de Inicialização
 
 1. `index.html` carrega `js/App.js`.
 2. `App.js` importa o singleton `ENGINE`.
 3. `App.js` chama `setupVirtualLabRuntime({ engine: ENGINE })`.
-4. O runtime cria o servico de conexoes e inicializa os controllers de apresentacao.
+4. O runtime cria o adapter visual de conexões sobre `ConnectionService` e inicializa os controllers de apresentacao.
 5. O engine é injetado na camada de apresentação via `PresentationEngineContext`.
 6. São inicializados:
    - Câmera.
@@ -322,7 +350,34 @@ Etapas:
 5. Sincronizar métricas físicas dos componentes.
 6. Atualizar tubos e estados visuais.
 7. Publicar evento de atualização do painel.
-8. Atualizar métricas de performance do solver.
+8. Atualizar métricas internas do solver.
+
+### 5.1 Passo de Integração
+
+O passo de integração da simulação é o `dt` calculado a cada chamada de `requestAnimationFrame` em `SimulationTickPipeline.calculateDeltaTime()`.
+
+Ele não é fixo. O cálculo usa o tempo real decorrido entre frames, em segundos, multiplicado pela velocidade configurada da simulação:
+
+```text
+dt = ((timestamp_atual - timestamp_anterior) / 1000) * velocidade
+```
+
+Em `1x`, numa tela rodando perto de 60 FPS, o passo típico fica em torno de:
+
+```text
+dt ≈ 1 / 60 s ≈ 0,0167 s
+```
+
+Com os modos de velocidade, o passo efetivo por frame fica aproximadamente:
+
+```text
+1x  -> 0,0167 s
+2x  -> 0,0333 s
+5x  -> 0,0833 s
+10x -> limitado a 0,1 s
+```
+
+O `dt` é limitado por `MAX_FRAME_DT_SECONDS = 0.1`. Esse limite evita saltos numéricos grandes quando a aba fica travada, o navegador pausa frames ou a máquina sofre uma queda momentânea de desempenho.
 
 Esse fluxo deixa o motor mais legível e evita concentrar toda a lógica dentro de `SimulationEngine.js`.
 
@@ -398,6 +453,7 @@ Quando a altura relativa está ligada:
 - A geometria lógica considera desníveis entre portas.
 - A carga estática influencia pressão e vazão.
 - Bocais do tanque influenciam contrapressão e disponibilidade de saída.
+- A interface mostra `Elev.` e `Δy` com a convenção física de `y` positivo para cima, enquanto o solver mantém internamente a convenção do canvas, onde `y` positivo aponta para baixo.
 
 Quando está desligada:
 
@@ -513,8 +569,11 @@ Comportamento:
 - A pressão gerada depende do acionamento e da vazão.
 - A eficiência varia ao redor do ponto de melhor eficiência.
 - O NPSHr varia com vazão e acionamento.
-- Se NPSHa for menor que NPSHr, o fator de cavitação reduz desempenho.
+- Se NPSHa for menor que NPSHr, o fator de cavitação reduz desempenho. Quando NPSHa colapsa para zero, não existe mais piso artificial de desempenho: a bomba não deve sustentar vazão apenas por estar acionada.
 - Quando instalada na saída de um tanque, a bomba pode produzir pressão de sucção manométrica negativa; isso é esperado em cenários de sucção e é limitado por NPSH/cavitação.
+- Em sucção com líquido disponível, mas NPSHa abaixo do NPSHr e fator de cavitação menor que 100%, a condição passa a indicar `Cavitando`, diferenciando falha física de um aviso preventivo.
+- Quando a bomba está acionada mas a sucção não possui líquido disponível, por exemplo com tanque vazio ou bocal de saída descoberto, a condição passa a indicar `Sem líquido suficiente` em vez de reaproveitar uma folga de NPSH antiga.
+- No diagnóstico de saturação do set point, quando há bomba a montante, o ajuste didático dimensiona a bomba. Quando não há bomba, o mesmo botão pode reduzir a pressão da fonte uma única vez para aproximar a vazão de entrada da capacidade física de saída no set point.
 
 ### 8.4 `ValvulaLogica`
 
@@ -565,6 +624,7 @@ Comportamento:
 - O controle de nível atua em válvulas de entrada e saída.
 - O set point só pode ser ativado se houver válvula diretamente conectada à saída.
 - O alerta de saturação compara a vazão de entrada com a capacidade estimada de saída no nível do set point.
+- A apresentação do alerta de saturação fica em `TankSaturationAlertPresenter`, usando popup global no topo, botão de ação de dimensionamento e botão `x` para dispensar o aviso atual.
 - Entradas simultâneas com fluidos diferentes atualizam a composição armazenada.
 
 ## 9. Conexões
@@ -595,7 +655,7 @@ O painel de propriedades é composto por presenters.
 
 Tipos:
 
-- `DefaultPropertiesPresenter`: estado global e unidades, sem edição de fluido global.
+- `DefaultPropertiesPresenter`: estado global e unidades, sem edição de fluido global. Inclui controle de velocidade de simulação para alternar o passo do tick em tempo real (1x), acelerado (2x), rápido (5x) e muito rápido (10x).
 - `ConnectionPropertiesPresenter`: edição de tubo/conexão.
 - `ComponentPropertiesPresenter`: roteia para presenter por tipo.
 - `PumpComponentPropertiesPresenter`.
@@ -612,17 +672,14 @@ Características:
 - Validação com feedback visual.
 - Atualização ao vivo por `PropertyLiveUpdater`.
 - Acesso ao DOM concentrado em `PropertyDomAdapter`.
+- `PropertyLiveUpdater` também atualiza os estados visuais dos alertas em modo escuro, sem alterar as regras físicas dos componentes.
 
 ## 11. Sistema de Unidades
 
-O arquivo `utils/Units.js` centraliza:
+O sistema de unidades foi dividido para preservar a arquitetura:
 
-- Conversões de pressão.
-- Conversões de vazão.
-- Conversões de comprimento.
-- Conversões de volume.
-- Conversões de temperatura.
-- Constantes hidráulicas padrão.
+- `domain/units/HydraulicUnits.js` centraliza constantes hidráulicas, conversões físicas e padrões do domínio.
+- `presentation/units/DisplayUnits.js` centraliza unidades selecionáveis, símbolos, passos de edição e conversões para exibição.
 
 Unidades internas principais:
 
@@ -632,7 +689,7 @@ Unidades internas principais:
 - Volume: L.
 - Temperatura: °C.
 
-O painel pode exibir valores em outras unidades, como kPa, m³/s, m³/h, mca e psi.
+O painel pode exibir valores em outras unidades, como kPa, m³/s, m³/h, mca e psi, sem contaminar o domínio com preferências visuais.
 
 ## 12. Monitoramento
 
@@ -657,12 +714,13 @@ Funcionalidades:
 
 ## 13. Internacionalização e Ajuda
 
-O sistema possui suporte a alternância de idioma entre português e inglês via `utils/LanguageManager.js`. Os nomes padrão de componentes e os textos de interface são atualizados no DOM sem reinicializar a aplicação.
+O sistema possui suporte a alternância de idioma entre português e inglês via `presentation/i18n/LanguageManager.js`. Os nomes padrão de componentes e os textos de interface são atualizados no DOM sem reinicializar a aplicação.
 
 Pontos atuais:
 
 - O antigo utilitário `I18n.js` foi renomeado para `LanguageManager.js`, deixando a função do arquivo mais explícita.
 - O toggle de idioma fica fixo no canto superior direito da janela.
+- O toggle de tema claro/escuro é localizado junto com os demais textos de toolbar e reaplica a atualização visual dos gráficos quando muda.
 - As fronteiras usam tags técnicas estáveis (`inlet` e `outlet`) internamente, mas os nomes padrão exibidos acompanham o idioma (`Entrada`/`Saída` em português e `inlet`/`outlet` em inglês).
 - Textos do tutorial, botões e títulos participam do mesmo fluxo de tradução.
 - A seleção `custom`/`personalizado` de fluido é preservada como intenção do usuário, mesmo se os parâmetros forem iguais aos de um preset.
@@ -724,6 +782,8 @@ Coberturas importantes:
 - Snapshot e aplicação de propriedades clonáveis no clipboard de componentes.
 - Snapshot de grupos selecionados, preservando conexões internas ao copiar e colar sistemas inteiros.
 - Regras de camadas.
+- Domínio sem imports de aplicação, apresentação, infraestrutura visual, DOM, Chart.js ou APIs globais do navegador.
+- Aplicação sem imports de apresentação ou infraestrutura visual.
 - Importação da apresentação sem DOM global.
 - Tags de fronteira `inlet`/`outlet` independentes do idioma.
 - Cores visuais de presets e fluidos personalizados.
@@ -743,7 +803,7 @@ Coberturas importantes:
 Auditoria dos testes:
 
 - A suite executada por `npm.cmd test` cobre os 6 arquivos listados acima.
-- Esses arquivos contem 60 blocos `test(...)` executados pelo Node e 262 chamadas de `assert`.
+- A execução atual possui 69 testes passantes. Os arquivos de teste contêm 337 ocorrências de `assert.*` na suíte principal.
 - Nao foi encontrado padrao trivial como `assert.ok(true)`, `assert.equal(true, true)`, `print(true)` ou `console.log` usado como teste na suite principal.
 - Os testes exercitam resultados observaveis: valores numericos, estado de stores, eventos, HTML gerado, regras de camadas, ausencia de dependencias indevidas e comportamento do solver.
 - `test-phase1.mjs` e os HTMLs em `Testes/VERTESTE/` sao artefatos auxiliares/manuais; eles nao fazem parte do script `npm test`.
@@ -767,18 +827,33 @@ Marcos concluídos:
 - Exportação tabular de dados da rede implementada para comparação externa.
 - Monitoramento detalhado com remoção individual de gráficos e redimensionamento por arraste.
 - Toggle de idioma movido para controle fixo no canto superior direito.
+- Toggle de tema claro/escuro adicionado com persistência local e atualização visual dos gráficos.
 - `I18n.js` renomeado para `LanguageManager.js` e imports atualizados.
 - Helper de tutorial adicionado ao cabeçalho.
 - Seleção múltipla por retângulo azul, `Ctrl+clique`, arraste em grupo, remoção em lote e clipboard de sistemas inteiros.
+- Histórico de desfazer por `Ctrl+Z` e refazer por `Ctrl+Y` / `Ctrl+Shift+Z` implementado em controller dedicado, com restauração visual e lógica de componentes, conexões, configuração de altura relativa e seleção.
+- Curvas de conexão passaram a considerar a direção das portas após rotação visual dos componentes, mantendo as setas dos tubos coerentes com a entrada/saída.
+- Exportação tabular passou a converter cabeçalhos e valores para as mesmas unidades escolhidas pelo usuário no painel de unidades.
+- Exportação tabular passou a localizar títulos, cabeçalhos e valores gerados pelo sistema conforme o idioma ativo, preservando nomes, tags e fluidos personalizados definidos pelo usuário.
 - `js/Config.js` removido; constantes visuais migradas para `infrastructure/dom/ComponentVisualConfig.js`.
 - Dimensionamento de canos passou a expor vazão de dimensionamento manual e captura da vazão atual/alvo, deixando claro que ela não controla a vazão real da rede.
+- Modo escuro revisado em profundidade para melhorar contraste de painéis, abas, botões, inputs, alertas, notas da toolbar e monitoramento.
+- Aviso de saturação do set point movido do painel do tanque para um popup global no topo, com texto sintetizado, centralização dinâmica no workspace, layout horizontal, botão de dimensionamento preservado e dispensa por `x`.
+- Monitoramento detalhado passou a recalcular suas margens laterais quando painéis são recolhidos, aproveitando o espaço horizontal disponível.
 - Pausa da simulação passou a congelar leituras hidráulicas em vez de zerar a UI.
 - `Tooltips.js` e `PropertyTabs.js` saíram de `utils/` e foram realocados para `presentation/properties`.
 - `PortStateManager.js` saiu de `utils/` e foi realocado para `infrastructure/dom`.
+- `LanguageManager.js` saiu de `utils/` e foi realocado para `presentation/i18n`.
+- `PortPositionCalculator.js` saiu de `domain/services`; a parte de geometria dependente de coordenadas/pixels agora vive em `application/services/ConnectionGeometryCalculator.js`.
+- `ConnectionServiceRuntime.js` saiu de `application/services`; o adapter que lê portas visuais agora vive em `infrastructure/rendering/ConnectionServiceRuntimeAdapter.js`.
+- Payloads e tipos de eventos de componentes foram movidos para `domain/events`, removendo a dependência invertida do domínio para `application/events`.
+- `PerformanceProfiler.js` foi removido por não existir fluxo real de ativação/uso no programa.
+- `Units.js` foi dividido entre `domain/units/HydraulicUnits.js` e `presentation/units/DisplayUnits.js`.
 - Atalho global de remoção e limpeza visual do canvas saíram de `App.js` e foram movidos para controller/infraestrutura dedicados.
 - `PresentationController.js` deixou de coordenar a apresentacao completa e passou a ser uma fachada de compatibilidade para `PropertyPanelController.js`.
 - `App.js` foi reduzido ao ponto de entrada; a ordem de inicializacao da UI foi movida para `VirtualLabRuntime.js`.
 - Testes de arquitetura e comportamento adicionados.
+- Testes de arquitetura passaram a impedir regressões em que `domain/` importe camadas externas ou `application/` importe apresentação/infraestrutura visual.
 - Verificação final de consistência física adicionou validação numérica estrita, normalização segura de parâmetros de tubulação e proteção contra altura útil inválida em tanques.
 
 Pontos ainda observáveis:
@@ -814,26 +889,71 @@ Ao alterar UI:
 4. Evitar duplicar lógica física na interface.
 5. Rodar `npm.cmd test`.
 
-## 18. Riscos Técnicos e Próximos Passos
+## 18. Relatório Sobre Solver Nodal Para Malhas Fechadas
+
+O solver atual é `push-based`: fontes e tanques iniciam uma emissão de vazão, e a rede propaga essa disponibilidade pelos ramos. Essa abordagem é adequada para cenários educacionais dirigidos, como fonte -> tanque -> bomba -> saída, séries de componentes, bifurcações simples e redes com orientação visual clara. Ela também é mais simples de explicar e depurar.
+
+Para malhas fechadas mais realistas, porém, a física passa a depender de equilíbrio simultâneo. Em uma rede com recirculação, bypass, bombas em paralelo, válvulas em ramos concorrentes ou possibilidade de reversão de fluxo, a vazão não pode ser determinada apenas empurrando fluido a partir das fronteiras. O sistema precisa resolver pressões ou cargas nos nós internos e encontrar vazões que satisfaçam, ao mesmo tempo:
+
+1. Conservação de massa em cada nó.
+2. Relação entre vazão e perda de carga em cada ramo.
+3. Ganho de carga de bombas.
+4. Altura relativa entre nós.
+5. Restrições de tanques, fontes, saídas, válvulas e NPSH.
+
+A recomendação é não substituir diretamente o solver atual. O caminho mais seguro é adicionar um solver nodal como segunda implementação, por trás de uma interface comum de solver. O modo `push-based` continuaria sendo o padrão estável para redes abertas e didáticas; o modo nodal começaria experimental, ativado por opção avançada ou por detecção de malha fechada.
+
+Estrutura sugerida:
+
+```text
+domain/services/
+  HydraulicSolverInterface.js
+  HydraulicNetworkAssembler.js
+  HydraulicNetworkSolver.js        # push-based atual
+  NodalHydraulicSolver.js          # novo solver experimental
+```
+
+O `HydraulicNetworkAssembler` ficaria responsável por transformar componentes e conexões em um grafo hidráulico com nós, ramos, condições de contorno e propriedades de fluido. O `NodalHydraulicSolver` poderia usar Newton amortecido ou método iterativo equivalente, reaproveitando o resultado do tick anterior como chute inicial para melhorar estabilidade.
+
+Ordem recomendada de implementação:
+
+1. Criar detector de malhas fechadas e avisar o usuário quando a topologia excede o modelo push-based.
+2. Criar o assembler de rede sem trocar o solver existente.
+3. Implementar solver nodal mínimo para tubos, fontes e saídas.
+4. Adicionar válvulas e perdas locais.
+5. Adicionar bombas e curvas de bomba.
+6. Adicionar tanques como fronteiras dinâmicas de nível.
+7. Integrar NPSH, falta de líquido na sucção e mistura de fluidos.
+8. Comparar solver push-based e solver nodal em casos simples onde ambos devem coincidir.
+
+Riscos principais:
+
+- Convergência numérica em redes mal condicionadas.
+- Diagnósticos ruins quando o usuário monta uma rede fisicamente impossível.
+- Misturar cedo demais os dois modelos e quebrar cenários que hoje funcionam.
+- Aumentar a percepção de precisão industrial sem deixar claro que o simulador ainda é didático.
+
+Conclusão: o solver nodal é uma evolução desejável para malhas fechadas, mas deve nascer isolado, testado por cenários pequenos e introduzido como modo experimental. A prioridade imediata é detectar malhas fechadas e evitar erro silencioso.
+
+## 19. Riscos Técnicos e Próximos Passos
 
 Riscos atuais:
 
 - O solver push-based é adequado para cenários educacionais e fluxos dirigidos, mas não é um solver nodal não linear completo.
 - Redes muito complexas, com recirculação ou malhas fechadas reais, podem exigir um solver iterativo por nós.
 - A UI ainda é manual, então mudanças grandes de DOM exigem cuidado com bindings.
-- Alguns utilitários visuais ainda vivem em `utils/`, embora `LanguageManager.js` agora deixe mais clara a responsabilidade de idioma/tradução.
+- As unidades agora estão divididas entre domínio e apresentação; futuras mudanças devem evitar recriar módulos genéricos em `utils/`.
 
 Próximos passos recomendados:
 
 - Criar um teste visual/smoke em navegador para fluxo básico de UI.
-- Avaliar um solver nodal para malhas fechadas mais realistas.
-- Migrar utilitários visuais restantes para `presentation` ou `infrastructure`.
+- Criar detector de malhas fechadas antes de ativar um solver nodal experimental.
 - Criar documentação curta para usuários finais além deste relatório técnico.
 - Adicionar exemplos de cenários prontos.
 - Criar importação/exportação de fluxogramas completos, caso o objetivo seja uso em laboratório. A exportação tabular de dados da simulação já existe.
 
-## 19. Resumo Executivo
+## 20. Resumo Executivo
 
 O projeto está em um estado estruturalmente muito melhor que a versão monolítica inicial. A física principal está concentrada no domínio, a aplicação orquestra o tick e a topologia, a apresentação foi dividida em controllers e presenters, e a infraestrutura visual está separada em adaptadores.
 
-O sistema já possui suporte funcional para montagem visual, seleção múltipla por retângulo, clonagem de componentes e sistemas por teclado, simulação hidráulica, bombas, válvulas, tanques, set point, monitoramento, unidades, tooltips, tutorial integrado, internacionalização, mistura de fluidos, cores visuais por fluido, exportação tabular de dados e testes automatizados. A base trata propriedades de fluido por entrada, composição por conexão e conteúdo misturado em tanques, desde que as fronteiras entre domínio, aplicação, apresentação e infraestrutura continuem sendo respeitadas.
+O sistema já possui suporte funcional para montagem visual, seleção múltipla por retângulo, clonagem de componentes e sistemas por teclado, desfazer por `Ctrl+Z`, simulação hidráulica, bombas, válvulas, tanques, set point, monitoramento, unidades, tooltips, tutorial integrado, internacionalização, modo escuro, mistura de fluidos, cores visuais por fluido, setas de tubos coerentes com componentes rotacionados, popup de saturação do set point, exportação tabular de dados nas unidades selecionadas pelo usuário e testes automatizados. A base trata propriedades de fluido por entrada, composição por conexão e conteúdo misturado em tanques, desde que as fronteiras entre domínio, aplicação, apresentação e infraestrutura continuem sendo respeitadas.

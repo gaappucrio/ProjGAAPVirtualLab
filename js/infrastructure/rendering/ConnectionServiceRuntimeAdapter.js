@@ -1,5 +1,5 @@
-import { ConnectionService } from './ConnectionService.js';
-import { createConnectionEndpointDefinition } from '../../infrastructure/rendering/ConnectionVisualRegistry.js';
+import { ConnectionService } from '../../application/services/ConnectionService.js';
+import { createConnectionEndpointDefinition } from './ConnectionVisualRegistry.js';
 
 export class ConnectionServiceRuntimeAdapter {
     constructor(engine, service = new ConnectionService(engine)) {

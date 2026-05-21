@@ -3,7 +3,7 @@
 // Arquivo: js/presentation/validation/InputValidator.js
 // ===================================
 
-import { translateLiteral } from '../../utils/LanguageManager.js';
+import { translateLiteral } from '../i18n/LanguageManager.js';
 
 export function parseStrictNumber(value) {
     if (typeof value === 'number') return Number.isFinite(value) ? value : NaN;

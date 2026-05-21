@@ -4,8 +4,8 @@ import {
     getFluidVisualStyle,
     resolveCustomFluidColor
 } from '../../../infrastructure/rendering/FluidVisualStyle.js';
-import { formatUnitValue, getUnitStep, toDisplayValue } from '../../../utils/Units.js';
-import { getFluidNameVariants, translateFluidName } from '../../../utils/LanguageManager.js';
+import { formatUnitValue, getUnitStep, toDisplayValue } from '../../units/DisplayUnits.js';
+import { getFluidNameVariants, translateFluidName } from '../../i18n/LanguageManager.js';
 import {
     ComponentEventPayloads,
     InputValidator,

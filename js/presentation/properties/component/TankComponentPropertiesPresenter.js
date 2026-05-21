@@ -18,7 +18,21 @@ import {
     setValue,
     validateInputWithFeedback
 } from '../PropertyPresenterShared.js';
-import { translateLiteral } from '../../../utils/LanguageManager.js';
+import { translateLiteral } from '../../i18n/LanguageManager.js';
+
+function getTankControlVisualState(active, available) {
+    if (active) return 'active';
+    return available ? 'ready' : 'blocked';
+}
+
+function syncTankControlVisualState(groupEl, state) {
+    if (!groupEl) return;
+
+    groupEl.dataset.controlState = state;
+    groupEl.classList.toggle('is-active', state === 'active');
+    groupEl.classList.toggle('is-ready', state === 'ready');
+    groupEl.classList.toggle('is-blocked', state === 'blocked');
+}
 
 export const TANK_PROPERTIES_PRESENTER = {
     render: (comp) => {
@@ -28,12 +42,24 @@ export const TANK_PROPERTIES_PRESENTER = {
         };
         const controleNivelDisponivel = diagnosticoControleNivel.podeAtivar !== false;
         const bloqueioControleAttr = controleNivelDisponivel ? '' : 'disabled';
-        const corBordaControle = comp.setpointAtivo ? '#e74c3c' : (controleNivelDisponivel ? '#eee' : '#f39c12');
-        const fundoControle = comp.setpointAtivo ? '#fdf5f4' : (controleNivelDisponivel ? '#f9fbfb' : '#fff8ee');
+        const isDark = document.body.classList.contains('theme-dark');
+        const corBordaControle = comp.setpointAtivo 
+            ? '#e74c3c' 
+            : (controleNivelDisponivel 
+                ? (isDark ? '#2d3d4b' : '#eee') 
+                : '#f39c12');
+        const fundoControle = comp.setpointAtivo 
+            ? (isDark ? '#2d1b1b' : '#fdf5f4') 
+            : (controleNivelDisponivel 
+                ? (isDark ? '#1d2a35' : '#f9fbfb') 
+                : (isDark ? '#2d2418' : '#fff8ee'));
         const textoStatusControle = controleNivelDisponivel
             ? translateLiteral('O controlador usa a válvula de saída para modular o escoamento e estabilizar o nível.')
             : translateLiteral(diagnosticoControleNivel.motivoBloqueio);
-        const corStatusControle = controleNivelDisponivel ? '#5f6f7f' : '#c0392b';
+        const corStatusControle = controleNivelDisponivel 
+            ? (isDark ? '#93a8b8' : '#5f6f7f') 
+            : (isDark ? '#ff6b6b' : '#c0392b');
+        const estadoVisualControle = getTankControlVisualState(comp.setpointAtivo, controleNivelDisponivel);
         const fluidoConteudo = comp.getFluidoConteudo?.() || comp.fluidoConteudo;
 
         const basicContent = `
@@ -73,13 +99,13 @@ export const TANK_PROPERTIES_PRESENTER = {
                 <label title="Densidade do fluido ou mistura armazenado no tanque.">Densidade do Fluido (kg/m³)</label>
                 <input type="text" id="disp-tank-fluid-density" title="Densidade do fluido ou mistura armazenado no tanque." value="${(fluidoConteudo?.densidade || 0).toFixed(1)}" disabled>
             </div>
-            <div class="prop-group" id="grp-sp-main" style="border-color:${corBordaControle}; background:${fundoControle};">
-                <label ${hintAttr(TOOLTIP.tankPiController)} style="color:#c0392b; font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">
+            <div class="prop-group tank-control-panel is-${estadoVisualControle}" id="grp-sp-main" data-control-state="${estadoVisualControle}" style="border-color:${corBordaControle}; background:${fundoControle};">
+                <label class="tank-control-title" ${hintAttr(TOOLTIP.tankPiController)} style="color:#c0392b; font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">
                     Controlador de nível (PI)
                 </label>
                 <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
                     <input type="checkbox" id="input-sp-ativo" ${hintAttr(TOOLTIP.tankSpActive)} ${comp.setpointAtivo ? 'checked' : ''} ${bloqueioControleAttr} style="width:16px; height:16px; cursor:pointer;">
-                    <span ${hintAttr(TOOLTIP.tankSpActive)} style="font-size:13px; font-weight:bold;">Ativar controle automático</span>
+                    <span class="tank-control-switch-label" ${hintAttr(TOOLTIP.tankSpActive)} style="font-size:13px; font-weight:bold;">Ativar controle automático</span>
                 </div>
                 <p id="tank-sp-status-text" ${hintAttr(TOOLTIP.tankSpActive)} style="margin:0 0 10px; font-size:11px; color:${corStatusControle};">${textoStatusControle}</p>
                 <label ${hintAttr(TOOLTIP.tankSetpoint)}>Ponto de ajuste
@@ -135,6 +161,7 @@ export const TANK_PROPERTIES_PRESENTER = {
             const statusEl = byId('tank-sp-status-text');
             const spAtivoEl = byId('input-sp-ativo');
             const mostrarParametros = comp.setpointAtivo ? 'block' : 'none';
+            const isDark = document.body.classList.contains('theme-dark');
 
             if (spAtivoEl) {
                 spAtivoEl.disabled = !diagnostico.podeAtivar;
@@ -145,12 +172,24 @@ export const TANK_PROPERTIES_PRESENTER = {
                 statusEl.textContent = diagnostico.podeAtivar
                     ? translateLiteral('O controlador usa a válvula de saída para modular o escoamento e estabilizar o nível.')
                     : translateLiteral(diagnostico.motivoBloqueio);
-                statusEl.style.color = diagnostico.podeAtivar ? '#5f6f7f' : '#c0392b';
+                statusEl.style.color = diagnostico.podeAtivar 
+                    ? (isDark ? '#93a8b8' : '#5f6f7f') 
+                    : (isDark ? '#ff6b6b' : '#c0392b');
             }
 
             if (grp) {
-                grp.style.borderColor = comp.setpointAtivo ? '#e74c3c' : (diagnostico.podeAtivar ? '#eee' : '#f39c12');
-                grp.style.background = comp.setpointAtivo ? '#fdf5f4' : (diagnostico.podeAtivar ? '#f9fbfb' : '#fff8ee');
+                syncTankControlVisualState(grp, getTankControlVisualState(comp.setpointAtivo, diagnostico.podeAtivar));
+
+                if (comp.setpointAtivo) {
+                    grp.style.borderColor = isDark ? '#e74c3c' : '#e74c3c';
+                    grp.style.background = isDark ? '#2d1b1b' : '#fdf5f4';
+                } else if (diagnostico.podeAtivar) {
+                    grp.style.borderColor = isDark ? '#2d3d4b' : '#eee';
+                    grp.style.background = isDark ? '#1d2a35' : '#f9fbfb';
+                } else {
+                    grp.style.borderColor = isDark ? '#f39c12' : '#f39c12';
+                    grp.style.background = isDark ? '#2d2418' : '#fff8ee';
+                }
             }
 
             const kpGroup = byId('group-ctrl-params');

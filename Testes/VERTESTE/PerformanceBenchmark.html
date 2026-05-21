@@ -406,7 +406,6 @@
         import { TanqueLogico } from '../js/componentes/TanqueLogico.js';
         import { ValvulaLogica } from '../js/componentes/ValvulaLogica.js';
         import { DrenoLogico } from '../js/componentes/DrenoLogico.js';
-        import { profiler } from '../js/utils/PerformanceProfiler.js';
         import { setPortStateUpdater, setConnectionFlowGetter } from '../js/MotorFisico.js';
         import { FabricaDeEquipamentos, updatePortStates } from '../js/FabricaEquipamentos.js';
         import { drawCurve, updateAllPipes } from '../js/controllers/PipeController.js';
@@ -452,7 +451,7 @@
                 createBenchmarkScene();
                 console.log(`✅ Cenário criado: ${ENGINE.componentes.length} componentes, ${ENGINE.conexoes.length} conexões`);
 
-                // Inicia simulação (profiler será ativado no tick)
+                // Inicia simulação
                 ENGINE.start();
                 console.log('▶️ Simulação iniciada');
 
@@ -472,8 +471,6 @@
             isRunning = false;
 
             ENGINE.stop();
-            profiler.disable();
-
             updateStatus('Benchmark parado. Relatório gerado.', 'warning');
             printBenchmarkReport();
         };
@@ -741,9 +738,8 @@
                 const frameTimeEl = document.getElementById('frameTime');
                 if (frameTimeEl) frameTimeEl.textContent = deltaMs.toFixed(2) + ' ms';
 
-                // Pega dados do ENGINE e profiler
+                // Pega dados do ENGINE
                 const solverMetrics = ENGINE?.getSolverMetrics?.() || {};
-                const profilerStats = profiler?.getStats?.();
 
                 // Iterações - do ENGINE
                 const iterEl = document.getElementById('iterations');
@@ -820,8 +816,14 @@
         }
 
         function printBenchmarkReport() {
-            const stats = profiler?.getStats?.();
             const solverMetrics = ENGINE?.getSolverMetrics?.() || {};
+            const average = (values) => values.length
+                ? values.reduce((sum, value) => sum + value, 0) / values.length
+                : null;
+            const avgFps = average(fpsHistory);
+            const avgFrameTime = average(solverTimeHistory);
+            const maxFrameTime = solverTimeHistory.length ? Math.max(...solverTimeHistory) : null;
+            const minFrameTime = solverTimeHistory.length ? Math.min(...solverTimeHistory) : null;
 
             const report = `
 === RELATÓRIO DE BENCHMARK ===
@@ -829,16 +831,16 @@ Componentes: ${ENGINE.componentes.length}
 Conexões: ${ENGINE.conexoes.length}
 
 📊 Estatísticas de Quadros:
-  - FPS estimado: ${stats?.estimatedFps?.toFixed(1) || '?'}
-  - Tempo médio: ${stats?.avgFrameTimeMs?.toFixed(2) || '?'} ms
-  - Tempo máx: ${stats?.maxFrameTimeMs?.toFixed(2) || '?'} ms
-  - Tempo mín: ${stats?.minFrameTimeMs?.toFixed(2) || '?'} ms
-  - Frames analisados: ${stats?.totalFramesAnalyzed || '?'}
+  - FPS estimado: ${avgFps?.toFixed(1) || '?'}
+  - Tempo médio: ${avgFrameTime?.toFixed(2) || '?'} ms
+  - Tempo máx: ${maxFrameTime?.toFixed(2) || '?'} ms
+  - Tempo mín: ${minFrameTime?.toFixed(2) || '?'} ms
+  - Frames analisados: ${frameCount || '?'}
 
 ⚙️ Solver:
-  - Iterações médias: ${stats?.avgSolverIterations?.toFixed(1) || '?'}
-  - Iterações máximas: ${stats?.maxSolverIterations || '?'}
-  - Taxa de convergência: ${stats?.convergenceRate?.toFixed(1) || '?'}%
+  - Últimas iterações: ${solverMetrics.lastIterations ?? '?'}
+  - Chamadas totais: ${solverMetrics.totalSolverCalls ?? '?'}
+  - Taxa de convergência: ${solverMetrics.totalSolverCalls ? (((solverMetrics.convergedCount || 0) / solverMetrics.totalSolverCalls) * 100).toFixed(1) : '?'}%
   - Limites atingidos: ${solverMetrics.maxIterationsHit || 0}
 
 💾 Memória:

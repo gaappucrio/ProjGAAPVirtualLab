@@ -5,8 +5,8 @@ import {
     areaFromDiameter,
     lpsToM3s,
     m3sToLps
-} from '../../utils/Units.js';
-import { ComponentEventPayloads } from '../../application/events/EventPayloads.js';
+} from '../units/HydraulicUnits.js';
+import { ComponentEventPayloads } from '../events/ComponentEventPayloads.js';
 import { mergeSimulationContext } from '../context/SimulationContext.js';
 import { mixFluidos } from './Fluido.js';
 

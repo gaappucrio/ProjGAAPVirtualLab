@@ -4,7 +4,7 @@ import {
     DEFAULT_PIPE_EXTRA_LENGTH_M,
     DEFAULT_PIPE_MINOR_LOSS,
     DEFAULT_PIPE_ROUGHNESS_MM
-} from '../../utils/Units.js';
+} from '../../domain/units/HydraulicUnits.js';
 import { EngineEventPayloads } from '../events/EventPayloads.js';
 
 function validateLevelControl(...components) {

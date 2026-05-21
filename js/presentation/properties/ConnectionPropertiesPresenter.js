@@ -3,13 +3,15 @@ import { getPresentationEngine } from '../context/PresentationEngineContext.js';
 import { clearInputError, InputValidator, showInputError } from '../validation/InputValidator.js';
 import { bindPropertyTabs, renderPropertyTabs } from './PropertyTabs.js';
 import { TOOLTIPS } from './PropertyTooltips.js';
-import { localizeElement, translateLiteral } from '../../utils/LanguageManager.js';
+import { localizeElement, translateLiteral } from '../i18n/LanguageManager.js';
 import {
     DEFAULT_DESIGN_VELOCITY_MPS,
     MAX_NETWORK_FLOW_LPS,
-    DEFAULT_PIPE_ROUGHNESS_MM,
+    DEFAULT_PIPE_ROUGHNESS_MM
+} from '../../domain/units/HydraulicUnits.js';
+import {
     getUnitSymbol
-} from '../../utils/Units.js';
+} from '../units/DisplayUnits.js';
 import {
     getCurrentDesignFlowCandidateLps,
     getSuggestedDiameterForConnection

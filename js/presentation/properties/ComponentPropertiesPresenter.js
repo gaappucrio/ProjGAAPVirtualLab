@@ -6,11 +6,10 @@ import { ValvulaLogica } from '../../domain/components/ValvulaLogica.js';
 import { ComponentEventPayloads } from '../../application/events/EventPayloads.js';
 import { bindPropertyTabs } from './PropertyTabs.js';
 import { TOOLTIPS } from './PropertyTooltips.js';
-import { localizeElement } from '../../utils/LanguageManager.js';
+import { localizeElement } from '../i18n/LanguageManager.js';
 import { getComponentPropertyPresenter } from './component/ComponentPropertyPresenterRegistry.js';
 import { bind } from './PropertyDomAdapter.js';
 import { bindUnitControls, renderUnitControls } from './PropertyUnitsPresenter.js';
-import { bindTankSaturationAlertActions } from './TankSaturationAlertPresenter.js';
 
 export function getComponentTypeKey(component) {
     if (component instanceof DrenoLogico) return 'sink';
@@ -23,19 +22,12 @@ export function getComponentTypeKey(component) {
 
 export function renderComponentProperties({
     propContent,
-    component,
-    onTankAdjustmentApplied
+    component
 }) {
     const tipoChave = getComponentTypeKey(component);
     const propertiesPresenter = getComponentPropertyPresenter(tipoChave);
 
     propContent.innerHTML = `
-        <div id="painel-alerta-saturacao" style="display: none; background-color: #fdeaea; border-left: 4px solid #e74c3c; padding: 10px; margin-bottom: 15px; border-radius: 4px;">
-            <h4 title="${TOOLTIPS.painel.alertaSaturacao}" style="margin: 0 0 5px 0; color: #c0392b; font-size: 13px;">Saída Saturada no Set Point</h4>
-            <p id="texto-alerta-saturacao" style="margin: 0; font-size: 11px; color: #333;"></p>
-            <button id="btn-aplicar-alerta-saturacao" type="button" title="${TOOLTIPS.painel.aplicarAjusteSaturacao}" style="display:none; margin-top:10px; padding:7px 10px; border:1px solid #c0392b; border-radius:4px; background:#fff; color:#c0392b; font-size:12px; font-weight:600; cursor:pointer;"></button>
-            <p id="texto-acao-alerta-saturacao" style="margin:8px 0 0; font-size:11px;"></p>
-        </div>
         ${renderUnitControls()}
         <div class="prop-group">
             <label title="${TOOLTIPS.painel.tagComponente}">Tag (Nome)</label>
@@ -53,10 +45,4 @@ export function renderComponentProperties({
     });
 
     propertiesPresenter.bind(component);
-
-    if (component instanceof TanqueLogico) {
-        bindTankSaturationAlertActions(component, {
-            onAdjustmentApplied: onTankAdjustmentApplied
-        });
-    }
 }
