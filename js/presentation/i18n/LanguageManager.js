@@ -323,6 +323,8 @@ const TEXTS = {
             statusOne: 'Clique em outro tanque ou bomba para dividir a visualização expandida.',
             statusEmpty: 'Clique em um tanque ou bomba para exibir um gráfico aqui.',
             removeChart: 'Remover gráfico do monitoramento',
+            exportPumpJson: 'Exportar dados da bomba em JSON',
+            exportPumpJsonTitle: 'Exporta a curva e o ponto de operação da bomba em JSON para comparação no DWSIM.',
             resizeMonitor: 'Arraste para ajustar a altura do monitoramento.',
             badge: ({ count }) => `${count} gráfico${count === 1 ? '' : 's'}`
         },
@@ -408,6 +410,8 @@ const TEXTS = {
             statusOne: 'Click another tank or pump to split the expanded view.',
             statusEmpty: 'Click a tank or pump to display a chart here.',
             removeChart: 'Remove chart from monitoring',
+            exportPumpJson: 'Export pump data as JSON',
+            exportPumpJsonTitle: 'Exports the pump curve and operating point as JSON for comparison in DWSIM.',
             resizeMonitor: 'Drag to adjust monitoring height.',
             badge: ({ count }) => `${count} chart${count === 1 ? '' : 's'}`
         },

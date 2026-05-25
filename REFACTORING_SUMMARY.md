@@ -62,6 +62,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Estado `Cavitando` separado do aviso preventivo de risco quando o solver já reduziu o desempenho da bomba por NPSH insuficiente.
 - Detecção explícita de falta de líquido na sucção da bomba, separada do cálculo de cavitação por NPSH.
 - Monitoramento por gráfico de curva com ponto de operação.
+- Exportação JSON individual da bomba a partir do gráfico de monitoramento, contendo curvas de carga, potência, eficiência e NPSHr no formato de CurveSet lido pelo DWSIM.
 
 ### 2.4 Válvula
 
@@ -117,6 +118,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Histórico por componente para tanque.
 - Reabertura de componente já monitorado sem reinicializar a série do gráfico, inclusive após pausar a simulação.
 - Gráfico de curva e ponto de operação para bomba.
+- Gráficos de bomba exibem um botão `JSON` no canto superior direito para baixar os dados da bomba sem exportar a planta inteira.
 - Redimensionamento e atualização dos gráficos por adaptadores de Chart.js.
 
 ### 2.8 Painel de Propriedades
@@ -142,6 +144,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Tabela de conexões com origem, destino, diâmetro, rugosidade, perdas, vazões, pressões, geometria, Reynolds, fator de atrito, regime e fluido do trecho.
 - As unidades exibidas nas tabelas exportadas seguem as preferências selecionadas na interface para pressão, vazão, comprimento, volume e temperatura, em vez de expor apenas as unidades internas do motor.
 - A exportação foi mantida focada em dados tabulares para comparação com DWSIM, sem anexar gráficos ao arquivo.
+- A exportação pontual de bomba gera um `.json` separado no formato de CurveSet esperado pelo DWSIM, com `Name`, `Description`, `ImpellerDiameter`, `ImpellerSpeed`, `ImpellerDiameterUnit`, `CurveHead`, `CurvePower`, `CurveEfficiency` e `CurveNPSHr`. As curvas usam arrays `X/Y` com vazão em `m3/s`; carga e NPSHr em `m`, potência estimada em `kW` e eficiência em `%`.
 
 ### 2.10 Aparência e Acessibilidade
 
@@ -951,6 +954,10 @@ Próximos passos recomendados:
 - Criar documentação curta para usuários finais além deste relatório técnico.
 - Adicionar exemplos de cenários prontos.
 - Criar importação/exportação de fluxogramas completos, caso o objetivo seja uso em laboratório. A exportação tabular de dados da simulação já existe.
+-Avaliar sistema de múltiplos componentes (adição de válvula apresenta queda brusca no nível do tanque)
+
+-Consertar o painel de alerta de saturação do set point: o x não está funcionando (provável rechamada devido à mudança de valores constante).
+ajustar o posicionamento para nao obstruir os botões da simulação.
 
 ## 20. Resumo Executivo
 

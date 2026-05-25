@@ -11,6 +11,7 @@ const PRESENTATION_MODULES = [
     '../js/presentation/controllers/MonitorController.js',
     '../js/presentation/controllers/TankSaturationAlertController.js',
     '../js/presentation/export/SimulationDataExporter.js',
+    '../js/presentation/export/PumpDwsimJsonExporter.js',
     '../js/presentation/controllers/PropertyPanelController.js',
     '../js/presentation/properties/ComponentPropertiesPresenter.js',
     '../js/presentation/properties/ConnectionPropertiesPresenter.js',
@@ -72,6 +73,64 @@ test('exportação registra altura relativa sem anexar gráficos', async () => {
     assert.match(html, /Bomba-01/);
     assert.doesNotMatch(html, /Gr\u00e1ficos dos componentes/);
     assert.doesNotMatch(html, /export-chart-svg/);
+});
+
+test('exportação JSON de bomba usa o formato de CurveSet do DWSIM', async () => {
+    const { buildPumpDwsimJsonData } = await import('../js/presentation/export/PumpDwsimJsonExporter.js');
+    const { BombaLogica } = await import('../js/domain/components/BombaLogica.js');
+
+    const bomba = new BombaLogica('pump-json', 'Bomba JSON', 0, 0);
+    bomba.vazaoNominal = 40;
+    bomba.pressaoMaxima = 4;
+    bomba.eficienciaHidraulica = 0.75;
+    bomba.npshRequeridoM = 2.2;
+    const data = buildPumpDwsimJsonData({
+        hydraulicContext: {
+            getComponentFluid: () => ({
+                nome: 'Água teste',
+                densidade: 1000,
+                temperatura: 25,
+                viscosidadeDinamicaPaS: 0.001,
+                pressaoVaporBar: 0.0317,
+                pressaoAtmosfericaBar: 1.01325
+            })
+        }
+    }, bomba);
+
+    assert.deepEqual(Object.keys(data), [
+        'Name',
+        'Description',
+        'ImpellerDiameter',
+        'ImpellerSpeed',
+        'ImpellerDiameterUnit',
+        'CurveHead',
+        'CurvePower',
+        'CurveEfficiency',
+        'CurveNPSHr'
+    ]);
+    assert.equal(data.Name, 'Bomba JSON');
+    assert.equal(data.ImpellerDiameter, 200);
+    assert.equal(data.ImpellerSpeed, 1450);
+    assert.equal(data.ImpellerDiameterUnit, 'mm');
+
+    for (const curveName of ['CurveHead', 'CurvePower', 'CurveEfficiency', 'CurveNPSHr']) {
+        assert.equal(data[curveName].Enabled, true);
+        assert.equal(data[curveName].CvType, 0);
+        assert.equal(data[curveName].xunit, 'm3/s');
+        assert.equal(data[curveName].X.length, 33);
+        assert.equal(data[curveName].Y.length, 33);
+        assert.equal(data[curveName].X[0], 0);
+        assert.equal(data[curveName].X.at(-1), 0.04);
+    }
+
+    assert.equal(data.CurveHead.yunit, 'm');
+    assert.equal(data.CurvePower.yunit, 'kW');
+    assert.equal(data.CurveEfficiency.yunit, '%');
+    assert.equal(data.CurveNPSHr.yunit, 'm');
+    assert.ok(data.CurveHead.Y[0] > data.CurveHead.Y.at(-1));
+    assert.ok(data.CurvePower.Y.some((value) => value > 0));
+    assert.ok(data.CurveEfficiency.Y.every((value) => value > 0));
+    assert.ok(data.CurveNPSHr.Y.at(-1) > data.CurveNPSHr.Y[0]);
 });
 
 test('alerta global de saturacao independe do painel de propriedades selecionado', async () => {

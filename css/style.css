@@ -296,6 +296,19 @@
       color: var(--gaap-danger-title) !important;
   }
 
+  body.theme-dark .chart-pump-export-button {
+      background: var(--gaap-input-bg) !important;
+      border-color: var(--gaap-border) !important;
+      color: var(--gaap-text) !important;
+  }
+
+  body.theme-dark .chart-pump-export-button:hover,
+  body.theme-dark .chart-pump-export-button:focus-visible {
+      background: var(--gaap-accent-soft) !important;
+      border-color: var(--gaap-accent) !important;
+      color: var(--gaap-text) !important;
+  }
+
   body.theme-dark .chart-container.maximized .chart-resize-handle::after {
       background: #617384 !important;
   }
@@ -1840,7 +1853,7 @@
 
   .chart-compare-card-header {
       display: flex;
-      justify-content: space-between;
+      justify-content: flex-start;
       align-items: flex-start;
       gap: 10px;
       padding: 12px 14px 8px;
@@ -1878,9 +1891,56 @@
       display: none;
   }
 
+  .chart-pump-export-button {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      z-index: 5;
+      min-width: 44px;
+      height: 28px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 9px;
+      border: 1px solid #cfdde7;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.94);
+      color: #2c3e50;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(20, 50, 80, 0.12);
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .chart-pump-export-button:hover,
+  .chart-pump-export-button:focus-visible {
+      background: #eef7ff;
+      border-color: #3498db;
+      color: #1f5d8a;
+      outline: none;
+      box-shadow: 0 6px 16px rgba(52, 152, 219, 0.2);
+  }
+
+  .chart-pump-export-button[hidden] {
+      display: none;
+  }
+
+  .chart-pump-export-button.is-compact-action{
+      display: none;
+  }
+
+  .chart-pump-export-button.is-header-action {
+      position: static;
+      flex: 0 0 auto;
+      box-shadow: none;
+  }
+
   .chart-compare-card-copy {
       display: flex;
       flex-direction: column;
+      flex: 1 1 auto;
       gap: 4px;
       min-width: 0;
   }

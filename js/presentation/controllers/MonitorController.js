@@ -7,6 +7,7 @@ import {
     refreshEmptyMonitorChartPresentation,
     refreshTankVolumeChart
 } from '../../infrastructure/charts/TankChartAdapter.js';
+import { exportPumpDwsimJson } from '../export/PumpDwsimJsonExporter.js';
 import { createMonitorSlotHistory } from '../monitoring/MonitorSlotHistory.js';
 import { getUnitSymbol } from '../units/DisplayUnits.js';
 import { t } from '../i18n/LanguageManager.js';
@@ -131,6 +132,7 @@ export function createMonitorController({ engine }) {
         setCompactMonitorMode('empty');
         chartedTankId = null;
         chartedPumpId = null;
+        refreshCompactPumpExportButton(null);
     }
 
     function createTankMonitorChartInstance(ctx, component, { resetSeries = false } = {}) {
@@ -151,6 +153,7 @@ export function createMonitorController({ engine }) {
         setCompactMonitorMode('tank');
         chartedTankId = component.id;
         chartedPumpId = null;
+        refreshCompactPumpExportButton(null);
     }
 
     function syncTankMonitorChart(chart, component, { update = true } = {}) {
@@ -160,6 +163,66 @@ export function createMonitorController({ engine }) {
 
     function createPumpMonitorChartInstance(ctx, component) {
         return createPumpChart(ctx, component, { expanded: isExpanded() });
+    }
+
+    function handlePumpExportClick(event) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const pumpId = event.currentTarget?.dataset?.pumpId;
+        const pump = engine.componentes.find((component) => component.id === pumpId);
+        if (pump instanceof BombaLogica) {
+            exportPumpDwsimJson(engine, pump);
+        }
+    }
+
+    function ensurePumpExportButton(container, id) {
+        if (!container) return null;
+
+        let button = document.getElementById(id);
+        if (!button) {
+            button = document.createElement('button');
+            button.id = id;
+            button.type = 'button';
+            button.className = 'chart-pump-export-button';
+            button.addEventListener('click', handlePumpExportClick);
+            container.appendChild(button);
+        }
+
+        if (button.parentElement !== container) {
+            container.appendChild(button);
+        }
+
+        button.classList.toggle('is-header-action', container.classList.contains('chart-compare-card-header'));
+        button.classList.toggle('is-compact-action', id === 'chart-pump-export-compact');
+        button.textContent = 'JSON';
+        button.title = t('chart.exportPumpJsonTitle');
+        button.setAttribute('aria-label', t('chart.exportPumpJson'));
+        return button;
+    }
+
+    function setPumpExportButtonState(button, component) {
+        if (!button) return;
+
+        if (component instanceof BombaLogica) {
+            button.hidden = false;
+            button.dataset.pumpId = component.id;
+            button.title = t('chart.exportPumpJsonTitle');
+            button.setAttribute('aria-label', t('chart.exportPumpJson'));
+            return;
+        }
+
+        button.hidden = true;
+        delete button.dataset.pumpId;
+    }
+
+    function refreshCompactPumpExportButton(component = null) {
+        const button = ensurePumpExportButton(
+            document.getElementById('chart-compact-stage'),
+            'chart-pump-export-compact'
+        );
+
+        setPumpExportButtonState(button, component);
     }
 
     function createPumpCompactChart(component) {
@@ -172,6 +235,7 @@ export function createMonitorController({ engine }) {
         setCompactMonitorMode('pump');
         chartedPumpId = component.id;
         chartedTankId = null;
+        refreshCompactPumpExportButton(component);
     }
 
     function refreshPumpMonitorChartInstance(chart, component) {
@@ -185,6 +249,7 @@ export function createMonitorController({ engine }) {
         }
 
         refreshPumpChart(compactChart, component, { expanded: isExpanded() });
+        refreshCompactPumpExportButton(component);
     }
 
     function refreshCompactPumpMonitorChart() {
@@ -203,11 +268,14 @@ export function createMonitorController({ engine }) {
             const bomba = engine.componentes.find((component) => component.id === chartedPumpId);
             if (bomba instanceof BombaLogica) {
                 refreshPumpCompactChart(bomba);
+            } else {
+                refreshCompactPumpExportButton(null);
             }
             return;
         }
 
         if (monitorChartMode === 'empty') {
+            refreshCompactPumpExportButton(null);
             refreshEmptyMonitorChartPresentation(compactChart);
             return;
         }
@@ -217,6 +285,7 @@ export function createMonitorController({ engine }) {
             if (tank) syncTankMonitorChart(compactChart, tank, { update: false });
         }
 
+        refreshCompactPumpExportButton(null);
         compactChart.update();
     }
 
@@ -231,7 +300,8 @@ export function createMonitorController({ engine }) {
             canvas: document.getElementById(`gaap-compare-chart-${slot}`),
             canvasWrap: document.getElementById(`chart-compare-wrap-${slot}`),
             empty: document.getElementById(`chart-compare-empty-${slot}`),
-            dismissButton: document.getElementById(`chart-compare-dismiss-${slot}`)
+            dismissButton: document.getElementById(`chart-compare-dismiss-${slot}`),
+            exportButton: document.getElementById(`chart-compare-export-${slot}`)
         };
     }
 
@@ -265,6 +335,10 @@ export function createMonitorController({ engine }) {
         button.setAttribute('aria-label', t('chart.removeChart'));
 
         return button;
+    }
+
+    function ensureExpandedPumpExportButton(elements, index) {
+        return ensurePumpExportButton(elements?.header, `chart-compare-export-${index + 1}`);
     }
 
     function destroyExpandedMonitorCharts() {
@@ -342,6 +416,7 @@ export function createMonitorController({ engine }) {
         for (let index = 0; index < MAX_MONITOR_CHART_HISTORY; index += 1) {
             const elements = getExpandedChartElements(index);
             const entry = entries[index];
+            const exportButton = ensureExpandedPumpExportButton(elements, index);
             const dismissButton = ensureExpandedChartDismissButton(elements, index);
 
             if (!elements.card) continue;
@@ -349,6 +424,7 @@ export function createMonitorController({ engine }) {
             if (!entry) {
                 elements.card.hidden = index > 0;
                 if (dismissButton) dismissButton.hidden = true;
+                setPumpExportButtonState(exportButton, null);
                 if (elements.title) elements.title.textContent = t('chart.waiting');
                 if (elements.subtitle) elements.subtitle.textContent = '';
                 if (elements.canvasWrap) elements.canvasWrap.hidden = true;
@@ -363,6 +439,7 @@ export function createMonitorController({ engine }) {
 
             elements.card.hidden = false;
             if (dismissButton) dismissButton.hidden = false;
+            setPumpExportButtonState(exportButton, entry.component);
             if (elements.title) elements.title.textContent = entry.component.tag || getMonitorChartKindLabel(entry.kind);
             if (elements.subtitle) elements.subtitle.textContent = getExpandedChartSubtitle(entry);
             if (elements.canvasWrap) elements.canvasWrap.hidden = false;
@@ -402,9 +479,11 @@ export function createMonitorController({ engine }) {
         entries.forEach((entry, index) => {
             const chart = expandedMonitorCharts[index];
             const elements = getExpandedChartElements(index);
+            const exportButton = ensureExpandedPumpExportButton(elements, index);
             const dismissButton = ensureExpandedChartDismissButton(elements, index);
 
             if (dismissButton) dismissButton.hidden = false;
+            setPumpExportButtonState(exportButton, entry.component);
             if (elements.title) elements.title.textContent = entry.component.tag || getMonitorChartKindLabel(entry.kind);
             if (elements.subtitle) elements.subtitle.textContent = getExpandedChartSubtitle(entry);
 
