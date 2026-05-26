@@ -957,7 +957,17 @@ Próximos passos recomendados:
 - Criar documentação curta para usuários finais além deste relatório técnico.
 - Adicionar exemplos de cenários prontos.
 - Criar importação/exportação de fluxogramas completos, caso o objetivo seja uso em laboratório. A exportação tabular de dados da simulação já existe.
-- Resolvido em 2026-05-26: sistema de múltiplos componentes avaliado com adição de válvulas durante a simulação. Conexões novas em simulação já iniciada passam a entrar com rampa hidráulica curta, evitando queda brusca inicial no nível do tanque sem alterar o regime permanente.
+
+-ajustar ocilacao do set point. ele quebra a valvula ao sair do modo de set point (aberta quando fechada)
+
+
+## 20. Resumo Executivo
+
+O projeto está em um estado estruturalmente muito melhor que a versão monolítica inicial. A física principal está concentrada no domínio, a aplicação orquestra o tick e a topologia, a apresentação foi dividida em controllers e presenters, e a infraestrutura visual está separada em adaptadores.
+
+O sistema já possui suporte funcional para montagem visual, seleção múltipla por retângulo, clonagem de componentes e sistemas por teclado, desfazer por `Ctrl+Z`, simulação hidráulica, bombas, válvulas, tanques, set point, monitoramento, unidades, tooltips, tutorial integrado, internacionalização, modo escuro, mistura de fluidos, cores visuais por fluido, setas de tubos coerentes com componentes rotacionados, popup de saturação do set point, exportação tabular de dados nas unidades selecionadas pelo usuário e testes automatizados. A base trata propriedades de fluido por entrada, composição por conexão e conteúdo misturado em tanques, desde que as fronteiras entre domínio, aplicação, apresentação e infraestrutura continuem sendo respeitadas.
+
+ver lugar:
 
 - Resolvido em 2026-05-26: painel de alerta de saturação do set point corrigido. O botão `x` passa a dispensar o aviso por assinatura estável de set point, topologia e parâmetros físicos, ignorando oscilações transitórias de vazão/pressão. O posicionamento do popup agora é calculado abaixo da toolbar para não obstruir os botões da simulação.
 
@@ -966,9 +976,4 @@ Próximos passos recomendados:
 - Resolvido em 2026-05-26: seleção do solver passou a respeitar ilhas hidráulicas desconectadas. Se uma ilha tem malha fechada, apenas ela usa o solver nodal; ilhas abertas continuam no solver push-based, preservando o comportamento de set point, volumes e vazões de sistemas completamente isolados.
 
 - Resolvido em 2026-05-26: fechamento de válvula sob set point corrigido. Aberturas abaixo da resolução visual de `0.0%` passam a ser normalizadas para fechamento real, e os parâmetros hidráulicos retornam área e Cv nulos para impedir vazamento residual.
-
-## 20. Resumo Executivo
-
-O projeto está em um estado estruturalmente muito melhor que a versão monolítica inicial. A física principal está concentrada no domínio, a aplicação orquestra o tick e a topologia, a apresentação foi dividida em controllers e presenters, e a infraestrutura visual está separada em adaptadores.
-
-O sistema já possui suporte funcional para montagem visual, seleção múltipla por retângulo, clonagem de componentes e sistemas por teclado, desfazer por `Ctrl+Z`, simulação hidráulica, bombas, válvulas, tanques, set point, monitoramento, unidades, tooltips, tutorial integrado, internacionalização, modo escuro, mistura de fluidos, cores visuais por fluido, setas de tubos coerentes com componentes rotacionados, popup de saturação do set point, exportação tabular de dados nas unidades selecionadas pelo usuário e testes automatizados. A base trata propriedades de fluido por entrada, composição por conexão e conteúdo misturado em tanques, desde que as fronteiras entre domínio, aplicação, apresentação e infraestrutura continuem sendo respeitadas.
+- Resolvido em 2026-05-26: sistema de múltiplos componentes avaliado com adição de válvulas durante a simulação. Conexões novas em simulação já iniciada passam a entrar com rampa hidráulica curta, evitando queda brusca inicial no nível do tanque sem alterar o regime permanente.
