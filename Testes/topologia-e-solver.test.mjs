@@ -55,6 +55,25 @@ function runAutomaticPhysicsSteps(engine, steps = 60, dt = 0.1) {
     }
 }
 
+function runControlledAutomaticPhysicsStep(engine, dt = 0.1) {
+    engine.tickPipeline.updateHighLevelControls(dt);
+    engine.componentes.forEach((component) => {
+        component.atualizarDinamica(dt, engine.hydraulicContext.getComponentFluid(component) || engine.fluidoOperante);
+    });
+    engine.resolveHydraulicNetwork(dt);
+    engine.componentes.forEach((component) => {
+        const fluid = engine.hydraulicContext.getComponentFluid(component) || engine.fluidoOperante;
+        if (component instanceof TanqueLogico) component.atualizarFisica(dt, fluid);
+        else component.sincronizarMetricasFisicas(fluid);
+    });
+}
+
+function runControlledAutomaticPhysicsSteps(engine, steps = 60, dt = 0.1) {
+    for (let i = 0; i < steps; i += 1) {
+        runControlledAutomaticPhysicsStep(engine, dt);
+    }
+}
+
 function listDomainFiles(dirPath) {
     return fs.readdirSync(dirPath, { withFileTypes: true }).flatMap((entry) => {
         const fullPath = path.join(dirPath, entry.name);
@@ -399,6 +418,38 @@ test('valvula totalmente aberta com Cv alto se aproxima de tubo equivalente', ()
     );
 });
 
+test('valvula controlada quase fechada nao vaza quando exibida como 0.0%', () => {
+    const engine = createEngine();
+    const tanque = new TanqueLogico('T-fecha-sp', 'T-fecha-sp', 0, 0);
+    const valvula = new ValvulaLogica('V-fecha-sp', 'V-fecha-sp', 120, 0);
+    const dreno = new DrenoLogico('D-fecha-sp', 'D-fecha-sp', 240, 0);
+
+    tanque.volumeAtual = 800;
+    tanque.capacidadeMaxima = 1000;
+    tanque.alturaUtilMetros = 2.4;
+    tanque.fluidoConteudo = { ...FLUID_PRESETS.agua };
+    valvula.aplicarControleNivel({ abertura: 0.01, intensidade: 0.0001, ownerId: tanque.id });
+    valvula.aberturaEfetiva = 0.01;
+
+    tanque.conectarSaida(valvula);
+    valvula.conectarSaida(dreno);
+
+    const entradaValvula = new ConnectionModel({ sourceId: tanque.id, targetId: valvula.id });
+    const saidaValvula = new ConnectionModel({ sourceId: valvula.id, targetId: dreno.id });
+
+    [tanque, valvula, dreno].forEach((component) => engine.add(component));
+    [entradaValvula, saidaValvula].forEach((connection) => engine.addConnection(connection));
+
+    const volumeInicial = tanque.volumeAtual;
+    runAutomaticPhysicsSteps(engine, 3, 0.1);
+
+    assert.equal(valvula.grauAbertura, 0);
+    assert.equal(valvula.getAberturaNormalizadaAtual(), 0);
+    assert.equal(engine.getConnectionState(entradaValvula).flowLps, 0);
+    assert.equal(engine.getConnectionState(saidaValvula).flowLps, 0);
+    assert.equal(tanque.volumeAtual, volumeInicial);
+});
+
 test('conexoes adicionadas com simulacao em andamento entram em rampa hidraulica', () => {
     const engine = createEngine();
     engine.elapsedTime = 5;
@@ -728,6 +779,206 @@ test('malha fechada passiva sem fronteira nao cria vazao artificial', () => {
         metrics.lastDiagnostics.some((diagnostic) => diagnostic.code === 'floating_passive_closed_loop'),
         'Malha passiva flutuante deve produzir diagnostico explicito'
     );
+});
+
+test('valvula em malha fechada com tanques nao cria fluido com altura relativa', () => {
+    const engine = createEngine();
+    engine.usarAlturaRelativa = true;
+
+    const tanqueAlto = new TanqueLogico('T-03', 'T-03', 0, 300);
+    const tanqueBaixo = new TanqueLogico('T-04', 'T-04', 0, 0);
+    const valvula = new ValvulaLogica('V-03', 'V-03', 300, 0);
+
+    [tanqueAlto, tanqueBaixo].forEach((tanque) => {
+        tanque.capacidadeMaxima = 1000;
+        tanque.alturaUtilMetros = 2.4;
+        tanque.alturaBocalEntradaM = 0;
+        tanque.alturaBocalSaidaM = 0;
+        tanque.perdaEntradaK = 1;
+        tanque.coeficienteSaida = 0.82;
+    });
+    tanqueAlto.volumeAtual = 85;
+    tanqueBaixo.volumeAtual = 1000;
+    valvula.aplicarPerfilCaracteristica('quick_opening');
+    valvula.setAbertura(100);
+    valvula.aberturaEfetiva = 100;
+
+    [tanqueAlto, tanqueBaixo, valvula].forEach((component) => engine.add(component));
+
+    const endpointTanque = { floorOffsetY: 160 };
+    const endpointValvula = { offsetX: 0, offsetY: 0, floorOffsetY: 0 };
+    const conectar = (source, target, sourceEndpoint, targetEndpoint) => {
+        source.conectarSaida(target);
+        const connection = new ConnectionModel({
+            sourceId: source.id,
+            targetId: target.id,
+            sourceEndpoint,
+            targetEndpoint
+        });
+        engine.addConnection(connection);
+        return connection;
+    };
+
+    const tanqueAltoBaixo = conectar(
+        tanqueAlto,
+        tanqueBaixo,
+        { portType: 'out', ...endpointTanque },
+        { portType: 'in', ...endpointTanque }
+    );
+    const tanqueBaixoValvula = conectar(
+        tanqueBaixo,
+        valvula,
+        { portType: 'out', ...endpointTanque },
+        { portType: 'in', ...endpointValvula }
+    );
+    const valvulaTanqueAlto = conectar(
+        valvula,
+        tanqueAlto,
+        { portType: 'out', ...endpointValvula },
+        { portType: 'in', ...endpointTanque }
+    );
+
+    const volumeInicialL = tanqueAlto.volumeAtual + tanqueBaixo.volumeAtual;
+
+    runAutomaticPhysicsSteps(engine, 20, 0.1);
+
+    const volumeFinalL = tanqueAlto.volumeAtual + tanqueBaixo.volumeAtual;
+    const vazaoEntradaValvulaLps = engine.getConnectionState(tanqueBaixoValvula).flowLps;
+    const vazaoSaidaValvulaLps = engine.getConnectionState(valvulaTanqueAlto).flowLps;
+
+    assert.equal(engine.getSolverMetrics().mode, 'nodal');
+    assert.ok(
+        Math.abs(volumeFinalL - volumeInicialL) < 1e-6,
+        `Inventario total dos tanques deve ser conservado: inicial=${volumeInicialL}, final=${volumeFinalL}`
+    );
+    assert.ok(
+        Math.abs(vazaoSaidaValvulaLps - vazaoEntradaValvulaLps) < 1e-6,
+        `Valvula nao deve criar nem consumir massa: entrada=${vazaoEntradaValvulaLps}, saida=${vazaoSaidaValvulaLps}`
+    );
+    assert.equal(engine.getConnectionState(tanqueAltoBaixo).flowLps, 0);
+});
+
+test('malha fechada em ilha isolada nao altera sistema aberto com set point', () => {
+    const configurarSistemaAberto = (engine) => {
+        const tanqueSuperior = new TanqueLogico('T-01', 'T-01', 620, 0);
+        const valvulaControle = new ValvulaLogica('V-01', 'V-01', 620, 180);
+        const tanqueControlado = new TanqueLogico('T-02', 'T-02', 620, 360);
+        const valvulaSaida = new ValvulaLogica('V-02', 'V-02', 620, 540);
+        const dreno = new DrenoLogico('D-01', 'Saida-01', 780, 560);
+
+        [tanqueSuperior, tanqueControlado].forEach((tanque) => {
+            tanque.capacidadeMaxima = 1000;
+            tanque.alturaUtilMetros = 2.4;
+            tanque.fluidoConteudo = { ...FLUID_PRESETS.agua };
+        });
+        tanqueSuperior.volumeAtual = 999;
+        tanqueControlado.volumeAtual = 497;
+        tanqueControlado.setpoint = 50;
+        [valvulaControle, valvulaSaida].forEach((valvula) => {
+            valvula.aplicarPerfilCaracteristica('quick_opening');
+            valvula.setAbertura(100);
+            valvula.aberturaEfetiva = 100;
+        });
+        dreno.pressaoSaidaBar = 0;
+
+        [tanqueSuperior, valvulaControle, tanqueControlado, valvulaSaida, dreno]
+            .forEach((component) => engine.add(component));
+
+        tanqueSuperior.conectarSaida(valvulaControle);
+        valvulaControle.conectarSaida(tanqueControlado);
+        tanqueControlado.conectarSaida(valvulaSaida);
+        valvulaSaida.conectarSaida(dreno);
+
+        const conexoes = [
+            new ConnectionModel({ sourceId: tanqueSuperior.id, targetId: valvulaControle.id }),
+            new ConnectionModel({ sourceId: valvulaControle.id, targetId: tanqueControlado.id }),
+            new ConnectionModel({ sourceId: tanqueControlado.id, targetId: valvulaSaida.id }),
+            new ConnectionModel({ sourceId: valvulaSaida.id, targetId: dreno.id })
+        ];
+        conexoes.forEach((connection) => engine.addConnection(connection));
+
+        const resultadoSetpoint = tanqueControlado.setSetpointAtivo(true);
+        assert.equal(resultadoSetpoint.ativado, true);
+
+        return {
+            tanqueSuperior,
+            tanqueControlado,
+            valvulaControle,
+            valvulaSaida,
+            conexoes
+        };
+    };
+
+    const adicionarMalhaFechadaIsolada = (engine) => {
+        const tanqueA = new TanqueLogico('T-03', 'T-03', 0, 0);
+        const tanqueB = new TanqueLogico('T-04', 'T-04', 220, 0);
+
+        [tanqueA, tanqueB].forEach((tanque) => {
+            tanque.capacidadeMaxima = 1000;
+            tanque.alturaUtilMetros = 2.4;
+            tanque.fluidoConteudo = { ...FLUID_PRESETS.agua };
+        });
+        tanqueA.volumeAtual = 827;
+        tanqueB.volumeAtual = 6;
+
+        [tanqueA, tanqueB].forEach((component) => engine.add(component));
+        tanqueA.conectarSaida(tanqueB);
+        tanqueB.conectarSaida(tanqueA);
+
+        [
+            new ConnectionModel({ sourceId: tanqueA.id, targetId: tanqueB.id }),
+            new ConnectionModel({ sourceId: tanqueB.id, targetId: tanqueA.id })
+        ].forEach((connection) => engine.addConnection(connection));
+    };
+
+    const simular = (comMalhaFechada) => {
+        const engine = createEngine();
+        engine.usarAlturaRelativa = true;
+        const sistemaAberto = configurarSistemaAberto(engine);
+        if (comMalhaFechada) adicionarMalhaFechadaIsolada(engine);
+
+        runControlledAutomaticPhysicsSteps(engine, 20, 0.1);
+
+        return {
+            metrics: engine.getSolverMetrics(),
+            volumeSuperiorL: sistemaAberto.tanqueSuperior.volumeAtual,
+            volumeControladoL: sistemaAberto.tanqueControlado.volumeAtual,
+            aberturaEntrada: sistemaAberto.valvulaControle.grauAbertura,
+            aberturaSaida: sistemaAberto.valvulaSaida.grauAbertura,
+            vazoesLps: sistemaAberto.conexoes.map((connection) =>
+                engine.getConnectionState(connection).flowLps
+            )
+        };
+    };
+
+    const semMalha = simular(false);
+    const comMalha = simular(true);
+
+    assert.equal(semMalha.metrics.mode, 'push');
+    assert.equal(comMalha.metrics.mode, 'mixed');
+    assert.ok(
+        comMalha.metrics.islandMetrics.some((metrics) => metrics.mode === 'nodal')
+        && comMalha.metrics.islandMetrics.some((metrics) => metrics.mode === 'push'),
+        'Motor deve resolver ilhas independentes com solver apropriado para cada topologia'
+    );
+    assert.ok(
+        Math.abs(comMalha.volumeSuperiorL - semMalha.volumeSuperiorL) < 1e-6,
+        `T-01 isolado nao deve mudar por causa da malha fechada: base=${semMalha.volumeSuperiorL}, comMalha=${comMalha.volumeSuperiorL}`
+    );
+    assert.ok(
+        Math.abs(comMalha.volumeControladoL - semMalha.volumeControladoL) < 1e-6,
+        `T-02 isolado nao deve mudar por causa da malha fechada: base=${semMalha.volumeControladoL}, comMalha=${comMalha.volumeControladoL}`
+    );
+    assert.ok(
+        Math.abs(comMalha.aberturaEntrada - semMalha.aberturaEntrada) < 1e-9,
+        'Set point da ilha aberta nao deve receber interferencia da malha fechada'
+    );
+    semMalha.vazoesLps.forEach((flowLps, index) => {
+        assert.ok(
+            Math.abs(comMalha.vazoesLps[index] - flowLps) < 1e-6,
+            `Conexao ${index} da ilha aberta deve manter a mesma vazao: base=${flowLps}, comMalha=${comMalha.vazoesLps[index]}`
+        );
+    });
 });
 
 test('recirculacao tanque bomba tanque conserva inventario do tanque', () => {

@@ -10,6 +10,8 @@ const PERFIL_PADRAO = 'equal_percentage';
 const PERFIS_CONTROLE_NIVEL = Object.freeze(['equal_percentage', 'linear', 'quick_opening']);
 const LIMIAR_REFORCO_CONTROLE_NIVEL = 0.85;
 const TIPOS_CARACTERISTICA = Object.freeze(['equal_percentage', 'linear', 'quick_opening']);
+const LIMIAR_FECHAMENTO_PERCENTUAL = 0.05;
+const LIMIAR_FECHAMENTO_NORMALIZADO = LIMIAR_FECHAMENTO_PERCENTUAL / 100;
 
 export const VALVE_PROFILE_DEFINITIONS = Object.freeze({
     equal_percentage: Object.freeze({
@@ -48,6 +50,11 @@ function normalizarTipoCaracteristica(tipo) {
 
 function normalizarPerfil(perfilId) {
     return VALVE_PROFILE_DEFINITIONS[perfilId] ? perfilId : PERFIL_PADRAO;
+}
+
+function normalizarAberturaPercentual(valor) {
+    const abertura = clamp(Number(valor) || 0, 0, 100);
+    return abertura <= LIMIAR_FECHAMENTO_PERCENTUAL ? 0 : abertura;
 }
 
 export class ValvulaLogica extends ComponenteFisico {
@@ -92,6 +99,7 @@ export class ValvulaLogica extends ComponenteFisico {
 
     getCharacteristicFactor(opening) {
         const safeOpening = clamp(opening, 0, 1);
+        if (safeOpening <= LIMIAR_FECHAMENTO_NORMALIZADO) return 0;
         if (this.tipoCaracteristica === 'linear') return safeOpening;
         if (this.tipoCaracteristica === 'quick_opening') return Math.sqrt(safeOpening);
 
@@ -101,11 +109,21 @@ export class ValvulaLogica extends ComponenteFisico {
     }
 
     getAberturaNormalizadaAtual() {
-        return clamp(this.aberturaEfetiva / 100.0, 0, 1);
+        return normalizarAberturaPercentual(this.aberturaEfetiva) / 100.0;
     }
 
     getParametrosHidraulicos(opening = this.getAberturaNormalizadaAtual()) {
         const aberturaNormalizada = clamp(opening, 0, 1);
+        if (aberturaNormalizada <= LIMIAR_FECHAMENTO_NORMALIZADO) {
+            return {
+                opening: 0,
+                characteristicFactor: 0,
+                effectiveCv: 0,
+                hydraulicAreaM2: 0,
+                localLossCoeff: 1e6
+            };
+        }
+
         const characteristicFactor = this.getCharacteristicFactor(aberturaNormalizada);
         const effectiveCv = Math.max(0.05, this.cv * Math.max(characteristicFactor, 0.05));
         const hydraulicAreaFactor = clamp((0.2 + (0.8 * characteristicFactor)), FATOR_MINIMO_AREA, 1);
@@ -133,9 +151,9 @@ export class ValvulaLogica extends ComponenteFisico {
             return false;
         }
 
-        this.grauAbertura = clamp(Number(valor) || 0, 0, 100);
+        this.grauAbertura = normalizarAberturaPercentual(valor);
         if (!this.getSimulationContext().isRunning) this.aberturaEfetiva = this.grauAbertura;
-        this.aberta = this.aberturaEfetiva > 0.5;
+        this.aberta = this.getAberturaNormalizadaAtual() > 0;
         this._notificarEstado();
         return true;
     }
@@ -308,8 +326,12 @@ export class ValvulaLogica extends ComponenteFisico {
 
     atualizarDinamica(dt) {
         const previousOpening = this.aberturaEfetiva;
-        this.aberturaEfetiva = rampToTarget(previousOpening, this.grauAbertura, dt, this.tempoCursoSegundos);
-        this.aberta = this.aberturaEfetiva > 0.5;
+        const nextOpening = rampToTarget(previousOpening, this.grauAbertura, dt, this.tempoCursoSegundos);
+        this.aberturaEfetiva = this.grauAbertura <= LIMIAR_FECHAMENTO_PERCENTUAL
+            && nextOpening <= LIMIAR_FECHAMENTO_PERCENTUAL
+            ? 0
+            : nextOpening;
+        this.aberta = this.getAberturaNormalizadaAtual() > 0;
 
         if (Math.abs(this.aberturaEfetiva - previousOpening) > 0.05) {
             this._notificarEstado();

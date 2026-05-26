@@ -801,12 +801,15 @@ Coberturas importantes:
 - Água escoando mais rápido que óleo leve em ramais equivalentes para tanque.
 - Bomba ativa na saída de tanque aumentando vazão sem manter o limite puramente gravitacional do tanque.
 - Válvula totalmente aberta, com `Cv` alto e `K=0`, não aplica perda mínima escondida e se aproxima de tubo equivalente.
+- Válvula comandada por set point com abertura subvisual, exibida como `0.0%`, fecha hidraulicamente e não mantém vazamento residual.
+- Válvula em malha fechada com tanques e altura relativa ligada não cria nem consome massa; o teste confere inventário total dos tanques e balanço entrada/saída da válvula.
+- Sistemas hidráulicos desconectados são resolvidos por ilha quando alguma malha fechada exige solver nodal; uma malha fechada isolada não altera volumes, vazões ou controle de set point de outra ilha aberta.
 - Configuracao visual de componentes centralizada em `infrastructure/dom/ComponentVisualConfig.js`, sem manter o antigo `js/Config.js` como fachada solta.
 
 Auditoria dos testes:
 
 - A suite executada por `npm.cmd test` cobre os 6 arquivos listados acima.
-- A execução atual possui 69 testes passantes. Os arquivos de teste contêm 337 ocorrências de `assert.*` na suíte principal.
+- A execução atual possui 79 testes passantes. Os arquivos de teste contêm 412 ocorrências de `assert.*` na suíte principal.
 - Nao foi encontrado padrao trivial como `assert.ok(true)`, `assert.equal(true, true)`, `print(true)` ou `console.log` usado como teste na suite principal.
 - Os testes exercitam resultados observaveis: valores numericos, estado de stores, eventos, HTML gerado, regras de camadas, ausencia de dependencias indevidas e comportamento do solver.
 - `test-phase1.mjs` e os HTMLs em `Testes/VERTESTE/` sao artefatos auxiliares/manuais; eles nao fazem parte do script `npm test`.
@@ -957,6 +960,12 @@ Próximos passos recomendados:
 - Resolvido em 2026-05-26: sistema de múltiplos componentes avaliado com adição de válvulas durante a simulação. Conexões novas em simulação já iniciada passam a entrar com rampa hidráulica curta, evitando queda brusca inicial no nível do tanque sem alterar o regime permanente.
 
 - Resolvido em 2026-05-26: painel de alerta de saturação do set point corrigido. O botão `x` passa a dispensar o aviso por assinatura estável de set point, topologia e parâmetros físicos, ignorando oscilações transitórias de vazão/pressão. O posicionamento do popup agora é calculado abaixo da toolbar para não obstruir os botões da simulação.
+
+- Resolvido em 2026-05-26: balanceamento de massa de componentes passantes corrigido para os dois sentidos. Quando a saída resolvida de uma válvula/bomba/trocador fica maior que a entrada, as conexões de saída também são reduzidas, evitando geração ou sumiço de fluido em malhas fechadas com altura relativa ligada.
+
+- Resolvido em 2026-05-26: seleção do solver passou a respeitar ilhas hidráulicas desconectadas. Se uma ilha tem malha fechada, apenas ela usa o solver nodal; ilhas abertas continuam no solver push-based, preservando o comportamento de set point, volumes e vazões de sistemas completamente isolados.
+
+- Resolvido em 2026-05-26: fechamento de válvula sob set point corrigido. Aberturas abaixo da resolução visual de `0.0%` passam a ser normalizadas para fechamento real, e os parâmetros hidráulicos retornam área e Cv nulos para impedir vazamento residual.
 
 ## 20. Resumo Executivo
 

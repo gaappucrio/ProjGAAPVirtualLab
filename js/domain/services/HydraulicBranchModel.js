@@ -267,10 +267,18 @@ export class HydraulicBranchModel {
                 const outputFlowLps = outputConnections.reduce((sum, conn) => sum + this.context.getConnectionState(conn).flowLps, 0);
                 const imbalanceLps = Math.max(0, inputFlowLps - outputFlowLps);
 
-                if (imbalanceLps <= EPSILON_FLOW) return;
+                if (imbalanceLps > EPSILON_FLOW) {
+                    const ratio = outputFlowLps > EPSILON_FLOW ? outputFlowLps / inputFlowLps : 0;
+                    inputConnections.forEach((conn) => this.scaleConnectionState(conn, ratio));
+                    adjusted = true;
+                    return;
+                }
 
-                const ratio = outputFlowLps > EPSILON_FLOW ? outputFlowLps / inputFlowLps : 0;
-                inputConnections.forEach((conn) => this.scaleConnectionState(conn, ratio));
+                const generatedFlowLps = Math.max(0, outputFlowLps - inputFlowLps);
+                if (generatedFlowLps <= EPSILON_FLOW) return;
+
+                const ratio = inputFlowLps > EPSILON_FLOW ? inputFlowLps / outputFlowLps : 0;
+                outputConnections.forEach((conn) => this.scaleConnectionState(conn, ratio));
                 adjusted = true;
             });
 
@@ -285,7 +293,7 @@ export class HydraulicBranchModel {
             const outputFlowLps = this.context.getOutputConnections(component)
                 .reduce((sum, conn) => sum + this.context.getConnectionState(conn).flowLps, 0);
 
-            return Math.max(maxImbalance, Math.max(0, inputFlowLps - outputFlowLps));
+            return Math.max(maxImbalance, Math.abs(inputFlowLps - outputFlowLps));
         }, 0);
 
         this.rebuildComponentHydraulicStateFromConnections();

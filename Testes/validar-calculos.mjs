@@ -404,6 +404,28 @@ test('característica da válvula altera capacidade hidráulica na mesma abertur
     );
 });
 
+test('valvula com abertura subvisual fecha hidraulicamente', () => {
+    const valvula = new ValvulaLogica('V-fechamento', 'V-fechamento', 0, 0);
+
+    valvula.aberturaEfetiva = 0.01;
+    valvula.grauAbertura = 0.01;
+
+    const parametros = valvula.getParametrosHidraulicos();
+
+    assert.equal(valvula.getAberturaNormalizadaAtual(), 0);
+    assert.equal(parametros.opening, 0);
+    assert.equal(parametros.effectiveCv, 0);
+    assert.equal(parametros.hydraulicAreaM2, 0);
+    assert.ok(parametros.localLossCoeff >= 1e6, 'Válvula subvisual deve se comportar como fechamento real');
+
+    valvula.aplicarControleNivel({ abertura: 0.01, intensidade: 0.0001, ownerId: 'T-01' });
+    assert.equal(valvula.grauAbertura, 0, 'Comando de set point arredondado para 0.0% deve virar fechamento real');
+
+    valvula.aberturaEfetiva = 0.01;
+    valvula.atualizarDinamica(0.1);
+    assert.equal(valvula.aberturaEfetiva, 0);
+});
+
 test('valvula aberta com K zero nao aplica perda minima escondida', () => {
     const valvula = new ValvulaLogica('V-zero', 'V-zero', 0, 0);
     valvula.aplicarPerfilCaracteristica('custom');
