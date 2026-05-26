@@ -55,7 +55,9 @@ export class ConnectionModel {
         designVelocityMps = DEFAULT_DESIGN_VELOCITY_MPS,
         designFlowLps = 0,
         transientFlowLps = 0,
-        lastResolvedFlowLps = 0
+        lastResolvedFlowLps = 0,
+        startupRampDurationS = 0,
+        startupRampElapsedS = 0
     }) {
         this.id = id;
         this.sourceId = sourceId;
@@ -70,6 +72,8 @@ export class ConnectionModel {
         this.designFlowLps = nonNegativeNumber(designFlowLps, 0);
         this.transientFlowLps = nonNegativeNumber(transientFlowLps, 0);
         this.lastResolvedFlowLps = nonNegativeNumber(lastResolvedFlowLps, 0);
+        this.startupRampDurationS = nonNegativeNumber(startupRampDurationS, 0);
+        this.startupRampElapsedS = nonNegativeNumber(startupRampElapsedS, 0);
         this.areaM2 = areaFromDiameter(this.diameterM);
     }
 

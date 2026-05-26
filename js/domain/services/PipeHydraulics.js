@@ -161,6 +161,8 @@ export function ensureConnectionProperties(conn) {
     conn.designFlowLps = nonNegativeNumber(conn.designFlowLps, 0);
     conn.transientFlowLps = nonNegativeNumber(conn.transientFlowLps, 0);
     conn.lastResolvedFlowLps = nonNegativeNumber(conn.lastResolvedFlowLps, 0);
+    conn.startupRampDurationS = nonNegativeNumber(conn.startupRampDurationS, 0);
+    conn.startupRampElapsedS = nonNegativeNumber(conn.startupRampElapsedS, 0);
 
     conn.areaM2 = areaFromDiameter(conn.diameterM);
     return conn;

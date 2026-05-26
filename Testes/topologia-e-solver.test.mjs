@@ -399,6 +399,71 @@ test('valvula totalmente aberta com Cv alto se aproxima de tubo equivalente', ()
     );
 });
 
+test('conexoes adicionadas com simulacao em andamento entram em rampa hidraulica', () => {
+    const engine = createEngine();
+    engine.elapsedTime = 5;
+
+    const tanque = new TanqueLogico('T-live-ramp', 'T-live-ramp', 0, 0);
+    tanque.volumeAtual = 500;
+    tanque.capacidadeMaxima = 1000;
+    tanque.fluidoConteudo = { ...FLUID_PRESETS.agua };
+    engine.add(tanque);
+
+    const conexoes = [];
+    for (let index = 0; index < 10; index += 1) {
+        const valvula = new ValvulaLogica(`V-live-${index}`, `V-live-${index}`, 120, index * 20);
+        const dreno = new DrenoLogico(`D-live-${index}`, `D-live-${index}`, 240, index * 20);
+
+        valvula.aplicarPerfilCaracteristica('custom');
+        valvula.setCoeficienteVazao(250);
+        valvula.setCoeficientePerda(0);
+        valvula.setTipoCaracteristica('linear');
+        valvula.setAbertura(100);
+        valvula.aberturaEfetiva = 100;
+
+        engine.add(valvula);
+        engine.add(dreno);
+        tanque.conectarSaida(valvula);
+        valvula.conectarSaida(dreno);
+
+        const entradaValvula = new ConnectionModel({ sourceId: tanque.id, targetId: valvula.id });
+        const saidaValvula = new ConnectionModel({ sourceId: valvula.id, targetId: dreno.id });
+        engine.addConnection(entradaValvula);
+        engine.addConnection(saidaValvula);
+        conexoes.push(entradaValvula, saidaValvula);
+    }
+
+    assert.ok(
+        conexoes.every((connection) => connection.startupRampDurationS > 0),
+        'Conexoes criadas durante a simulacao devem receber rampa inicial'
+    );
+
+    const volumeInicial = tanque.volumeAtual;
+    runAutomaticPhysicsStep(engine, 0.1);
+    const primeiraVazaoSaida = tanque.lastQout;
+    const primeiraQuedaL = volumeInicial - tanque.volumeAtual;
+
+    assert.ok(
+        primeiraQuedaL < 1,
+        `A rampa deve evitar queda brusca no primeiro tick: queda=${primeiraQuedaL} L`
+    );
+    assert.ok(
+        primeiraVazaoSaida < 5,
+        `A vazao inicial deve ser suavizada antes de atingir o regime: qout=${primeiraVazaoSaida} L/s`
+    );
+
+    runAutomaticPhysicsSteps(engine, 14, 0.1);
+
+    assert.ok(
+        conexoes.every((connection) => connection.startupRampDurationS === 0),
+        'A rampa deve terminar apos o periodo de partida'
+    );
+    assert.ok(
+        tanque.lastQout > 20,
+        `A rede deve atingir vazao normal apos a rampa: qout=${tanque.lastQout} L/s`
+    );
+});
+
 test('valvula mistura fluidos de multiplas entradas e entrega composicao ao tanque', () => {
     const engine = createEngine();
     const fonteAgua = new FonteLogica('F-agua', 'inlet-agua', 0, -40);

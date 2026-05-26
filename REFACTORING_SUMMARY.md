@@ -954,10 +954,9 @@ Próximos passos recomendados:
 - Criar documentação curta para usuários finais além deste relatório técnico.
 - Adicionar exemplos de cenários prontos.
 - Criar importação/exportação de fluxogramas completos, caso o objetivo seja uso em laboratório. A exportação tabular de dados da simulação já existe.
--Avaliar sistema de múltiplos componentes (adição de válvula apresenta queda brusca no nível do tanque)
+- Resolvido em 2026-05-26: sistema de múltiplos componentes avaliado com adição de válvulas durante a simulação. Conexões novas em simulação já iniciada passam a entrar com rampa hidráulica curta, evitando queda brusca inicial no nível do tanque sem alterar o regime permanente.
 
--Consertar o painel de alerta de saturação do set point: o x não está funcionando (provável rechamada devido à mudança de valores constante).
-ajustar o posicionamento para nao obstruir os botões da simulação.
+- Resolvido em 2026-05-26: painel de alerta de saturação do set point corrigido. O botão `x` passa a dispensar o aviso por assinatura estável de set point, topologia e parâmetros físicos, ignorando oscilações transitórias de vazão/pressão. O posicionamento do popup agora é calculado abaixo da toolbar para não obstruir os botões da simulação.
 
 ## 20. Resumo Executivo
 

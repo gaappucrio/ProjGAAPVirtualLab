@@ -35,6 +35,8 @@ import { SelectionStore } from '../stores/SelectionStore.js';
 import { SimulationConfigStore } from '../stores/SimulationConfigStore.js';
 import { TopologyGraph } from '../stores/TopologyGraph.js';
 
+const LIVE_CONNECTION_STARTUP_RAMP_SECONDS = 1.2;
+
 export {
     clamp,
     ComponenteFisico,
@@ -205,7 +207,19 @@ export class SistemaSimulacao extends Observable {
         this.attachComponentContext(comp);
     }
 
+    primeLiveConnectionStartupRamp(connection) {
+        if (!connection || !this.isRunning || this.elapsedTime <= 0) return;
+
+        connection.startupRampDurationS = Math.max(
+            connection.startupRampDurationS || 0,
+            LIVE_CONNECTION_STARTUP_RAMP_SECONDS
+        );
+        connection.startupRampElapsedS = 0;
+        connection.transientFlowLps = 0;
+    }
+
     addConnection(connection) {
+        this.primeLiveConnectionStartupRamp(connection);
         this.topology.addConnection(connection);
         this.notify(EngineEventPayloads.connectionCommitted(connection));
         return connection;

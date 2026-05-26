@@ -217,7 +217,8 @@ test('alerta global de saturacao independe do painel de propriedades selecionado
 
         const tank = new TanqueLogico('tank-alert', 'Tank Alert', 0, 0);
         tank.setpoint = 72;
-        tank.alertaSaturacao = {
+        tank.setpointAtivo = true;
+        const createAlert = (overrides = {}) => ({
             ativo: true,
             usarAlturaRelativa: false,
             vazaoSaidaLimiteSetpointLps: 12.5,
@@ -229,8 +230,10 @@ test('alerta global de saturacao independe do painel de propriedades selecionado
                 vazaoNominalRecomendadaLps: 10,
                 pressaoMaximaRecomendadaBar: 2.5
             }],
-            ajustesFonte: []
-        };
+            ajustesFonte: [],
+            ...overrides
+        });
+        tank.alertaSaturacao = createAlert();
 
         const visibleTank = refreshTankSaturationAlertForComponents([tank]);
 
@@ -238,6 +241,29 @@ test('alerta global de saturacao independe do painel de propriedades selecionado
         assert.equal(panel.dataset.visible, 'true');
         assert.equal(popup.classList.contains('is-visible'), true);
         assert.match(text.innerHTML, /Set point/);
+
+        closeButton.onclick();
+        assert.equal(panel.dataset.visible, 'false');
+        assert.equal(panel.style.display, 'none');
+
+        tank.alertaSaturacao = createAlert({
+            vazaoSaidaLimiteSetpointLps: 12.1,
+            pressaoSaidaSetpointBar: 0.13,
+            ajustesBomba: [{
+                vazaoNominalRecomendadaLps: 9.8,
+                pressaoMaximaRecomendadaBar: 2.45
+            }]
+        });
+        const hiddenAfterDynamicChange = refreshTankSaturationAlertForComponents([tank]);
+
+        assert.equal(hiddenAfterDynamicChange, null);
+        assert.equal(panel.dataset.visible, 'false');
+
+        tank.setpoint = 75;
+        const visibleAfterSetpointChange = refreshTankSaturationAlertForComponents([tank]);
+
+        assert.equal(visibleAfterSetpointChange, tank);
+        assert.equal(panel.dataset.visible, 'true');
 
         tank.alertaSaturacao = null;
         const hiddenTank = refreshTankSaturationAlertForComponents([tank]);

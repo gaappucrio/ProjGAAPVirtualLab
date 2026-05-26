@@ -536,7 +536,7 @@
 
   .tank-saturation-popup {
       position: fixed;
-      top: 82px;
+      top: var(--tank-popup-top, 148px);
       left: var(--tank-popup-left, 20px);
       right: var(--tank-popup-right, 20px);
       z-index: 1600;
@@ -556,7 +556,7 @@
   .tank-saturation-popup .tank-saturation-alert {
       margin: 0 !important;
       padding: 12px 46px 12px 16px !important;
-      max-height: calc(100vh - 120px);
+      max-height: calc(100vh - var(--tank-popup-top, 148px) - 16px);
       overflow: auto;
       border-left-width: 4px !important;
       border-radius: 8px !important;
@@ -657,7 +657,7 @@
 
   @media (max-width: 900px) {
       .tank-saturation-popup {
-          top: 74px;
+          top: var(--tank-popup-top, 132px);
           left: 12px;
           right: 12px;
       }

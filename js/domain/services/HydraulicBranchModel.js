@@ -20,6 +20,29 @@ import {
 } from '../units/HydraulicUnits.js';
 import { getConnectionResponseTimeS as calculateConnectionResponseTimeS } from './PipeHydraulics.js';
 
+function applyConnectionStartupRamp(conn, targetFlowLps, dt) {
+    const rampDurationS = Number(conn?.startupRampDurationS) || 0;
+    const safeTargetFlowLps = Math.max(0, targetFlowLps);
+
+    if (rampDurationS <= 0 || safeTargetFlowLps <= EPSILON_FLOW) return safeTargetFlowLps;
+    if (dt <= 0) return 0;
+
+    const nextElapsedS = Math.min(
+        rampDurationS,
+        Math.max(0, Number(conn.startupRampElapsedS) || 0) + dt
+    );
+    const rampScale = clamp(nextElapsedS / rampDurationS, 0, 1);
+    conn.startupRampElapsedS = nextElapsedS;
+
+    if (nextElapsedS >= rampDurationS) {
+        conn.startupRampDurationS = 0;
+        conn.startupRampElapsedS = 0;
+        return safeTargetFlowLps;
+    }
+
+    return safeTargetFlowLps * rampScale;
+}
+
 export class HydraulicBranchModel {
     constructor(hydraulicContext) {
         this.context = hydraulicContext;
@@ -35,9 +58,10 @@ export class HydraulicBranchModel {
 
     applyConnectionDynamics(conn, targetFlowLps, dt, geometry, isPassThrough = false, fluid = this.context.getConnectionFluid(conn)) {
         const responseTimeS = this.getConnectionResponseTimeS(conn, geometry, fluid);
-        const actualFlowLps = isPassThrough ? targetFlowLps : smoothFirstOrder(
+        const dynamicTargetFlowLps = applyConnectionStartupRamp(conn, targetFlowLps, dt);
+        const actualFlowLps = isPassThrough ? dynamicTargetFlowLps : smoothFirstOrder(
             Math.max(0, conn.transientFlowLps || 0),
-            Math.max(0, targetFlowLps),
+            dynamicTargetFlowLps,
             dt,
             responseTimeS
         );
