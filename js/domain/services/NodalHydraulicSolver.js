@@ -234,6 +234,35 @@ export class NodalHydraulicSolver {
         const loop = this.buildFloatingSeriesLoop(network, island);
         if (!loop) return false;
 
+        if (loop.blocked) {
+            const pressureByNodeId = this.createInitialPressures(network);
+            const branchResults = network.branches.map((branch) => this.createZeroBranchResult(
+                branch,
+                getNodePressure(pressureByNodeId, branch.fromNodeId),
+                getNodePressure(pressureByNodeId, branch.toNodeId)
+            ));
+
+            this.metrics.lastDiagnostics.push({
+                code: 'floating_closed_loop_blocked',
+                severity: 'info',
+                componentIds: loop.orderedComponents.map((component) => component.id),
+                message: 'Malha fechada bloqueada por valvula ou ramo fechado: a vazao fisica e zero.'
+            });
+            this.applySolvedConnectionStates(network, branchResults, pressureByNodeId, dt);
+            const balanceError = this.hydraulicModel.balancePassThroughMass();
+            this.applyPumpMetrics(network, branchResults, pressureByNodeId);
+            this.hydraulicModel.relaxIdleConnections(dt);
+
+            pressureByNodeId.forEach((pressureBar, nodeId) => {
+                this.nodePressureGuesses.set(nodeId, pressureBar);
+            });
+
+            this.metrics.lastIterations = 0;
+            this.metrics.lastError = balanceError;
+            this.metrics.convergedCount++;
+            return true;
+        }
+
         const highLimitLps = loop.pumpBranches.reduce((limit, branch) => {
             const pumpLimit = Math.max(0, branch.component.vazaoNominal * branch.component.getDriveAtual());
             return Math.min(limit, pumpLimit);
@@ -351,13 +380,16 @@ export class NodalHydraulicSolver {
 
         const pumpBranches = orderedInternalBranches.filter((branch) => branch.kind === 'pump' && !branch.disabled);
         if (pumpBranches.length === 0) return null;
+        const blocked = [...orderedInternalBranches, ...orderedConnectionBranches]
+            .some((branch) => branch?.disabled === true);
 
         return {
             startComponent,
             orderedComponents,
             orderedInternalBranches,
             orderedConnectionBranches,
-            pumpBranches
+            pumpBranches,
+            blocked
         };
     }
 

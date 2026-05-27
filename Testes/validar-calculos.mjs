@@ -12,7 +12,7 @@ import {
     calcularSaidaTrocadorCalor
 } from '../js/domain/components/TrocadorCalorLogico.js';
 import { VALVE_PROFILE_DEFINITIONS, ValvulaLogica } from '../js/domain/components/ValvulaLogica.js';
-import { pressureLossFromFlow } from '../js/domain/components/BaseComponente.js';
+import { pressureLossFromFlow, smoothFirstOrder } from '../js/domain/components/BaseComponente.js';
 import { ConnectionModel } from '../js/domain/models/ConnectionModel.js';
 import {
     darcyFrictionFactor,
@@ -367,6 +367,11 @@ test('tempo de curso e rampa aceitam zero e respeitam a escala configurada', () 
     approx(bomba.acionamentoEfetivo, 100, 1e-9, 'Tempo de rampa zero da bomba');
 });
 
+test('dinamica transitoria nao avanca quando o passo de tempo e zero', () => {
+    approx(smoothFirstOrder(2, 10, 0, 1), 2, 1e-12, 'Suavizacao de primeira ordem deve preservar estado em dt zero');
+    approx(smoothFirstOrder(2, 10, -0.1, 1), 2, 1e-12, 'Suavizacao de primeira ordem deve ignorar dt negativo');
+});
+
 test('característica da válvula altera capacidade hidráulica na mesma abertura', () => {
     const valvula = new ValvulaLogica('V-02', 'V-02', 0, 0);
     valvula.aberturaEfetiva = 50;
@@ -606,6 +611,25 @@ test('fator de cavitação da bomba permanece finito com NPSHa inválido', () =>
     approx(bomba.calcularFatorCavitacao(3, 2.5), 1, 1e-12, 'NPSHa suficiente não limita a bomba');
     approx(bomba.calcularFatorCavitacao(-1, 2.5), 0, 1e-12, 'NPSHa negativo deve zerar sem NaN');
     approx(bomba.calcularFatorCavitacao(Number.NaN, 2.5), 0, 1e-12, 'NPSHa inválido deve zerar sem NaN');
+});
+
+test('carga instantanea da bomba segue a mesma curva usada pelo solver', () => {
+    const bomba = new BombaLogica('B-curve', 'B-curve', 0, 0);
+
+    bomba.vazaoNominal = 40;
+    bomba.pressaoMaxima = 4;
+    bomba.acionamentoEfetivo = 100;
+    bomba.fluxoReal = bomba.vazaoNominal;
+    bomba.npshDisponivelM = 20;
+    bomba.fatorCavitacaoAtual = 1;
+    bomba.recalcularMetricasDerivadasCurva();
+
+    approx(
+        bomba.cargaGeradaBar,
+        bomba.getCurvaPressaoBar(bomba.fluxoReal, bomba.getDriveAtual()),
+        1e-12,
+        'A bomba nao deve manter carga escondida quando a curva de pressao ja chegou a zero'
+    );
 });
 
 test('curva da bomba reflete alteração de NPSHr sem esconder a mudança pela escala', () => {

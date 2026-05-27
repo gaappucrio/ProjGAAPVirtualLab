@@ -27,7 +27,7 @@ const nonNegativeLossCoeff = (lossCoeff) => {
 const solverLossCoeff = (lossCoeff) => Math.max(MIN_SOLVER_LOSS_COEFF, nonNegativeLossCoeff(lossCoeff));
 
 export const smoothFirstOrder = (current, target, dt, timeConstantS) => {
-    if (dt <= 0) return target;
+    if (dt <= 0) return current;
     if (!Number.isFinite(timeConstantS) || timeConstantS <= 0.001) return target;
     const alpha = 1 - Math.exp(-dt / timeConstantS);
     return current + ((target - current) * alpha);

@@ -766,6 +766,7 @@ Arquivos de teste:
 - `Testes/camadas-compat.test.mjs`
 - `Testes/cenarios-aplicacao.test.mjs`
 - `Testes/presentation-imports.test.mjs`
+- `Testes/browser-smoke.mjs` como smoke visual opcional via `npm run test:browser-smoke`.
 
 Coberturas importantes:
 
@@ -804,12 +805,15 @@ Coberturas importantes:
 - Válvula comandada por set point com abertura subvisual, exibida como `0.0%`, fecha hidraulicamente e não mantém vazamento residual.
 - Válvula em malha fechada com tanques e altura relativa ligada não cria nem consome massa; o teste confere inventário total dos tanques e balanço entrada/saída da válvula.
 - Sistemas hidráulicos desconectados são resolvidos por ilha quando alguma malha fechada exige solver nodal; uma malha fechada isolada não altera volumes, vazões ou controle de set point de outra ilha aberta.
+- Diagnóstico de malha fechada antes do solver nodal experimental.
+- Exportação/importação de fluxograma completo.
+- Cenários prontos importáveis como fluxogramas.
 - Configuracao visual de componentes centralizada em `infrastructure/dom/ComponentVisualConfig.js`, sem manter o antigo `js/Config.js` como fachada solta.
 
 Auditoria dos testes:
 
 - A suite executada por `npm.cmd test` cobre os 6 arquivos listados acima.
-- A execução atual possui 79 testes passantes. Os arquivos de teste contêm 412 ocorrências de `assert.*` na suíte principal.
+- A execução atual possui 84 testes passantes. Os arquivos de teste contêm 445 ocorrências de `assert.*` na suíte principal.
 - Nao foi encontrado padrao trivial como `assert.ok(true)`, `assert.equal(true, true)`, `print(true)` ou `console.log` usado como teste na suite principal.
 - Os testes exercitam resultados observaveis: valores numericos, estado de stores, eventos, HTML gerado, regras de camadas, ausencia de dependencias indevidas e comportamento do solver.
 - `test-phase1.mjs` e os HTMLs em `Testes/VERTESTE/` sao artefatos auxiliares/manuais; eles nao fazem parte do script `npm test`.
@@ -943,20 +947,20 @@ Conclusão: o solver nodal é uma evolução desejável para malhas fechadas, ma
 
 ## 19. Riscos Técnicos e Próximos Passos
 
-Riscos atuais:
+Riscos atuais e mitigação:
 
-- O solver push-based é adequado para cenários educacionais e fluxos dirigidos, mas não é um solver nodal não linear completo.
-- Redes muito complexas, com recirculação ou malhas fechadas reais, podem exigir um solver iterativo por nós.
-- A UI ainda é manual, então mudanças grandes de DOM exigem cuidado com bindings.
-- As unidades agora estão divididas entre domínio e apresentação; futuras mudanças devem evitar recriar módulos genéricos em `utils/`.
+- O solver push-based continua sendo o padrão para redes abertas e didáticas. Malhas fechadas são detectadas por `HydraulicNetworkAnalyzer` e sinalizadas na UI antes da simulação, usando o solver nodal experimental somente nas ilhas necessárias.
+- Redes muito complexas, com recirculação real ou malhas mal condicionadas, continuam fora do escopo industrial validado. O aviso de diagnóstico deixa claro quando a planta entrou no modo nodal experimental.
+- A UI continua manual, mas agora há smoke visual de navegador em `Testes/browser-smoke.mjs` e script `npm run test:browser-smoke` para verificar fluxo básico de abertura da UI, cenários prontos e aviso de malha fechada.
+- As unidades permanecem separadas entre `domain/units/HydraulicUnits.js` e `presentation/units/DisplayUnits.js`; os testes de camadas seguem impedindo recriação de `utils/` genérico.
 
-Próximos passos recomendados:
+Próximos passos concluídos em 2026-05-27:
 
-- Criar um teste visual/smoke em navegador para fluxo básico de UI.
-- Criar detector de malhas fechadas antes de ativar um solver nodal experimental.
-- Criar documentação curta para usuários finais além deste relatório técnico.
-- Adicionar exemplos de cenários prontos.
-- Criar importação/exportação de fluxogramas completos, caso o objetivo seja uso em laboratório. A exportação tabular de dados da simulação já existe.
+- Smoke visual de navegador criado.
+- Detector/diagnóstico de malhas fechadas exposto na UI antes do solver nodal experimental atuar.
+- Documentação curta para usuários finais criada em `docs/GUIA_USUARIO.md`.
+- Cenários prontos adicionados no seletor superior.
+- Importação/exportação de fluxogramas completos adicionada por arquivos `.gaap-flow.json`, mantendo a exportação tabular existente para dados de simulação.
 
 ## 20. Resumo Executivo
 

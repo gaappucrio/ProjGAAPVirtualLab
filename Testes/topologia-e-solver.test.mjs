@@ -5,12 +5,14 @@ import test from 'node:test';
 
 import { FLUID_PRESETS, SistemaSimulacao } from '../js/application/engine/SimulationEngine.js';
 import { ConnectionModel } from '../js/domain/models/ConnectionModel.js';
+import { analyzeHydraulicNetwork } from '../js/domain/services/HydraulicNetworkAnalyzer.js';
 import { BombaLogica } from '../js/domain/components/BombaLogica.js';
 import { DrenoLogico } from '../js/domain/components/DrenoLogico.js';
 import { FonteLogica } from '../js/domain/components/FonteLogica.js';
 import { TanqueLogico } from '../js/domain/components/TanqueLogico.js';
 import { TrocadorCalorLogico } from '../js/domain/components/TrocadorCalorLogico.js';
 import { ValvulaLogica } from '../js/domain/components/ValvulaLogica.js';
+import { buildNetworkDiagnosticState } from '../js/presentation/controllers/NetworkDiagnosticsController.js';
 
 const DOMAIN_ROOT = path.resolve('js/domain');
 
@@ -702,6 +704,40 @@ test('solver distribui fluxo em bifurcação simples', () => {
     assert.ok(fonte.fluxoReal >= drenoA.vazaoRecebidaLps + drenoB.vazaoRecebidaLps - 1e-9, 'A fonte deve suprir a soma dos ramos');
 });
 
+test('fonte limitada por vazao nao sustenta pressao nominal no dreno', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-limited', 'F-limited', 0, 0);
+    const dreno = new DrenoLogico('D-limited', 'D-limited', 160, 0);
+
+    fonte.pressaoFonteBar = 10;
+    fonte.vazaoMaxima = 1;
+    dreno.pressaoSaidaBar = 0;
+    fonte.conectarSaida(dreno);
+
+    const connection = new ConnectionModel({ sourceId: fonte.id, targetId: dreno.id });
+    engine.add(fonte);
+    engine.add(dreno);
+    engine.addConnection(connection);
+
+    runPhysicsSteps(engine, 60, 0.1);
+
+    const state = engine.getConnectionState(connection);
+
+    assert.ok(Math.abs(state.flowLps - fonte.vazaoMaxima) < 1e-6, `Fonte deve respeitar limite de vazao: ${state.flowLps}`);
+    assert.ok(
+        state.outletPressureBar <= dreno.pressaoSaidaBar + 1e-9,
+        `Dreno de pressao fixa nao deve receber pressao nominal da fonte limitada: ${state.outletPressureBar}`
+    );
+    assert.ok(
+        state.sourcePressureBar < fonte.pressaoFonteBar * 0.01,
+        `Pressao efetiva deve cair quando a fonte satura em vazao: ${state.sourcePressureBar}`
+    );
+    assert.ok(
+        Math.abs(state.deltaPBar + state.targetLossBar - state.totalLossBar) < 1e-9,
+        'Perdas registradas devem ser consistentes com a vazao efetiva'
+    );
+});
+
 test('solver automatico usa modelo nodal em circuito fechado com bomba', () => {
     const engine = createEngine();
     const bomba = new BombaLogica('P-loop', 'P-loop', 0, 0);
@@ -749,6 +785,43 @@ test('solver automatico usa modelo nodal em circuito fechado com bomba', () => {
     );
 });
 
+test('bomba em circuito fechado nao atravessa valvula fechada', () => {
+    const engine = createEngine();
+    const bomba = new BombaLogica('P-loop-closed', 'P-loop-closed', 0, 0);
+    const valvula = new ValvulaLogica('V-loop-closed', 'V-loop-closed', 140, 0);
+
+    bomba.vazaoNominal = 60;
+    bomba.pressaoMaxima = 4;
+    bomba.grauAcionamento = 100;
+    bomba.acionamentoEfetivo = 100;
+    valvula.setAbertura(0);
+    valvula.aberturaEfetiva = 0;
+
+    bomba.conectarSaida(valvula);
+    valvula.conectarSaida(bomba);
+
+    const pumpValve = new ConnectionModel({ sourceId: bomba.id, targetId: valvula.id });
+    const valvePump = new ConnectionModel({ sourceId: valvula.id, targetId: bomba.id });
+
+    [bomba, valvula].forEach((component) => engine.add(component));
+    [pumpValve, valvePump].forEach((connection) => engine.addConnection(connection));
+
+    runAutomaticPhysicsSteps(engine, 4, 0.1);
+
+    const metrics = engine.getSolverMetrics();
+
+    assert.equal(metrics.mode, 'nodal');
+    assert.equal(valvula.getAberturaNormalizadaAtual(), 0);
+    assert.equal(engine.getConnectionState(pumpValve).flowLps, 0);
+    assert.equal(engine.getConnectionState(valvePump).flowLps, 0);
+    assert.equal(valvula.fluxoReal, 0);
+    assert.equal(bomba.fluxoReal, 0);
+    assert.ok(
+        metrics.lastDiagnostics.some((diagnostic) => diagnostic.code === 'floating_closed_loop_blocked'),
+        'Malha fechada bloqueada deve registrar diagnostico fisico explicito'
+    );
+});
+
 test('malha fechada passiva sem fronteira nao cria vazao artificial', () => {
     const engine = createEngine();
     const valvulaA = new ValvulaLogica('V-passiva-A', 'V-passiva-A', 0, 0);
@@ -779,6 +852,54 @@ test('malha fechada passiva sem fronteira nao cria vazao artificial', () => {
         metrics.lastDiagnostics.some((diagnostic) => diagnostic.code === 'floating_passive_closed_loop'),
         'Malha passiva flutuante deve produzir diagnostico explicito'
     );
+});
+
+test('diagnostico de rede avisa malhas fechadas antes do solver nodal', () => {
+    const bomba = new BombaLogica('P-loop-diag', 'P-loop-diag', 0, 0);
+    const valvula = new ValvulaLogica('V-loop-diag', 'V-loop-diag', 140, 0);
+    const connections = [
+        new ConnectionModel({ sourceId: bomba.id, targetId: valvula.id }),
+        new ConnectionModel({ sourceId: valvula.id, targetId: bomba.id })
+    ];
+
+    bomba.grauAcionamento = 100;
+    bomba.acionamentoEfetivo = 100;
+    bomba.vazaoNominal = 60;
+    bomba.pressaoMaxima = 4;
+    bomba.conectarSaida(valvula);
+    valvula.conectarSaida(bomba);
+
+    const analysis = analyzeHydraulicNetwork({
+        componentes: [bomba, valvula],
+        conexoes: connections
+    });
+    const diagnostic = buildNetworkDiagnosticState(analysis);
+
+    assert.equal(analysis.hasDirectedCycle, true);
+    assert.equal(diagnostic.visible, true);
+    assert.equal(diagnostic.code, 'floating_active_closed_loop');
+    assert.equal(diagnostic.activePumpFloatingCount, 1);
+});
+
+test('diagnostico de rede fica silencioso em rede aberta dirigida', () => {
+    const fonte = new FonteLogica('F-open-diag', 'F-open-diag', 0, 0);
+    const tanque = new TanqueLogico('T-open-diag', 'T-open-diag', 120, 0);
+    const dreno = new DrenoLogico('D-open-diag', 'D-open-diag', 240, 0);
+    const connections = [
+        new ConnectionModel({ sourceId: fonte.id, targetId: tanque.id }),
+        new ConnectionModel({ sourceId: tanque.id, targetId: dreno.id })
+    ];
+
+    fonte.conectarSaida(tanque);
+    tanque.conectarSaida(dreno);
+
+    const diagnostic = buildNetworkDiagnosticState(analyzeHydraulicNetwork({
+        componentes: [fonte, tanque, dreno],
+        conexoes: connections
+    }));
+
+    assert.equal(diagnostic.visible, false);
+    assert.equal(diagnostic.code, 'open_network');
 });
 
 test('valvula em malha fechada com tanques nao cria fluido com altura relativa', () => {

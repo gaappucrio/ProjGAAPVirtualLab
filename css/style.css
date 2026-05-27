@@ -114,6 +114,40 @@
       color: var(--gaap-text) !important;
   }
 
+  .network-diagnostics-banner {
+      margin: 0 12px 10px;
+      padding: 9px 12px;
+      border-left: 4px solid #f39c12;
+      border-radius: 4px;
+      background: #fff7e6;
+      color: #6f4b00;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.45;
+  }
+
+  .network-diagnostics-banner[hidden] {
+      display: none !important;
+  }
+
+  .network-diagnostics-banner[data-severity="info"] {
+      border-left-color: #3498db;
+      background: #eef7ff;
+      color: #1f5d87;
+  }
+
+  body.theme-dark .network-diagnostics-banner {
+      background: var(--gaap-warning-bg);
+      border-left-color: var(--gaap-warning-border);
+      color: var(--gaap-warning-text);
+  }
+
+  body.theme-dark .network-diagnostics-banner[data-severity="info"] {
+      background: #10253a;
+      border-left-color: #4fa3dc;
+      color: #d8ecfb;
+  }
+
   body.theme-dark #btn-clear {
       background: var(--gaap-surface-muted) !important;
       border-color: var(--gaap-danger-border) !important;
@@ -526,7 +560,10 @@
       z-index: 1000;
       display: flex;
       align-items: center;
+      justify-content: flex-end;
       gap: 8px;
+      flex-wrap: wrap;
+      max-width: calc(100vw - 120px);
       pointer-events: none;
   }
 

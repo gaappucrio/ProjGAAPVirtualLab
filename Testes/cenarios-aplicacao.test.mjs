@@ -9,6 +9,12 @@ import { DrenoLogico } from '../js/domain/components/DrenoLogico.js';
 import { FonteLogica } from '../js/domain/components/FonteLogica.js';
 import { TanqueLogico } from '../js/domain/components/TanqueLogico.js';
 import { ValvulaLogica } from '../js/domain/components/ValvulaLogica.js';
+import {
+    createFlowchartDocument,
+    FLOWCHART_DOCUMENT_TYPE,
+    parseFlowchartDocument
+} from '../js/presentation/flowchart/FlowchartPersistence.js';
+import { getReadyScenario, listReadyScenarios } from '../js/presentation/flowchart/ReadyScenarios.js';
 
 function createEngine() {
     const engine = new SistemaSimulacao();
@@ -167,4 +173,45 @@ test('pausa da simulação preserva último estado hidráulico visível', () => 
     assert.equal(engine.getConnectionState(connection).targetFlowLps, 4.5);
     assert.equal(connection.transientFlowLps, 4);
     assert.equal(connection.lastResolvedFlowLps, 4.5);
+});
+
+test('exportação de fluxograma completo preserva componentes, conexões e análise', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-01', 'Entrada-01', 0, 0);
+    const tanque = new TanqueLogico('T-01', 'Tanque-01', 160, 0);
+    const dreno = new DrenoLogico('D-01', 'Saida-01', 320, 0);
+    const entradaTanque = new ConnectionModel({ id: 'C-01', sourceId: fonte.id, targetId: tanque.id });
+    const saidaTanque = new ConnectionModel({ id: 'C-02', sourceId: tanque.id, targetId: dreno.id });
+
+    fonte.pressaoFonteBar = 1.2;
+    tanque.volumeAtual = 350;
+    fonte.conectarSaida(tanque);
+    tanque.conectarSaida(dreno);
+    [fonte, tanque, dreno].forEach((component) => engine.add(component));
+    [entradaTanque, saidaTanque].forEach((connection) => engine.addConnection(connection));
+
+    const document = createFlowchartDocument(engine, { name: 'Caso de teste' });
+    const parsed = parseFlowchartDocument(JSON.stringify(document));
+
+    assert.equal(document.type, FLOWCHART_DOCUMENT_TYPE);
+    assert.equal(document.workspace.components.length, 3);
+    assert.equal(document.workspace.connections.length, 2);
+    assert.equal(document.analysis.hasDirectedCycle, false);
+    assert.equal(parsed.workspace.components[1].snapshot.properties.volumeAtual, 350);
+});
+
+test('cenarios prontos são fluxogramas importáveis e incluem caso de malha fechada', () => {
+    const scenarios = listReadyScenarios();
+    assert.ok(scenarios.length >= 3);
+
+    scenarios.forEach((scenario) => {
+        const readyScenario = getReadyScenario(scenario.id);
+        const parsed = parseFlowchartDocument(readyScenario.document);
+        assert.equal(parsed.document.type, FLOWCHART_DOCUMENT_TYPE);
+        assert.ok(parsed.workspace.components.length > 0);
+    });
+
+    const loop = parseFlowchartDocument(getReadyScenario('malha-fechada-experimental').document);
+    assert.equal(loop.workspace.components.length, 2);
+    assert.equal(loop.workspace.connections.length, 2);
 });

@@ -292,6 +292,13 @@ const TEXTS = {
             clear: 'Limpar Área',
             exportData: 'Exportar dados',
             exportDataTitle: 'Exporta dados dos componentes e conexões atuais para tabelas.',
+            exportFlowchart: 'Exportar planta',
+            exportFlowchartTitle: 'Exporta o fluxograma completo em JSON para reabrir depois.',
+            importFlowchart: 'Importar planta',
+            importFlowchartTitle: 'Importa um fluxograma completo salvo em JSON.',
+            importFlowchartError: 'Nao foi possivel importar o fluxograma.',
+            readyScenarioPlaceholder: 'Cenarios prontos',
+            readyScenarioTitle: 'Carrega exemplos de plantas para estudo.',
             relativeHeight: 'Altura relativa',
             language: 'Inglês',
             languageTitle: 'Alterna os textos do laboratório entre português e inglês.',
@@ -367,6 +374,11 @@ const TEXTS = {
             successSourceOne: 'Fonte ajustada para o limite físico do set point.',
             successSourceMany: ({ count }) => `${count} fontes ajustadas para o limite físico do set point.`
         },
+        networkDiagnostics: {
+            closedLoop: ({ count }) => `Malha fechada detectada em ${count} ilha(s): o solver nodal experimental sera usado para evitar erro silencioso do modelo push-based.`,
+            floatingActive: ({ count }) => `${count} malha(s) fechada(s) sem fonte, dreno ou tanque: o solver nodal usa referencia manometrica relativa. Use como experimento didatico.`,
+            floatingPassive: ({ count }) => `${count} malha(s) fechada(s) passiva(s) sem fronteira de pressao: a solucao fisica esperada e vazao zero.`
+        },
         common: {
             rangeSeparator: ' a '
         }
@@ -379,6 +391,13 @@ const TEXTS = {
             clear: 'Clear Area',
             exportData: 'Export data',
             exportDataTitle: 'Exports current component and connection data to tables.',
+            exportFlowchart: 'Export plant',
+            exportFlowchartTitle: 'Exports the full flowchart as JSON so it can be reopened later.',
+            importFlowchart: 'Import plant',
+            importFlowchartTitle: 'Imports a full flowchart saved as JSON.',
+            importFlowchartError: 'The flowchart could not be imported.',
+            readyScenarioPlaceholder: 'Ready scenarios',
+            readyScenarioTitle: 'Loads example plants for study.',
             relativeHeight: 'Relative height',
             language: 'English',
             languageTitle: 'Switches the lab text between Portuguese and English.',
@@ -453,6 +472,11 @@ const TEXTS = {
             successMany: ({ count }) => `${count} pumps sized to the physical set point limit.`,
             successSourceOne: 'Source adjusted to the physical set point limit.',
             successSourceMany: ({ count }) => `${count} sources adjusted to the physical set point limit.`
+        },
+        networkDiagnostics: {
+            closedLoop: ({ count }) => `Closed loop detected in ${count} island(s): the experimental nodal solver will be used to avoid silent push-based model errors.`,
+            floatingActive: ({ count }) => `${count} closed loop(s) without source, sink, or tank: the nodal solver uses a relative gauge-pressure reference. Treat it as a didactic experiment.`,
+            floatingPassive: ({ count }) => `${count} passive closed loop(s) without a pressure boundary: the expected physical solution is zero flow.`
         },
         common: {
             rangeSeparator: ' to '
