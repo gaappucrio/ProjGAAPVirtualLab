@@ -70,7 +70,7 @@ export const VALVE_PROPERTIES_PRESENTER = {
             </div>
             <div class="prop-group">
                 ${makeLabel('Coeficiente de vazão (Cv)', TOOLTIP.valveCv)}
-                <input type="number" id="input-cv" ${hintAttr(TOOLTIP.valveCv)} value="${comp.cv.toFixed(2)}" step="0.1" min="0.1" max="250" ${bloqueioParametrosAttr}>
+                <input type="number" id="input-cv" ${hintAttr(TOOLTIP.valveCv)} value="${comp.cv.toFixed(2)}" step="0.1" min="0.1" max="800" ${bloqueioParametrosAttr}>
             </div>
             <div class="prop-group">
                 ${makeLabel('Coeficiente de perda (K)', TOOLTIP.valveK)}
@@ -198,7 +198,7 @@ export const VALVE_PROPERTIES_PRESENTER = {
             }
             validateInputWithFeedback(
                 event.target,
-                (value, name) => InputValidator.validateNumber(value, 0.05, 250, name),
+                (value, name) => InputValidator.validateNumber(value, 0.05, 800, name),
                 'Coeficiente Cv',
                 (validated) => { comp.setCoeficienteVazao(validated); }
             );

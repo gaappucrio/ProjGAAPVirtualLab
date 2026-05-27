@@ -36,6 +36,7 @@ const removedFiles = [
     ['js', 'utils', 'PortStateManager.js'],
     ['js', 'application', 'services', 'ConnectionServiceRuntime.js'],
     ['js', 'domain', 'services', 'PortPositionCalculator.js'],
+    ['js', 'presentation', 'controllers', 'PresentationController.js'],
     ['js', 'presentation', 'properties', 'component', 'PumpValveComponentPropertiesPresenter.js']
 ];
 

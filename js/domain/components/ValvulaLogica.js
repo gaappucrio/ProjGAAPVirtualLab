@@ -2,11 +2,13 @@ import { clamp, ComponenteFisico, pressureLossFromFlow, rampToTarget } from './B
 import { ComponentEventPayloads } from '../events/ComponentEventPayloads.js';
 
 const FATOR_MINIMO_AREA = 0.12;
-const BASE_PERDA_POR_CV = 25;
 const CV_CONTROLE_NIVEL_MAX = 800;
 const K_CONTROLE_NIVEL_MIN = 0.02;
 const PERFIL_PERSONALIZADO = 'custom';
 const PERFIL_PADRAO = 'equal_percentage';
+const GPM_PER_M3S = 15850.323141489;
+const PA_PER_PSI = 6894.757293168;
+const WATER_DENSITY_REFERENCE_KG_M3 = 999.016;
 const PERFIS_CONTROLE_NIVEL = Object.freeze(['equal_percentage', 'linear', 'quick_opening']);
 const LIMIAR_REFORCO_CONTROLE_NIVEL = 0.85;
 const TIPOS_CARACTERISTICA = Object.freeze(['equal_percentage', 'linear', 'quick_opening']);
@@ -17,7 +19,7 @@ export const VALVE_PROFILE_DEFINITIONS = Object.freeze({
     equal_percentage: Object.freeze({
         id: 'equal_percentage',
         tipoCaracteristica: 'equal_percentage',
-        cv: 4.0,
+        cv: 160.0,
         perdaLocalK: 1.0,
         rangeabilidade: 30,
         tempoCursoSegundos: 6.0
@@ -25,7 +27,7 @@ export const VALVE_PROFILE_DEFINITIONS = Object.freeze({
     linear: Object.freeze({
         id: 'linear',
         tipoCaracteristica: 'linear',
-        cv: 6.0,
+        cv: 220.0,
         perdaLocalK: 0.75,
         rangeabilidade: 50,
         tempoCursoSegundos: 4.0
@@ -33,7 +35,7 @@ export const VALVE_PROFILE_DEFINITIONS = Object.freeze({
     quick_opening: Object.freeze({
         id: 'quick_opening',
         tipoCaracteristica: 'quick_opening',
-        cv: 10.0,
+        cv: 280.0,
         perdaLocalK: 0.35,
         rangeabilidade: 15,
         tempoCursoSegundos: 2.0
@@ -55,6 +57,17 @@ function normalizarPerfil(perfilId) {
 function normalizarAberturaPercentual(valor) {
     const abertura = clamp(Number(valor) || 0, 0, 100);
     return abertura <= LIMIAR_FECHAMENTO_PERCENTUAL ? 0 : abertura;
+}
+
+function cvToLossCoeff(cv, areaM2) {
+    const safeCv = Math.max(0.05, Number(cv) || 0);
+    const safeAreaM2 = Math.max(0, Number(areaM2) || 0);
+    if (safeAreaM2 <= 0) return 1e6;
+
+    return (
+        (2 * PA_PER_PSI * GPM_PER_M3S * GPM_PER_M3S)
+        / WATER_DENSITY_REFERENCE_KG_M3
+    ) * ((safeAreaM2 * safeAreaM2) / (safeCv * safeCv));
 }
 
 export class ValvulaLogica extends ComponenteFisico {
@@ -129,7 +142,7 @@ export class ValvulaLogica extends ComponenteFisico {
         const hydraulicAreaFactor = clamp((0.2 + (0.8 * characteristicFactor)), FATOR_MINIMO_AREA, 1);
         const hydraulicAreaM2 = this.getAreaConexaoM2() * hydraulicAreaFactor;
         const throttlingLoss = Math.max(0, (1 / Math.max(FATOR_MINIMO_AREA, characteristicFactor)) - 1);
-        const lossFromCv = BASE_PERDA_POR_CV / Math.max(0.01, effectiveCv * effectiveCv);
+        const lossFromCv = cvToLossCoeff(effectiveCv, hydraulicAreaM2);
         const localLossCoeff = Math.max(0, this.perdaLocalK + throttlingLoss + lossFromCv);
 
         return {

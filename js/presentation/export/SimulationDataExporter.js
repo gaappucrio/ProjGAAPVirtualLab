@@ -5,6 +5,10 @@ import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
 import { TrocadorCalorLogico } from '../../domain/components/TrocadorCalorLogico.js';
 import { ValvulaLogica } from '../../domain/components/ValvulaLogica.js';
 import { getFluidVisualStyle } from '../../infrastructure/rendering/FluidVisualStyle.js';
+import {
+    calculateConnectionResidenceTimeS,
+    calculateTankResidenceTimeS
+} from '../../domain/services/ResidenceTime.js';
 import { isEnglishLanguage, translateFluidName, translateLiteral } from '../i18n/LanguageManager.js';
 import { formatUnitValue, getUnitPreferences, getUnitSymbol } from '../units/DisplayUnits.js';
 
@@ -90,6 +94,7 @@ const COMPONENT_COLUMNS = [
     'Pressão no fundo do tanque (bar)',
     'Vazão de entrada do tanque (L/s)',
     'Vazão de saída do tanque (L/s)',
+    'Tempo de residência do tanque (s)',
     'Fluido no tanque',
     'Densidade do fluido no tanque (kg/m³)',
     'Temperatura do fluido no tanque (°C)',
@@ -115,8 +120,8 @@ const CONNECTION_COLUMNS = [
     'Rugosidade absoluta (mm)',
     'Comprimento extra (m)',
     'Perda local K',
-    'Velocidade de projeto (m/s)',
-    'Vazão de projeto (L/s)',
+    'Velocidade desejada (m/s)',
+    'Vazão de referência (L/s)',
     'Vazão atual (L/s)',
     'Vazão alvo (L/s)',
     'Velocidade atual (m/s)',
@@ -128,6 +133,7 @@ const CONNECTION_COLUMNS = [
     'Comprimento hidráulico total (m)',
     'Comprimento reto/esquemático (m)',
     'Desnível hidráulico (m)',
+    'Tempo de residência no trecho (s)',
     'Tempo de resposta (s)',
     'Reynolds',
     'Fator de atrito Darcy',
@@ -221,6 +227,7 @@ const EXPORT_LABELS_EN = {
     'Pressão no fundo do tanque': 'Tank bottom pressure',
     'Vazão de entrada do tanque': 'Tank inlet flow',
     'Vazão de saída do tanque': 'Tank outlet flow',
+    'Tempo de residência do tanque': 'Tank residence time',
     'Fluido no tanque': 'Fluid in tank',
     'Densidade do fluido no tanque': 'Tank fluid density',
     'Temperatura do fluido no tanque': 'Tank fluid temperature',
@@ -243,8 +250,8 @@ const EXPORT_LABELS_EN = {
     'Rugosidade absoluta': 'Absolute roughness',
     'Comprimento extra': 'Extra length',
     'Perda local K': 'Local loss K',
-    'Velocidade de projeto': 'Design velocity',
-    'Vazão de projeto': 'Design flow',
+    'Velocidade desejada': 'Target velocity',
+    'Vazão de referência': 'Reference flow',
     'Vazão atual': 'Current flow',
     'Vazão alvo': 'Target flow',
     'Velocidade atual': 'Current velocity',
@@ -256,6 +263,7 @@ const EXPORT_LABELS_EN = {
     'Comprimento hidráulico total': 'Total hydraulic length',
     'Comprimento reto/esquemático': 'Straight/schematic length',
     'Desnível hidráulico': 'Hydraulic elevation difference',
+    'Tempo de residência no trecho': 'Line residence time',
     'Tempo de resposta': 'Response time',
     'Fator de atrito Darcy': 'Darcy friction factor',
     'Rugosidade relativa': 'Relative roughness',
@@ -549,6 +557,7 @@ function buildComponentRow(component) {
         row['Pressão no fundo do tanque (bar)'] = numberValue(component.pressaoFundoBar, 5);
         row['Vazão de entrada do tanque (L/s)'] = numberValue(component.lastQin, 5);
         row['Vazão de saída do tanque (L/s)'] = numberValue(component.lastQout, 5);
+        row['Tempo de residência do tanque (s)'] = numberValue(calculateTankResidenceTimeS(component).timeS, 5);
         row['Fluido no tanque'] = fluid?.nome || '';
         row['Densidade do fluido no tanque (kg/m³)'] = numberValue(fluid?.densidade, 3);
         row['Temperatura do fluido no tanque (°C)'] = numberValue(fluid?.temperatura, 3);
@@ -584,8 +593,8 @@ function buildConnectionRow(engine, connection, index) {
         'Rugosidade absoluta (mm)': numberValue(connection.roughnessMm, 5),
         'Comprimento extra (m)': numberValue(connection.extraLengthM, 5),
         'Perda local K': numberValue(connection.perdaLocalK, 5),
-        'Velocidade de projeto (m/s)': numberValue(connection.designVelocityMps, 5),
-        'Vazão de projeto (L/s)': numberValue(connection.designFlowLps, 5),
+        'Velocidade desejada (m/s)': numberValue(connection.designVelocityMps, 5),
+        'Vazão de referência (L/s)': numberValue(connection.designFlowLps, 5),
         'Vazão atual (L/s)': numberValue(state?.flowLps, 5),
         'Vazão alvo (L/s)': numberValue(state?.targetFlowLps, 5),
         'Velocidade atual (m/s)': numberValue(state?.velocityMps, 5),
@@ -597,6 +606,11 @@ function buildConnectionRow(engine, connection, index) {
         'Comprimento hidráulico total (m)': numberValue(geometry?.lengthM ?? state?.lengthM, 5),
         'Comprimento reto/esquemático (m)': numberValue(geometry?.straightLengthM ?? state?.straightLengthM, 5),
         'Desnível hidráulico (m)': numberValue(geometry?.headGainM ?? state?.headGainM, 5),
+        'Tempo de residência no trecho (s)': numberValue(calculateConnectionResidenceTimeS(
+            connection,
+            { ...geometry, lengthM: state?.lengthM || geometry?.lengthM },
+            state?.flowLps
+        ), 5),
         'Tempo de resposta (s)': numberValue(state?.responseTimeS, 5),
         Reynolds: numberValue(state?.reynolds, 2),
         'Fator de atrito Darcy': numberValue(state?.frictionFactor, 6),

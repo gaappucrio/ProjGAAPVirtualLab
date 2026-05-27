@@ -75,6 +75,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Cada perfil altera características hidráulicas, como `Cv`, perda local `K`, característica, rangeabilidade e tempo de curso.
 - Modo personalizado permite edição individual dos parâmetros.
 - A característica da válvula altera a área hidráulica efetiva e a perda local.
+- O `Cv` é convertido para um coeficiente de perda equivalente pela relação industrial `Q = Cv * sqrt(DeltaP/SG)`, permitindo comparação mais direta com ferramentas como DWSIM.
 - Integração com controle de nível de tanque.
 
 ### 2.5 Tanque
@@ -83,6 +84,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Bocais com elevação de entrada e saída.
 - Vazão de entrada e saída.
 - Pressão hidrostática calculada pela altura de líquido.
+- Tempo de residência atual calculado por `V/Q`, usando a vazão de saída como referência e a vazão de entrada quando não há saída.
 - Controle de nível por set point.
 - Bloqueio de ativação do controle caso não exista válvula conectada diretamente à saída do tanque.
 - Alerta de saturação quando o set point não é alcançável com a capacidade hidráulica atual.
@@ -94,7 +96,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 
 ### 2.6 Conexões e Tubulações
 
-- Diâmetro interno.
+- Diâmetro interno do trecho como propriedade física direta: o valor editado sempre altera área, velocidade, Reynolds, perda distribuída e tempo de residência.
 - Comprimento hidráulico total.
 - Comprimento extra equivalente.
 - Rugosidade absoluta.
@@ -104,8 +106,9 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Fator de atrito Darcy.
 - Regime de escoamento.
 - Tempo de resposta hidráulica.
-- Diâmetro sugerido por continuidade, usando vazão de projeto e velocidade de projeto.
-- Vazão de dimensionamento editável no painel do trecho, com botão para capturar a vazão atual/alvo como base estável do cálculo de diâmetro sugerido.
+- Tempo de residência no trecho calculado pelo volume interno da tubulação dividido pela vazão atual.
+- Diâmetro sugerido por continuidade, usando vazão de referência e velocidade desejada.
+- Vazão de referência editável no painel avançado do trecho, com botão para capturar a vazão atual/alvo como base estável do cálculo de diâmetro sugerido. Essa vazão não força nem limita a vazão real da rede.
 
 ### 2.7 Monitoramento
 
@@ -143,6 +146,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Tabela de componentes com nome, tipo, identificadores, posição, conexões, pressões, vazões e parâmetros específicos de fontes, saídas, bombas, válvulas e tanques.
 - Tabela de conexões com origem, destino, diâmetro, rugosidade, perdas, vazões, pressões, geometria, Reynolds, fator de atrito, regime e fluido do trecho.
 - As unidades exibidas nas tabelas exportadas seguem as preferências selecionadas na interface para pressão, vazão, comprimento, volume e temperatura, em vez de expor apenas as unidades internas do motor.
+- A exportação inclui tempo de residência do tanque e tempo de residência de cada trecho.
 - A exportação foi mantida focada em dados tabulares para comparação com DWSIM, sem anexar gráficos ao arquivo.
 - A exportação pontual de bomba gera um `.json` separado no formato de CurveSet esperado pelo DWSIM, com `Name`, `Description`, `ImpellerDiameter`, `ImpellerSpeed`, `ImpellerDiameterUnit`, `CurveHead`, `CurvePower`, `CurveEfficiency` e `CurveNPSHr`. As curvas usam arrays `X/Y` com vazão em `m3/s`; carga e NPSHr em `m`, potência estimada em `kW` e eficiência em `%`.
 
@@ -187,6 +191,7 @@ Arquivos principais:
 - `domain/models/ConnectionModel.js`
 - `domain/services/HydraulicNetworkSolver.js`
 - `domain/services/HydraulicBranchModel.js`
+- `domain/services/ResidenceTime.js`
 - `domain/services/PipeHydraulics.js`
 - `domain/context/SimulationContext.js`
 
@@ -235,7 +240,6 @@ Contém controllers, presenters, validações de UI e lógica de painel.
 
 Arquivos principais:
 
-- `presentation/controllers/PresentationController.js`
 - `presentation/controllers/PropertyPanelController.js`
 - `presentation/controllers/ClipboardController.js`
 - `presentation/controllers/DeleteSelectionController.js`
@@ -507,7 +511,7 @@ Características:
 - Mistura fluidos em componentes passantes com múltiplas entradas.
 - Corrige perdas locais por Reynolds e viscosidade, evitando que fluidos viscosos sejam favorecidos artificialmente apenas pela menor densidade.
 - Resolve bombas ativas a jusante de tanques de forma implícita, permitindo sucção acima da vazão gravitacional passiva e limitando o resultado por curva da bomba, perdas do ramo e NPSH.
-- Componentes passantes não duplicam a perda base do trecho a jusante; válvulas abertas com `K=0` e `Cv` alto se aproximam de um tubo de comprimento hidráulico equivalente.
+- Componentes passantes não duplicam a perda base do trecho a jusante; válvulas abertas com `K=0` aplicam apenas a perda física equivalente ao `Cv`, de modo que `Cv` muito alto se aproxima de um tubo de comprimento hidráulico equivalente.
 
 ### 7.1 Conservação de Massa
 
@@ -619,6 +623,7 @@ Propriedades principais:
 - Fluido de conteúdo.
 - Set point.
 - Ganhos PI.
+- Ganhos padrão reescalados para erro normalizado (`Kp = 4`, `Ki = 0.6`), permitindo modulação parcial de válvulas em vez de saturação imediata em aberto/fechado.
 
 Comportamento:
 
@@ -646,8 +651,8 @@ Propriedades principais:
 - Perda local.
 - Vazão transitória.
 - Vazão resolvida.
-- Velocidade de projeto.
-- Vazão de projeto.
+- Velocidade desejada para dimensionamento.
+- Vazão de referência para dimensionamento.
 - Comprimento hidráulico esquemático base de 1 m quando a altura relativa está desligada, sem usar distância visual para perda de carga.
 
 As referências visuais ficam em registries e renderizadores de infraestrutura, não no domínio.
@@ -766,11 +771,11 @@ Arquivos de teste:
 - `Testes/camadas-compat.test.mjs`
 - `Testes/cenarios-aplicacao.test.mjs`
 - `Testes/presentation-imports.test.mjs`
-- `Testes/browser-smoke.mjs` como smoke visual opcional via `npm run test:browser-smoke`.
 
 Coberturas importantes:
 
 - Cálculos hidráulicos.
+- Tempo de residência em tanques e tubulações.
 - Tempo de curso da válvula.
 - Rampa da bomba.
 - Perfis de válvula.
@@ -801,7 +806,7 @@ Coberturas importantes:
 - Pressão atmosférica igual em todos os presets padrão.
 - Água escoando mais rápido que óleo leve em ramais equivalentes para tanque.
 - Bomba ativa na saída de tanque aumentando vazão sem manter o limite puramente gravitacional do tanque.
-- Válvula totalmente aberta, com `Cv` alto e `K=0`, não aplica perda mínima escondida e se aproxima de tubo equivalente.
+- Válvula totalmente aberta, com `Cv` alto e `K=0`, aplica apenas a perda física equivalente ao `Cv` e se aproxima de tubo equivalente quando o `Cv` é suficientemente alto.
 - Válvula comandada por set point com abertura subvisual, exibida como `0.0%`, fecha hidraulicamente e não mantém vazamento residual.
 - Válvula em malha fechada com tanques e altura relativa ligada não cria nem consome massa; o teste confere inventário total dos tanques e balanço entrada/saída da válvula.
 - Sistemas hidráulicos desconectados são resolvidos por ilha quando alguma malha fechada exige solver nodal; uma malha fechada isolada não altera volumes, vazões ou controle de set point de outra ilha aberta.
@@ -812,10 +817,10 @@ Coberturas importantes:
 Auditoria dos testes:
 
 - A suite executada por `npm.cmd test` cobre os 6 arquivos listados acima.
-- A execução atual possui 84 testes passantes. Os arquivos de teste contêm 445 ocorrências de `assert.*` na suíte principal.
+- A execução atual possui 88 testes passantes. Os arquivos de teste contêm 461 ocorrências de `assert.*` na suíte principal.
 - Nao foi encontrado padrao trivial como `assert.ok(true)`, `assert.equal(true, true)`, `print(true)` ou `console.log` usado como teste na suite principal.
 - Os testes exercitam resultados observaveis: valores numericos, estado de stores, eventos, HTML gerado, regras de camadas, ausencia de dependencias indevidas e comportamento do solver.
-- `test-phase1.mjs` e os HTMLs em `Testes/VERTESTE/` sao artefatos auxiliares/manuais; eles nao fazem parte do script `npm test`.
+- O antigo `test-phase1.mjs` foi removido em 2026-05-27 porque importava fachadas ja eliminadas (`ConnectionServiceRuntime.js` e `PortPositionCalculator.js`) e nao fazia parte do script `npm test`.
 
 ## 16. Estado Atual da Refatoração
 
@@ -859,7 +864,8 @@ Marcos concluídos:
 - `PerformanceProfiler.js` foi removido por não existir fluxo real de ativação/uso no programa.
 - `Units.js` foi dividido entre `domain/units/HydraulicUnits.js` e `presentation/units/DisplayUnits.js`.
 - Atalho global de remoção e limpeza visual do canvas saíram de `App.js` e foram movidos para controller/infraestrutura dedicados.
-- `PresentationController.js` deixou de coordenar a apresentacao completa e passou a ser uma fachada de compatibilidade para `PropertyPanelController.js`.
+- A fachada legada `PresentationController.js` foi removida; o painel de propriedades e inicializado diretamente por `PropertyPanelController.js`.
+- O hook sem uso `setConnectionFlowGetter` foi removido do engine; a vazao exibida passa a vir diretamente do estado hidraulico resolvido.
 - `App.js` foi reduzido ao ponto de entrada; a ordem de inicializacao da UI foi movida para `VirtualLabRuntime.js`.
 - Testes de arquitetura e comportamento adicionados.
 - Testes de arquitetura passaram a impedir regressões em que `domain/` importe camadas externas ou `application/` importe apresentação/infraestrutura visual.
@@ -868,7 +874,7 @@ Marcos concluídos:
 Pontos ainda observáveis:
 
 - `VirtualLabRuntime.js` agora concentra a montagem do navegador. Isso é intencional: ele é a borda de composição entre engine, controllers e infraestrutura visual.
-- `PresentationController.js` permanece apenas como fachada de compatibilidade. Novas mudanças devem mirar `PropertyPanelController.js` ou controllers específicos.
+- Nao ha mais fachada geral de apresentacao. Novas mudanças devem mirar `PropertyPanelController.js` ou controllers especificos.
 
 ## 17. Boas Práticas Para Manutenção
 
@@ -950,14 +956,14 @@ Riscos atuais e mitigação:
 
 - O solver push-based continua sendo o padrão para redes abertas e didáticas. Malhas fechadas são detectadas por `HydraulicNetworkAnalyzer` e sinalizadas na UI antes da simulação, usando o solver nodal experimental somente nas ilhas necessárias.
 - Redes muito complexas, com recirculação real ou malhas mal condicionadas, continuam fora do escopo industrial validado. O aviso de diagnóstico deixa claro quando a planta entrou no modo nodal experimental.
-- A UI continua manual, mas agora há smoke visual de navegador em `Testes/browser-smoke.mjs` e script `npm run test:browser-smoke` para verificar fluxo básico de abertura da UI e aviso de malha fechada.
+- A UI continua manual; a validação automatizada permanece concentrada na suíte Node principal para evitar dependências pesadas de navegador.
 - As unidades permanecem separadas entre `domain/units/HydraulicUnits.js` e `presentation/units/DisplayUnits.js`; os testes de camadas seguem impedindo recriação de `utils/` genérico.
 
 Próximos passos concluídos em 2026-05-27:
 
-- Smoke visual de navegador criado.
+- Smoke visual de navegador removido em 2026-05-27 por não agregar confiança proporcional ao custo de dependência.
 - Detector/diagnóstico de malhas fechadas exposto na UI antes do solver nodal experimental atuar.
-- Documentação curta para usuários finais criada em `docs/GUIA_USUARIO.md`.
+- Documentacao tecnica e de uso consolidada em `docs/Documentaçao-GAAPVL.md`.
 - Importação/exportação de fluxogramas completos adicionada por arquivos `.gaap-flow.json`, mantendo a exportação tabular existente para dados de simulação.
 
 ## 20. Resumo Executivo
@@ -977,3 +983,6 @@ ver lugar:
 - Resolvido em 2026-05-26: fechamento de válvula sob set point corrigido. Aberturas abaixo da resolução visual de `0.0%` passam a ser normalizadas para fechamento real, e os parâmetros hidráulicos retornam área e Cv nulos para impedir vazamento residual.
 - Resolvido em 2026-05-26: sistema de múltiplos componentes avaliado com adição de válvulas durante a simulação. Conexões novas em simulação já iniciada passam a entrar com rampa hidráulica curta, evitando queda brusca inicial no nível do tanque sem alterar o regime permanente.
 - Resolvido em 2026-05-27: oscilacao do set point em sistemas com valvula de entrada e saida corrigida. O controle entra em repouso com histerese ao atingir o PA, fecha hidraulicamente as valvulas controladas, zera fluxo residual em conexoes bloqueadas por valvula fechada e restaura a abertura manual ao sair do modo de set point.
+- Resolvido em 2026-05-27: ganhos padrão do PI reescalados para erro normalizado. Fora da banda morta, erros pequenos agora comandam aberturas parciais nas válvulas; a saturação em 100% fica reservada para desvios grandes.
+
+SET POINT QUEBROU (CALMA SÓ O RANGE DE PARÂMETROS) analisar valores de ki e kp em relacao a vida real e o dwsim (lógica fuzzy)

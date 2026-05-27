@@ -19,6 +19,7 @@ import {
     validateInputWithFeedback
 } from '../PropertyPresenterShared.js';
 import { translateLiteral } from '../../i18n/LanguageManager.js';
+import { calculateTankResidenceTimeS } from '../../../domain/services/ResidenceTime.js';
 
 function getTankControlVisualState(active, available) {
     if (active) return 'active';
@@ -32,6 +33,10 @@ function syncTankControlVisualState(groupEl, state) {
     groupEl.classList.toggle('is-active', state === 'active');
     groupEl.classList.toggle('is-ready', state === 'ready');
     groupEl.classList.toggle('is-blocked', state === 'blocked');
+}
+
+function formatResidenceTime(valueS) {
+    return Number.isFinite(valueS) ? `${valueS.toFixed(2)} s` : translateLiteral('Sem fluxo');
 }
 
 export const TANK_PROPERTIES_PRESENTER = {
@@ -61,6 +66,7 @@ export const TANK_PROPERTIES_PRESENTER = {
             : (isDark ? '#ff6b6b' : '#c0392b');
         const estadoVisualControle = getTankControlVisualState(comp.setpointAtivo, controleNivelDisponivel);
         const fluidoConteudo = comp.getFluidoConteudo?.() || comp.fluidoConteudo;
+        const residence = calculateTankResidenceTimeS(comp);
 
         const basicContent = `
             <div class="prop-group">
@@ -90,6 +96,10 @@ export const TANK_PROPERTIES_PRESENTER = {
             <div class="prop-group">
                 ${makeUnitLabel('Vazão de saída', 'flow', TOOLTIP.tankOutletFlow)}
                 <input type="text" id="disp-qout-tanque" ${hintAttr(TOOLTIP.tankOutletFlow)} value="${displayUnitValue('flow', comp.lastQout, 2)}" disabled>
+            </div>
+            <div class="prop-group">
+                ${makeLabel('Tempo de residência (s)', TOOLTIP.tankResidenceTime)}
+                <input type="text" id="disp-tempo-residencia-tanque" ${hintAttr(TOOLTIP.tankResidenceTime)} value="${formatResidenceTime(residence.timeS)}" disabled>
             </div>
             <div class="prop-group">
                 <label title="Fluido ou mistura atualmente armazenado no tanque.">Fluido no Tanque</label>
@@ -136,11 +146,11 @@ export const TANK_PROPERTIES_PRESENTER = {
             </div>
             <div class="prop-group" id="group-ctrl-params" style="display:${comp.setpointAtivo ? 'block' : 'none'};">
                 ${makeLabel('Ganho proporcional (Kp)', TOOLTIP.tankKp)}
-                <input type="number" id="input-kp" ${hintAttr(TOOLTIP.tankKp)} value="${comp.kp}" step="5" min="1" max="500">
+                <input type="number" id="input-kp" ${hintAttr(TOOLTIP.tankKp)} value="${comp.kp}" step="0.1" min="0" max="20">
             </div>
             <div class="prop-group" id="group-ctrl-ki" style="display:${comp.setpointAtivo ? 'block' : 'none'};">
                 ${makeLabel('Ganho integral (Ki)', TOOLTIP.tankKi)}
-                <input type="number" id="input-ki" ${hintAttr(TOOLTIP.tankKi)} value="${comp.ki}" step="1" min="0" max="100">
+                <input type="number" id="input-ki" ${hintAttr(TOOLTIP.tankKi)} value="${comp.ki}" step="0.1" min="0" max="10">
             </div>
         `;
 
@@ -209,6 +219,8 @@ export const TANK_PROPERTIES_PRESENTER = {
 
             setValue('disp-pressao-tanque', displayUnitValue('pressure', comp.pressaoFundoBar, 2));
             setValue('disp-nível-tanque', displayUnitValue('length', comp.getAlturaLiquidoM(), 2));
+            const residence = calculateTankResidenceTimeS(comp);
+            setValue('disp-tempo-residencia-tanque', formatResidenceTime(residence.timeS));
             const fluidoAtual = comp.getFluidoConteudo?.() || comp.fluidoConteudo;
             setValue('disp-tank-fluid', fluidoAtual?.nome || '-');
             setValue('disp-tank-fluid-density', fluidoAtual?.densidade ? fluidoAtual.densidade.toFixed(1) : '0.0');
@@ -344,7 +356,7 @@ export const TANK_PROPERTIES_PRESENTER = {
         bind('input-kp', 'change', (event) => {
             validateInputWithFeedback(
                 event.target,
-                (value, name) => InputValidator.validateNumber(value, 1, 500, name),
+                (value, name) => InputValidator.validateNumber(value, 0, 20, name),
                 'Ganho proporcional',
                 (validated) => {
                     comp.kp = validated;
@@ -355,7 +367,7 @@ export const TANK_PROPERTIES_PRESENTER = {
         bind('input-ki', 'change', (event) => {
             validateInputWithFeedback(
                 event.target,
-                (value, name) => InputValidator.validateNumber(value, 0, 100, name),
+                (value, name) => InputValidator.validateNumber(value, 0, 10, name),
                 'Ganho integral',
                 (validated) => {
                     comp.ki = validated;

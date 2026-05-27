@@ -120,12 +120,14 @@ export function darcyFrictionFactor(reynolds, relativeRoughness) {
  * Obtém propriedades hidráulicas da tubulação para uma vazão.
  */
 export function getPipeHydraulics(conn, geometry, areaM2, flowLps, density, viscosityPaS) {
-    const reynolds = reynoldsFromFlow(flowLps, conn.diameterM, areaM2, density, viscosityPaS);
+    ensureConnectionProperties(conn);
+    const safeAreaM2 = positiveNumber(areaM2, conn.areaM2);
+    const reynolds = reynoldsFromFlow(flowLps, conn.diameterM, safeAreaM2, density, viscosityPaS);
     const relativeRoughness = conn.diameterM > 0
         ? (Math.max(0, conn.roughnessMm || 0) / 1000) / conn.diameterM
         : 0;
     const frictionFactor = darcyFrictionFactor(reynolds, relativeRoughness);
-    const velocityMps = areaM2 > 0 ? lpsToM3s(flowLps) / areaM2 : 0;
+    const velocityMps = safeAreaM2 > 0 ? lpsToM3s(flowLps) / safeAreaM2 : 0;
 
     return {
         velocityMps,

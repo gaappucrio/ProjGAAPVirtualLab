@@ -193,12 +193,16 @@ export const PUMP_PROPERTIES_PRESENTER = {
                 <input type="number" id="input-vazmax" ${hintAttr(TOOLTIP.pumpFlow)} value="${displayEditableUnitValue('flow', comp.vazaoNominal, 3)}" step="${displayStep('flow', 0.5)}" min="${displayBound('flow', 5)}" max="${displayBound('flow', 500)}">
             </div>
             <div class="prop-group">
-                ${makeUnitLabel('Pressão máxima', 'pressure', TOOLTIP.pumpPressure)}
+                ${makeUnitLabel('Carga máxima da curva', 'pressure', TOOLTIP.pumpPressure)}
                 <input type="number" id="input-pressao-max-bomba" ${hintAttr(TOOLTIP.pumpPressure)} value="${displayEditableUnitValue('pressure', comp.pressaoMaxima, 3)}" step="${displayStep('pressure', 0.01)}" min="${displayBound('pressure', 0.5)}" max="${displayBound('pressure', 20)}">
             </div>
             <div class="prop-group">
                 ${makeUnitLabel('Vazão atual', 'flow', TOOLTIP.pumpCurrentFlow)}
                 <input type="text" id="disp-vazao-bomba" ${hintAttr(TOOLTIP.pumpCurrentFlow)} value="${displayUnitValue('flow', comp.fluxoReal, 2)}" disabled>
+            </div>
+            <div class="prop-group">
+                ${makeUnitLabel('Aumento de pressão atual', 'pressure', TOOLTIP.pumpPressureIncrease)}
+                <input type="text" id="disp-carga-bomba" ${hintAttr(TOOLTIP.pumpPressureIncrease)} value="${displayUnitValue('pressure', comp.cargaGeradaBar, 2)}" disabled>
             </div>
             <div class="prop-group">
                 ${makeUnitLabel('Pressão de sucção', 'pressure', TOOLTIP.pumpSuctionPressure)}
@@ -310,7 +314,7 @@ export const PUMP_PROPERTIES_PRESENTER = {
             validateInputWithFeedback(
                 event.target,
                 (value, name) => InputValidator.validatePressure(baseFromDisplay('pressure', value), 20, name),
-                'Pressão máxima',
+                'Carga máxima',
                 (validated) => {
                     comp.pressaoMaxima = validated;
                     comp.recalcularMetricasDerivadasCurva?.();

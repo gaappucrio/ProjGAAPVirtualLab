@@ -36,8 +36,8 @@ export class TanqueLogico extends ComponenteFisico {
         this.fluidoConteudo = createFluidoFromProperties();
         this.setpointAtivo = false;
         this.setpoint = 50;
-        this.kp = 250;
-        this.ki = 25;
+        this.kp = 4;
+        this.ki = 0.6;
         this.alertaSaturacao = null;
         this._ctrlIntegral = 0;
         this._lastErro = 0;

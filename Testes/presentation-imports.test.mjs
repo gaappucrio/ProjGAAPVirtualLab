@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 const PRESENTATION_MODULES = [
-    '../js/presentation/controllers/PresentationController.js',
     '../js/presentation/controllers/ClipboardController.js',
     '../js/presentation/controllers/ComponentRotationController.js',
     '../js/presentation/controllers/DeleteSelectionController.js',

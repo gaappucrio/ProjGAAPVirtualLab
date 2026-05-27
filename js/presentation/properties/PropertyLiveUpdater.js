@@ -8,6 +8,10 @@ import {
     getCurrentDesignFlowCandidateLps,
     getSuggestedDiameterForConnection
 } from '../../domain/services/PipeHydraulics.js';
+import {
+    calculateConnectionResidenceTimeS,
+    calculateTankResidenceTimeS
+} from '../../domain/services/ResidenceTime.js';
 import { toDisplayValue } from '../units/DisplayUnits.js';
 import { localizeElement, translateLiteral } from '../i18n/LanguageManager.js';
 import { byId, isActive, setValue } from './PropertyDomAdapter.js';
@@ -17,6 +21,10 @@ import { updateTankControlAvailabilityUI } from './TankSaturationAlertPresenter.
 function getPumpNpshMargin(component) {
     const npshRequeridoAtualM = component.npshRequeridoAtualM ?? component.npshRequeridoM ?? 0;
     return component.getMargemNpshAtualM?.() ?? (component.npshDisponivelM - npshRequeridoAtualM);
+}
+
+function formatResidenceTime(valueS) {
+    return Number.isFinite(valueS) ? `${valueS.toFixed(2)} s` : translateLiteral('Sem fluxo');
 }
 
 function getPumpNpshCondition(component) {
@@ -151,6 +159,11 @@ function updateConnectionValues(engine, connection) {
     setValue('disp-pipe-fluid-viscosity', fluid?.viscosidadeDinamicaPaS ? fluid.viscosidadeDinamicaPaS.toFixed(5) : '0.00000');
     setFieldValue('disp-pipe-deltap', state.deltaPBar, 'pressure', 3);
     setFieldValue('disp-pipe-length', state.lengthM, 'length', 2);
+    setValue('disp-pipe-residence-time', formatResidenceTime(calculateConnectionResidenceTimeS(
+        connection,
+        { lengthM: state.lengthM },
+        state.flowLps
+    )));
     setValue('disp-pipe-response', state.responseTimeS.toFixed(2));
 
     const suggestedDiameterM = getSuggestedDiameterForConnection(connection, state);
@@ -175,6 +188,7 @@ function updateTankValues(component) {
     setFieldValue('disp-nível-tanque', component.getAlturaLiquidoM(), 'length', 2);
     setFieldValue('disp-qin-tanque', component.lastQin, 'flow', 2);
     setFieldValue('disp-qout-tanque', component.lastQout, 'flow', 2);
+    setValue('disp-tempo-residencia-tanque', formatResidenceTime(calculateTankResidenceTimeS(component).timeS));
     const fluid = component.getFluidoConteudo?.() || component.fluidoConteudo;
     setValue('disp-tank-fluid', fluid?.nome || '-');
     setValue('disp-tank-fluid-density', fluid?.densidade ? fluid.densidade.toFixed(1) : '0.0');
@@ -228,6 +242,7 @@ function updatePumpValues(component, { monitorController } = {}) {
     }
     setValue('disp-acionamento-real-bomba', component.acionamentoEfetivo.toFixed(1));
     setFieldValue('disp-vazao-bomba', component.fluxoReal, 'flow', 2);
+    setFieldValue('disp-carga-bomba', component.cargaGeradaBar, 'pressure', 2);
     setFieldValue('disp-succao-bomba', component.pressaoSucaoAtualBar, 'pressure', 2);
     setFieldValue('disp-descarga-bomba', component.pressaoDescargaAtualBar, 'pressure', 2);
     setValue('disp-cavitacao-bomba', `${(component.fatorCavitacaoAtual * 100).toFixed(0)}%`);

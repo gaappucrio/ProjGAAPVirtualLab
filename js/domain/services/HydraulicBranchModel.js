@@ -18,7 +18,9 @@ import {
     lpsToM3s,
     pressureFromHeadBar
 } from '../units/HydraulicUnits.js';
-import { getConnectionResponseTimeS as calculateConnectionResponseTimeS } from './PipeHydraulics.js';
+import {
+    getConnectionResponseTimeS as calculateConnectionResponseTimeS
+} from './PipeHydraulics.js';
 
 function applyConnectionStartupRamp(conn, targetFlowLps, dt) {
     const rampDurationS = Number(conn?.startupRampDurationS) || 0;
@@ -526,11 +528,9 @@ export class HydraulicBranchModel {
 
         const target = this.context.getComponentById(conn.targetId);
         const geometry = this.context.getConnectionGeometry(conn);
-        const branchAreaM2 = Math.min(
-            conn.areaM2,
-            supply.hydraulicAreaM2 || conn.areaM2,
-            this.getTargetEntranceArea(target)
-        );
+        const sourceAreaM2 = supply.hydraulicAreaM2 || conn.areaM2;
+        const targetAreaM2 = this.getTargetEntranceArea(target);
+        const branchAreaM2 = Math.min(conn.areaM2, sourceAreaM2, targetAreaM2);
         const baseTargetEntryLossCoeff = this.getTargetEntryLossCoeff(target);
         const fluid = supply.fluid || this.context.getComponentFluid(comp);
         const backPressureBar = this.getTargetBackPressureBar(target, this.context.getComponentFluid(target));
@@ -555,7 +555,8 @@ export class HydraulicBranchModel {
         }
 
         const density = fluid.densidade;
-        const baseLossCoeff = (supply.connectionBaseLossCoeff ?? 1) + conn.perdaLocalK + (supply.localLossCoeff || 0) + baseTargetEntryLossCoeff + DEFAULT_PIPE_FRICTION * (geometry.lengthM / Math.max(conn.diameterM, 0.001));
+        const initialPipeLossCoeff = DEFAULT_PIPE_FRICTION * (geometry.lengthM / Math.max(conn.diameterM, 0.001));
+        const baseLossCoeff = (supply.connectionBaseLossCoeff ?? 1) + conn.perdaLocalK + (supply.localLossCoeff || 0) + baseTargetEntryLossCoeff + initialPipeLossCoeff;
         let pressureCapacityLps = targetIsActivePump
             ? target.vazaoNominal * target.getDriveAtual()
             : flowFromBernoulli(availableDeltaPBar, branchAreaM2, density, baseLossCoeff);

@@ -51,7 +51,6 @@ export {
 
 let portStateUpdater = null;
 let connectionVisualUpdater = null;
-let connectionFlowGetter = null;
 let componentVisualPositionResolver = (component) => ({
     x: typeof component?.x === 'number' ? component.x : 0,
     y: typeof component?.y === 'number' ? component.y : 0
@@ -69,10 +68,6 @@ export function setPortStateUpdater(fn) {
 
 export function setConnectionVisualUpdater(fn) {
     connectionVisualUpdater = fn;
-}
-
-export function setConnectionFlowGetter(fn) {
-    connectionFlowGetter = fn;
 }
 
 export function setComponentVisualPositionResolver(fn) {
@@ -390,10 +385,6 @@ export class SistemaSimulacao extends Observable {
     }
 
     resolveConnectionDisplayFlow(conn) {
-        if (typeof connectionFlowGetter === 'function') {
-            return connectionFlowGetter(conn);
-        }
-
         const state = this.getConnectionState(conn);
         return state.flowLps;
     }

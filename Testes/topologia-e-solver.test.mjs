@@ -391,7 +391,7 @@ test('valvula totalmente aberta com Cv alto se aproxima de tubo equivalente', ()
         const dreno = new DrenoLogico('D-valve', 'D-valve', 200, 0);
 
         valvula.aplicarPerfilCaracteristica('custom');
-        valvula.setCoeficienteVazao(250);
+        valvula.setCoeficienteVazao(800);
         valvula.setCoeficientePerda(0);
         valvula.setTipoCaracteristica('linear');
         valvula.setAbertura(100);

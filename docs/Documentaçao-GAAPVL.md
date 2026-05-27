@@ -80,6 +80,7 @@ Este módulo instancia o engine, conecta serviços de visual, cria controladores
 - O usuário deve arrastar componentes da paleta para o workspace.
 - O usuário deve conectar portas de saída a portas de entrada para criar conexões.
 - O usuário deve editar propriedades de componentes e conexões no painel de propriedades.
+- O usuário deve poder ativar o uso de diâmetro personalizado de tubulação em opções avançadas do trecho; por padrão, a simulação usa uma referência didática fixa.
 - O usuário deve poder selecionar múltiplos componentes por caixa de seleção ou `Ctrl+clique`.
 - O usuário deve poder duplicar seleções com `Ctrl+C` / `Ctrl+V`.
 - O usuário deve poder desfazer/refazer alterações com `Ctrl+Z` / `Ctrl+Y`.
@@ -97,6 +98,7 @@ Este módulo instancia o engine, conecta serviços de visual, cria controladores
 - Bombas devem ter curvas de carga, eficiência e NPSHr.
 - Válvulas devem ter abertura desejada, tempo de curso e perfil de característica.
 - Tanques devem calcular pressão hidrostática e permitir controle de set point.
+- Tanques e tubulações devem exibir tempo de residência atual quando houver vazão suficiente.
 - Fontes devem definir fluido, pressão de alimentação e vazão máxima.
 - Drenos devem manter pressão de saída.
 
@@ -288,7 +290,7 @@ A seguir estão as funções/chaves de alto valor do sistema, com seus objetivos
   - O engine é limpo e recarregado com componentes e conexões do snapshot.
   - A visualização do workspace é reconstruída e as conexões são redesenhadas.
   - A seleção anterior é restaurada.
-- Interface com o usuário: permite desfazer/redizer e retomar estados de edição anteriores.
+- Interface com o usuário: permite desfazer/refazer e retomar estados de edição anteriores.
 
 ### 5.13 `createUndoRedoHistory({ captureSnapshot, restoreSnapshot, signatureFactory, maxHistorySize } = {})`
 
@@ -855,3 +857,105 @@ A seguir estão as funções/chaves de alto valor do sistema, com seus objetivos
 - A exportação tabular não inclui gráficos, apenas dados numéricos e estados de simulação.
 - A persistência de tema e idioma é feita via `localStorage` quando disponível.
 - O uso de ES Modules permite inspeção de dependências e facilita manutenção sem bundler.
+
+## 10. Referência Completa de Exportações
+
+- Esta seção lista todas as exportações de interface pública dos módulos JavaScript do sistema.
+- Inclui funções, classes e símbolos que formam a API exposta pelos módulos carregados no navegador.
+
+A seguir, a lista completa de módulos e símbolos exportados.
+
+- `js/VirtualLabRuntime.js`: setupVirtualLabRuntime
+- `js/application/config/FluidPresets.js`: FLUID_PRESETS
+- `js/application/engine/HydraulicNetworkContext.js`: HydraulicNetworkContext, HydraulicScopedNetworkContext
+- `js/application/engine/SimulationEngine.js`: ComponenteFisico, ENGINE, EPSILON_FLOW, FLUID_PRESETS, MAX_NETWORK_FLOW_LPS, Observable, SistemaSimulacao, clamp, flowFromBernoulli, pressureFromHeadBar, pressureLossFromFlow, setComponentVisualCleanupHooks, setComponentVisualPositionResolver, setConnectionVisualUpdater, setPortStateUpdater, smoothFirstOrder
+- `js/application/engine/SimulationTickPipeline.js`: SimulationTickPipeline
+- `js/application/events/EventPayloads.js`: ComponentEventPayloads, EngineEventPayloads
+- `js/application/events/EventTypes.js`: COMPONENT_EVENTS, ENGINE_EVENTS
+- `js/application/services/ConnectionGeometryCalculator.js`: calculateConnectionGeometry, calculatePortPosition
+- `js/application/services/ConnectionGeometryService.js`: ConnectionGeometryService
+- `js/application/services/ConnectionService.js`: ConnectionService
+- `js/application/stores/ConnectionStateStore.js`: ConnectionStateStore
+- `js/application/stores/SelectionStore.js`: SelectionStore
+- `js/application/stores/SimulationConfigStore.js`: SimulationConfigStore
+- `js/application/stores/TopologyGraph.js`: TopologyGraph
+- `js/application/stores/TransientConnectionStore.js`: TransientConnectionStore
+- `js/domain/components/BaseComponente.js`: ComponenteFisico, Observable, clamp, flowFromBernoulli, pressureLossFromFlow, rampToTarget, smoothFirstOrder
+- `js/domain/components/BombaLogica.js`: BombaLogica
+- `js/domain/components/DrenoLogico.js`: DrenoLogico
+- `js/domain/components/Fluido.js`: Fluido, cloneFluido, createFluidoFromProperties, mixFluidos, updateFluidoProperties
+- `js/domain/components/FonteLogica.js`: FonteLogica
+- `js/domain/components/TanqueLogico.js`: TanqueLogico
+- `js/domain/components/TrocadorCalorLogico.js`: TrocadorCalorLogico, calcularSaidaTrocadorCalor
+- `js/domain/components/ValvulaLogica.js`: VALVE_PROFILE_DEFINITIONS, ValvulaLogica
+- `js/domain/context/SimulationContext.js`: createSimulationContext, mergeSimulationContext
+- `js/domain/events/ComponentEventPayloads.js`: ComponentEventPayloads
+- `js/domain/events/ComponentEventTypes.js`: COMPONENT_EVENTS
+- `js/domain/models/ConnectionModel.js`: ConnectionModel
+- `js/domain/services/HydraulicBranchModel.js`: HydraulicBranchModel
+- `js/domain/services/HydraulicNetworkAnalyzer.js`: analyzeHydraulicNetwork
+- `js/domain/services/HydraulicNetworkSolver.js`: HydraulicNetworkSolver
+- `js/domain/services/NodalHydraulicSolver.js`: NodalHydraulicSolver
+- `js/domain/services/PipeHydraulics.js`: classifyFlowRegime, darcyFrictionFactor, diameterFromFlowVelocity, diameterFromM3sVelocity, ensureConnectionDesignFlowLps, ensureConnectionProperties, getConnectionResponseTimeS, getCurrentDesignFlowCandidateLps, getPipeHydraulics, getSuggestedDiameterForConnection, reynoldsFromFlow
+- `js/domain/services/ResidenceTime.js`: calculateConnectionResidenceTimeS, calculateResidenceTimeS, calculateTankResidenceTimeS, getTankResidenceFlowBasis
+- `js/domain/units/HydraulicUnits.js`: BAR_TO_PA, CONSTANTES_CONVERSAO, DEFAULT_ATMOSPHERIC_PRESSURE_BAR, DEFAULT_DESIGN_VELOCITY_MPS, DEFAULT_ENTRY_LOSS, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK, DEFAULT_FLUID_VAPOR_PRESSURE_BAR, DEFAULT_FLUID_VISCOSITY_PA_S, DEFAULT_PIPE_DIAMETER_M, DEFAULT_PIPE_EXTRA_LENGTH_M, DEFAULT_PIPE_FRICTION, DEFAULT_PIPE_MINOR_LOSS, DEFAULT_PIPE_ROUGHNESS_MM, DEFAULT_SOURCE_PRESSURE_BAR, EPSILON_FLOW, GRAVITY, MAX_NETWORK_FLOW_LPS, PADROES_HIDRAULICOS, areaFromDiameter, lpsToM3s, m3sToLps, pressureFromHeadBar
+- `js/infrastructure/charts/PumpChartAdapter.js`: applyPumpChartPresentation, buildPumpCurveDatasets, createPumpChart, refreshPumpChart
+- `js/infrastructure/charts/TankChartAdapter.js`: createEmptyMonitorChart, createTankVolumeChart, refreshEmptyMonitorChartPresentation, refreshTankVolumeChart, resolveTankChartColors
+- `js/infrastructure/dom/ComponentVisualConfig.js`: GRID_SIZE, colorPort, labelStyle
+- `js/infrastructure/dom/ComponentVisualFactory.js`: FabricaDeEquipamentos, obterProximaTag, updatePortStates
+- `js/infrastructure/dom/ComponentVisualRegistry.js`: clearComponentVisualRegistry, createConnectionEndpointDefinition, getComponentPortElement, getComponentVisual, getRegisteredComponentVisualPosition, registerComponentVisual, removeAllComponentVisualElements, unregisterComponentVisual
+- `js/infrastructure/dom/ComponentVisualShared.js`: COMPONENT_EVENTS, ENGINE, ENGINE_EVENTS, createElevationUpdater, displayUnitValue, getUnitSymbol, labelStyle, makePort, subscribeUnitPreferences, volumeText
+- `js/infrastructure/dom/ComponentVisualSpecs.js`: COMPONENT_VISUAL_SPECS, HEAT_EXCHANGER_COMPONENT_VISUAL, PUMP_COMPONENT_VISUAL, SINK_COMPONENT_VISUAL, SOURCE_COMPONENT_VISUAL, TANK_COMPONENT_VISUAL, VALVE_COMPONENT_VISUAL, getComponentVisualSpec
+- `js/infrastructure/dom/ComponentVisualTransform.js`: applyComponentVisualRotation, normalizeRotationDegrees, rotateComponentVisualBy
+- `js/infrastructure/dom/PortStateManager.js`: updatePortStates
+- `js/infrastructure/rendering/ConnectionServiceRuntimeAdapter.js`: ConnectionServiceRuntimeAdapter, createConnectionServiceRuntime
+- `js/infrastructure/rendering/ConnectionVisualRegistry.js`: createConnectionEndpointDefinition, findConnectionByPath, getConnectionVisual, registerConnectionVisual, unregisterConnectionVisual
+- `js/infrastructure/rendering/FluidVisualStyle.js`: CUSTOM_FLUID_COLOR_OPTIONS, getFluidVisualStyle, resolveCustomFluidColor
+- `js/infrastructure/rendering/PipeRenderer.js`: createConnectionVisual, createTransientConnectionVisual, drawConnectionCurve, removeConnectionVisual, removeTransientConnectionVisual, updateConnectionFlowVisual, updateConnectionVisualLayout, updateTransientConnectionVisual
+- `js/presentation/context/PresentationEngineContext.js`: getPresentationEngine, setPresentationEngine
+- `js/presentation/controllers/CameraController.js`: camera, getCameraState, setupCameraControl, updateCameraTransform
+- `js/presentation/controllers/ClipboardController.js`: applyComponentClipboardSnapshot, buildClonedComponentTag, cloneSnapshotValue, createComponentClipboardSnapshot, createComponentGroupClipboardSnapshot, setupClipboardController, syncComponentVisualState
+- `js/presentation/controllers/ComponentRotationController.js`: rotateComponentsByWheelSteps, setupComponentRotationController
+- `js/presentation/controllers/DeleteSelectionController.js`: setupDeleteSelectionController
+- `js/presentation/controllers/DragDropController.js`: makeComponentDraggable, setupDragDrop
+- `js/presentation/controllers/FlowchartController.js`: setupFlowchartController
+- `js/presentation/controllers/HelpController.js`: setupHelpController
+- `js/presentation/controllers/LayoutController.js`: setupLayoutController
+- `js/presentation/controllers/MonitorController.js`: createMonitorController
+- `js/presentation/controllers/NetworkDiagnosticsController.js`: buildNetworkDiagnosticState, setupNetworkDiagnosticsController
+- `js/presentation/controllers/PipeController.js`: drawCurve, getConnectionFlow, getPortCoords, setupPipeControl, updateAllPipes, updateConnectionVisualStates
+- `js/presentation/controllers/PropertyPanelContextController.js`: createPropertyPanelContextStore
+- `js/presentation/controllers/PropertyPanelController.js`: setupPropertyPanelController, updatePipesVisualUI
+- `js/presentation/controllers/TankSaturationAlertController.js`: setupTankSaturationAlertController
+- `js/presentation/controllers/ToolbarController.js`: setupToolbar
+- `js/presentation/controllers/UndoController.js`: createUndoRedoHistory, createWorkspaceSnapshot, restoreWorkspaceSnapshot, setupUndoController
+- `js/presentation/controllers/UnitsController.js`: bindUnitsPanel, renderUnitsPanel
+- `js/presentation/controllers/WorkspaceSelectionController.js`: setupWorkspaceSelectionController
+- `js/presentation/export/PumpDwsimJsonExporter.js`: buildPumpDwsimJsonData, exportPumpDwsimJson
+- `js/presentation/export/SimulationDataExporter.js`: buildExportHtml, exportSimulationData
+- `js/presentation/flowchart/FlowchartPersistence.js`: FLOWCHART_DOCUMENT_TYPE, FLOWCHART_DOCUMENT_VERSION, createFlowchartDocument, downloadFlowchartDocument, getFlowchartFileName, parseFlowchartDocument, readFlowchartFile, restoreFlowchartDocument
+- `js/presentation/i18n/LanguageManager.js`: TEXTS, applyLanguageToDocument, createTranslationProxy, getComponentTagPrefix, getFluidNameVariants, getLanguage, isEnglishLanguage, localizeElement, setLanguage, subscribeLanguageChanges, t, translateDefaultComponentTag, translateFluidName, translateLiteral
+- `js/presentation/monitoring/MonitorSlotHistory.js`: createMonitorSlotHistory
+- `js/presentation/properties/ComponentPropertiesPresenter.js`: getComponentTypeKey, renderComponentProperties
+- `js/presentation/properties/ConnectionPropertiesPresenter.js`: renderConnectionProperties
+- `js/presentation/properties/DefaultPropertiesPresenter.js`: renderDefaultProperties
+- `js/presentation/properties/PropertyDomAdapter.js`: bind, byId, isActive, setDisabled, setDisplay, setHtml, setText, setValue, setValueWhenBlurred, valueOf
+- `js/presentation/properties/PropertyLiveUpdater.js`: updatePropertyPanelValues
+- `js/presentation/properties/PropertyPresenterShared.js`: COMPONENT_EVENTS, ComponentEventPayloads, ENGINE_EVENTS, EngineEventPayloads, InputValidator, TOOLTIP, TOOLTIPS, baseFromDisplay, bind, byId, clearInputError, displayBound, displayEditableUnitValue, displayStep, displayUnitValue, getPresentationEngine, getUnitSymbol, hintAttr, isActive, makeLabel, makeUnitLabel, notifyPanelRefresh, renderPropertyTabs, setDisabled, setDisplay, setHtml, setText, setValue, setValueWhenBlurred, showInputError, subscribeUnitPreferences, validateInputWithFeedback, valueOf, volumeText
+- `js/presentation/properties/PropertyTabs.js`: bindPropertyTabs, getPropertyTabsState, renderPropertyTabs, restorePropertyTabsState
+- `js/presentation/properties/PropertyTooltips.js`: TOOLTIPS
+- `js/presentation/properties/PropertyUnitsPresenter.js`: bindUnitControls, renderUnitControls
+- `js/presentation/properties/PropertyValueFormatters.js`: displayBound, displayEditableUnitValue, displayStep, displayUnitValue, formatMeasuredValue, inputBaseValue, rawBaseValue, setFieldValue
+- `js/presentation/properties/TankSaturationAlertPresenter.js`: bindTankSaturationAlertActions, hideTankSaturationAlert, refreshTankSaturationAlertForComponents, updateTankControlAvailabilityUI, updateTankSaturationAlert
+- `js/presentation/properties/component/BoundaryComponentPropertiesPresenter.js`: SINK_PROPERTIES_PRESENTER, SOURCE_PROPERTIES_PRESENTER
+- `js/presentation/properties/component/ComponentPropertyPresenterRegistry.js`: getComponentPropertyPresenter
+- `js/presentation/properties/component/HeatExchangerComponentPropertiesPresenter.js`: HEAT_EXCHANGER_PROPERTIES_PRESENTER, thermalPowerText
+- `js/presentation/properties/component/PumpComponentPropertiesPresenter.js`: PUMP_PROPERTIES_PRESENTER
+- `js/presentation/properties/component/TankComponentPropertiesPresenter.js`: TANK_PROPERTIES_PRESENTER
+- `js/presentation/properties/component/ValveComponentPropertiesPresenter.js`: VALVE_PROPERTIES_PRESENTER
+- `js/presentation/registry/ComponentDefinitionRegistry.js`: REGISTRO_COMPONENTES, getComponentDefinition, hasComponentDefinition, listComponentDefinitions
+- `js/presentation/registry/specs/BoundaryComponentSpecs.js`: SINK_COMPONENT_SPEC, SOURCE_COMPONENT_SPEC
+- `js/presentation/registry/specs/PumpValveComponentSpecs.js`: HEAT_EXCHANGER_COMPONENT_SPEC, PUMP_COMPONENT_SPEC, VALVE_COMPONENT_SPEC
+- `js/presentation/registry/specs/TankComponentSpec.js`: TANK_COMPONENT_SPEC
+- `js/presentation/units/DisplayUnits.js`: formatUnitValue, getUnitConfig, getUnitOptions, getUnitPreferences, getUnitStep, getUnitSymbol, setUnitPreference, subscribeUnitPreferences, toBaseValue, toDisplayValue
+- `js/presentation/validation/InputValidator.js`: InputValidator, clearInputError, parseStrictNumber, showInputError, validateInput
