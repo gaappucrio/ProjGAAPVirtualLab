@@ -958,9 +958,6 @@ Próximos passos recomendados:
 - Adicionar exemplos de cenários prontos.
 - Criar importação/exportação de fluxogramas completos, caso o objetivo seja uso em laboratório. A exportação tabular de dados da simulação já existe.
 
--ajustar ocilacao do set point. ele quebra a valvula ao sair do modo de set point (aberta quando fechada)
-
-
 ## 20. Resumo Executivo
 
 O projeto está em um estado estruturalmente muito melhor que a versão monolítica inicial. A física principal está concentrada no domínio, a aplicação orquestra o tick e a topologia, a apresentação foi dividida em controllers e presenters, e a infraestrutura visual está separada em adaptadores.
@@ -977,3 +974,4 @@ ver lugar:
 
 - Resolvido em 2026-05-26: fechamento de válvula sob set point corrigido. Aberturas abaixo da resolução visual de `0.0%` passam a ser normalizadas para fechamento real, e os parâmetros hidráulicos retornam área e Cv nulos para impedir vazamento residual.
 - Resolvido em 2026-05-26: sistema de múltiplos componentes avaliado com adição de válvulas durante a simulação. Conexões novas em simulação já iniciada passam a entrar com rampa hidráulica curta, evitando queda brusca inicial no nível do tanque sem alterar o regime permanente.
+- Resolvido em 2026-05-27: oscilacao do set point em sistemas com valvula de entrada e saida corrigida. O controle entra em repouso com histerese ao atingir o PA, fecha hidraulicamente as valvulas controladas, zera fluxo residual em conexoes bloqueadas por valvula fechada e restaura a abertura manual ao sair do modo de set point.

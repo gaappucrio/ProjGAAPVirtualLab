@@ -16,6 +16,8 @@ const FATOR_DRENAGEM_TRANSITORIA_SETPOINT = 1.01;
 const PRESSAO_MINIMA_DIMENSIONAMENTO_BOMBA_BAR = 0.5;
 const PRESSAO_MAXIMA_DIMENSIONAMENTO_BOMBA_BAR = 20;
 const PRESSAO_MAXIMA_AJUSTE_FONTE_BAR = 20;
+const BANDA_MORTA_SETPOINT_NORMALIZADA = 0.0025;
+const BANDA_REATIVACAO_SETPOINT_NORMALIZADA = 0.0075;
 
 export class TanqueLogico extends ComponenteFisico {
     constructor(id, tag, x, y) {
@@ -39,7 +41,8 @@ export class TanqueLogico extends ComponenteFisico {
         this.alertaSaturacao = null;
         this._ctrlIntegral = 0;
         this._lastErro = 0;
-        this._ultimoEstadoControle = { u: 0, erro: 0 };
+        this._ultimoEstadoControle = { u: 0, erro: 0, emRepouso: false };
+        this._controleNivelEmRepouso = false;
         this._valvulasControleNivel = new Set();
         this._bombasMantidasControleNivel = new Map();
     }
@@ -618,34 +621,57 @@ export class TanqueLogico extends ComponenteFisico {
         if (!this.setpointAtivo) return;
 
         const erro = (this.setpoint / 100) - this.getNivelNormalizado();
-        if (this._lastErro !== undefined && (this._lastErro * erro < 0)) this._ctrlIntegral = 0;
-        this._lastErro = erro;
-        this._ctrlIntegral += erro * dt;
-
-        const clampInt = this.ki > 0 ? 1 / this.ki : 1;
-        this._ctrlIntegral = Math.max(-clampInt, Math.min(clampInt, this._ctrlIntegral));
-
-        const u = Math.max(-1, Math.min(1, this.kp * erro + this.ki * this._ctrlIntegral));
-        const grauEntrada = Math.max(0, u * 100);
-        const grauSaida = Math.max(0, -u * 100);
-        const intensidadeEntrada = grauEntrada / 100;
-        const intensidadeSaida = grauSaida / 100;
         const atuadores = this.getAtuadoresControleNivel();
         const valvulasControle = [...atuadores.valvulasEntrada, ...atuadores.valvulasSaida];
+        const erroAbs = Math.abs(erro);
+        const deveEntrarEmRepouso = erroAbs <= BANDA_MORTA_SETPOINT_NORMALIZADA;
+        const deveManterRepouso = this._controleNivelEmRepouso
+            && erroAbs <= BANDA_REATIVACAO_SETPOINT_NORMALIZADA;
 
-        this._ultimoEstadoControle = { u, erro };
+        let u = 0;
+        let grauEntrada = 0;
+        let grauSaida = 0;
+        let intensidadeEntrada = 0;
+        let intensidadeSaida = 0;
+        let emRepouso = false;
+
+        if (deveEntrarEmRepouso || deveManterRepouso) {
+            this._controleNivelEmRepouso = true;
+            this._ctrlIntegral = 0;
+            this._lastErro = erro;
+            emRepouso = true;
+        } else {
+            this._controleNivelEmRepouso = false;
+
+            if (this._lastErro !== undefined && (this._lastErro * erro < 0)) this._ctrlIntegral = 0;
+            this._lastErro = erro;
+            this._ctrlIntegral += erro * dt;
+
+            const clampInt = this.ki > 0 ? 1 / this.ki : 1;
+            this._ctrlIntegral = Math.max(-clampInt, Math.min(clampInt, this._ctrlIntegral));
+
+            u = Math.max(-1, Math.min(1, this.kp * erro + this.ki * this._ctrlIntegral));
+            grauEntrada = Math.max(0, u * 100);
+            grauSaida = Math.max(0, -u * 100);
+            intensidadeEntrada = grauEntrada / 100;
+            intensidadeSaida = grauSaida / 100;
+        }
+
+        this._ultimoEstadoControle = { u, erro, emRepouso };
         this._sincronizarValvulasControleNivel(valvulasControle);
         this._sincronizarBombasMantidasControleNivel(atuadores.bombas);
 
         atuadores.valvulasEntrada.forEach((valvula) => valvula.aplicarControleNivel({
             abertura: grauEntrada,
             intensidade: intensidadeEntrada,
-            ownerId: this.id
+            ownerId: this.id,
+            fechamentoImediato: emRepouso
         }));
         atuadores.valvulasSaida.forEach((valvula) => valvula.aplicarControleNivel({
             abertura: grauSaida,
             intensidade: intensidadeSaida,
-            ownerId: this.id
+            ownerId: this.id,
+            fechamentoImediato: emRepouso
         }));
 
         this.notify(ComponentEventPayloads.controlUpdate({
@@ -655,6 +681,7 @@ export class TanqueLogico extends ComponenteFisico {
             grauSaida,
             intensidadeEntrada,
             intensidadeSaida,
+            emRepouso,
             bombasFixas100: atuadores.bombas.length
         }));
     }
@@ -662,7 +689,8 @@ export class TanqueLogico extends ComponenteFisico {
     resetControlador() {
         this._ctrlIntegral = 0;
         this._lastErro = 0;
-        this._ultimoEstadoControle = { u: 0, erro: 0 };
+        this._ultimoEstadoControle = { u: 0, erro: 0, emRepouso: false };
+        this._controleNivelEmRepouso = false;
         this.alertaSaturacao = null;
     }
 

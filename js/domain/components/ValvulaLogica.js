@@ -246,6 +246,9 @@ export class ValvulaLogica extends ComponenteFisico {
     _iniciarControleNivel(ownerId) {
         if (!this._controleNivelAtivo) {
             this._parametrosManuaisControleNivel = {
+                aberta: this.aberta,
+                grauAbertura: this.grauAbertura,
+                aberturaEfetiva: this.aberturaEfetiva,
                 cv: this.cv,
                 perdaLocalK: this.perdaLocalK,
                 perfilCaracteristica: this.perfilCaracteristica,
@@ -282,7 +285,7 @@ export class ValvulaLogica extends ComponenteFisico {
         return 'equal_percentage';
     }
 
-    aplicarControleNivel({ abertura, intensidade = 0, ownerId = null, cvMaximo = null } = {}) {
+    aplicarControleNivel({ abertura, intensidade = 0, ownerId = null, cvMaximo = null, fechamentoImediato = false } = {}) {
         this._iniciarControleNivel(ownerId);
 
         const demanda = clamp(Number(intensidade) || 0, 0, 1);
@@ -302,7 +305,14 @@ export class ValvulaLogica extends ComponenteFisico {
         this.cv = cvBase + ((cvControleMaximo - cvBase) * reforco);
         this.perdaLocalK = K_CONTROLE_NIVEL_MIN + ((kBase - K_CONTROLE_NIVEL_MIN) * Math.pow(1 - demanda, 1.5));
 
-        return this.setAbertura(aberturaComandada, { fromSetpoint: true });
+        const aplicado = this.setAbertura(aberturaComandada, { fromSetpoint: true });
+        if (aplicado && fechamentoImediato === true && aberturaComandada <= LIMIAR_FECHAMENTO_PERCENTUAL) {
+            this.aberturaEfetiva = 0;
+            this.aberta = false;
+            this._notificarEstado();
+        }
+
+        return aplicado;
     }
 
     liberarControleNivel(ownerId = null) {
@@ -310,6 +320,9 @@ export class ValvulaLogica extends ComponenteFisico {
         if (ownerId && this._controleNivelOwnerId && ownerId !== this._controleNivelOwnerId) return;
 
         if (this._parametrosManuaisControleNivel) {
+            this.aberta = this._parametrosManuaisControleNivel.aberta;
+            this.grauAbertura = this._parametrosManuaisControleNivel.grauAbertura;
+            this.aberturaEfetiva = this._parametrosManuaisControleNivel.aberturaEfetiva;
             this.cv = this._parametrosManuaisControleNivel.cv;
             this.perdaLocalK = this._parametrosManuaisControleNivel.perdaLocalK;
             this.perfilCaracteristica = this._parametrosManuaisControleNivel.perfilCaracteristica;

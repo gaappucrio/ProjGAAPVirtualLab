@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { FLUID_PRESETS, SistemaSimulacao } from '../js/application/engine/SimulationEngine.js';
 import { BombaLogica } from '../js/domain/components/BombaLogica.js';
+import { DrenoLogico } from '../js/domain/components/DrenoLogico.js';
 import { mixFluidos } from '../js/domain/components/Fluido.js';
 import { FonteLogica } from '../js/domain/components/FonteLogica.js';
 import { TanqueLogico } from '../js/domain/components/TanqueLogico.js';
@@ -591,6 +592,9 @@ test('controle de nível atua nas válvulas e mantem bomba operacional em 100%',
 
     tanque.setSetpointAtivo(false);
     assert.equal(engine.isBombaBloqueadaPorSetpoint(bomba), false);
+    assert.equal(valvula.estaControladaPorSetpoint(), false, 'A valvula deve sair do bloqueio do set point');
+    assert.equal(valvula.grauAbertura, 0, 'Ao desligar o set point, a valvula volta para a abertura manual fechada');
+    assert.equal(valvula.aberturaEfetiva, 0, 'Ao desligar o set point, a abertura efetiva manual tambem e restaurada');
     assert.equal(bomba.getAcionamentoAlvo(), 35, 'Ao desligar o set point, o alvo volta ao comando manual preservado');
     assert.equal(bomba.setAcionamento(20), true);
     assert.equal(bomba.grauAcionamento, 20, 'Ao desligar o set point, a bomba volta a aceitar comando manual');
@@ -757,4 +761,68 @@ test('diagnóstico de saturação ajusta pressão da fonte quando não há bomba
         1e-12,
         'Pressão da fonte deve receber o ajuste recomendado'
     );
+});
+
+test('controle de nivel fecha entrada e saida dentro da banda do set point', () => {
+    const engine = createEngine();
+    engine.isRunning = true;
+
+    const fonte = new FonteLogica('F-DB', 'Entrada-DB', 0, 0);
+    const valvulaEntrada = new ValvulaLogica('VE-DB', 'Valvula-Entrada-DB', 80, 0);
+    const tanque = new TanqueLogico('T-DB', 'Tanque-DB', 160, 0);
+    const valvulaSaida = new ValvulaLogica('VS-DB', 'Valvula-Saida-DB', 240, 0);
+    const dreno = new DrenoLogico('D-DB', 'Saida-DB', 320, 0);
+
+    valvulaEntrada.setAbertura(100);
+    valvulaEntrada.aberturaEfetiva = 100;
+    valvulaSaida.setAbertura(100);
+    valvulaSaida.aberturaEfetiva = 100;
+
+    fonte.conectarSaida(valvulaEntrada);
+    valvulaEntrada.conectarSaida(tanque);
+    tanque.conectarSaida(valvulaSaida);
+    valvulaSaida.conectarSaida(dreno);
+
+    [fonte, valvulaEntrada, tanque, valvulaSaida, dreno].forEach((component) => engine.add(component));
+    const conexoes = [
+        new ConnectionModel({ sourceId: fonte.id, targetId: valvulaEntrada.id }),
+        new ConnectionModel({ sourceId: valvulaEntrada.id, targetId: tanque.id }),
+        new ConnectionModel({ sourceId: tanque.id, targetId: valvulaSaida.id }),
+        new ConnectionModel({ sourceId: valvulaSaida.id, targetId: dreno.id })
+    ];
+    conexoes.forEach((connection) => engine.addConnection(connection));
+
+    tanque.capacidadeMaxima = 1000;
+    tanque.volumeAtual = 500;
+    tanque.setpoint = 50;
+
+    const resultado = tanque.setSetpointAtivo(true);
+    assert.equal(resultado.ativado, true);
+
+    tanque._rodarControlador(0.1);
+    assert.equal(tanque._ultimoEstadoControle.emRepouso, true);
+    assert.equal(valvulaEntrada.grauAbertura, 0, 'No set point, a entrada deve receber comando fechado');
+    assert.equal(valvulaSaida.grauAbertura, 0, 'No set point, a saida deve receber comando fechado');
+    assert.equal(valvulaEntrada.aberturaEfetiva, 0, 'No set point, a entrada deve fechar hidraulicamente');
+    assert.equal(valvulaSaida.aberturaEfetiva, 0, 'No set point, a saida deve fechar hidraulicamente');
+    conexoes.forEach((connection) => {
+        connection.transientFlowLps = 10;
+        connection.lastResolvedFlowLps = 10;
+    });
+    engine.resolveHydraulicNetwork(0.1);
+    tanque.atualizarFisica(0.1, engine.fluidoOperante);
+    assert.equal(tanque.lastQin, 0, 'Fluxo residual de entrada deve zerar com valvula fechada');
+    assert.equal(tanque.lastQout, 0, 'Fluxo residual de saida deve zerar com valvula fechada');
+
+    tanque.volumeAtual = 503;
+    tanque._rodarControlador(0.1);
+    assert.equal(tanque._ultimoEstadoControle.emRepouso, true, 'Pequena variacao deve permanecer em repouso');
+    assert.equal(valvulaEntrada.grauAbertura, 0);
+    assert.equal(valvulaSaida.grauAbertura, 0);
+
+    tanque.volumeAtual = 510;
+    tanque._rodarControlador(0.1);
+    assert.equal(tanque._ultimoEstadoControle.emRepouso, false, 'Erro fora da histerese deve reativar controle');
+    assert.equal(valvulaEntrada.grauAbertura, 0);
+    assert.ok(valvulaSaida.grauAbertura > 0, 'Nivel alto deve abrir somente a valvula de saida');
 });

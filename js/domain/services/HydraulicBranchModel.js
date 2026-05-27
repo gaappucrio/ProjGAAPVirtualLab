@@ -75,24 +75,57 @@ export class HydraulicBranchModel {
         };
     }
 
+    isClosedValve(component) {
+        return component instanceof ValvulaLogica && component.getAberturaNormalizadaAtual() <= 0;
+    }
+
+    isConnectionBlockedByClosedValve(conn) {
+        const source = this.context.getComponentById(conn.sourceId);
+        const target = this.context.getComponentById(conn.targetId);
+        return this.isClosedValve(source) || this.isClosedValve(target);
+    }
+
+    clearConnectionFlow(conn, state = this.context.getConnectionState(conn)) {
+        conn.transientFlowLps = 0;
+        conn.lastResolvedFlowLps = 0;
+        state.flowLps = 0;
+        state.pressureBar = 0;
+        state.outletPressureBar = 0;
+        state.sourcePressureBar = 0;
+        state.backPressureBar = 0;
+        state.velocityMps = 0;
+        state.deltaPBar = 0;
+        state.totalLossBar = 0;
+        state.targetLossBar = 0;
+        state.targetFlowLps = 0;
+        state.reynolds = 0;
+        state.regime = 'sem fluxo';
+    }
+
     relaxIdleConnections(dt) {
         this.context.conexoes.forEach(conn => {
             if (conn._activeTick) return;
 
             this.ensureConnectionProperties(conn);
             const geometry = this.context.getConnectionGeometry(conn);
-            const { flowLps, responseTimeS } = this.applyConnectionDynamics(conn, 0, dt, geometry);
             const state = this.context.getConnectionState(conn);
 
             state.lengthM = geometry.lengthM;
             state.straightLengthM = geometry.straightLengthM;
             state.headGainM = geometry.headGainM;
             state.targetFlowLps = 0;
+
+            if (this.isConnectionBlockedByClosedValve(conn)) {
+                this.clearConnectionFlow(conn, state);
+                state.responseTimeS = this.getConnectionResponseTimeS(conn, geometry);
+                return;
+            }
+
+            const { flowLps, responseTimeS } = this.applyConnectionDynamics(conn, 0, dt, geometry);
             state.responseTimeS = responseTimeS;
 
             if (flowLps <= EPSILON_FLOW) {
-                conn.transientFlowLps = 0;
-                conn.lastResolvedFlowLps = 0;
+                this.clearConnectionFlow(conn, state);
                 return;
             }
 
