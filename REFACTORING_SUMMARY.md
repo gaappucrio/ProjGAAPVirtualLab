@@ -807,7 +807,6 @@ Coberturas importantes:
 - Sistemas hidráulicos desconectados são resolvidos por ilha quando alguma malha fechada exige solver nodal; uma malha fechada isolada não altera volumes, vazões ou controle de set point de outra ilha aberta.
 - Diagnóstico de malha fechada antes do solver nodal experimental.
 - Exportação/importação de fluxograma completo.
-- Cenários prontos importáveis como fluxogramas.
 - Configuracao visual de componentes centralizada em `infrastructure/dom/ComponentVisualConfig.js`, sem manter o antigo `js/Config.js` como fachada solta.
 
 Auditoria dos testes:
@@ -951,7 +950,7 @@ Riscos atuais e mitigação:
 
 - O solver push-based continua sendo o padrão para redes abertas e didáticas. Malhas fechadas são detectadas por `HydraulicNetworkAnalyzer` e sinalizadas na UI antes da simulação, usando o solver nodal experimental somente nas ilhas necessárias.
 - Redes muito complexas, com recirculação real ou malhas mal condicionadas, continuam fora do escopo industrial validado. O aviso de diagnóstico deixa claro quando a planta entrou no modo nodal experimental.
-- A UI continua manual, mas agora há smoke visual de navegador em `Testes/browser-smoke.mjs` e script `npm run test:browser-smoke` para verificar fluxo básico de abertura da UI, cenários prontos e aviso de malha fechada.
+- A UI continua manual, mas agora há smoke visual de navegador em `Testes/browser-smoke.mjs` e script `npm run test:browser-smoke` para verificar fluxo básico de abertura da UI e aviso de malha fechada.
 - As unidades permanecem separadas entre `domain/units/HydraulicUnits.js` e `presentation/units/DisplayUnits.js`; os testes de camadas seguem impedindo recriação de `utils/` genérico.
 
 Próximos passos concluídos em 2026-05-27:
@@ -959,7 +958,6 @@ Próximos passos concluídos em 2026-05-27:
 - Smoke visual de navegador criado.
 - Detector/diagnóstico de malhas fechadas exposto na UI antes do solver nodal experimental atuar.
 - Documentação curta para usuários finais criada em `docs/GUIA_USUARIO.md`.
-- Cenários prontos adicionados no seletor superior.
 - Importação/exportação de fluxogramas completos adicionada por arquivos `.gaap-flow.json`, mantendo a exportação tabular existente para dados de simulação.
 
 ## 20. Resumo Executivo

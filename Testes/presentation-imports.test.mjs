@@ -15,7 +15,6 @@ const PRESENTATION_MODULES = [
     '../js/presentation/export/SimulationDataExporter.js',
     '../js/presentation/export/PumpDwsimJsonExporter.js',
     '../js/presentation/flowchart/FlowchartPersistence.js',
-    '../js/presentation/flowchart/ReadyScenarios.js',
     '../js/presentation/controllers/PropertyPanelController.js',
     '../js/presentation/properties/ComponentPropertiesPresenter.js',
     '../js/presentation/properties/ConnectionPropertiesPresenter.js',

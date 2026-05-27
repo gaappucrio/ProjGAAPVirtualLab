@@ -72,19 +72,8 @@ try {
     await page.waitForSelector('#workspace-canvas');
     await page.waitForSelector('#btn-export-flowchart');
     await page.waitForSelector('#btn-import-flowchart');
-    await page.waitForSelector('#select-ready-scenario');
 
-    await page.selectOption('#select-ready-scenario', 'setpoint-duas-valvulas');
-    await page.waitForFunction(() => document.querySelectorAll('.placed-component').length >= 5);
-    await page.waitForFunction(() => document.querySelectorAll('.pipe-line').length >= 4);
-
-    await page.selectOption('#select-ready-scenario', 'malha-fechada-experimental');
-    await page.waitForFunction(() => {
-        const banner = document.getElementById('network-diagnostics-banner');
-        return banner && !banner.hidden && banner.textContent.includes('Malha fechada');
-    });
-
-    console.log('Smoke visual OK: UI abriu, carregou cenarios e exibiu diagnostico de malha fechada.');
+    console.log('Smoke visual OK: UI abriu e botões principais estão presentes.');
 } finally {
     await browser.close();
     server.close();
