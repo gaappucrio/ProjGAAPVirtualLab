@@ -1,5 +1,9 @@
 import { clamp, ComponenteFisico, pressureLossFromFlow, rampToTarget } from './BaseComponente.js';
 import { ComponentEventPayloads } from '../events/ComponentEventPayloads.js';
+import {
+    aplicarAjusteDimensionamentoValvula,
+    diagnosticarDimensionamentoValvula
+} from '../services/ValveSizingDiagnostics.js';
 
 const FATOR_MINIMO_AREA = 0.12;
 const CV_CONTROLE_NIVEL_MAX = 800;
@@ -375,6 +379,18 @@ export class ValvulaLogica extends ComponenteFisico {
             : 0;
 
         this.pressaoSaidaAtualBar = Math.max(0, this.pressaoEntradaAtualBar - this.deltaPAtualBar);
+    }
+
+    getDiagnosticoDimensionamento() {
+        return diagnosticarDimensionamentoValvula(this);
+    }
+
+    aplicarAjusteDimensionamento() {
+        const resultado = aplicarAjusteDimensionamentoValvula(this);
+        this._notificarEstado({
+            ajusteDimensionamento: resultado
+        });
+        return resultado;
     }
 
     getFluxoSaidaFromTank() {

@@ -191,14 +191,17 @@ Arquivos principais:
 - `domain/models/ConnectionModel.js`
 - `domain/services/HydraulicNetworkSolver.js`
 - `domain/services/HydraulicBranchModel.js`
+- `domain/services/LevelController.js`
 - `domain/services/ResidenceTime.js`
 - `domain/services/PipeHydraulics.js`
+- `domain/services/ValveSizingDiagnostics.js`
 - `domain/context/SimulationContext.js`
 
 Responsabilidades:
 
 - Representar componentes físicos.
 - Calcular vazões, perdas e propriedades hidráulicas.
+- Calcular controle de nível em serviço puro, separado da dinâmica do tanque, com modos PID determinístico e fuzzy.
 - Modelar conexões puramente lógicas.
 - Emitir eventos de componentes lógicos sem depender da camada de aplicação.
 - Preservar regras de controle e comportamento físico sem acesso visual.
@@ -533,11 +536,13 @@ Representa entrada de fluido.
 Propriedades principais:
 
 - Pressão da fonte.
-- Vazão máxima.
+- Vazão máxima, com padrão de `32 m³/h` (`8,8889 L/s`) para não tornar a válvula padrão subdimensionada em sistemas simples.
 - Vazão real entregue.
 - Fluido de entrada, com densidade, viscosidade, temperatura, pressão de vapor, nome e preset.
 
 A fonte é um emissor intrínseco: inicia o fluxo na rede.
+
+No solver, `pressaoFonteBar` e `vazaoMaxima` atuam em conjunto, mas não como uma curva de bomba. A pressão da fonte define a fronteira de pressão disponível para calcular a vazão através de canos, válvulas, tanques e perdas. Depois, `vazaoMaxima` limita a capacidade entregue; se a rede pedir mais vazão que a entrada suporta, a fonte satura e a pressão efetiva vista a jusante cai em vez de sustentar artificialmente a pressão nominal.
 
 As propriedades de fluido são editadas somente quando a fonte está selecionada. Isso evita ambiguidade entre entradas diferentes e elimina o antigo conceito de fluido global do programa.
 
@@ -606,6 +611,8 @@ Perfis:
 
 O controle de nível pode assumir temporariamente o controle da válvula e restaurar os parâmetros manuais ao ser liberado.
 
+O diagnóstico de dimensionamento fica em `domain/services/ValveSizingDiagnostics.js`. Ele avalia abertura efetiva, vazão, queda de pressão e perda local equivalente para identificar quando a válvula está virando gargalo hidráulico. O painel da válvula exibe um alerta didático quando a abertura está alta e a queda de pressão ainda é relevante, com ação para colocar o perfil em `custom`, aumentar Cv e reduzir K dentro dos limites do simulador. O diagnóstico não implementa ainda verificação de classe pressão-temperatura ou material da válvula.
+
 ### 8.5 `TanqueLogico`
 
 Representa armazenamento com dinâmica de volume.
@@ -622,14 +629,17 @@ Propriedades principais:
 - Vazão de saída.
 - Fluido de conteúdo.
 - Set point.
-- Ganhos PI.
-- Ganhos padrão reescalados para erro normalizado (`Kp = 4`, `Ki = 0.6`), permitindo modulação parcial de válvulas em vez de saturação imediata em aberto/fechado.
+- Modo do controlador de nível (`PID` determinístico ou `Fuzzy`).
+- Ganhos PID (`Kp`, `Ki`, `Kd`) no modo determinístico.
+- Ganhos padrão reescalados para erro normalizado (`Kp = 4`, `Ki = 0.6`, `Kd = 0`), permitindo modulação parcial de válvulas em vez de saturação imediata em aberto/fechado. Com `Kd = 0`, o comportamento segue equivalente ao PI anterior.
 
 Comportamento:
 
 - Volume evolui por balanço: `volume += (Qin - Qout) * dt`.
 - Pressão no fundo vem da carga hidrostática.
 - O controle de nível atua em válvulas de entrada e saída.
+- A matemática de controle e o estado interno vivem em `domain/services/LevelController.js`; o tanque apenas fornece medição/set point e traduz a saída `u` em abertura de válvulas.
+- O modo fuzzy usa funções trapezoidais nas extremidades (`NB`, `PB`), triangulares nas regiões intermediárias/centrais (`NS`, `ZE`, `PS`) e defuzzificação por média ponderada de singletons. Isso mantém saturação previsível nos extremos e resposta suave perto do set point.
 - O set point só pode ser ativado se houver válvula diretamente conectada à saída.
 - O alerta de saturação compara a vazão de entrada com a capacidade estimada de saída no nível do set point.
 - A apresentação do alerta de saturação fica em `TankSaturationAlertPresenter`, usando popup global no topo, botão de ação de dimensionamento e botão `x` para dispensar o aviso atual.
@@ -697,7 +707,7 @@ Unidades internas principais:
 - Volume: L.
 - Temperatura: °C.
 
-O painel pode exibir valores em outras unidades, como kPa, m³/s, m³/h, mca e psi, sem contaminar o domínio com preferências visuais.
+O painel exibe vazão em `m³/h` por padrão e pode alternar para outras unidades, como L/s, L/min, m³/s, gpm, kPa, mca e psi, sem contaminar o domínio com preferências visuais.
 
 ## 12. Monitoramento
 
@@ -781,6 +791,7 @@ Coberturas importantes:
 - Perfis de válvula.
 - Curvas de bomba e NPSH.
 - Resumo de ajuste de pressão do set point.
+- Controlador de nível como serviço puro, com estado externo ao tanque, incluindo modo PID e modo fuzzy.
 - Topologia sem DOM.
 - Solver com fluxo em série.
 - Solver com bifurcação.
@@ -817,7 +828,7 @@ Coberturas importantes:
 Auditoria dos testes:
 
 - A suite executada por `npm.cmd test` cobre os 6 arquivos listados acima.
-- A execução atual possui 88 testes passantes. Os arquivos de teste contêm 461 ocorrências de `assert.*` na suíte principal.
+- A execução atual possui 92 testes passantes. Os arquivos de teste contêm 492 ocorrências de `assert.*` na suíte principal.
 - Nao foi encontrado padrao trivial como `assert.ok(true)`, `assert.equal(true, true)`, `print(true)` ou `console.log` usado como teste na suite principal.
 - Os testes exercitam resultados observaveis: valores numericos, estado de stores, eventos, HTML gerado, regras de camadas, ausencia de dependencias indevidas e comportamento do solver.
 - O antigo `test-phase1.mjs` foi removido em 2026-05-27 porque importava fachadas ja eliminadas (`ConnectionServiceRuntime.js` e `PortPositionCalculator.js`) e nao fazia parte do script `npm test`.
@@ -970,7 +981,7 @@ Próximos passos concluídos em 2026-05-27:
 
 O projeto está em um estado estruturalmente muito melhor que a versão monolítica inicial. A física principal está concentrada no domínio, a aplicação orquestra o tick e a topologia, a apresentação foi dividida em controllers e presenters, e a infraestrutura visual está separada em adaptadores.
 
-O sistema já possui suporte funcional para montagem visual, seleção múltipla por retângulo, clonagem de componentes e sistemas por teclado, desfazer por `Ctrl+Z`, simulação hidráulica, bombas, válvulas, tanques, set point, monitoramento, unidades, tooltips, tutorial integrado, internacionalização, modo escuro, mistura de fluidos, cores visuais por fluido, setas de tubos coerentes com componentes rotacionados, popup de saturação do set point, exportação tabular de dados nas unidades selecionadas pelo usuário e testes automatizados. A base trata propriedades de fluido por entrada, composição por conexão e conteúdo misturado em tanques, desde que as fronteiras entre domínio, aplicação, apresentação e infraestrutura continuem sendo respeitadas.
+O sistema já possui suporte funcional para montagem visual, seleção múltipla por retângulo, clonagem de componentes e sistemas por teclado, desfazer por `Ctrl+Z`, simulação hidráulica, bombas, válvulas, tanques, set point com controle PID/fuzzy, monitoramento, unidades, tooltips, tutorial integrado, internacionalização, modo escuro, mistura de fluidos, cores visuais por fluido, setas de tubos coerentes com componentes rotacionados, popup de saturação do set point, exportação tabular de dados nas unidades selecionadas pelo usuário e testes automatizados. A base trata propriedades de fluido por entrada, composição por conexão e conteúdo misturado em tanques, desde que as fronteiras entre domínio, aplicação, apresentação e infraestrutura continuem sendo respeitadas.
 
 ver lugar:
 
@@ -984,5 +995,7 @@ ver lugar:
 - Resolvido em 2026-05-26: sistema de múltiplos componentes avaliado com adição de válvulas durante a simulação. Conexões novas em simulação já iniciada passam a entrar com rampa hidráulica curta, evitando queda brusca inicial no nível do tanque sem alterar o regime permanente.
 - Resolvido em 2026-05-27: oscilacao do set point em sistemas com valvula de entrada e saida corrigida. O controle entra em repouso com histerese ao atingir o PA, fecha hidraulicamente as valvulas controladas, zera fluxo residual em conexoes bloqueadas por valvula fechada e restaura a abertura manual ao sair do modo de set point.
 - Resolvido em 2026-05-27: ganhos padrão do PI reescalados para erro normalizado. Fora da banda morta, erros pequenos agora comandam aberturas parciais nas válvulas; a saturação em 100% fica reservada para desvios grandes.
-
-SET POINT QUEBROU (CALMA SÓ O RANGE DE PARÂMETROS) analisar valores de ki e kp em relacao a vida real e o dwsim (lógica fuzzy)
+- Resolvido em 2026-05-28: controlador de nível separado de `TanqueLogico` em `domain/services/LevelController.js`. O tanque mantém a física e o mapeamento para válvulas, enquanto o serviço concentra cálculo PID, banda morta, histerese, integral, derivada e saturação. O novo `Kd` nasce com padrão `0`, preservando o comportamento PI atual e preparando terreno para sintonia PID/fuzzy sem misturar a lógica de controle com a dinâmica do tanque.
+- Resolvido em 2026-05-28: modo fuzzy adicionado como opção avançada do controlador de nível. O padrão usa conjuntos trapezoidais nas extremidades, triangulares no centro/intermediários, regras linguísticas sobre erro e taxa de erro, e média ponderada para defuzzificação. O PID determinístico continua como padrão para preservar os casos existentes.
+- Resolvido em 2026-05-28: diagnóstico didático de válvula subdimensionada adicionado em serviço de domínio. O alerta considera abertura, vazão, queda de pressão e perda equivalente, e o painel pode aplicar ajuste de Cv/K sem implementar ainda classe pressão-temperatura.
+- Resolvido em 2026-05-28: vazão máxima padrão da entrada reduzida para `32 m³/h`, separando o padrão da fonte do limite máximo global da rede. A unidade padrão de vazão no frontend passou para `m³/h`.

@@ -67,6 +67,8 @@ export const TANK_PROPERTIES_PRESENTER = {
         const estadoVisualControle = getTankControlVisualState(comp.setpointAtivo, controleNivelDisponivel);
         const fluidoConteudo = comp.getFluidoConteudo?.() || comp.fluidoConteudo;
         const residence = calculateTankResidenceTimeS(comp);
+        const modoControlador = comp.controladorNivelModo === 'fuzzy' ? 'fuzzy' : 'pid';
+        const mostrarSintoniaPid = comp.setpointAtivo && modoControlador === 'pid';
 
         const basicContent = `
             <div class="prop-group">
@@ -111,7 +113,7 @@ export const TANK_PROPERTIES_PRESENTER = {
             </div>
             <div class="prop-group tank-control-panel is-${estadoVisualControle}" id="grp-sp-main" data-control-state="${estadoVisualControle}" style="border-color:${corBordaControle}; background:${fundoControle};">
                 <label class="tank-control-title" ${hintAttr(TOOLTIP.tankPiController)} style="color:#c0392b; font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">
-                    Controlador de nível (PI)
+                    Controlador de nível (PID)
                 </label>
                 <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
                     <input type="checkbox" id="input-sp-ativo" ${hintAttr(TOOLTIP.tankSpActive)} ${comp.setpointAtivo ? 'checked' : ''} ${bloqueioControleAttr} style="width:16px; height:16px; cursor:pointer;">
@@ -144,20 +146,31 @@ export const TANK_PROPERTIES_PRESENTER = {
                 ${makeLabel('Perda na entrada (K)', TOOLTIP.tankEntryK)}
                 <input type="number" id="input-k-entrada-tanque" ${hintAttr(TOOLTIP.tankEntryK)} value="${comp.perdaEntradaK}" step="0.1" min="0" max="50">
             </div>
-            <div class="prop-group" id="group-ctrl-params" style="display:${comp.setpointAtivo ? 'block' : 'none'};">
+            <div class="prop-group" id="group-ctrl-mode" style="display:${comp.setpointAtivo ? 'block' : 'none'};">
+                ${makeLabel('Modo do controlador', TOOLTIP.tankControlMode)}
+                <select id="input-control-mode" ${hintAttr(TOOLTIP.tankControlMode)}>
+                    <option value="pid" ${modoControlador === 'pid' ? 'selected' : ''}>Determinístico (PID)</option>
+                    <option value="fuzzy" ${modoControlador === 'fuzzy' ? 'selected' : ''}>Fuzzy</option>
+                </select>
+            </div>
+            <div class="prop-group" id="group-ctrl-params" style="display:${mostrarSintoniaPid ? 'block' : 'none'};">
                 ${makeLabel('Ganho proporcional (Kp)', TOOLTIP.tankKp)}
                 <input type="number" id="input-kp" ${hintAttr(TOOLTIP.tankKp)} value="${comp.kp}" step="0.1" min="0" max="20">
             </div>
-            <div class="prop-group" id="group-ctrl-ki" style="display:${comp.setpointAtivo ? 'block' : 'none'};">
+            <div class="prop-group" id="group-ctrl-ki" style="display:${mostrarSintoniaPid ? 'block' : 'none'};">
                 ${makeLabel('Ganho integral (Ki)', TOOLTIP.tankKi)}
                 <input type="number" id="input-ki" ${hintAttr(TOOLTIP.tankKi)} value="${comp.ki}" step="0.1" min="0" max="10">
+            </div>
+            <div class="prop-group" id="group-ctrl-kd" style="display:${mostrarSintoniaPid ? 'block' : 'none'};">
+                ${makeLabel('Ganho derivativo (Kd)', TOOLTIP.tankKd)}
+                <input type="number" id="input-kd" ${hintAttr(TOOLTIP.tankKd)} value="${comp.kd}" step="0.1" min="0" max="20">
             </div>
         `;
 
         return renderPropertyTabs({
             basicContent,
             advancedContent,
-            advancedDescription: 'Aqui ficam os parâmetros de bocais, perdas e sintonia do controlador PI. Eles refinam a dinâmica do tanque e costumam ser ajustados só em estudos mais detalhados.'
+            advancedDescription: 'Aqui ficam os parâmetros de bocais, perdas e sintonia do controlador PID. Eles refinam a dinâmica do tanque e costumam ser ajustados só em estudos mais detalhados.'
         });
     },
     bind: (comp) => {
@@ -170,7 +183,8 @@ export const TANK_PROPERTIES_PRESENTER = {
             const grp = byId('grp-sp-main');
             const statusEl = byId('tank-sp-status-text');
             const spAtivoEl = byId('input-sp-ativo');
-            const mostrarParametros = comp.setpointAtivo ? 'block' : 'none';
+            const mostrarModo = comp.setpointAtivo ? 'block' : 'none';
+            const mostrarParametrosPid = comp.setpointAtivo && comp.controladorNivelModo !== 'fuzzy' ? 'block' : 'none';
             const isDark = document.body.classList.contains('theme-dark');
 
             if (spAtivoEl) {
@@ -202,10 +216,14 @@ export const TANK_PROPERTIES_PRESENTER = {
                 }
             }
 
+            const modeGroup = byId('group-ctrl-mode');
             const kpGroup = byId('group-ctrl-params');
             const kiGroup = byId('group-ctrl-ki');
-            if (kpGroup) kpGroup.style.display = mostrarParametros;
-            if (kiGroup) kiGroup.style.display = mostrarParametros;
+            const kdGroup = byId('group-ctrl-kd');
+            if (modeGroup) modeGroup.style.display = mostrarModo;
+            if (kpGroup) kpGroup.style.display = mostrarParametrosPid;
+            if (kiGroup) kiGroup.style.display = mostrarParametrosPid;
+            if (kdGroup) kdGroup.style.display = mostrarParametrosPid;
         };
 
         const emitirVolumeAtualizado = () => {
@@ -353,6 +371,13 @@ export const TANK_PROPERTIES_PRESENTER = {
 
         bind('input-sp', 'input', (event) => updateFromSlider(event.target.value));
         bind('val-sp', 'change', (event) => updateFromInput(event.target.value));
+        bind('input-control-mode', 'change', (event) => {
+            comp.controladorNivelModo = event.target.value === 'fuzzy' ? 'fuzzy' : 'pid';
+            comp.resetControlador();
+            atualizarEstadoControleNivel();
+            comp.notify(ComponentEventPayloads.setpointUpdate());
+            notifyPanelRefresh();
+        });
         bind('input-kp', 'change', (event) => {
             validateInputWithFeedback(
                 event.target,
@@ -371,6 +396,17 @@ export const TANK_PROPERTIES_PRESENTER = {
                 'Ganho integral',
                 (validated) => {
                     comp.ki = validated;
+                    comp.resetControlador();
+                }
+            );
+        });
+        bind('input-kd', 'change', (event) => {
+            validateInputWithFeedback(
+                event.target,
+                (value, name) => InputValidator.validateNumber(value, 0, 20, name),
+                'Ganho derivativo',
+                (validated) => {
+                    comp.kd = validated;
                     comp.resetControlador();
                 }
             );

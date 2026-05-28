@@ -412,6 +412,7 @@ test('clipboard de componentes preserva propriedades clonaveis e sufixo por idio
     } = await import('../js/presentation/controllers/ClipboardController.js');
     const { FonteLogica } = await import('../js/domain/components/FonteLogica.js');
     const { BombaLogica } = await import('../js/domain/components/BombaLogica.js');
+    const { TanqueLogico } = await import('../js/domain/components/TanqueLogico.js');
     const { TrocadorCalorLogico } = await import('../js/domain/components/TrocadorCalorLogico.js');
     const { setLanguage } = await import('../js/presentation/i18n/LanguageManager.js');
 
@@ -464,6 +465,28 @@ test('clipboard de componentes preserva propriedades clonaveis e sufixo por idio
     assert.equal(bombaClone.vazaoNominal, 123);
     assert.equal(bombaClone.pressaoMaxima, 6.5);
     assert.equal(bombaClone.tempoRampaSegundos, 2.75);
+
+    const tanque = new TanqueLogico('tank-01', 'T-01', 0, 0);
+    tanque.setpointAtivo = true;
+    tanque.setpoint = 62;
+    tanque.controladorNivelModo = 'fuzzy';
+    tanque.kp = 5.5;
+    tanque.ki = 0.7;
+    tanque.kd = 0.3;
+
+    const tanqueSnapshot = createComponentClipboardSnapshot(tanque);
+    const tanqueClone = new TanqueLogico('tank-02', 'T-02', 0, 0);
+    applyComponentClipboardSnapshot(tanqueSnapshot, tanqueClone, {
+        tag: buildClonedComponentTag(tanqueSnapshot.tag)
+    });
+
+    assert.equal(tanqueClone.tag, 'T-01 - copia');
+    assert.equal(tanqueClone.setpointAtivo, true);
+    assert.equal(tanqueClone.setpoint, 62);
+    assert.equal(tanqueClone.controladorNivelModo, 'fuzzy');
+    assert.equal(tanqueClone.kp, 5.5);
+    assert.equal(tanqueClone.ki, 0.7);
+    assert.equal(tanqueClone.kd, 0.3);
 
     const trocador = new TrocadorCalorLogico('hx-01', 'TC-01', 0, 0);
     trocador.temperaturaServicoC = 12;

@@ -18,6 +18,69 @@ import {
 } from '../PropertyPresenterShared.js';
 import { VALVE_PROFILE_DEFINITIONS } from '../../../domain/components/ValvulaLogica.js';
 
+function getThemeAwareValveAlertColors(isDark, severity) {
+    if (severity === 'danger') {
+        return isDark
+            ? { severity, border: '#e74c3c', background: '#2d1b1b', color: '#ff6b6b', bodyColor: '#f7d8d4' }
+            : { severity, border: '#c0392b', background: '#fdeaea', color: '#922b21', bodyColor: '#34495e' };
+    }
+
+    return isDark
+        ? { severity: 'warning', border: '#f39c12', background: '#2d2418', color: '#f0b36b', bodyColor: '#f6dfbd' }
+        : { severity: 'warning', border: '#e67e22', background: '#fff3e6', color: '#a84300', bodyColor: '#34495e' };
+}
+
+function getValveSizingAlertState(diagnostico) {
+    const isDark = document.body.classList.contains('theme-dark');
+    const severity = diagnostico?.status === 'undersized' ? 'danger' : 'warning';
+    const colors = getThemeAwareValveAlertColors(isDark, severity);
+
+    if (diagnostico?.status === 'undersized') {
+        return {
+            title: 'Válvula restritiva',
+            message: 'A válvula está muito aberta e ainda consome uma parcela alta da pressão disponível. Aumente o Cv ou reduza K para liberar a passagem sem mascarar a perda nos canos.',
+            ...colors
+        };
+    }
+
+    return {
+        title: 'Válvula no limite',
+        message: 'A queda de pressão na válvula já é relevante para a abertura atual. O sistema ainda opera, mas a válvula pode estar virando o gargalo hidráulico.',
+        ...colors
+    };
+}
+
+function formatValveSizingMetrics(diagnostico) {
+    if (!diagnostico) return '';
+
+    return [
+        `ΔP: ${displayUnitValue('pressure', diagnostico.quedaPressaoBar, 2)}`,
+        `Abertura: ${diagnostico.aberturaPercent.toFixed(1)}%`,
+        `Cv: ${diagnostico.cvAtual.toFixed(1)} -> ${diagnostico.cvSugerido.toFixed(1)}`,
+        `K: ${diagnostico.perdaLocalKAtual.toFixed(3)} -> ${diagnostico.perdaLocalKSugerida.toFixed(3)}`
+    ].join(' | ');
+}
+
+function renderValveSizingAlert(comp, controladaPorSetpoint) {
+    const diagnostico = comp.getDiagnosticoDimensionamento?.();
+    const visible = diagnostico?.ativo === true;
+    const state = getValveSizingAlertState(diagnostico);
+    const actionDisabled = controladaPorSetpoint || !diagnostico?.aplicavel;
+    const display = visible ? 'block' : 'none';
+
+    return `
+        <div id="painel-alerta-dimensionamento-valvula" class="prop-group gaap-alert gaap-alert--${state.severity}" data-alert-severity="${state.severity}" style="display:${display}; border-left:4px solid ${state.border}; border-color:${state.border}; background:${state.background}; padding:10px 12px;">
+            <h4 id="titulo-alerta-dimensionamento-valvula" class="gaap-alert__title" style="margin:0 0 6px; color:${state.color}; font-size:13px;">${state.title}</h4>
+            <p id="texto-alerta-dimensionamento-valvula" class="gaap-alert__body" style="margin:0; font-size:11px; line-height:1.45; color:${state.bodyColor};">${state.message}</p>
+            <p id="metricas-alerta-dimensionamento-valvula" class="gaap-alert__metrics" style="margin:8px 0 0; font-size:11px; color:${state.color};">${formatValveSizingMetrics(diagnostico)}</p>
+            <button id="btn-ajustar-dimensionamento-valvula" class="gaap-alert__action" type="button" ${actionDisabled ? 'disabled' : ''} style="margin-top:9px; padding:7px 10px; border:1px solid ${state.border}; border-radius:4px; background:#fff; color:${state.color}; font-size:12px; font-weight:700; cursor:pointer;">
+                Ajustar Cv e K
+            </button>
+            <p id="feedback-alerta-dimensionamento-valvula" class="gaap-alert__feedback" hidden style="margin:8px 0 0; font-size:11px; color:${state.color};"></p>
+        </div>
+    `;
+}
+
 export const VALVE_PROPERTIES_PRESENTER = {
     render: (comp) => {
         const engine = getPresentationEngine();
@@ -42,6 +105,7 @@ export const VALVE_PROPERTIES_PRESENTER = {
                 <input type="range" id="input-abertura" min="0" max="100" value="${Math.round(comp.grauAbertura)}" ${hintAttr(TOOLTIP.valveOpening)} ${bloqueioAttr}>
                 ${controladaPorSetpoint ? '<p style="margin:6px 0 0; font-size:11px; color:#c0392b;">Válvula sob controle do ponto de ajuste do tanque. Abertura e perfil são ajustados automaticamente.</p>' : ''}
             </div>
+            ${renderValveSizingAlert(comp, controladaPorSetpoint)}
             <div class="prop-group">
                 ${makeLabel('Abertura efetiva (%)', TOOLTIP.valveEffectiveOpening)}
                 <input type="text" id="disp-abertura-efetiva-valvula" ${hintAttr(TOOLTIP.valveEffectiveOpening)} value="${comp.aberturaEfetiva.toFixed(1)}" disabled>
@@ -111,6 +175,8 @@ export const VALVE_PROPERTIES_PRESENTER = {
         const caracteristicaInput = byId('input-caracteristica-valvula');
         const rangeabilidadeInput = byId('input-rangeabilidade-valvula');
         const cursoInput = byId('input-curso-valvula');
+        const ajusteDimensionamentoButton = byId('btn-ajustar-dimensionamento-valvula');
+        const feedbackDimensionamento = byId('feedback-alerta-dimensionamento-valvula');
         const valvulaBloqueadaPorSetpoint = () => engine.isValvulaBloqueadaPorSetpoint?.(comp) === true || comp.estaControladaPorSetpoint?.() === true;
         const getPerfilAtual = () => VALVE_PROFILE_DEFINITIONS[comp.perfilCaracteristica] ? comp.perfilCaracteristica : 'custom';
         const perfilEhPersonalizado = () => getPerfilAtual() === 'custom';
@@ -252,6 +318,19 @@ export const VALVE_PROPERTIES_PRESENTER = {
                 (validated) => { comp.setTempoCurso(validated); }
             );
         });
+        bind('btn-ajustar-dimensionamento-valvula', 'click', () => {
+            const resultado = comp.aplicarAjusteDimensionamento?.();
+            if (feedbackDimensionamento) {
+                feedbackDimensionamento.hidden = false;
+                feedbackDimensionamento.dataset.state = resultado?.aplicado ? 'success' : 'warning';
+                feedbackDimensionamento.textContent = resultado?.aplicado
+                    ? 'Parâmetros ajustados para reduzir a restrição da válvula.'
+                    : (resultado?.bloqueadoPorSetpoint
+                        ? 'Desative o set point do tanque para editar esta válvula manualmente.'
+                        : 'A válvula já está dentro dos limites de ajuste automático.');
+            }
+            notifyPanelRefresh();
+        });
 
         comp.subscribe((dados) => {
             if (dados.tipo === COMPONENT_EVENTS.STATE && slider) {
@@ -264,6 +343,10 @@ export const VALVE_PROPERTIES_PRESENTER = {
                 if (perdaInput && !isActive(perdaInput)) perdaInput.value = comp.perdaLocalK.toFixed(3);
                 if (rangeabilidadeInput && !isActive(rangeabilidadeInput)) rangeabilidadeInput.value = comp.rangeabilidade;
                 if (cursoInput && !isActive(cursoInput)) cursoInput.value = comp.tempoCursoSegundos;
+                if (ajusteDimensionamentoButton) {
+                    const diagnostico = comp.getDiagnosticoDimensionamento?.();
+                    ajusteDimensionamentoButton.disabled = valvulaBloqueadaPorSetpoint() || !diagnostico?.aplicavel;
+                }
                 atualizarDescricaoPerfil();
                 atualizarDescricaoCaracteristica();
                 setValue('disp-abertura-efetiva-valvula', (dados.grauEfetivo ?? dados.grau).toFixed(1));

@@ -195,6 +195,97 @@ function updateTankValues(component) {
     updateTankControlAvailabilityUI(component);
 }
 
+function getValveSizingAlertState(diagnostico) {
+    const isDark = document.body.classList.contains('theme-dark');
+    const severity = diagnostico?.status === 'undersized' ? 'danger' : 'warning';
+
+    if (diagnostico?.status === 'undersized') {
+        return isDark
+            ? {
+                severity,
+                title: 'Válvula restritiva',
+                message: 'A válvula está muito aberta e ainda consome uma parcela alta da pressão disponível. Aumente o Cv ou reduza K para liberar a passagem sem mascarar a perda nos canos.',
+                border: '#e74c3c',
+                background: '#2d1b1b',
+                color: '#ff6b6b',
+                bodyColor: '#f7d8d4'
+            }
+            : {
+                severity,
+                title: 'Válvula restritiva',
+                message: 'A válvula está muito aberta e ainda consome uma parcela alta da pressão disponível. Aumente o Cv ou reduza K para liberar a passagem sem mascarar a perda nos canos.',
+                border: '#c0392b',
+                background: '#fdeaea',
+                color: '#922b21',
+                bodyColor: '#34495e'
+            };
+    }
+
+    return isDark
+        ? {
+            severity,
+            title: 'Válvula no limite',
+            message: 'A queda de pressão na válvula já é relevante para a abertura atual. O sistema ainda opera, mas a válvula pode estar virando o gargalo hidráulico.',
+            border: '#f39c12',
+            background: '#2d2418',
+            color: '#f0b36b',
+            bodyColor: '#f6dfbd'
+        }
+        : {
+            severity,
+            title: 'Válvula no limite',
+            message: 'A queda de pressão na válvula já é relevante para a abertura atual. O sistema ainda opera, mas a válvula pode estar virando o gargalo hidráulico.',
+            border: '#e67e22',
+            background: '#fff3e6',
+            color: '#a84300',
+            bodyColor: '#34495e'
+        };
+}
+
+function updateValveSizingAlert(component, blockedBySetpoint) {
+    const alertEl = byId('painel-alerta-dimensionamento-valvula');
+    if (!alertEl) return;
+
+    const diagnostico = component.getDiagnosticoDimensionamento?.();
+    if (!diagnostico?.ativo) {
+        alertEl.style.display = 'none';
+        return;
+    }
+
+    const state = getValveSizingAlertState(diagnostico);
+    const titleEl = byId('titulo-alerta-dimensionamento-valvula');
+    const textEl = byId('texto-alerta-dimensionamento-valvula');
+    const metricsEl = byId('metricas-alerta-dimensionamento-valvula');
+    const actionButton = byId('btn-ajustar-dimensionamento-valvula');
+
+    alertEl.style.display = 'block';
+    alertEl.classList.remove('gaap-alert--danger', 'gaap-alert--warning', 'gaap-alert--caution', 'gaap-alert--success', 'gaap-alert--neutral');
+    alertEl.classList.add('gaap-alert', `gaap-alert--${state.severity}`);
+    alertEl.dataset.alertSeverity = state.severity;
+    alertEl.style.borderLeftColor = state.border;
+    alertEl.style.borderColor = state.border;
+    alertEl.style.background = state.background;
+
+    if (titleEl) {
+        titleEl.textContent = state.title;
+        titleEl.style.color = state.color;
+    }
+    if (textEl) {
+        textEl.textContent = state.message;
+        textEl.style.color = state.bodyColor;
+    }
+    if (metricsEl) {
+        metricsEl.style.color = state.color;
+        metricsEl.textContent = [
+            `ΔP: ${formatMeasuredValue('pressure', diagnostico.quedaPressaoBar, 2)}`,
+            `Abertura: ${diagnostico.aberturaPercent.toFixed(1)}%`,
+            `Cv: ${diagnostico.cvAtual.toFixed(1)} -> ${diagnostico.cvSugerido.toFixed(1)}`,
+            `K: ${diagnostico.perdaLocalKAtual.toFixed(3)} -> ${diagnostico.perdaLocalKSugerida.toFixed(3)}`
+        ].join(' | ');
+    }
+    if (actionButton) actionButton.disabled = blockedBySetpoint || !diagnostico.aplicavel;
+}
+
 function updateValveValues(engine, component) {
     const abEl = byId('input-abertura');
     const numInput = byId('val-abertura');
@@ -231,6 +322,7 @@ function updateValveValues(engine, component) {
     setValue('disp-abertura-efetiva-valvula', component.aberturaEfetiva.toFixed(1));
     setFieldValue('disp-vazao-valvula', component.fluxoReal, 'flow', 2);
     setFieldValue('disp-deltap-valvula', component.deltaPAtualBar, 'pressure', 2);
+    updateValveSizingAlert(component, bloqueadaPorSetpoint);
 }
 
 function updatePumpValues(component, { monitorController } = {}) {

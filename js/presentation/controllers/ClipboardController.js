@@ -68,8 +68,10 @@ const CLONEABLE_PROPERTIES_BY_TYPE = {
         'fluidoConteudo',
         'setpointAtivo',
         'setpoint',
+        'controladorNivelModo',
         'kp',
-        'ki'
+        'ki',
+        'kd'
     ],
     heat_exchanger: [
         'temperaturaServicoC',

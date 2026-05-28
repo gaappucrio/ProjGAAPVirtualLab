@@ -5,6 +5,12 @@ import { FonteLogica } from './FonteLogica.js';
 import { ValvulaLogica } from './ValvulaLogica.js';
 import { cloneFluido, createFluidoFromProperties, mixFluidos } from './Fluido.js';
 import { EPSILON_FLOW, pressureFromHeadBar } from '../units/HydraulicUnits.js';
+import {
+    LEVEL_CONTROLLER_MODES,
+    calculateLevelControl,
+    createLevelControllerState,
+    resetLevelControllerState
+} from '../services/LevelController.js';
 
 const TOLERANCIA_ERRO_SATURACAO = -0.02;
 const FATOR_EXCESSO_ENTRADA = 1.02;
@@ -38,11 +44,18 @@ export class TanqueLogico extends ComponenteFisico {
         this.setpoint = 50;
         this.kp = 4;
         this.ki = 0.6;
+        this.kd = 0;
+        this.controladorNivelModo = LEVEL_CONTROLLER_MODES.PID;
         this.alertaSaturacao = null;
-        this._ctrlIntegral = 0;
-        this._lastErro = 0;
-        this._ultimoEstadoControle = { u: 0, erro: 0, emRepouso: false };
-        this._controleNivelEmRepouso = false;
+        this._levelControllerState = createLevelControllerState();
+        this._ultimoEstadoControle = {
+            u: 0,
+            erro: 0,
+            emRepouso: false,
+            integral: 0,
+            derivativo: 0,
+            modo: LEVEL_CONTROLLER_MODES.PID
+        };
         this._valvulasControleNivel = new Set();
         this._bombasMantidasControleNivel = new Map();
     }
@@ -620,44 +633,43 @@ export class TanqueLogico extends ComponenteFisico {
         this.garantirConsistenciaControleNivel();
         if (!this.setpointAtivo) return;
 
-        const erro = (this.setpoint / 100) - this.getNivelNormalizado();
         const atuadores = this.getAtuadoresControleNivel();
         const valvulasControle = [...atuadores.valvulasEntrada, ...atuadores.valvulasSaida];
-        const erroAbs = Math.abs(erro);
-        const deveEntrarEmRepouso = erroAbs <= BANDA_MORTA_SETPOINT_NORMALIZADA;
-        const deveManterRepouso = this._controleNivelEmRepouso
-            && erroAbs <= BANDA_REATIVACAO_SETPOINT_NORMALIZADA;
+        const modoControle = this.controladorNivelModo === LEVEL_CONTROLLER_MODES.FUZZY
+            ? LEVEL_CONTROLLER_MODES.FUZZY
+            : LEVEL_CONTROLLER_MODES.PID;
+        const controle = calculateLevelControl({
+            mode: modoControle,
+            setpoint: this.getSetpointNormalizado(),
+            measurement: this.getNivelNormalizado(),
+            dt,
+            kp: this.kp,
+            ki: this.ki,
+            kd: this.kd,
+            state: this._levelControllerState,
+            config: {
+                deadband: BANDA_MORTA_SETPOINT_NORMALIZADA,
+                reactivationBand: BANDA_REATIVACAO_SETPOINT_NORMALIZADA,
+                outputMin: -1,
+                outputMax: 1
+            }
+        });
 
-        let u = 0;
-        let grauEntrada = 0;
-        let grauSaida = 0;
-        let intensidadeEntrada = 0;
-        let intensidadeSaida = 0;
-        let emRepouso = false;
+        const { u, error: erro, inRest: emRepouso } = controle;
+        const grauEntrada = emRepouso ? 0 : Math.max(0, u * 100);
+        const grauSaida = emRepouso ? 0 : Math.max(0, -u * 100);
+        const intensidadeEntrada = grauEntrada / 100;
+        const intensidadeSaida = grauSaida / 100;
 
-        if (deveEntrarEmRepouso || deveManterRepouso) {
-            this._controleNivelEmRepouso = true;
-            this._ctrlIntegral = 0;
-            this._lastErro = erro;
-            emRepouso = true;
-        } else {
-            this._controleNivelEmRepouso = false;
-
-            if (this._lastErro !== undefined && (this._lastErro * erro < 0)) this._ctrlIntegral = 0;
-            this._lastErro = erro;
-            this._ctrlIntegral += erro * dt;
-
-            const clampInt = this.ki > 0 ? 1 / this.ki : 1;
-            this._ctrlIntegral = Math.max(-clampInt, Math.min(clampInt, this._ctrlIntegral));
-
-            u = Math.max(-1, Math.min(1, this.kp * erro + this.ki * this._ctrlIntegral));
-            grauEntrada = Math.max(0, u * 100);
-            grauSaida = Math.max(0, -u * 100);
-            intensidadeEntrada = grauEntrada / 100;
-            intensidadeSaida = grauSaida / 100;
-        }
-
-        this._ultimoEstadoControle = { u, erro, emRepouso };
+        this._ultimoEstadoControle = {
+            u,
+            erro,
+            emRepouso,
+            integral: controle.integral,
+            derivativo: controle.derivative,
+            saturado: controle.saturated,
+            modo: modoControle
+        };
         this._sincronizarValvulasControleNivel(valvulasControle);
         this._sincronizarBombasMantidasControleNivel(atuadores.bombas);
 
@@ -682,15 +694,21 @@ export class TanqueLogico extends ComponenteFisico {
             intensidadeEntrada,
             intensidadeSaida,
             emRepouso,
-            bombasFixas100: atuadores.bombas.length
+            bombasFixas100: atuadores.bombas.length,
+            modoControle
         }));
     }
 
     resetControlador() {
-        this._ctrlIntegral = 0;
-        this._lastErro = 0;
-        this._ultimoEstadoControle = { u: 0, erro: 0, emRepouso: false };
-        this._controleNivelEmRepouso = false;
+        resetLevelControllerState(this._levelControllerState);
+        this._ultimoEstadoControle = {
+            u: 0,
+            erro: 0,
+            emRepouso: false,
+            integral: 0,
+            derivativo: 0,
+            modo: this.controladorNivelModo || LEVEL_CONTROLLER_MODES.PID
+        };
         this.alertaSaturacao = null;
     }
 

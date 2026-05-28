@@ -17,7 +17,7 @@ Responsabilidade: conter a regra física, modelos de componentes e serviços hid
 Principais módulos:
 - `domain/components/` — classes lógicas de componentes, como bomba, tanque, válvula, fonte e dreno.
 - `domain/models/ConnectionModel.js` — definição de conexão lógica entre componentes.
-- `domain/services/` — solver hidráulico, cálculo de perdas, análise de rede e hidráulica de tubulação.
+- `domain/services/` — solver hidráulico, cálculo de perdas, análise de rede, hidráulica de tubulação, tempo de residência e controle de nível PID/fuzzy.
 - `domain/context/SimulationContext.js` — contexto de simulação com parâmetros físicos e unidades.
 
 Interface com outros módulos:
@@ -96,10 +96,10 @@ Este módulo instancia o engine, conecta serviços de visual, cria controladores
 ### 3.3 Componentes específicos
 
 - Bombas devem ter curvas de carga, eficiência e NPSHr.
-- Válvulas devem ter abertura desejada, tempo de curso e perfil de característica.
-- Tanques devem calcular pressão hidrostática e permitir controle de set point.
+- Válvulas devem ter abertura desejada, tempo de curso, perfil de característica e alerta didático de subdimensionamento hidráulico por queda de pressão.
+- Tanques devem calcular pressão hidrostática e permitir controle de set point por controlador de nível separado da dinâmica física do tanque, com alternância avançada entre PID determinístico e fuzzy.
 - Tanques e tubulações devem exibir tempo de residência atual quando houver vazão suficiente.
-- Fontes devem definir fluido, pressão de alimentação e vazão máxima.
+- Fontes devem definir fluido, pressão de alimentação e vazão máxima; a pressão dirige a vazão resolvida e a vazão máxima limita a capacidade entregue quando a fonte satura. A vazão máxima padrão da entrada é `32 m³/h`.
 - Drenos devem manter pressão de saída.
 
 ### 3.4 Exportação e persistência
@@ -895,10 +895,12 @@ A seguir, a lista completa de módulos e símbolos exportados.
 - `js/domain/services/HydraulicBranchModel.js`: HydraulicBranchModel
 - `js/domain/services/HydraulicNetworkAnalyzer.js`: analyzeHydraulicNetwork
 - `js/domain/services/HydraulicNetworkSolver.js`: HydraulicNetworkSolver
+- `js/domain/services/LevelController.js`: DEFAULT_LEVEL_CONTROLLER_CONFIG, LEVEL_CONTROLLER_MODES, calculateFuzzyLevelControl, calculateLevelControl, calculatePidLevelControl, createLevelControllerState, resetLevelControllerState
 - `js/domain/services/NodalHydraulicSolver.js`: NodalHydraulicSolver
 - `js/domain/services/PipeHydraulics.js`: classifyFlowRegime, darcyFrictionFactor, diameterFromFlowVelocity, diameterFromM3sVelocity, ensureConnectionDesignFlowLps, ensureConnectionProperties, getConnectionResponseTimeS, getCurrentDesignFlowCandidateLps, getPipeHydraulics, getSuggestedDiameterForConnection, reynoldsFromFlow
 - `js/domain/services/ResidenceTime.js`: calculateConnectionResidenceTimeS, calculateResidenceTimeS, calculateTankResidenceTimeS, getTankResidenceFlowBasis
-- `js/domain/units/HydraulicUnits.js`: BAR_TO_PA, CONSTANTES_CONVERSAO, DEFAULT_ATMOSPHERIC_PRESSURE_BAR, DEFAULT_DESIGN_VELOCITY_MPS, DEFAULT_ENTRY_LOSS, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK, DEFAULT_FLUID_VAPOR_PRESSURE_BAR, DEFAULT_FLUID_VISCOSITY_PA_S, DEFAULT_PIPE_DIAMETER_M, DEFAULT_PIPE_EXTRA_LENGTH_M, DEFAULT_PIPE_FRICTION, DEFAULT_PIPE_MINOR_LOSS, DEFAULT_PIPE_ROUGHNESS_MM, DEFAULT_SOURCE_PRESSURE_BAR, EPSILON_FLOW, GRAVITY, MAX_NETWORK_FLOW_LPS, PADROES_HIDRAULICOS, areaFromDiameter, lpsToM3s, m3sToLps, pressureFromHeadBar
+- `js/domain/services/ValveSizingDiagnostics.js`: aplicarAjusteDimensionamentoValvula, diagnosticarDimensionamentoValvula
+- `js/domain/units/HydraulicUnits.js`: BAR_TO_PA, CONSTANTES_CONVERSAO, DEFAULT_ATMOSPHERIC_PRESSURE_BAR, DEFAULT_DESIGN_VELOCITY_MPS, DEFAULT_ENTRY_LOSS, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK, DEFAULT_FLUID_VAPOR_PRESSURE_BAR, DEFAULT_FLUID_VISCOSITY_PA_S, DEFAULT_PIPE_DIAMETER_M, DEFAULT_PIPE_EXTRA_LENGTH_M, DEFAULT_PIPE_FRICTION, DEFAULT_PIPE_MINOR_LOSS, DEFAULT_PIPE_ROUGHNESS_MM, DEFAULT_SOURCE_MAX_FLOW_LPS, DEFAULT_SOURCE_PRESSURE_BAR, EPSILON_FLOW, GRAVITY, MAX_NETWORK_FLOW_LPS, PADROES_HIDRAULICOS, areaFromDiameter, lpsToM3s, m3sToLps, pressureFromHeadBar
 - `js/infrastructure/charts/PumpChartAdapter.js`: applyPumpChartPresentation, buildPumpCurveDatasets, createPumpChart, refreshPumpChart
 - `js/infrastructure/charts/TankChartAdapter.js`: createEmptyMonitorChart, createTankVolumeChart, refreshEmptyMonitorChartPresentation, refreshTankVolumeChart, resolveTankChartColors
 - `js/infrastructure/dom/ComponentVisualConfig.js`: GRID_SIZE, colorPort, labelStyle

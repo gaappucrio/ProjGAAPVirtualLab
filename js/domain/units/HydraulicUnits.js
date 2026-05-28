@@ -21,6 +21,7 @@ export const PADROES_HIDRAULICOS = Object.freeze({
     pressaoVaporPadraoBar: 0.0317,
     pressaoAtmosfericaPadraoBar: 1.01325,
     vazaoMaximaRedeLps: 500,
+    vazaoPadraoFonteLps: 32 / 3.6,
     pressaoPadraoFonteBar: 0.5
 });
 
@@ -39,6 +40,7 @@ export const DEFAULT_FLUID_SPECIFIC_HEAT_JKGK = PADROES_HIDRAULICOS.calorEspecif
 export const DEFAULT_FLUID_VAPOR_PRESSURE_BAR = PADROES_HIDRAULICOS.pressaoVaporPadraoBar;
 export const DEFAULT_ATMOSPHERIC_PRESSURE_BAR = PADROES_HIDRAULICOS.pressaoAtmosfericaPadraoBar;
 export const MAX_NETWORK_FLOW_LPS = PADROES_HIDRAULICOS.vazaoMaximaRedeLps;
+export const DEFAULT_SOURCE_MAX_FLOW_LPS = PADROES_HIDRAULICOS.vazaoPadraoFonteLps;
 export const DEFAULT_SOURCE_PRESSURE_BAR = PADROES_HIDRAULICOS.pressaoPadraoFonteBar;
 
 export function lpsToM3s(value) {

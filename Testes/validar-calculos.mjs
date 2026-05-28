@@ -27,8 +27,19 @@ import {
     calculateResidenceTimeS,
     calculateTankResidenceTimeS
 } from '../js/domain/services/ResidenceTime.js';
+import {
+    LEVEL_CONTROLLER_MODES,
+    calculateFuzzyLevelControl,
+    calculateLevelControl,
+    calculatePidLevelControl,
+    createLevelControllerState
+} from '../js/domain/services/LevelController.js';
 import { buildPumpCurveDatasets } from '../js/infrastructure/charts/PumpChartAdapter.js';
-import { DEFAULT_ATMOSPHERIC_PRESSURE_BAR, pressureFromHeadBar } from '../js/domain/units/HydraulicUnits.js';
+import {
+    DEFAULT_ATMOSPHERIC_PRESSURE_BAR,
+    DEFAULT_SOURCE_MAX_FLOW_LPS,
+    pressureFromHeadBar
+} from '../js/domain/units/HydraulicUnits.js';
 
 function approx(actual, expected, tolerance, label) {
     assert.ok(
@@ -87,6 +98,90 @@ test('tempo de residencia usa volume dividido pela vazao volumetrica', () => {
     const fillingResidence = calculateTankResidenceTimeS(tank);
     assert.equal(fillingResidence.basis, 'inlet');
     approx(fillingResidence.timeS, 41.6666666667, 1e-9, 'Tempo de residencia por entrada');
+});
+
+test('controlador PID de nivel calcula saida continua com estado separado do tanque', () => {
+    const state = createLevelControllerState();
+
+    const piResult = calculatePidLevelControl({
+        setpoint: 0.5,
+        measurement: 0.51,
+        dt: 0.1,
+        kp: 4,
+        ki: 0.6,
+        kd: 0,
+        state
+    });
+
+    approx(piResult.u, -0.0406, 1e-12, 'Saida PI para erro normalizado pequeno');
+    assert.equal(piResult.inRest, false);
+    approx(state.integral, -0.001, 1e-12, 'Integral acumulada no estado externo');
+
+    const restResult = calculatePidLevelControl({
+        setpoint: 0.5,
+        measurement: 0.5005,
+        dt: 0.1,
+        kp: 4,
+        ki: 0.6,
+        kd: 0,
+        state
+    });
+
+    assert.equal(restResult.inRest, true);
+    assert.equal(restResult.u, 0);
+    assert.equal(state.integral, 0);
+
+    const pidState = createLevelControllerState();
+    const pidResult = calculatePidLevelControl({
+        setpoint: 0.5,
+        measurement: 0.45,
+        dt: 0.1,
+        kp: 4,
+        ki: 0.6,
+        kd: 0.2,
+        state: pidState
+    });
+
+    approx(pidResult.u, 0.303, 1e-12, 'Termo derivativo deve participar quando Kd for maior que zero');
+    approx(pidResult.derivative, 0.5, 1e-12, 'Derivada do erro fica no estado do controlador');
+});
+
+test('controlador fuzzy de nivel usa pertinencia trapezoidal triangular e media ponderada', () => {
+    const state = createLevelControllerState();
+
+    const fuzzyResult = calculateFuzzyLevelControl({
+        setpoint: 0.5,
+        measurement: 0.45,
+        dt: 0.1,
+        state
+    });
+
+    assert.equal(fuzzyResult.mode, LEVEL_CONTROLLER_MODES.FUZZY);
+    assert.equal(fuzzyResult.inRest, false);
+    assert.ok(fuzzyResult.u > 0, 'Erro positivo deve abrir atuadores de entrada');
+    assert.ok(fuzzyResult.u <= 1, 'Saida fuzzy deve permanecer normalizada');
+    assert.ok(fuzzyResult.derivative > 0, 'Taxa de erro deve alimentar a base fuzzy');
+
+    const selectedResult = calculateLevelControl({
+        mode: LEVEL_CONTROLLER_MODES.FUZZY,
+        setpoint: 0.5,
+        measurement: 0.55,
+        dt: 0.1,
+        state: createLevelControllerState()
+    });
+
+    assert.equal(selectedResult.mode, LEVEL_CONTROLLER_MODES.FUZZY);
+    assert.ok(selectedResult.u < 0, 'Erro negativo deve abrir atuadores de saida');
+
+    const restResult = calculateFuzzyLevelControl({
+        setpoint: 0.5,
+        measurement: 0.501,
+        dt: 0.1,
+        state
+    });
+
+    assert.equal(restResult.inRest, true);
+    assert.equal(restResult.u, 0);
 });
 
 test('propriedades hidraulicas de conexao preservam zero fisico e reparam invalidos', () => {
@@ -213,6 +308,8 @@ test('trocador de calor clona fluido de saida sem alterar composicao hidraulica'
 test('fonte mantem propriedades de fluido de entrada independentes do fluido operante', () => {
     const fonte = new FonteLogica('F-01', 'inlet-01', 0, 0);
 
+    approx(fonte.vazaoMaxima, DEFAULT_SOURCE_MAX_FLOW_LPS, 1e-12, 'vazao maxima padrao da fonte');
+    approx(fonte.vazaoMaxima * 3.6, 32, 1e-12, 'vazao maxima padrao da fonte em m3/h');
     assert.equal(fonte.fluidoEntrada.nome, '\u00c1gua');
     approx(fonte.fluidoEntrada.densidade, 997, 1e-12, 'densidade padrao do fluido de entrada');
     approx(fonte.fluidoEntrada.viscosidadeDinamicaPaS, 0.00089, 1e-12, 'viscosidade padrao do fluido de entrada');
@@ -480,6 +577,33 @@ test('valvula aberta com K zero aplica apenas a perda física do Cv', () => {
     valvula.setCoeficienteVazao(800);
     const parametrosCvAlto = valvula.getParametrosHidraulicos();
     assert.ok(parametrosCvAlto.localLossCoeff < parametros.localLossCoeff, 'Cv maior deve reduzir a perda da válvula');
+});
+
+test('diagnostico de dimensionamento da valvula sugere liberar passagem quando ha gargalo', () => {
+    const valvula = new ValvulaLogica('V-sizing', 'V-sizing', 0, 0);
+    valvula.aplicarPerfilCaracteristica('custom');
+    valvula.setCoeficienteVazao(18);
+    valvula.setCoeficientePerda(12);
+    valvula.setTipoCaracteristica('linear');
+    valvula.setAbertura(100);
+    valvula.aberturaEfetiva = 100;
+    valvula.fluxoReal = 18;
+    valvula.pressaoEntradaAtualBar = 1.2;
+    valvula.pressaoSaidaAtualBar = 0.2;
+    valvula.deltaPAtualBar = 1.0;
+
+    const diagnostico = valvula.getDiagnosticoDimensionamento();
+
+    assert.equal(diagnostico.status, 'undersized');
+    assert.equal(diagnostico.ativo, true);
+    assert.ok(diagnostico.cvSugerido > valvula.cv, 'Cv sugerido deve aumentar a capacidade da valvula');
+    assert.ok(diagnostico.perdaLocalKSugerida < valvula.perdaLocalK, 'K sugerido deve reduzir perda localizada');
+
+    const resultado = valvula.aplicarAjusteDimensionamento();
+    assert.equal(resultado.aplicado, true);
+    assert.equal(valvula.perfilCaracteristica, 'custom');
+    assert.ok(valvula.cv > 18, 'Ajuste deve aumentar Cv');
+    assert.ok(valvula.perdaLocalK < 12, 'Ajuste deve reduzir K');
 });
 
 test('perfis da válvula aplicam propriedades e modo personalizado libera edição fina', () => {

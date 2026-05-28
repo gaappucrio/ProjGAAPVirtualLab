@@ -102,8 +102,10 @@ const COMPONENT_COLUMNS = [
     'Cor visual do fluido no tanque',
     'Set point ativo',
     'Set point (%)',
+    'Modo do controlador de nível',
     'Ganho proporcional Kp',
     'Ganho integral Ki',
+    'Ganho derivativo Kd',
     'Alerta de saturação ativo'
 ];
 
@@ -235,8 +237,10 @@ const EXPORT_LABELS_EN = {
     'Cor visual do fluido no tanque': 'Tank fluid visual color',
     'Set point ativo': 'Set point active',
     'Set point': 'Set point',
+    'Modo do controlador de nível': 'Level controller mode',
     'Ganho proporcional Kp': 'Proportional gain Kp',
     'Ganho integral Ki': 'Integral gain Ki',
+    'Ganho derivativo Kd': 'Derivative gain Kd',
     'Alerta de saturação ativo': 'Saturation alert active',
     'Nome do trecho': 'Line name',
     'Componente de origem': 'Source component',
@@ -288,6 +292,9 @@ const EXPORT_VALUE_TRANSLATIONS_EN = {
     oleo_leve: 'Light oil',
     glicol_30: 'Glycol 30%',
     custom: 'Custom',
+    'Determinístico (PID)': 'Deterministic (PID)',
+    pid: 'Deterministic PID',
+    fuzzy: 'Fuzzy',
     equal_percentage: 'Equal percentage',
     linear: 'Linear',
     quick_opening: 'Quick opening'
@@ -302,6 +309,7 @@ const LOCALIZED_VALUE_COLUMNS = new Set([
     'Bomba ligada',
     'Válvula aberta',
     'Set point ativo',
+    'Modo do controlador de nível',
     'Alerta de saturação ativo',
     'Perfil da válvula',
     'Característica da válvula',
@@ -565,8 +573,12 @@ function buildComponentRow(component) {
         row['Cor visual do fluido no tanque'] = fluid ? getFluidVisualStyle(fluid).stroke : '';
         row['Set point ativo'] = booleanValue(component.setpointAtivo);
         row['Set point (%)'] = numberValue(component.setpoint, 3);
+        row['Modo do controlador de nível'] = component.controladorNivelModo === 'fuzzy'
+            ? 'Fuzzy'
+            : 'Determinístico (PID)';
         row['Ganho proporcional Kp'] = numberValue(component.kp, 5);
         row['Ganho integral Ki'] = numberValue(component.ki, 5);
+        row['Ganho derivativo Kd'] = numberValue(component.kd, 5);
         row['Alerta de saturação ativo'] = booleanValue(component.alertaSaturacao?.ativo);
     }
 

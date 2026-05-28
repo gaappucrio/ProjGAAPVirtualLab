@@ -400,8 +400,10 @@ export function updateTankControlAvailabilityUI(component) {
     const spAtivoEl = byId('input-sp-ativo');
     const statusEl = byId('tank-sp-status-text');
     const grp = byId('grp-sp-main');
+    const modeGroup = byId('group-ctrl-mode');
     const kpGroup = byId('group-ctrl-params');
     const kiGroup = byId('group-ctrl-ki');
+    const kdGroup = byId('group-ctrl-kd');
     const isDark = document.body.classList.contains('theme-dark');
 
     if (spAtivoEl) {
@@ -428,7 +430,12 @@ export function updateTankControlAvailabilityUI(component) {
             : (diagnostico.podeAtivar ? (isDark ? '#1d2a35' : '#f9fbfb') : (isDark ? '#332613' : '#fff8ee'));
     }
 
-    const mostrarParametros = component.setpointAtivo ? 'block' : 'none';
-    if (kpGroup) kpGroup.style.display = mostrarParametros;
-    if (kiGroup) kiGroup.style.display = mostrarParametros;
+    const mostrarModo = component.setpointAtivo ? 'block' : 'none';
+    const mostrarParametrosPid = component.setpointAtivo && component.controladorNivelModo !== 'fuzzy'
+        ? 'block'
+        : 'none';
+    if (modeGroup) modeGroup.style.display = mostrarModo;
+    if (kpGroup) kpGroup.style.display = mostrarParametrosPid;
+    if (kiGroup) kiGroup.style.display = mostrarParametrosPid;
+    if (kdGroup) kdGroup.style.display = mostrarParametrosPid;
 }
