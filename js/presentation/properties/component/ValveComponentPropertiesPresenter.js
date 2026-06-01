@@ -130,7 +130,7 @@ export const VALVE_PROPERTIES_PRESENTER = {
                 </select>
                 <p id="texto-perfil-valvula" title="${selectedProfileHint}" style="margin:6px 0 0; font-size:11px; line-height:1.45; color:#5f6f7f;">${selectedProfileHint}</p>
                 ${!controladaPorSetpoint && !perfilPersonalizado ? '<p style="margin:6px 0 0; font-size:11px; line-height:1.45; color:#7f8c8d;">Para alterar Cv, K, curva, rangeabilidade ou tempo de curso individualmente, selecione o perfil Personalizado.</p>' : ''}
-                ${controladaPorSetpoint ? '<p style="margin:6px 0 0; font-size:11px; line-height:1.45; color:#c0392b;">Com o ponto de ajuste ativo, o tanque escolhe automaticamente o perfil mais adequado para a demanda de controle.</p>' : ''}
+                ${controladaPorSetpoint ? '<p style="margin:6px 0 0; font-size:11px; line-height:1.45; color:#c0392b;">Com o ponto de ajuste ativo, o tanque modula somente a abertura; desative o PA para alterar Cv, K, curva, rangeabilidade ou tempo de curso.</p>' : ''}
             </div>
             <div class="prop-group">
                 ${makeLabel('Coeficiente de vazão (Cv)', TOOLTIP.valveCv)}

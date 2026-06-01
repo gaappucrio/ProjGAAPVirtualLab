@@ -6,15 +6,12 @@ import {
 } from '../services/ValveSizingDiagnostics.js';
 
 const FATOR_MINIMO_AREA = 0.12;
-const CV_CONTROLE_NIVEL_MAX = 800;
-const K_CONTROLE_NIVEL_MIN = 0.02;
+const CV_MAX = 800;
 const PERFIL_PERSONALIZADO = 'custom';
 const PERFIL_PADRAO = 'equal_percentage';
 const GPM_PER_M3S = 15850.323141489;
 const PA_PER_PSI = 6894.757293168;
 const WATER_DENSITY_REFERENCE_KG_M3 = 999.016;
-const PERFIS_CONTROLE_NIVEL = Object.freeze(['equal_percentage', 'linear', 'quick_opening']);
-const LIMIAR_REFORCO_CONTROLE_NIVEL = 0.85;
 const TIPOS_CARACTERISTICA = Object.freeze(['equal_percentage', 'linear', 'quick_opening']);
 const LIMIAR_FECHAMENTO_PERCENTUAL = 0.05;
 const LIMIAR_FECHAMENTO_NORMALIZADO = LIMIAR_FECHAMENTO_PERCENTUAL / 100;
@@ -215,7 +212,7 @@ export class ValvulaLogica extends ComponenteFisico {
         if (!this._podeEditarParametros(options)) return false;
 
         const numero = Number(valor);
-        this.cv = clamp(Number.isFinite(numero) ? numero : this.cv, 0.05, CV_CONTROLE_NIVEL_MAX);
+        this.cv = clamp(Number.isFinite(numero) ? numero : this.cv, 0.05, CV_MAX);
         this._marcarPerfilPersonalizado(options);
         this._notificarEstado();
         return true;
@@ -279,49 +276,10 @@ export class ValvulaLogica extends ComponenteFisico {
         this._controleNivelOwnerId = ownerId;
     }
 
-    _selecionarPerfilControleNivel(demanda, aberturaComandada) {
-        const comando = clamp((Number(aberturaComandada) || 0) / 100, 0, 1);
-        const perfilAtual = PERFIS_CONTROLE_NIVEL.includes(this.perfilCaracteristica)
-            ? this.perfilCaracteristica
-            : 'equal_percentage';
-
-        // O controle fino deve acontecer pela abertura; o perfil só troca de faixa com histerese.
-        if (perfilAtual === 'quick_opening') {
-            if (comando <= 0.45) return 'linear';
-            return 'quick_opening';
-        }
-
-        if (perfilAtual === 'linear') {
-            if (comando >= 0.9) return 'quick_opening';
-            if (comando <= 0.2) return 'equal_percentage';
-            return 'linear';
-        }
-
-        if (comando >= 0.9) return 'quick_opening';
-        if (comando >= 0.7) return 'linear';
-        return 'equal_percentage';
-    }
-
-    aplicarControleNivel({ abertura, intensidade = 0, ownerId = null, cvMaximo = null, fechamentoImediato = false } = {}) {
+    aplicarControleNivel({ abertura, ownerId = null, fechamentoImediato = false } = {}) {
         this._iniciarControleNivel(ownerId);
 
-        const demanda = clamp(Number(intensidade) || 0, 0, 1);
         const aberturaComandada = clamp(Number(abertura) || 0, 0, 100);
-        const perfilControle = this._selecionarPerfilControleNivel(demanda, aberturaComandada);
-        const parametrosPerfil = VALVE_PROFILE_DEFINITIONS[perfilControle];
-
-        this._aplicarPerfilBase(perfilControle);
-
-        const cvBase = Math.max(0.05, parametrosPerfil.cv);
-        const kBase = Math.max(K_CONTROLE_NIVEL_MIN, parametrosPerfil.perdaLocalK);
-        const demandaReforco = clamp((demanda - LIMIAR_REFORCO_CONTROLE_NIVEL) / (1 - LIMIAR_REFORCO_CONTROLE_NIVEL), 0, 1);
-        const reforco = Math.pow(demandaReforco, 1.25);
-        const limiteCv = cvMaximo !== null ? Math.max(CV_CONTROLE_NIVEL_MAX, cvMaximo) : CV_CONTROLE_NIVEL_MAX;
-        const cvControleMaximo = Math.max(limiteCv, cvBase);
-
-        this.cv = cvBase + ((cvControleMaximo - cvBase) * reforco);
-        this.perdaLocalK = K_CONTROLE_NIVEL_MIN + ((kBase - K_CONTROLE_NIVEL_MIN) * Math.pow(1 - demanda, 1.5));
-
         const aplicado = this.setAbertura(aberturaComandada, { fromSetpoint: true });
         if (aplicado && fechamentoImediato === true && aberturaComandada <= LIMIAR_FECHAMENTO_PERCENTUAL) {
             this.aberturaEfetiva = 0;

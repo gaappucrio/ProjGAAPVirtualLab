@@ -606,6 +606,33 @@ test('diagnostico de dimensionamento da valvula sugere liberar passagem quando h
     assert.ok(valvula.perdaLocalK < 12, 'Ajuste deve reduzir K');
 });
 
+test('ajuste de dimensionamento da valvula altera somente a valvula selecionada', () => {
+    const valvulaSelecionada = new ValvulaLogica('V-sizing-target', 'V-sizing-target', 0, 0);
+    const valvulaIsolada = new ValvulaLogica('V-sizing-other', 'V-sizing-other', 0, 0);
+
+    [valvulaSelecionada, valvulaIsolada].forEach((valvula) => {
+        valvula.aplicarPerfilCaracteristica('custom');
+        valvula.setCoeficienteVazao(18);
+        valvula.setCoeficientePerda(12);
+        valvula.setTipoCaracteristica('linear');
+        valvula.setAbertura(100);
+        valvula.aberturaEfetiva = 100;
+        valvula.fluxoReal = 18;
+        valvula.pressaoEntradaAtualBar = 1.2;
+        valvula.pressaoSaidaAtualBar = 0.2;
+        valvula.deltaPAtualBar = 1.0;
+    });
+
+    const resultado = valvulaSelecionada.aplicarAjusteDimensionamento();
+
+    assert.equal(resultado.aplicado, true);
+    assert.ok(valvulaSelecionada.cv > 18);
+    assert.ok(valvulaSelecionada.perdaLocalK < 12);
+    approx(valvulaIsolada.cv, 18, 1e-12, 'Cv de outra valvula nao deve mudar');
+    approx(valvulaIsolada.perdaLocalK, 12, 1e-12, 'K de outra valvula nao deve mudar');
+    assert.equal(valvulaIsolada.perfilCaracteristica, 'custom');
+});
+
 test('perfis da válvula aplicam propriedades e modo personalizado libera edição fina', () => {
     const valvula = new ValvulaLogica('V-03', 'V-03', 0, 0);
     const perfilRapido = VALVE_PROFILE_DEFINITIONS.quick_opening;
@@ -644,7 +671,7 @@ test('perfis da válvula aplicam propriedades e modo personalizado libera ediç�
     assert.equal(valvula.tempoCursoSegundos, 2);
 });
 
-test('controle de nível escolhe perfil automaticamente e restaura perfil manual ao liberar', () => {
+test('controle de nível modula abertura sem redesenhar Cv ou K da válvula', () => {
     const valvula = new ValvulaLogica('V-04', 'V-04', 0, 0);
 
     valvula.aplicarPerfilCaracteristica('custom');
@@ -659,52 +686,35 @@ test('controle de nível escolhe perfil automaticamente e restaura perfil manual
         intensidade: 0.2,
         ownerId: 'T-01'
     });
-    assert.equal(valvula.perfilCaracteristica, 'equal_percentage');
-    assert.equal(valvula.tempoCursoSegundos, VALVE_PROFILE_DEFINITIONS.equal_percentage.tempoCursoSegundos);
-    approx(valvula.cv, VALVE_PROFILE_DEFINITIONS.equal_percentage.cv, 1e-12, 'Cv deve ficar no perfil enquanto a abertura controla a vazão');
+    assert.equal(valvula.perfilCaracteristica, 'custom');
+    approx(valvula.cv, 7, 1e-12, 'Cv de projeto deve permanecer local e fixo durante o PA');
+    approx(valvula.perdaLocalK, 1.3, 1e-12, 'K de projeto deve permanecer local e fixo durante o PA');
+    assert.equal(valvula.tipoCaracteristica, 'equal_percentage');
+    assert.equal(valvula.rangeabilidade, 120);
+    assert.equal(valvula.tempoCursoSegundos, 1.5);
+    assert.equal(valvula.grauAbertura, 20);
 
     valvula.aplicarControleNivel({
         abertura: 50,
         intensidade: 0.5,
         ownerId: 'T-01'
     });
-    assert.equal(valvula.perfilCaracteristica, 'equal_percentage');
-    approx(valvula.cv, VALVE_PROFILE_DEFINITIONS.equal_percentage.cv, 1e-12, 'Perfil não deve trocar em ajuste moderado');
-
-    valvula.aplicarControleNivel({
-        abertura: 75,
-        intensidade: 0.75,
-        ownerId: 'T-01'
-    });
-    assert.equal(valvula.perfilCaracteristica, 'linear');
-    assert.equal(valvula.tempoCursoSegundos, VALVE_PROFILE_DEFINITIONS.linear.tempoCursoSegundos);
-    approx(valvula.cv, VALVE_PROFILE_DEFINITIONS.linear.cv, 1e-12, 'Cv deve seguir o perfil linear antes do reforço de alta demanda');
+    assert.equal(valvula.perfilCaracteristica, 'custom');
+    approx(valvula.cv, 7, 1e-12, 'Aumento de demanda deve atuar pela abertura, nao por Cv global');
+    approx(valvula.perdaLocalK, 1.3, 1e-12, 'Aumento de demanda nao deve reduzir K automaticamente');
+    assert.equal(valvula.grauAbertura, 50);
 
     valvula.aplicarControleNivel({
         abertura: 90,
         intensidade: 0.9,
         ownerId: 'T-01'
     });
-
-    assert.equal(valvula.perfilCaracteristica, 'quick_opening');
-    assert.equal(valvula.tipoCaracteristica, 'quick_opening');
-    assert.equal(valvula.tempoCursoSegundos, VALVE_PROFILE_DEFINITIONS.quick_opening.tempoCursoSegundos);
-    assert.ok(valvula.cv > VALVE_PROFILE_DEFINITIONS.quick_opening.cv, 'Controle de nível deve reforçar o Cv do perfil escolhido');
-    assert.ok(valvula.perdaLocalK < VALVE_PROFILE_DEFINITIONS.quick_opening.perdaLocalK, 'Controle de nível deve reduzir K para atender alta demanda');
-
-    valvula.aplicarControleNivel({
-        abertura: 50,
-        intensidade: 0.5,
-        ownerId: 'T-01'
-    });
-    assert.equal(valvula.perfilCaracteristica, 'quick_opening', 'Histerese deve evitar troca de perfil por ajuste intermediário');
-
-    valvula.aplicarControleNivel({
-        abertura: 40,
-        intensidade: 0.4,
-        ownerId: 'T-01'
-    });
-    assert.equal(valvula.perfilCaracteristica, 'linear', 'Perfil só deve descer faixa após redução maior de abertura');
+    assert.equal(valvula.perfilCaracteristica, 'custom');
+    assert.equal(valvula.tipoCaracteristica, 'equal_percentage');
+    assert.equal(valvula.tempoCursoSegundos, 1.5);
+    approx(valvula.cv, 7, 1e-12, 'Alta demanda tambem nao deve reforcar Cv automaticamente');
+    approx(valvula.perdaLocalK, 1.3, 1e-12, 'Alta demanda tambem nao deve reduzir K automaticamente');
+    assert.equal(valvula.grauAbertura, 90);
 
     valvula.liberarControleNivel('T-01');
 
