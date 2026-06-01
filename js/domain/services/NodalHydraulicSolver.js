@@ -594,6 +594,18 @@ export class NodalHydraulicSolver {
         }
     }
 
+    isClosedValve(component) {
+        return component instanceof ValvulaLogica && component.getAberturaNormalizadaAtual() <= 0;
+    }
+
+    isInactivePump(component) {
+        return component instanceof BombaLogica && component.getDriveAtual() <= EPSILON_FLOW;
+    }
+
+    isShutoffComponent(component) {
+        return this.isClosedValve(component) || this.isInactivePump(component);
+    }
+
     createConnectionBranch(connection, source, target) {
         this.hydraulicModel.ensureConnectionProperties(connection);
 
@@ -604,8 +616,12 @@ export class NodalHydraulicSolver {
         const areaM2 = Math.min(connection.areaM2, sourceArea, targetArea);
         const sourceOutletLossCoeff = this.getSourceOutletLossCoeff(source);
         const targetEntryLossCoeff = this.getBoundaryTargetEntryLossCoeff(target);
-        const disabled = source instanceof TanqueLogico
-            && source.temLiquidoDisponivelSaida?.(this.context.usarAlturaRelativa) === false;
+        const disabled = this.isShutoffComponent(source)
+            || this.isShutoffComponent(target)
+            || (
+                source instanceof TanqueLogico
+                && source.temLiquidoDisponivelSaida?.(this.context.usarAlturaRelativa) === false
+            );
 
         return {
             id: `connection:${connection.id}`,

@@ -81,10 +81,18 @@ export class HydraulicBranchModel {
         return component instanceof ValvulaLogica && component.getAberturaNormalizadaAtual() <= 0;
     }
 
-    isConnectionBlockedByClosedValve(conn) {
+    isInactivePump(component) {
+        return component instanceof BombaLogica && component.getDriveAtual() <= EPSILON_FLOW;
+    }
+
+    isShutoffComponent(component) {
+        return this.isClosedValve(component) || this.isInactivePump(component);
+    }
+
+    isConnectionBlockedByShutoff(conn) {
         const source = this.context.getComponentById(conn.sourceId);
         const target = this.context.getComponentById(conn.targetId);
-        return this.isClosedValve(source) || this.isClosedValve(target);
+        return this.isShutoffComponent(source) || this.isShutoffComponent(target);
     }
 
     clearConnectionFlow(conn, state = this.context.getConnectionState(conn)) {
@@ -117,7 +125,7 @@ export class HydraulicBranchModel {
             state.headGainM = geometry.headGainM;
             state.targetFlowLps = 0;
 
-            if (this.isConnectionBlockedByClosedValve(conn)) {
+            if (this.isConnectionBlockedByShutoff(conn)) {
                 this.clearConnectionFlow(conn, state);
                 state.responseTimeS = this.getConnectionResponseTimeS(conn, geometry);
                 return;

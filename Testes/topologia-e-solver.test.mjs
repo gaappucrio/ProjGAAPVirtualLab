@@ -822,6 +822,58 @@ test('bomba em circuito fechado nao atravessa valvula fechada', () => {
     );
 });
 
+test('malha com tanques nao escoa por bomba desligada nem valvula fechada', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-boundary-loop', 'Entrada-boundary-loop', 0, 0);
+    const tanqueA = new TanqueLogico('T-boundary-A', 'T-boundary-A', 140, 0);
+    const bomba = new BombaLogica('P-boundary-off', 'P-boundary-off', 280, 0);
+    const tanqueB = new TanqueLogico('T-boundary-B', 'T-boundary-B', 420, 0);
+    const valvula = new ValvulaLogica('V-boundary-closed', 'V-boundary-closed', 560, 0);
+
+    fonte.pressaoFonteBar = 0.5;
+    fonte.vazaoMaxima = 8.8889;
+    tanqueA.volumeAtual = 900;
+    tanqueA.capacidadeMaxima = 1000;
+    tanqueB.volumeAtual = 850;
+    tanqueB.capacidadeMaxima = 1000;
+    bomba.grauAcionamento = 0;
+    bomba.acionamentoEfetivo = 0;
+    valvula.setAbertura(0);
+    valvula.aberturaEfetiva = 0;
+
+    fonte.conectarSaida(tanqueA);
+    tanqueA.conectarSaida(bomba);
+    bomba.conectarSaida(tanqueB);
+    tanqueB.conectarSaida(valvula);
+    valvula.conectarSaida(tanqueA);
+
+    const fonteTanque = new ConnectionModel({ sourceId: fonte.id, targetId: tanqueA.id });
+    const tanqueBomba = new ConnectionModel({ sourceId: tanqueA.id, targetId: bomba.id });
+    const bombaTanque = new ConnectionModel({ sourceId: bomba.id, targetId: tanqueB.id });
+    const tanqueValvula = new ConnectionModel({ sourceId: tanqueB.id, targetId: valvula.id });
+    const valvulaTanque = new ConnectionModel({ sourceId: valvula.id, targetId: tanqueA.id });
+
+    [fonte, tanqueA, bomba, tanqueB, valvula].forEach((component) => engine.add(component));
+    [fonteTanque, tanqueBomba, bombaTanque, tanqueValvula, valvulaTanque].forEach((connection) => engine.addConnection(connection));
+
+    runAutomaticPhysicsSteps(engine, 6, 0.1);
+
+    const metrics = engine.getSolverMetrics();
+
+    assert.equal(metrics.mode, 'nodal');
+    assert.ok(engine.getConnectionState(fonteTanque).flowLps > 0, 'A fonte ainda deve conseguir alimentar o tanque a montante');
+    assert.equal(engine.getConnectionState(tanqueBomba).flowLps, 0);
+    assert.equal(engine.getConnectionState(bombaTanque).flowLps, 0);
+    assert.equal(engine.getConnectionState(tanqueValvula).flowLps, 0);
+    assert.equal(engine.getConnectionState(valvulaTanque).flowLps, 0);
+    assert.equal(bomba.fluxoReal, 0);
+    assert.equal(valvula.fluxoReal, 0);
+    assert.ok(
+        !metrics.lastDiagnostics.some((diagnostic) => diagnostic.code === 'nodal_singular_matrix'),
+        'Atuadores totalmente fechados nao devem deixar nos mortos produzirem matriz singular'
+    );
+});
+
 test('malha fechada passiva sem fronteira nao cria vazao artificial', () => {
     const engine = createEngine();
     const valvulaA = new ValvulaLogica('V-passiva-A', 'V-passiva-A', 0, 0);
