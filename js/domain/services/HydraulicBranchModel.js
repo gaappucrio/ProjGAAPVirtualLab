@@ -45,6 +45,11 @@ function applyConnectionStartupRamp(conn, targetFlowLps, dt) {
     return safeTargetFlowLps * rampScale;
 }
 
+function finiteNumber(value, fallback = 0) {
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : fallback;
+}
+
 export class HydraulicBranchModel {
     constructor(hydraulicContext) {
         this.context = hydraulicContext;
@@ -200,8 +205,8 @@ export class HydraulicBranchModel {
             if (!source || !target) return;
 
             const fluid = state.fluid || this.context.getConnectionFluid(conn);
-            source.registrarSaida(state.flowLps, state.sourcePressureBar || state.pressureBar || 0, fluid);
-            target.registrarEntrada(state.flowLps, state.outletPressureBar || state.pressureBar || 0, fluid);
+            source.registrarSaida(state.flowLps, finiteNumber(state.sourcePressureBar, finiteNumber(state.pressureBar, 0)), fluid);
+            target.registrarEntrada(state.flowLps, finiteNumber(state.outletPressureBar, finiteNumber(state.pressureBar, 0)), fluid);
         });
 
         this.context.componentes.forEach((component) => {

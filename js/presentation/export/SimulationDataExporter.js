@@ -10,6 +10,7 @@ import {
     calculateTankResidenceTimeS
 } from '../../domain/services/ResidenceTime.js';
 import { isEnglishLanguage, translateFluidName, translateLiteral } from '../i18n/LanguageManager.js';
+import { resolvePipePressureProfile } from '../monitoring/PipePressureProfile.js';
 import { formatUnitValue, getUnitPreferences, getUnitSymbol } from '../units/DisplayUnits.js';
 
 const EXPORT_METADATA_COLUMNS = [
@@ -591,6 +592,7 @@ function buildConnectionRow(engine, connection, index) {
     const state = engine.getConnectionState(connection);
     const geometry = engine.getConnectionGeometry(connection);
     const fluid = state?.fluid || engine.hydraulicContext?.getConnectionFluid?.(connection);
+    const pressureProfile = resolvePipePressureProfile({ state, source });
 
     return {
         'Nome do Cano': `Cano ${index + 1}`,
@@ -610,10 +612,10 @@ function buildConnectionRow(engine, connection, index) {
         'Vazão atual (L/s)': numberValue(state?.flowLps, 5),
         'Vazão alvo (L/s)': numberValue(state?.targetFlowLps, 5),
         'Velocidade atual (m/s)': numberValue(state?.velocityMps, 5),
-        'Delta P no Cano (bar)': numberValue(state?.deltaPBar, 5),
+        'Delta P no Cano (bar)': numberValue(pressureProfile.pressureDropBar, 5),
         'Perda total (bar)': numberValue(state?.totalLossBar, 5),
-        'Pressão na origem (bar)': numberValue(state?.sourcePressureBar, 5),
-        'Pressão de chegada (bar)': numberValue(state?.outletPressureBar, 5),
+        'Pressão na origem (bar)': numberValue(pressureProfile.sourcePressureBar, 5),
+        'Pressão de chegada (bar)': numberValue(pressureProfile.endPressureBar, 5),
         'Contrapressão (bar)': numberValue(state?.backPressureBar, 5),
         'Comprimento hidráulico total (m)': numberValue(geometry?.lengthM ?? state?.lengthM, 5),
         'Comprimento reto/esquemático (m)': numberValue(geometry?.straightLengthM ?? state?.straightLengthM, 5),

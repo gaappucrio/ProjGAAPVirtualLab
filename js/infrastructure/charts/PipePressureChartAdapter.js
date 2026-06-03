@@ -28,6 +28,10 @@ function finiteNumber(value, fallback = 0) {
     return Number.isFinite(numericValue) ? numericValue : fallback;
 }
 
+function hasFiniteNumber(value) {
+    return Number.isFinite(Number(value));
+}
+
 function formatAxisTick(value) {
     const numericValue = Number(value);
     if (!Number.isFinite(numericValue)) return value;
@@ -38,22 +42,34 @@ function formatAxisTick(value) {
     });
 }
 
-function getPressureProfileEndpointBar(state = {}) {
-    const sourcePressureBar = finiteNumber(
+function getPressureProfileEndpointBar(state = {}, overrides = {}) {
+    const resolvedSourcePressureBar = finiteNumber(
         state.sourcePressureBar,
         finiteNumber(state.pressureBar, 0)
     );
+    const hasResolvedEndPressure = hasFiniteNumber(state.pressureBar) || hasFiniteNumber(state.outletPressureBar);
+    const resolvedEndPressureBar = finiteNumber(
+        state.pressureBar,
+        finiteNumber(state.outletPressureBar, 0)
+    );
+    const sourcePressureBar = finiteNumber(
+        overrides.sourcePressureBar,
+        resolvedSourcePressureBar
+    );
+    const fallbackPressureDropBar = hasResolvedEndPressure
+        ? Math.max(0, resolvedSourcePressureBar - resolvedEndPressureBar)
+        : Math.max(0, finiteNumber(state.totalLossBar, finiteNumber(state.deltaPBar, 0)));
+    const pressureDropBar = finiteNumber(
+        overrides.pressureDropBar,
+        fallbackPressureDropBar
+    );
     const estimatedEndPressureBar = Math.max(
         0,
-        sourcePressureBar - Math.max(
-            0,
-            finiteNumber(state.totalLossBar, finiteNumber(state.deltaPBar, 0))
-        )
+        sourcePressureBar - Math.max(0, pressureDropBar)
     );
-    const endPressureBar = finiteNumber(
-        state.pressureBar,
-        finiteNumber(state.outletPressureBar, estimatedEndPressureBar)
-    );
+    const endPressureBar = hasFiniteNumber(overrides.sourcePressureBar)
+        ? estimatedEndPressureBar
+        : finiteNumber(state.pressureBar, finiteNumber(state.outletPressureBar, estimatedEndPressureBar));
 
     return {
         sourcePressureBar,
@@ -61,13 +77,16 @@ function getPressureProfileEndpointBar(state = {}) {
     };
 }
 
-export function buildPipePressureProfile(connection, state = {}, geometry = {}) {
+export function buildPipePressureProfile(connection, state = {}, geometry = {}, options = {}) {
     const rawLengthM = Math.max(
         0,
         finiteNumber(state.lengthM, finiteNumber(geometry.lengthM, connection?.extraLengthM || 0))
     );
     const lengthM = rawLengthM > 0 ? rawLengthM : 1;
-    const { sourcePressureBar, endPressureBar } = getPressureProfileEndpointBar(state);
+    const { sourcePressureBar, endPressureBar } = getPressureProfileEndpointBar(state, {
+        sourcePressureBar: options.sourcePressureBar,
+        pressureDropBar: options.pressureDropBar
+    });
     const pressureUnit = getUnitSymbol('pressure');
     const lengthUnit = getUnitSymbol('length');
     const pressurePoints = [];
@@ -162,8 +181,17 @@ function applyPipePressureChartPresentation(chart, profileData, { expanded = fal
     chart.data.datasets[1].pointHoverRadius = profile.endpointRadius + 2;
 }
 
-export function createPipePressureChart(ctx, connection, state, geometry, { expanded = false, label = '' } = {}) {
-    const profileData = buildPipePressureProfile(connection, state, geometry);
+export function createPipePressureChart(
+    ctx,
+    connection,
+    state,
+    geometry,
+    { expanded = false, label = '', sourcePressureBar = undefined, pressureDropBar = undefined } = {}
+) {
+    const profileData = buildPipePressureProfile(connection, state, geometry, {
+        sourcePressureBar,
+        pressureDropBar
+    });
 
     const chart = new Chart(ctx, {
         type: 'line',
@@ -251,10 +279,19 @@ export function createPipePressureChart(ctx, connection, state, geometry, { expa
     return chart;
 }
 
-export function refreshPipePressureChart(chart, connection, state, geometry, { expanded = false, label = '' } = {}) {
+export function refreshPipePressureChart(
+    chart,
+    connection,
+    state,
+    geometry,
+    { expanded = false, label = '', sourcePressureBar = undefined, pressureDropBar = undefined } = {}
+) {
     if (!chart) return;
 
-    const profileData = buildPipePressureProfile(connection, state, geometry);
+    const profileData = buildPipePressureProfile(connection, state, geometry, {
+        sourcePressureBar,
+        pressureDropBar
+    });
     chart.data.datasets[0].label = label ? `${t('chart.pressure')}: ${label}` : t('chart.pressure');
     chart.data.datasets[0].data = profileData.pressurePoints;
     chart.data.datasets[1].label = t('chart.endpoints');

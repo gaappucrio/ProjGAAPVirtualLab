@@ -61,7 +61,7 @@ Responsabilidade: implementar adaptadores visuais, renderização SVG, estilos e
 Principais módulos:
 - `infrastructure/dom/` — gerenciamento de elementos visuais de componentes, posições e estado de portas.
 - `infrastructure/rendering/` — adaptadores de desenho de conexões e integração com Chart.js.
-- `infrastructure/charts/` — adaptadores especiais para gráficos de bomba e tanque.
+- `infrastructure/charts/` — adaptadores especiais para gráficos de bomba, tanque e pressão de Canos.
 
 Interface com outros módulos:
 - Fornece serviços para a camada de apresentação sem trazer lógica de domínio.
@@ -115,6 +115,7 @@ Este módulo instancia o engine, conecta serviços de visual, cria controladores
 - O sistema deve suportar modo claro e modo escuro com preferência persistente.
 - O sistema deve exibir tutorial de uso em modal.
 - O sistema deve mostrar notificações de diagnóstico de rede e avisos de saturação.
+- O monitoramento, o painel de propriedades e a exportação de Canos devem exibir pressão ao longo da distância usando a pressão física de saída do componente de origem e sem somar novamente perdas próprias de componentes passantes, como a queda de pressão de válvulas.
 
 ## 4. Requisitos Não Funcionais
 
@@ -124,6 +125,7 @@ Este módulo instancia o engine, conecta serviços de visual, cria controladores
 - Evitar imports transversais entre camadas.
 - Garantir testes automatizados nas principais camadas.
 - Executar sem bundler e carregar direto via ES Modules no navegador.
+- Atualizar os arquivos `.md` relevantes junto com mudanças que alterem comportamento, semântica física, UI, monitoramento, exportação ou contratos de manutenção.
 
 ## 5. Funções e Componentes Principais
 
@@ -407,15 +409,17 @@ A seguir estão as funções/chaves de alto valor do sistema, com seus objetivos
 ### 5.21 `createMonitorController({ engine })`
 
 - Módulo: `js/presentation/controllers/MonitorController.js`
-- Objetivo: criar e atualizar os gráficos de monitoramento para tanques e bombas.
+- Objetivo: criar e atualizar os gráficos de monitoramento para tanques, bombas e Canos.
 - Pré-condições: `engine` deve estar disponível com componentes registráveis.
 - Entrada:
   - `engine`: instância do motor de simulação.
 - Saída: controlador de monitor com métodos internos de atualização.
 - Pós-condições:
-  - O monitor exibe séries de tempo para tanques e bombas selecionados.
+  - O monitor exibe séries de tempo para tanques, curvas de operação para bombas e pressão ao longo da distância para Canos.
   - O histórico de slots de gráfico é gerenciado automaticamente.
   - O botão de exportação de JSON de bomba é habilitado quando aplicável.
+  - O gráfico de Cano ancora o perfil na pressão física de saída do componente de origem; quando o trecho sai de uma válvula, a queda própria da válvula é descontada do perfil para evitar dupla contagem.
+  - A mesma semântica deve ser usada no painel de propriedades e na exportação tabular para `Delta P no Cano`, `Pressão na origem` e `Pressão de chegada`.
 - Interface com o usuário: atualiza visualmente o painel de gráficos e histórico de monitoramento.
 
 ### 5.22 `setupWorkspaceSelectionController({ engine })`
@@ -902,6 +906,7 @@ A seguir, a lista completa de módulos e símbolos exportados.
 - `js/domain/services/ValveSizingDiagnostics.js`: aplicarAjusteDimensionamentoValvula, diagnosticarDimensionamentoValvula
 - `js/domain/units/HydraulicUnits.js`: BAR_TO_PA, CONSTANTES_CONVERSAO, DEFAULT_ATMOSPHERIC_PRESSURE_BAR, DEFAULT_DESIGN_VELOCITY_MPS, DEFAULT_ENTRY_LOSS, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK, DEFAULT_FLUID_VAPOR_PRESSURE_BAR, DEFAULT_FLUID_VISCOSITY_PA_S, DEFAULT_PIPE_DIAMETER_M, DEFAULT_PIPE_EXTRA_LENGTH_M, DEFAULT_PIPE_FRICTION, DEFAULT_PIPE_MINOR_LOSS, DEFAULT_PIPE_ROUGHNESS_MM, DEFAULT_SOURCE_MAX_FLOW_LPS, DEFAULT_SOURCE_PRESSURE_BAR, EPSILON_FLOW, GRAVITY, MAX_NETWORK_FLOW_LPS, PADROES_HIDRAULICOS, areaFromDiameter, lpsToM3s, m3sToLps, pressureFromHeadBar
 - `js/infrastructure/charts/PumpChartAdapter.js`: applyPumpChartPresentation, buildPumpCurveDatasets, createPumpChart, refreshPumpChart
+- `js/infrastructure/charts/PipePressureChartAdapter.js`: buildPipePressureProfile, createPipePressureChart, refreshPipePressureChart
 - `js/infrastructure/charts/TankChartAdapter.js`: createEmptyMonitorChart, createTankVolumeChart, refreshEmptyMonitorChartPresentation, refreshTankVolumeChart, resolveTankChartColors
 - `js/infrastructure/dom/ComponentVisualConfig.js`: GRID_SIZE, colorPort, labelStyle
 - `js/infrastructure/dom/ComponentVisualFactory.js`: FabricaDeEquipamentos, obterProximaTag, updatePortStates
@@ -938,6 +943,7 @@ A seguir, a lista completa de módulos e símbolos exportados.
 - `js/presentation/flowchart/FlowchartPersistence.js`: FLOWCHART_DOCUMENT_TYPE, FLOWCHART_DOCUMENT_VERSION, createFlowchartDocument, downloadFlowchartDocument, getFlowchartFileName, parseFlowchartDocument, readFlowchartFile, restoreFlowchartDocument
 - `js/presentation/i18n/LanguageManager.js`: TEXTS, applyLanguageToDocument, createTranslationProxy, getComponentTagPrefix, getFluidNameVariants, getLanguage, isEnglishLanguage, localizeElement, setLanguage, subscribeLanguageChanges, t, translateDefaultComponentTag, translateFluidName, translateLiteral
 - `js/presentation/monitoring/MonitorSlotHistory.js`: createMonitorSlotHistory
+- `js/presentation/monitoring/PipePressureProfile.js`: resolvePipePressureProfile, resolvePipePressureProfileOptions
 - `js/presentation/properties/ComponentPropertiesPresenter.js`: getComponentTypeKey, renderComponentProperties
 - `js/presentation/properties/ConnectionPropertiesPresenter.js`: renderConnectionProperties
 - `js/presentation/properties/DefaultPropertiesPresenter.js`: renderDefaultProperties

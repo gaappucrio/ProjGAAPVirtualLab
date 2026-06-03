@@ -14,6 +14,7 @@ import {
 } from '../../domain/services/ResidenceTime.js';
 import { toDisplayValue } from '../units/DisplayUnits.js';
 import { localizeElement, translateLiteral } from '../i18n/LanguageManager.js';
+import { resolvePipePressureProfile } from '../monitoring/PipePressureProfile.js';
 import { byId, isActive, setValue } from './PropertyDomAdapter.js';
 import { formatMeasuredValue, setFieldValue } from './PropertyValueFormatters.js';
 import { updateTankControlAvailabilityUI } from './TankSaturationAlertPresenter.js';
@@ -147,6 +148,8 @@ function updateConnectionValues(engine, connection) {
     if (!connection) return;
 
     const state = engine.getConnectionState(connection);
+    const source = engine.getComponentById(connection.sourceId);
+    const pressureProfile = resolvePipePressureProfile({ state, source });
     const fluid = state.fluid || engine.hydraulicContext?.getConnectionFluid?.(connection);
     setFieldValue('disp-pipe-flow', state.flowLps, 'flow', 2);
     setFieldValue('disp-pipe-target-flow', state.targetFlowLps, 'flow', 2);
@@ -157,7 +160,7 @@ function updateConnectionValues(engine, connection) {
     setValue('disp-pipe-fluid', fluid?.nome || '-');
     setValue('disp-pipe-fluid-density', fluid?.densidade ? fluid.densidade.toFixed(1) : '0.0');
     setValue('disp-pipe-fluid-viscosity', fluid?.viscosidadeDinamicaPaS ? fluid.viscosidadeDinamicaPaS.toFixed(5) : '0.00000');
-    setFieldValue('disp-pipe-deltap', state.deltaPBar, 'pressure', 3);
+    setFieldValue('disp-pipe-deltap', pressureProfile.pressureDropBar, 'pressure', 3);
     setFieldValue('disp-pipe-length', state.lengthM, 'length', 2);
     setValue('disp-pipe-residence-time', formatResidenceTime(calculateConnectionResidenceTimeS(
         connection,

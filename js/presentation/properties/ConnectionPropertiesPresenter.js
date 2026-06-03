@@ -26,6 +26,7 @@ import {
 } from './PropertyValueFormatters.js';
 import { bind, setValue } from './PropertyDomAdapter.js';
 import { bindUnitControls, renderUnitControls } from './PropertyUnitsPresenter.js';
+import { resolvePipePressureProfile } from '../monitoring/PipePressureProfile.js';
 
 function getConnectionDisplay(engine, connection) {
     const source = engine.componentes.find((component) => component.id === connection.sourceId);
@@ -66,6 +67,8 @@ export function renderConnectionProperties({
     const state = engine.getConnectionState(connection);
     const labels = getConnectionDisplay(engine, connection);
     const geometry = engine.getConnectionGeometry(connection);
+    const source = engine.getComponentById(connection.sourceId);
+    const pressureProfile = resolvePipePressureProfile({ state, source });
     const suggestedDiameterM = getSuggestedDiameterM(connection, state);
     const currentFluid = state.fluid || engine.hydraulicContext?.getConnectionFluid?.(connection);
     const residenceTimeS = calculateConnectionResidenceTimeS(
@@ -93,7 +96,7 @@ export function renderConnectionProperties({
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.deltaPTrecho}">Queda de Pressão no Cano (${getUnitSymbol('pressure')})</label>
-            <input type="text" id="disp-pipe-deltap" title="${TOOLTIPS.conexao.deltaPTrecho}" value="${displayUnitValue('pressure', state.deltaPBar, 3)}" disabled>
+            <input type="text" id="disp-pipe-deltap" title="${TOOLTIPS.conexao.deltaPTrecho}" value="${displayUnitValue('pressure', pressureProfile.pressureDropBar, 3)}" disabled>
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.comprimentoTotal}">Comprimento Total (${getUnitSymbol('length')})</label>

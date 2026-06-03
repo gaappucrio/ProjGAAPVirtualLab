@@ -675,6 +675,66 @@ test('perfil de pressao do pipe usa pressao resolvida ao longo da distancia', as
     ]);
 });
 
+test('perfil de pressao do pipe pode usar pressao fisica de saida da origem', async () => {
+    const { ConnectionModel } = await import('../js/domain/models/ConnectionModel.js');
+    const { buildPipePressureProfile } = await import('../js/infrastructure/charts/PipePressureChartAdapter.js');
+    const { setUnitPreference } = await import('../js/presentation/units/DisplayUnits.js');
+
+    setUnitPreference('pressure', 'kpa');
+    setUnitPreference('length', 'm');
+
+    const connection = new ConnectionModel({
+        sourceId: 'V-01',
+        targetId: 'D-01'
+    });
+    const profile = buildPipePressureProfile(
+        connection,
+        {
+            sourcePressureBar: 0.1094,
+            pressureBar: 0.0294,
+            deltaPBar: 0.08,
+            outletPressureBar: 0,
+            lengthM: 1
+        },
+        { lengthM: 1 },
+        {
+            sourcePressureBar: 0.3928,
+            pressureDropBar: 0.08
+        }
+    );
+
+    assert.ok(Math.abs(profile.pressurePoints[0].y - 39.28) < 1e-9);
+    assert.ok(Math.abs(profile.pressurePoints.at(-1).y - 31.28) < 1e-9);
+    assert.deepEqual(profile.endpointPoints.map((point) => ({
+        x: point.x,
+        y: Number(point.y.toFixed(2))
+    })), [
+        { x: 0, y: 39.28 },
+        { x: 1, y: 31.28 }
+    ]);
+});
+
+test('monitor de pipe desconta perda propria da valvula na origem', async () => {
+    const { resolvePipePressureProfileOptions } = await import('../js/presentation/monitoring/PipePressureProfile.js');
+
+    const options = resolvePipePressureProfileOptions({
+        source: {
+            pressaoEntradaAtualBar: 0.42518,
+            pressaoSaidaAtualBar: 0.13317,
+            deltaPAtualBar: 0.05235
+        },
+        state: {
+            flowLps: 8.65916,
+            sourcePressureBar: 0.13317,
+            pressureBar: 0.03517,
+            deltaPBar: 0.09799
+        }
+    });
+
+    assert.ok(Math.abs(options.sourcePressureBar - 0.37283) < 1e-9);
+    assert.ok(Math.abs(options.pressureDropBar - 0.04564) < 1e-9);
+});
+
 test('presenter da fonte preserva custom selecionado mesmo com valores de preset', async () => {
     const { FonteLogica } = await import('../js/domain/components/FonteLogica.js');
     const { SOURCE_PROPERTIES_PRESENTER } = await import('../js/presentation/properties/component/BoundaryComponentPropertiesPresenter.js');

@@ -11,6 +11,7 @@ import {
 } from '../../infrastructure/charts/TankChartAdapter.js';
 import { exportPumpDwsimJson } from '../export/PumpDwsimJsonExporter.js';
 import { createMonitorSlotHistory } from '../monitoring/MonitorSlotHistory.js';
+import { resolvePipePressureProfileOptions } from '../monitoring/PipePressureProfile.js';
 import { getUnitSymbol } from '../units/DisplayUnits.js';
 import { t } from '../i18n/LanguageManager.js';
 
@@ -87,6 +88,12 @@ export function createMonitorController({ engine }) {
         const sourceLabel = source?.tag || connection?.sourceId || t('chart.pipe');
         const targetLabel = target?.tag || connection?.targetId || t('chart.pipe');
         return `${sourceLabel} -> ${targetLabel}`;
+    }
+
+    function getPipePressureProfileOptions(connection) {
+        const state = engine.getConnectionState(connection);
+        const source = engine.getComponentById?.(connection?.sourceId);
+        return resolvePipePressureProfileOptions({ state, source });
     }
 
     function getMonitorChartTitle(entry) {
@@ -198,7 +205,8 @@ export function createMonitorController({ engine }) {
             engine.getConnectionGeometry(connection),
             {
                 expanded: isExpanded(),
-                label: getConnectionMonitorLabel(connection)
+                label: getConnectionMonitorLabel(connection),
+                ...getPipePressureProfileOptions(connection)
             }
         );
     }
@@ -305,7 +313,8 @@ export function createMonitorController({ engine }) {
             engine.getConnectionGeometry(connection),
             {
                 expanded: isExpanded(),
-                label: getConnectionMonitorLabel(connection)
+                label: getConnectionMonitorLabel(connection),
+                ...getPipePressureProfileOptions(connection)
             }
         );
     }

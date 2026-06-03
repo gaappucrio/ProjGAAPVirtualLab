@@ -729,6 +729,10 @@ test('fonte limitada por vazao nao sustenta pressao nominal no dreno', () => {
         `Dreno de pressao fixa nao deve receber pressao nominal da fonte limitada: ${state.outletPressureBar}`
     );
     assert.ok(
+        Math.abs(dreno.pressaoEntradaAtualBar - dreno.pressaoSaidaBar) < 1e-9,
+        `Pressao final do dreno deve preservar zero como valor valido: ${dreno.pressaoEntradaAtualBar}`
+    );
+    assert.ok(
         state.sourcePressureBar < fonte.pressaoFonteBar * 0.01,
         `Pressao efetiva deve cair quando a fonte satura em vazao: ${state.sourcePressureBar}`
     );
