@@ -370,6 +370,7 @@ export function updatePropertyPanelValues({
 
     if (component instanceof DrenoLogico) {
         setFieldValue('disp-vazao-dreno', component.vazaoRecebidaLps, 'flow', 2);
+        setFieldValue('disp-pressao-final-dreno', component.pressaoEntradaAtualBar, 'pressure', 2);
     }
 
     if (component instanceof TanqueLogico) {

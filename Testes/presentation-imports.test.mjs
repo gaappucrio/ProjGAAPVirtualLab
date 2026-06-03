@@ -639,6 +639,42 @@ test('gráfico de tanque usa a cor do fluido armazenado', async () => {
     assert.equal(colors.fillColor, 'rgba(255, 0, 255, 0.2)');
 });
 
+test('perfil de pressao do pipe usa pressao resolvida ao longo da distancia', async () => {
+    const { ConnectionModel } = await import('../js/domain/models/ConnectionModel.js');
+    const { buildPipePressureProfile } = await import('../js/infrastructure/charts/PipePressureChartAdapter.js');
+    const { setUnitPreference } = await import('../js/presentation/units/DisplayUnits.js');
+
+    setUnitPreference('pressure', 'kpa');
+    setUnitPreference('length', 'm');
+
+    const connection = new ConnectionModel({
+        sourceId: 'F-01',
+        targetId: 'D-01',
+        extraLengthM: 2
+    });
+    const profile = buildPipePressureProfile(
+        connection,
+        {
+            sourcePressureBar: 2.4,
+            pressureBar: 0.8,
+            outletPressureBar: 0,
+            lengthM: 12
+        },
+        { lengthM: 10 }
+    );
+
+    assert.equal(profile.pressureUnit, 'kPa');
+    assert.equal(profile.lengthUnit, 'm');
+    assert.equal(profile.pressurePoints[0].x, 0);
+    assert.equal(profile.pressurePoints[0].y, 240);
+    assert.equal(profile.pressurePoints.at(-1).x, 12);
+    assert.equal(profile.pressurePoints.at(-1).y, 80);
+    assert.deepEqual(profile.endpointPoints, [
+        { x: 0, y: 240 },
+        { x: 12, y: 80 }
+    ]);
+});
+
 test('presenter da fonte preserva custom selecionado mesmo com valores de preset', async () => {
     const { FonteLogica } = await import('../js/domain/components/FonteLogica.js');
     const { SOURCE_PROPERTIES_PRESENTER } = await import('../js/presentation/properties/component/BoundaryComponentPropertiesPresenter.js');
@@ -656,4 +692,20 @@ test('presenter da fonte preserva custom selecionado mesmo com valores de preset
 
     assert.match(html, /<option value="custom" selected>Personalizado<\/option>/);
     assert.doesNotMatch(html, /<option value="agua" selected>/);
+});
+
+test('presenter da saida exibe pressao final calculada', async () => {
+    const { DrenoLogico } = await import('../js/domain/components/DrenoLogico.js');
+    const { SINK_PROPERTIES_PRESENTER } = await import('../js/presentation/properties/component/BoundaryComponentPropertiesPresenter.js');
+    const { setUnitPreference } = await import('../js/presentation/units/DisplayUnits.js');
+
+    setUnitPreference('pressure', 'kpa');
+    const dreno = new DrenoLogico('D-01', 'Saida-01', 0, 0);
+    dreno.pressaoEntradaAtualBar = 1.23;
+
+    const html = SINK_PROPERTIES_PRESENTER.render(dreno);
+
+    assert.match(html, /Press\u00e3o final/);
+    assert.match(html, /id="disp-pressao-final-dreno"/);
+    assert.match(html, /value="123\.00"/);
 });

@@ -1,5 +1,7 @@
 import { BombaLogica } from '../../domain/components/BombaLogica.js';
+import { ConnectionModel } from '../../domain/models/ConnectionModel.js';
 import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
+import { createPipePressureChart, refreshPipePressureChart } from '../../infrastructure/charts/PipePressureChartAdapter.js';
 import { createPumpChart, refreshPumpChart } from '../../infrastructure/charts/PumpChartAdapter.js';
 import {
     createEmptyMonitorChart,
@@ -22,6 +24,7 @@ export function createMonitorController({ engine }) {
     let tankSampleTimer = 0;
     let chartedTankId = null;
     let chartedPumpId = null;
+    let chartedConnectionId = null;
     let monitorChartMode = 'empty';
     let expandedMonitorCharts = [null, null];
     const monitorTankSeries = new Map();
@@ -57,18 +60,38 @@ export function createMonitorController({ engine }) {
     function getMonitorChartKind(component) {
         if (component instanceof TanqueLogico) return 'tank';
         if (component instanceof BombaLogica) return 'pump';
+        if (component instanceof ConnectionModel) return 'pipe';
         return null;
     }
 
     function getMonitorChartKindLabel(kind) {
         if (kind === 'tank') return t('chart.tank');
         if (kind === 'pump') return t('chart.pump');
+        if (kind === 'pipe') return t('chart.pipe');
         return t('chart.component');
     }
 
     function getMonitorChartComponent(entry) {
+        if (entry.kind === 'pipe') {
+            const connection = engine.conexoes.find((candidate) => candidate.id === entry.id);
+            return getMonitorChartKind(connection) === entry.kind ? connection : null;
+        }
+
         const component = engine.componentes.find((candidate) => candidate.id === entry.id);
         return getMonitorChartKind(component) === entry.kind ? component : null;
+    }
+
+    function getConnectionMonitorLabel(connection) {
+        const source = engine.getComponentById?.(connection?.sourceId);
+        const target = engine.getComponentById?.(connection?.targetId);
+        const sourceLabel = source?.tag || connection?.sourceId || t('chart.pipe');
+        const targetLabel = target?.tag || connection?.targetId || t('chart.pipe');
+        return `${sourceLabel} -> ${targetLabel}`;
+    }
+
+    function getMonitorChartTitle(entry) {
+        if (entry?.kind === 'pipe') return getConnectionMonitorLabel(entry.component);
+        return entry?.component?.tag || getMonitorChartKindLabel(entry?.kind);
     }
 
     function pruneMonitorChartHistory() {
@@ -132,6 +155,7 @@ export function createMonitorController({ engine }) {
         setCompactMonitorMode('empty');
         chartedTankId = null;
         chartedPumpId = null;
+        chartedConnectionId = null;
         refreshCompactPumpExportButton(null);
     }
 
@@ -153,6 +177,7 @@ export function createMonitorController({ engine }) {
         setCompactMonitorMode('tank');
         chartedTankId = component.id;
         chartedPumpId = null;
+        chartedConnectionId = null;
         refreshCompactPumpExportButton(null);
     }
 
@@ -163,6 +188,19 @@ export function createMonitorController({ engine }) {
 
     function createPumpMonitorChartInstance(ctx, component) {
         return createPumpChart(ctx, component, { expanded: isExpanded() });
+    }
+
+    function createPipeMonitorChartInstance(ctx, connection) {
+        return createPipePressureChart(
+            ctx,
+            connection,
+            engine.getConnectionState(connection),
+            engine.getConnectionGeometry(connection),
+            {
+                expanded: isExpanded(),
+                label: getConnectionMonitorLabel(connection)
+            }
+        );
     }
 
     function handlePumpExportClick(event) {
@@ -235,12 +273,59 @@ export function createMonitorController({ engine }) {
         setCompactMonitorMode('pump');
         chartedPumpId = component.id;
         chartedTankId = null;
+        chartedConnectionId = null;
         refreshCompactPumpExportButton(component);
     }
 
     function refreshPumpMonitorChartInstance(chart, component) {
         if (!(component instanceof BombaLogica) || !chart) return;
         refreshPumpChart(chart, component, { expanded: isExpanded() });
+    }
+
+    function createPipeCompactChart(connection) {
+        const ctx = getCompactChartContext();
+        if (!ctx) return;
+
+        destroyCompactChart();
+        compactChart = createPipeMonitorChartInstance(ctx, connection);
+
+        setCompactMonitorMode('pipe');
+        chartedConnectionId = connection.id;
+        chartedPumpId = null;
+        chartedTankId = null;
+        refreshCompactPumpExportButton(null);
+    }
+
+    function refreshPipeMonitorChartInstance(chart, connection) {
+        if (!(connection instanceof ConnectionModel) || !chart) return;
+        refreshPipePressureChart(
+            chart,
+            connection,
+            engine.getConnectionState(connection),
+            engine.getConnectionGeometry(connection),
+            {
+                expanded: isExpanded(),
+                label: getConnectionMonitorLabel(connection)
+            }
+        );
+    }
+
+    function refreshPipeCompactChart(connection) {
+        if (!(connection instanceof ConnectionModel) || !compactChart || monitorChartMode !== 'pipe' || chartedConnectionId !== connection.id) {
+            return;
+        }
+
+        refreshPipeMonitorChartInstance(compactChart, connection);
+        refreshCompactPumpExportButton(null);
+    }
+
+    function refreshCompactPipeMonitorChart() {
+        if (monitorChartMode !== 'pipe' || !chartedConnectionId || !compactChart) return;
+
+        const connection = engine.conexoes.find((candidate) => candidate.id === chartedConnectionId);
+        if (connection instanceof ConnectionModel) {
+            refreshPipeCompactChart(connection);
+        }
     }
 
     function refreshPumpCompactChart(component) {
@@ -270,6 +355,16 @@ export function createMonitorController({ engine }) {
                 refreshPumpCompactChart(bomba);
             } else {
                 refreshCompactPumpExportButton(null);
+            }
+            return;
+        }
+
+        if (monitorChartMode === 'pipe') {
+            const connection = engine.conexoes.find((candidate) => candidate.id === chartedConnectionId);
+            if (connection instanceof ConnectionModel) {
+                refreshPipeCompactChart(connection);
+            } else {
+                createEmptyCompactChart();
             }
             return;
         }
@@ -355,6 +450,12 @@ export function createMonitorController({ engine }) {
         if (entry.kind === 'pump') {
             return t('chart.pumpSubtitle');
         }
+        if (entry.kind === 'pipe') {
+            return t('chart.pipeSubtitle', {
+                pressureUnit: getUnitSymbol('pressure'),
+                lengthUnit: getUnitSymbol('length')
+            });
+        }
         return '';
     }
 
@@ -388,6 +489,10 @@ export function createMonitorController({ engine }) {
 
         if (component instanceof BombaLogica) {
             return createPumpMonitorChartInstance(ctx, component);
+        }
+
+        if (component instanceof ConnectionModel) {
+            return createPipeMonitorChartInstance(ctx, component);
         }
 
         return null;
@@ -440,7 +545,7 @@ export function createMonitorController({ engine }) {
             elements.card.hidden = false;
             if (dismissButton) dismissButton.hidden = false;
             setPumpExportButtonState(exportButton, entry.component);
-            if (elements.title) elements.title.textContent = entry.component.tag || getMonitorChartKindLabel(entry.kind);
+            if (elements.title) elements.title.textContent = getMonitorChartTitle(entry);
             if (elements.subtitle) elements.subtitle.textContent = getExpandedChartSubtitle(entry);
             if (elements.canvasWrap) elements.canvasWrap.hidden = false;
             if (elements.empty) elements.empty.hidden = true;
@@ -484,13 +589,15 @@ export function createMonitorController({ engine }) {
 
             if (dismissButton) dismissButton.hidden = false;
             setPumpExportButtonState(exportButton, entry.component);
-            if (elements.title) elements.title.textContent = entry.component.tag || getMonitorChartKindLabel(entry.kind);
+            if (elements.title) elements.title.textContent = getMonitorChartTitle(entry);
             if (elements.subtitle) elements.subtitle.textContent = getExpandedChartSubtitle(entry);
 
             if (entry.component instanceof TanqueLogico) {
                 syncTankMonitorChart(chart, entry.component);
             } else if (entry.component instanceof BombaLogica) {
                 refreshPumpMonitorChartInstance(chart, entry.component);
+            } else if (entry.component instanceof ConnectionModel) {
+                refreshPipeMonitorChartInstance(chart, entry.component);
             }
         });
     }
@@ -540,6 +647,7 @@ export function createMonitorController({ engine }) {
 
         refreshCompactTankMonitorChart();
         refreshCompactPumpMonitorChart();
+        refreshCompactPipeMonitorChart();
         refreshExpandedMonitorCharts();
     }
 
@@ -551,6 +659,17 @@ export function createMonitorController({ engine }) {
     }
 
     function refreshSelection(component, connection) {
+        if (connection instanceof ConnectionModel) {
+            rememberMonitorChartComponent(connection);
+            if (monitorChartMode !== 'pipe' || chartedConnectionId !== connection.id) {
+                createPipeCompactChart(connection);
+            } else {
+                refreshPipeCompactChart(connection);
+            }
+            if (isExpanded()) renderExpandedMonitorCharts();
+            return;
+        }
+
         if (component instanceof TanqueLogico) {
             rememberMonitorChartComponent(component);
             if (monitorChartMode !== 'tank' || chartedTankId !== component.id) {

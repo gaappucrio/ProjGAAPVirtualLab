@@ -376,6 +376,10 @@ export const SINK_PROPERTIES_PRESENTER = {
             ${makeUnitLabel('Vazão recebida', 'flow', TOOLTIP.sinkCurrentFlow)}
             <input type="text" id="disp-vazao-dreno" ${hintAttr(TOOLTIP.sinkCurrentFlow)} value="${displayUnitValue('flow', comp.vazaoRecebidaLps, 2)}" disabled>
         </div>
+        <div class="prop-group">
+            ${makeUnitLabel('Pressão final', 'pressure', TOOLTIP.sinkFinalPressure)}
+            <input type="text" id="disp-pressao-final-dreno" ${hintAttr(TOOLTIP.sinkFinalPressure)} value="${displayUnitValue('pressure', comp.pressaoEntradaAtualBar, 2)}" disabled>
+        </div>
     `,
     bind: (comp) => {
         const inputPressure = byId('input-pressao-dreno');
