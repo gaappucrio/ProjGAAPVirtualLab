@@ -122,9 +122,12 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Histórico por componente para tanque.
 - Reabertura de componente já monitorado sem reinicializar a série do gráfico, inclusive após pausar a simulação.
 - Gráfico de curva e ponto de operação para bomba.
+- Gráfico de válvula por abertura, mostrando `Cv` efetivo, `Delta P` estimado na vazão atual e `K` equivalente conforme o perfil selecionado.
 - Gráficos de bomba exibem um botão `JSON` no canto superior direito para baixar os dados da bomba sem exportar a planta inteira.
-- Gráfico de pressão por distância para Canos, usando a pressão física de saída do componente de origem como ponto inicial do trecho.
-- Quando o Cano sai de um componente passante com perda própria, como válvula ou trocador, o monitor desconta essa perda do perfil do trecho para evitar dupla contagem; a queda da válvula continua aparecendo no painel da válvula, e o gráfico do Cano mostra apenas a queda do trecho.
+- Gráfico de pressão por distância para Canos, usando a pressão física de entrada do trecho como ponto inicial e a perda real do próprio Cano como queda exibida.
+- Quando o Cano sai de um componente passante com perda própria, como válvula ou trocador, a queda do componente fica separada da queda do Cano; a queda da válvula continua aparecendo no painel da válvula, e o gráfico do Cano mostra apenas a queda do trecho.
+- Quando a origem do Cano é um componente passante, a pressão inicial do trecho permanece ancorada na saída física desse componente; retropropagação a partir de dreno/tanque só pode recalcular pressão de fronteiras não passantes, como fonte ou tanque.
+- Painel da saída separa contrapressão imposta, pressão final da rede antes da perda de entrada do dreno, queda na entrada da saída e `K` de entrada.
 - Redimensionamento e atualização dos gráficos por adaptadores de Chart.js.
 
 ### 2.8 Painel de Propriedades
@@ -136,6 +139,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
   - Posição de rolagem.
 - Tooltips em propriedades não triviais.
 - Conversão de unidades para pressão, vazão, comprimento, volume e temperatura.
+- Bindings de propriedades de bomba, válvula e tanque possuem limpeza explícita ao trocar seleção ou re-renderizar o painel, evitando acúmulo de listeners em componentes ainda vivos.
 - Presets e propriedades de fluido ficam nas propriedades da entrada selecionada.
 - Não existe mais edição de fluido global quando nenhum componente de entrada está selecionado.
 - O preset `custom`/`personalizado` é preservado durante troca de idioma, mesmo quando seus valores coincidem com um preset conhecido.
@@ -270,6 +274,7 @@ Arquivos principais:
 - `presentation/validation/InputValidator.js`
 - `presentation/monitoring/MonitorSlotHistory.js`
 - `presentation/monitoring/PipePressureProfile.js`
+- `presentation/monitoring/SinkPressureProfile.js`
 
 Responsabilidades:
 
@@ -296,6 +301,7 @@ Arquivos principais:
 - `infrastructure/charts/PumpChartAdapter.js`
 - `infrastructure/charts/PipePressureChartAdapter.js`
 - `infrastructure/charts/TankChartAdapter.js`
+- `infrastructure/charts/ValveChartAdapter.js`
 - `infrastructure/dom/ComponentVisualConfig.js`
 - `infrastructure/dom/ComponentVisualFactory.js`
 - `infrastructure/dom/ComponentVisualRegistry.js`
@@ -563,6 +569,7 @@ Propriedades principais:
 - Vazão recebida.
 
 O dreno aceita vazão e impõe contrapressão.
+No painel, `Contrapressão imposta` é a fronteira após a perda de entrada do dreno. `Pressão final da rede` é a pressão no extremo do Cano que chega à saída, antes do `perdaEntradaK`. A diferença entre esses valores aparece como `Queda na entrada da saída`, evitando confundir a perda do dreno com a queda do Cano.
 
 ### 8.3 `BombaLogica`
 
@@ -728,11 +735,13 @@ O monitoramento é dividido entre:
 - `TankChartAdapter`.
 - `PumpChartAdapter`.
 - `PipePressureChartAdapter`.
+- `ValveChartAdapter`.
 
 Funcionalidades:
 
 - Gráfico de tanque com histórico de volume.
 - Gráfico de bomba com curvas e ponto de operação.
+- Gráfico de válvula com curva por abertura, incluindo `Cv` efetivo, `Delta P` estimado na vazão atual e `K` equivalente.
 - Gráfico de Cano com pressão ao longo da distância.
 - Monitor compacto para seleção atual.
 - Monitor detalhado redimensionável.
@@ -746,9 +755,13 @@ Semântica do gráfico de pressão do Cano:
 
 - O eixo `x` usa o comprimento hidráulico do trecho em unidade de exibição.
 - O eixo `y` usa pressão manométrica na unidade de exibição.
-- O ponto inicial deve ser a pressão física de saída do componente de origem, não uma pressão efetiva interna do solver.
-- O ponto final deve aplicar somente a queda atribuída ao Cano. Perdas próprias de componentes passantes a montante, como `deltaPAtualBar` de válvulas, não devem ser somadas de novo no perfil do Cano.
+- O ponto inicial deve ser `pipeInletPressureBar`, que representa a pressão física na entrada do trecho depois de perdas próprias do componente de origem.
+- Para Canos a jusante de válvula, bomba ou trocador, `pipeInletPressureBar` não deve ser recalculado a partir da pressão da saída/dreno quando a vazão do ramo for limitada; ele deve permanecer igual à pressão física entregue pelo componente passante.
+- O ponto final deve aplicar somente `pipePressureDropBar`, a soma da perda distribuída do Cano (`pipeDistributedLossBar`) com a perda local própria da conexão (`pipeLocalLossBar`).
+- Perdas próprias de componentes passantes a montante, como `deltaPAtualBar` de válvulas, não devem ser somadas de novo no perfil do Cano.
 - O painel de propriedades e a exportação tabular devem usar a mesma semântica visual do monitor para `Delta P no Cano`, `Pressão na origem` e `Pressão de chegada`; campos internos como `Perda total` podem continuar expondo perdas acumuladas do ramo quando forem úteis para diagnóstico.
+- Registro de comparação GAAP/DWSIM: a discrepância observada em Canos adjacentes a válvulas era causada pela mistura entre área/perdas do componente passante e área/perdas do Cano. O solver agora separa perda própria da origem, perda distribuída do Cano, perda local da conexão e perda de entrada do destino; para comparar com DWSIM como `Straight Tube`, usar `pipePressureDropBar`/`Delta P no Cano`.
+- Como a separação de perdas altera a resistência hidráulica efetiva do ramo, a vazão de cenários antigos pode mudar. Antes, parte da perda da válvula/dreno podia ser computada junto com a área/perda do Cano; agora cada parcela entra no balanço em seu lugar físico.
 
 ## 13. Internacionalização e Ajuda
 
@@ -1025,5 +1038,11 @@ ver lugar:
 - Resolvido em 2026-05-28: diagnóstico didático de válvula subdimensionada adicionado em serviço de domínio. O alerta considera abertura, vazão, queda de pressão e perda equivalente, e o painel pode aplicar ajuste de Cv/K sem implementar ainda classe pressão-temperatura.
 - Resolvido em 2026-05-28: vazão máxima padrão da entrada reduzida para `32 m³/h`, separando o padrão da fonte do limite máximo global da rede. A unidade padrão de vazão no frontend passou para `m³/h`.
 - Registrado em 2026-05-29: comparação GAAP/DWSIM para válvula com perfil de abertura rápida. No caso observado (`Cv=280`, abertura `50%`, rangeabilidade `15`, vazão aproximada `28.47 m³/h`), o DWSIM calculou queda de aproximadamente `2.77 kPa`, coerente com perda quase pura por `Cv_eff = 280 * sqrt(0.5) ~= 198`. O GAAP calculou aproximadamente `4.37 kPa` porque `ValvulaLogica.getParametrosHidraulicos()` soma `perdaLocalK + throttlingLoss + lossFromCv`; portanto o resultado inclui `Cv` efetivo, `K` configurado e perda adicional por estrangulamento/área efetiva. Para comparação direta com DWSIM/IEC 60534, considerar futuramente um modo de compatibilidade "Cv puro" que exclua `K` e `throttlingLoss` da queda da válvula.
-- Resolvido em 2026-06-03: o gráfico de pressão do Cano após uma válvula podia mostrar pressão incompatível com a queda registrada no painel da válvula. A causa era misturar a pressão efetiva interna do ramo com a pressão física de saída do componente e, em seguida, contabilizar novamente a perda própria da válvula no perfil do Cano. O monitor agora ancora o perfil na pressão resultante após a válvula (`pressaoEntradaAtualBar - deltaPAtualBar`) e subtrai a perda própria do componente de origem da queda exibida no trecho.
+- Resolvido em 2026-06-03: o gráfico de pressão do Cano após uma válvula podia mostrar pressão incompatível com a queda registrada no painel da válvula. A causa era misturar a pressão efetiva interna do ramo com a pressão física de saída do componente e, em seguida, contabilizar novamente a perda própria da válvula no perfil do Cano. A semântica foi corrigida para usar `pipeInletPressureBar` e `pipePressureDropBar`, separando a queda própria da válvula da queda real do trecho.
+- Resolvido em 2026-06-03: o Cano a jusante de componente passante ainda podia ser ancorado perto da pressão do dreno quando o ramo era limitado pela vazão recebida. A retropropagação de pressão por vazão limitada agora se aplica apenas a origens não passantes; para válvulas, bombas e trocadores, `pipeInletPressureBar` permanece na saída física do componente.
 - Resolvido em 2026-06-03: painel/exportação ainda exibiam `state.deltaPBar` interno em `Delta P no Cano`, divergindo dos extremos do gráfico corrigido. A semântica de pressão do Cano foi centralizada em `presentation/monitoring/PipePressureProfile.js` e aplicada também às propriedades e à exportação. No mesmo ajuste, `rebuildComponentHydraulicStateFromConnections()` deixou de usar `||` para escolher pressão de chegada, preservando `0 kPa` como valor válido na saída em vez de cair no valor antes da perda de entrada do dreno.
+- Resolvido em 2026-06-03: comparação de Cano GAAP/DWSIM indicou `~6.3 kPa` no GAAP contra `~0.6 kPa` em trecho equivalente no DWSIM porque o solver misturava área/perdas do componente passante com área/perdas do Cano. O cálculo do ramo agora separa perda própria da origem, perda distribuída do Cano, perda local da conexão e perda de entrada do destino; `pipePressureDropBar` passa a representar a queda real do trecho de Cano para monitoramento, propriedades e exportação.
+- Resolvido em 2026-06-03: pressão da saída/dreno corrigida no painel. `Pressão final da rede` agora usa o extremo do Cano que chega ao dreno, enquanto `Contrapressão imposta` e `Queda na entrada da saída` mostram a fronteira do dreno e a perda associada ao `perdaEntradaK`.
+- Registrado em 2026-06-03: a vazão de cenários comparados antes da separação de perdas pode mudar porque o balanço hidráulico deixou de tratar área/perda de componente passante como perda do Cano. A mudança é física/numérica esperada: a resistência total do ramo é recomposta em parcelas explícitas.
+- Resolvido em 2026-06-03: monitoramento de válvula adicionado ao mesmo fluxo de Tanque/Bomba/Cano. O gráfico usa o perfil selecionado da válvula e apresenta curva por abertura com `Cv` efetivo, `Delta P` estimado na vazão atual, `K` equivalente e ponto operacional.
+- Resolvido em 2026-06-03: risco de vazamento de memória por listeners de UI. Visuais de componentes registravam `ENGINE.subscribe`, `logica.subscribe`, idioma e unidades sem descarte garantido ao remover componentes ou limpar canvas; além disso, binds do painel de propriedades acumulavam `comp.subscribe` em re-renderizações. O registro visual agora executa funções de limpeza, `createElevationUpdater` aceita gancho de cleanup, e os presenters de bomba/válvula/tanque retornam `unsubscribe` para descarte pelo `ComponentPropertiesPresenter`.

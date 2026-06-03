@@ -420,6 +420,60 @@ test('valvula totalmente aberta com Cv alto se aproxima de tubo equivalente', ()
     );
 });
 
+test('cano a jusante de valvula usa pressao fisica apos queda da valvula', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-valve-downstream', 'Entrada-01', 0, 0);
+    const valvula = new ValvulaLogica('V-valve-downstream', 'V-01', 120, 0);
+    const dreno = new DrenoLogico('D-valve-downstream', 'Saida-01', 240, 0);
+
+    fonte.pressaoFonteBar = 0.5;
+    fonte.vazaoMaxima = 8.1;
+    fonte.atualizarFluidoEntrada(FLUID_PRESETS.agua, { presetId: 'agua' });
+    dreno.pressaoSaidaBar = 0.0296;
+    dreno.perdaEntradaK = 1.1;
+    valvula.aplicarPerfilCaracteristica('quick_opening');
+    valvula.setCoeficienteVazao(280);
+    valvula.setCoeficientePerda(0.35);
+    valvula.setAbertura(50);
+    valvula.aberturaEfetiva = 50;
+
+    fonte.conectarSaida(valvula);
+    valvula.conectarSaida(dreno);
+
+    const entradaValvula = new ConnectionModel({
+        sourceId: fonte.id,
+        targetId: valvula.id,
+        diameterM: 0.08,
+        extraLengthM: 1,
+        perdaLocalK: 0
+    });
+    const saidaValvula = new ConnectionModel({
+        sourceId: valvula.id,
+        targetId: dreno.id,
+        diameterM: 0.08,
+        extraLengthM: 1,
+        perdaLocalK: 0
+    });
+
+    [fonte, valvula, dreno].forEach((component) => engine.add(component));
+    [entradaValvula, saidaValvula].forEach((connection) => engine.addConnection(connection));
+    runPhysicsSteps(engine, 80, 0.1);
+
+    const upstreamState = engine.getConnectionState(entradaValvula);
+    const downstreamState = engine.getConnectionState(saidaValvula);
+    const expectedAfterValveBar = Math.max(0, upstreamState.pipeOutletPressureBar - valvula.deltaPAtualBar);
+
+    assert.ok(downstreamState.flowLps > 0, 'O trecho a jusante da valvula deve receber vazao');
+    assert.ok(
+        Math.abs(downstreamState.pipeInletPressureBar - expectedAfterValveBar) < 0.02,
+        `Pressao inicial do cano deve seguir a saida fisica da valvula: esperado=${expectedAfterValveBar}, obtido=${downstreamState.pipeInletPressureBar}`
+    );
+    assert.ok(
+        downstreamState.pipeInletPressureBar > dreno.pressaoSaidaBar + downstreamState.pipePressureDropBar,
+        `Pressao inicial do cano nao deve ser recalculada pela saida: entrada=${downstreamState.pipeInletPressureBar}, dreno=${dreno.pressaoSaidaBar}, perdaCano=${downstreamState.pipePressureDropBar}`
+    );
+});
+
 test('valvula controlada quase fechada nao vaza quando exibida como 0.0%', () => {
     const engine = createEngine();
     const tanque = new TanqueLogico('T-fecha-sp', 'T-fecha-sp', 0, 0);

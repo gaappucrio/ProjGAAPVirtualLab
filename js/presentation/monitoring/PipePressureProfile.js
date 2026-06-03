@@ -16,7 +16,7 @@ function resolveSourceOutletPressureBar(source) {
 }
 
 export function resolvePipePressureProfileOptions({ state = {}, source = null } = {}) {
-    const sourcePressureBar = resolveSourceOutletPressureBar(source);
+    const sourcePressureBar = finiteNumber(state.pipeInletPressureBar, resolveSourceOutletPressureBar(source));
     if (sourcePressureBar === null || state.flowLps <= FLOW_EPSILON_LPS) return {};
 
     const resolvedSourcePressureBar = finiteNumber(state.sourcePressureBar, 0);
@@ -26,10 +26,13 @@ export function resolvePipePressureProfileOptions({ state = {}, source = null } 
         Math.max(0, resolvedSourcePressureBar - resolvedEndPressureBar)
     );
     const sourceComponentPressureDropBar = Math.max(0, finiteNumber(source?.deltaPAtualBar, 0));
+    const pipePressureDropBar = finiteNumber(state.pipePressureDropBar);
 
     return {
         sourcePressureBar,
-        pressureDropBar: Math.max(0, branchPressureDropBar - sourceComponentPressureDropBar)
+        pressureDropBar: pipePressureDropBar !== null
+            ? Math.max(0, pipePressureDropBar)
+            : Math.max(0, branchPressureDropBar - sourceComponentPressureDropBar)
     };
 }
 

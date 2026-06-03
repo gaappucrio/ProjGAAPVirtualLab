@@ -404,6 +404,93 @@ test('rotação visual de componentes normaliza graus sem afetar propriedades f�
     unregisterComponentVisual(bomba);
 });
 
+test('registro visual executa limpezas ao remover componentes do canvas', async () => {
+    const {
+        clearComponentVisualRegistry,
+        registerComponentVisual,
+        removeAllComponentVisualElements,
+        unregisterComponentVisual
+    } = await import('../js/infrastructure/dom/ComponentVisualRegistry.js');
+    const { BombaLogica } = await import('../js/domain/components/BombaLogica.js');
+
+    clearComponentVisualRegistry();
+
+    const bomba = new BombaLogica('pump-cleanup', 'P-Clean', 0, 0);
+    let cleanupCount = 0;
+    const visualEl = {
+        __gaapCleanupFns: [() => { cleanupCount += 1; }],
+        querySelector: () => null
+    };
+
+    registerComponentVisual(bomba, visualEl);
+    unregisterComponentVisual(bomba);
+
+    assert.equal(cleanupCount, 1);
+    assert.equal(visualEl.__gaapCleanupFns.length, 0);
+
+    const bombaRemovida = new BombaLogica('pump-remove-all', 'P-All', 0, 0);
+    let removed = false;
+    const visualRemovivel = {
+        __gaapCleanupFns: [() => { cleanupCount += 1; }],
+        querySelector: () => null,
+        remove: () => { removed = true; }
+    };
+
+    registerComponentVisual(bombaRemovida, visualRemovivel);
+    removeAllComponentVisualElements();
+
+    assert.equal(cleanupCount, 2);
+    assert.equal(removed, true);
+});
+
+test('binds de propriedades retornam unsubscribe para listeners de componente', async () => {
+    const originalDocument = globalThis.document;
+    const hadDocument = Object.hasOwn(globalThis, 'document');
+    const { setPresentationEngine } = await import('../js/presentation/context/PresentationEngineContext.js');
+    const { BombaLogica } = await import('../js/domain/components/BombaLogica.js');
+    const { TanqueLogico } = await import('../js/domain/components/TanqueLogico.js');
+    const { ValvulaLogica } = await import('../js/domain/components/ValvulaLogica.js');
+    const { PUMP_PROPERTIES_PRESENTER } = await import('../js/presentation/properties/component/PumpComponentPropertiesPresenter.js');
+    const { TANK_PROPERTIES_PRESENTER } = await import('../js/presentation/properties/component/TankComponentPropertiesPresenter.js');
+    const { VALVE_PROPERTIES_PRESENTER } = await import('../js/presentation/properties/component/ValveComponentPropertiesPresenter.js');
+
+    globalThis.document = {
+        activeElement: null,
+        body: { classList: { contains: () => false } },
+        getElementById: () => null
+    };
+    setPresentationEngine({
+        isBombaBloqueadaPorSetpoint: () => false,
+        isValvulaBloqueadaPorSetpoint: () => false,
+        notify: () => {}
+    });
+
+    try {
+        const bomba = new BombaLogica('pump-props-cleanup', 'P-Props', 0, 0);
+        const valvula = new ValvulaLogica('valve-props-cleanup', 'V-Props', 0, 0);
+        const tanque = new TanqueLogico('tank-props-cleanup', 'T-Props', 0, 0);
+
+        const cleanupPump = PUMP_PROPERTIES_PRESENTER.bind(bomba);
+        assert.equal(bomba.listeners.length, 1);
+        cleanupPump();
+        assert.equal(bomba.listeners.length, 0);
+
+        const cleanupValve = VALVE_PROPERTIES_PRESENTER.bind(valvula);
+        assert.equal(valvula.listeners.length, 1);
+        cleanupValve();
+        assert.equal(valvula.listeners.length, 0);
+
+        const cleanupTank = TANK_PROPERTIES_PRESENTER.bind(tanque);
+        assert.equal(tanque.listeners.length, 1);
+        cleanupTank();
+        assert.equal(tanque.listeners.length, 0);
+    } finally {
+        setPresentationEngine(null);
+        if (hadDocument) globalThis.document = originalDocument;
+        else Reflect.deleteProperty(globalThis, 'document');
+    }
+});
+
 test('clipboard de componentes preserva propriedades clonaveis e sufixo por idioma', async () => {
     const {
         applyComponentClipboardSnapshot,
@@ -735,6 +822,69 @@ test('monitor de pipe desconta perda propria da valvula na origem', async () => 
     assert.ok(Math.abs(options.pressureDropBar - 0.04564) < 1e-9);
 });
 
+test('monitor de pipe prioriza perda real separada do Cano', async () => {
+    const { resolvePipePressureProfileOptions } = await import('../js/presentation/monitoring/PipePressureProfile.js');
+
+    const options = resolvePipePressureProfileOptions({
+        source: {
+            pressaoEntradaAtualBar: 0.4367,
+            pressaoSaidaAtualBar: 0.3928,
+            deltaPAtualBar: 0.0439
+        },
+        state: {
+            flowLps: 7.908,
+            sourcePressureBar: 0.1094,
+            pressureBar: 0.0296,
+            deltaPBar: 0.0798,
+            pipeInletPressureBar: 0.3928,
+            pipePressureDropBar: 0.0063,
+            pipeOutletPressureBar: 0.3865
+        }
+    });
+
+    assert.equal(options.sourcePressureBar, 0.3928);
+    assert.equal(options.pressureDropBar, 0.0063);
+});
+
+test('grafico de valvula usa perfil selecionado e ponto operacional', async () => {
+    const { ValvulaLogica } = await import('../js/domain/components/ValvulaLogica.js');
+    const { buildValveCurveDatasets } = await import('../js/infrastructure/charts/ValveChartAdapter.js');
+    const { setUnitPreference } = await import('../js/presentation/units/DisplayUnits.js');
+
+    setUnitPreference('pressure', 'kpa');
+    setUnitPreference('flow', 'm3h');
+
+    const fluido = {
+        nome: 'Agua teste',
+        densidade: 997,
+        viscosidadeDinamicaPaS: 0.00089
+    };
+    const valvula = new ValvulaLogica('valve-chart', 'V-Chart', 0, 0);
+    valvula.setSimulationContextProvider(() => ({
+        fluidoOperante: fluido,
+        queries: {
+            getComponentFluid: () => fluido,
+            isValvulaBloqueadaPorSetpoint: () => false
+        }
+    }));
+    valvula.aplicarPerfilCaracteristica('quick_opening');
+    valvula.setAbertura(50);
+    valvula.fluxoReal = 7.908;
+    valvula.deltaPAtualBar = 0.0437;
+
+    const datasets = buildValveCurveDatasets(valvula);
+    const quarterOpening = datasets.cvPoints.find((point) => point.x === 25);
+
+    assert.equal(datasets.pressureUnit, 'kPa');
+    assert.equal(datasets.currentOpeningPercent, 50);
+    assert.equal(Number(datasets.currentPressureDrop.toFixed(2)), 4.37);
+    assert.ok(quarterOpening.y > valvula.cv * 0.25, 'perfil de abertura rapida deve liberar Cv acima da curva linear');
+    assert.ok(datasets.currentEffectiveCv > valvula.cv * 0.5);
+    assert.ok(datasets.currentEffectiveCv < valvula.cv);
+    assert.ok(datasets.pressureDropPoints.some((point) => Number(point.y) > 0));
+    assert.ok(datasets.lossCoeffPoints.some((point) => Number(point.y) > valvula.perdaLocalK));
+});
+
 test('presenter da fonte preserva custom selecionado mesmo com valores de preset', async () => {
     const { FonteLogica } = await import('../js/domain/components/FonteLogica.js');
     const { SOURCE_PROPERTIES_PRESENTER } = await import('../js/presentation/properties/component/BoundaryComponentPropertiesPresenter.js');
@@ -757,15 +907,34 @@ test('presenter da fonte preserva custom selecionado mesmo com valores de preset
 test('presenter da saida exibe pressao final calculada', async () => {
     const { DrenoLogico } = await import('../js/domain/components/DrenoLogico.js');
     const { SINK_PROPERTIES_PRESENTER } = await import('../js/presentation/properties/component/BoundaryComponentPropertiesPresenter.js');
+    const { setPresentationEngine } = await import('../js/presentation/context/PresentationEngineContext.js');
     const { setUnitPreference } = await import('../js/presentation/units/DisplayUnits.js');
 
     setUnitPreference('pressure', 'kpa');
     const dreno = new DrenoLogico('D-01', 'Saida-01', 0, 0);
-    dreno.pressaoEntradaAtualBar = 1.23;
+    dreno.pressaoSaidaBar = 0.0296;
+    dreno.pressaoEntradaAtualBar = 0.0296;
+    const inputConnection = { id: 'conn-out', targetId: dreno.id };
+    setPresentationEngine({
+        getInputConnections: () => [inputConnection],
+        getConnectionState: () => ({
+            flowLps: 7.9,
+            pipeOutletPressureBar: 0.35,
+            pressureBar: 0.35
+        }),
+        notify: () => {}
+    });
 
-    const html = SINK_PROPERTIES_PRESENTER.render(dreno);
+    try {
+        const html = SINK_PROPERTIES_PRESENTER.render(dreno);
 
-    assert.match(html, /Press\u00e3o final/);
-    assert.match(html, /id="disp-pressao-final-dreno"/);
-    assert.match(html, /value="123\.00"/);
+        assert.match(html, /Press\u00e3o final da rede/);
+        assert.match(html, /id="disp-pressao-final-dreno"/);
+        assert.match(html, /value="35\.00"/);
+        assert.match(html, /id="disp-deltap-entrada-dreno"/);
+        assert.match(html, /value="32\.04"/);
+        assert.match(html, /Perda de entrada \(K\)/);
+    } finally {
+        setPresentationEngine(null);
+    }
 });

@@ -10,7 +10,10 @@ import {
 import { subscribeLanguageChanges } from '../i18n/LanguageManager.js';
 import { createPropertyPanelContextStore } from './PropertyPanelContextController.js';
 import { renderConnectionProperties as renderConnectionPropertiesPresenter } from '../properties/ConnectionPropertiesPresenter.js';
-import { renderComponentProperties as renderComponentPropertiesPresenter } from '../properties/ComponentPropertiesPresenter.js';
+import {
+    disposeComponentPropertyBindings,
+    renderComponentProperties as renderComponentPropertiesPresenter
+} from '../properties/ComponentPropertiesPresenter.js';
 import { renderDefaultProperties as renderDefaultPropertiesPresenter } from '../properties/DefaultPropertiesPresenter.js';
 import { updatePropertyPanelValues } from '../properties/PropertyLiveUpdater.js';
 import { setPresentationEngine } from '../context/PresentationEngineContext.js';
@@ -82,6 +85,7 @@ export function setupPropertyPanelController({ engine, monitorController } = {})
         const connection = currentEngine.selectedConnection;
         const nextContextKey = getPropertyContextKey(component, connection);
 
+        disposeComponentPropertyBindings();
         monitorController?.refreshSelection(component, connection);
         monitorController?.refreshPresentation();
 

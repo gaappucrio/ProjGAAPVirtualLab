@@ -10,6 +10,19 @@ function resolveComponentId(componentOrId) {
     return componentOrId?.id || null;
 }
 
+function disposeComponentVisualEntry(entry) {
+    const cleanupFns = entry?.visualEl?.__gaapCleanupFns;
+    if (!Array.isArray(cleanupFns)) return;
+
+    cleanupFns.splice(0).forEach((cleanup) => {
+        try {
+            cleanup();
+        } catch (error) {
+            console.warn('Erro ao limpar listener visual do componente:', error);
+        }
+    });
+}
+
 export function createConnectionEndpointDefinition(component, portEl) {
     const svgEl = portEl?.ownerSVGElement;
     const offsetX = parseStyleNumber(svgEl?.style.left) + parseFloat(portEl?.getAttribute('cx') || '0');
@@ -75,17 +88,20 @@ export function unregisterComponentVisual(componentOrId) {
     if (!componentId) return null;
 
     const visual = visualsByComponentId.get(componentId) || null;
+    disposeComponentVisualEntry(visual);
     visualsByComponentId.delete(componentId);
     return visual;
 }
 
 export function clearComponentVisualRegistry() {
+    visualsByComponentId.forEach(disposeComponentVisualEntry);
     visualsByComponentId.clear();
 }
 
 export function removeAllComponentVisualElements() {
     visualsByComponentId.forEach((entry) => {
+        disposeComponentVisualEntry(entry);
         entry.visualEl?.remove();
     });
-    clearComponentVisualRegistry();
+    visualsByComponentId.clear();
 }

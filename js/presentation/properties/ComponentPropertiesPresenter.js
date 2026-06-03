@@ -11,6 +11,15 @@ import { getComponentPropertyPresenter } from './component/ComponentPropertyPres
 import { bind } from './PropertyDomAdapter.js';
 import { bindUnitControls, renderUnitControls } from './PropertyUnitsPresenter.js';
 
+let activeComponentPropertyCleanup = null;
+
+export function disposeComponentPropertyBindings() {
+    if (typeof activeComponentPropertyCleanup !== 'function') return;
+
+    activeComponentPropertyCleanup();
+    activeComponentPropertyCleanup = null;
+}
+
 export function getComponentTypeKey(component) {
     if (component instanceof DrenoLogico) return 'sink';
     if (component instanceof BombaLogica) return 'pump';
@@ -24,6 +33,8 @@ export function renderComponentProperties({
     propContent,
     component
 }) {
+    disposeComponentPropertyBindings();
+
     const tipoChave = getComponentTypeKey(component);
     const propertiesPresenter = getComponentPropertyPresenter(tipoChave);
 
@@ -44,5 +55,6 @@ export function renderComponentProperties({
         component.notify(ComponentEventPayloads.tagUpdate());
     });
 
-    propertiesPresenter.bind(component);
+    const cleanup = propertiesPresenter.bind(component);
+    activeComponentPropertyCleanup = typeof cleanup === 'function' ? cleanup : null;
 }

@@ -352,7 +352,7 @@ export const PUMP_PROPERTIES_PRESENTER = {
             );
         });
 
-        comp.subscribe((dados) => {
+        const unsubscribeComponent = comp.subscribe((dados) => {
             if (dados.tipo === COMPONENT_EVENTS.STATE && slider) {
                 sincronizarBloqueioSetpoint();
                 slider.value = dados.grau;
@@ -362,5 +362,6 @@ export const PUMP_PROPERTIES_PRESENTER = {
         });
 
         sincronizarBloqueioSetpoint();
+        return unsubscribeComponent;
     }
 };

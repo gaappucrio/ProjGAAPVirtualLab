@@ -28,7 +28,7 @@ export const makePort = (id, cx, cy, inOut) => {
     `;
 };
 
-export function createElevationUpdater({ visual, logica, id, offsetY }) {
+export function createElevationUpdater({ visual, logica, id, offsetY, registerCleanup = null }) {
     const update = () => {
         ['in', 'out'].forEach((tipo) => {
             const el = visual.querySelector(`#elev-${tipo}-${id}`);
@@ -46,7 +46,8 @@ export function createElevationUpdater({ visual, logica, id, offsetY }) {
         });
     };
 
-    subscribeLanguageChanges(update);
+    const unsubscribeLanguage = subscribeLanguageChanges(update);
+    if (typeof registerCleanup === 'function') registerCleanup(unsubscribeLanguage);
     return update;
 }
 

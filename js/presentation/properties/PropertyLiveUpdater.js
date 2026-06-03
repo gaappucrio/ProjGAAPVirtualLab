@@ -15,6 +15,7 @@ import {
 import { toDisplayValue } from '../units/DisplayUnits.js';
 import { localizeElement, translateLiteral } from '../i18n/LanguageManager.js';
 import { resolvePipePressureProfile } from '../monitoring/PipePressureProfile.js';
+import { resolveSinkPressureProfile } from '../monitoring/SinkPressureProfile.js';
 import { byId, isActive, setValue } from './PropertyDomAdapter.js';
 import { formatMeasuredValue, setFieldValue } from './PropertyValueFormatters.js';
 import { updateTankControlAvailabilityUI } from './TankSaturationAlertPresenter.js';
@@ -289,7 +290,7 @@ function updateValveSizingAlert(component, blockedBySetpoint) {
     if (actionButton) actionButton.disabled = blockedBySetpoint || !diagnostico.aplicavel;
 }
 
-function updateValveValues(engine, component) {
+function updateValveValues(engine, component, { monitorController } = {}) {
     const abEl = byId('input-abertura');
     const numInput = byId('val-abertura');
     const cvInput = byId('input-cv');
@@ -326,6 +327,7 @@ function updateValveValues(engine, component) {
     setFieldValue('disp-vazao-valvula', component.fluxoReal, 'flow', 2);
     setFieldValue('disp-deltap-valvula', component.deltaPAtualBar, 'pressure', 2);
     updateValveSizingAlert(component, bloqueadaPorSetpoint);
+    monitorController?.refreshValve(component);
 }
 
 function updatePumpValues(component, { monitorController } = {}) {
@@ -372,8 +374,10 @@ export function updatePropertyPanelValues({
     }
 
     if (component instanceof DrenoLogico) {
+        const pressureProfile = resolveSinkPressureProfile({ engine, sink: component });
         setFieldValue('disp-vazao-dreno', component.vazaoRecebidaLps, 'flow', 2);
-        setFieldValue('disp-pressao-final-dreno', component.pressaoEntradaAtualBar, 'pressure', 2);
+        setFieldValue('disp-pressao-final-dreno', pressureProfile.finalNetworkPressureBar, 'pressure', 2);
+        setFieldValue('disp-deltap-entrada-dreno', pressureProfile.entryPressureDropBar, 'pressure', 2);
     }
 
     if (component instanceof TanqueLogico) {
@@ -381,7 +385,7 @@ export function updatePropertyPanelValues({
     }
 
     if (component instanceof ValvulaLogica) {
-        updateValveValues(engine, component);
+        updateValveValues(engine, component, { monitorController });
     }
 
     if (component instanceof BombaLogica) {

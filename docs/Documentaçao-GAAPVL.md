@@ -61,7 +61,7 @@ Responsabilidade: implementar adaptadores visuais, renderização SVG, estilos e
 Principais módulos:
 - `infrastructure/dom/` — gerenciamento de elementos visuais de componentes, posições e estado de portas.
 - `infrastructure/rendering/` — adaptadores de desenho de conexões e integração com Chart.js.
-- `infrastructure/charts/` — adaptadores especiais para gráficos de bomba, tanque e pressão de Canos.
+- `infrastructure/charts/` — adaptadores especiais para gráficos de bomba, válvula, tanque e pressão de Canos.
 
 Interface com outros módulos:
 - Fornece serviços para a camada de apresentação sem trazer lógica de domínio.
@@ -100,7 +100,7 @@ Este módulo instancia o engine, conecta serviços de visual, cria controladores
 - Tanques devem calcular pressão hidrostática e permitir controle de set point por controlador de nível separado da dinâmica física do tanque, com alternância avançada entre PID determinístico e fuzzy.
 - Tanques e tubulações devem exibir tempo de residência atual quando houver vazão suficiente.
 - Fontes devem definir fluido, pressão de alimentação e vazão máxima; a pressão dirige a vazão resolvida e a vazão máxima limita a capacidade entregue quando a fonte satura. A vazão máxima padrão da entrada é `32 m³/h`.
-- Drenos devem manter pressão de saída.
+- Drenos devem manter contrapressão de saída, exibir a pressão final da rede antes da perda de entrada e explicitar a queda causada pelo `K` de entrada.
 
 ### 3.4 Exportação e persistência
 
@@ -115,7 +115,10 @@ Este módulo instancia o engine, conecta serviços de visual, cria controladores
 - O sistema deve suportar modo claro e modo escuro com preferência persistente.
 - O sistema deve exibir tutorial de uso em modal.
 - O sistema deve mostrar notificações de diagnóstico de rede e avisos de saturação.
-- O monitoramento, o painel de propriedades e a exportação de Canos devem exibir pressão ao longo da distância usando a pressão física de saída do componente de origem e sem somar novamente perdas próprias de componentes passantes, como a queda de pressão de válvulas.
+- O monitoramento, o painel de propriedades e a exportação de Canos devem exibir pressão ao longo da distância usando a pressão física de entrada do trecho e a queda real própria do Cano, sem somar novamente perdas próprias de componentes passantes, como a queda de pressão de válvulas.
+- Canos a jusante de válvulas, bombas ou trocadores devem ancorar a pressão inicial na saída física do componente passante; a pressão da saída/dreno não deve retropropagar esse ponto quando a vazão for limitada.
+- O monitoramento deve permitir selecionar válvulas e visualizar curva por abertura baseada no perfil selecionado, com `Cv` efetivo, `Delta P` estimado na vazão atual, `K` equivalente e ponto operacional.
+- Componentes com perda própria calculada devem mostrar essa queda no painel de propriedades: válvula, trocador de calor e saída/dreno.
 
 ## 4. Requisitos Não Funcionais
 
@@ -123,6 +126,7 @@ Este módulo instancia o engine, conecta serviços de visual, cria controladores
 - Manter o domínio livre de dependências de DOM, Chart.js e APIs de navegador.
 - Usar injeção de dependências para engine e controllers.
 - Evitar imports transversais entre camadas.
+- Garantir limpeza explícita de listeners associados a elementos visuais removíveis e binds de painel re-renderizáveis.
 - Garantir testes automatizados nas principais camadas.
 - Executar sem bundler e carregar direto via ES Modules no navegador.
 - Atualizar os arquivos `.md` relevantes junto com mudanças que alterem comportamento, semântica física, UI, monitoramento, exportação ou contratos de manutenção.
@@ -263,6 +267,7 @@ A seguir estão as funções/chaves de alto valor do sistema, com seus objetivos
   - O painel de propriedades atualiza automaticamente quando a seleção muda ou quando o idioma é alterado.
   - O estado de contexto do painel é capturado e restaurado entre seleções.
   - O monitor associado é atualizado quando necessário.
+  - Assinaturas de componente criadas pelos presenters são descartadas antes de trocar a seleção ou re-renderizar o painel.
 - Interface com o usuário: mantém o painel de propriedades sincronizado com seleção de componentes, conexões e estados de simulação.
 
 ### 5.11 `createWorkspaceSnapshot(engine)`
@@ -409,16 +414,18 @@ A seguir estão as funções/chaves de alto valor do sistema, com seus objetivos
 ### 5.21 `createMonitorController({ engine })`
 
 - Módulo: `js/presentation/controllers/MonitorController.js`
-- Objetivo: criar e atualizar os gráficos de monitoramento para tanques, bombas e Canos.
+- Objetivo: criar e atualizar os gráficos de monitoramento para tanques, bombas, válvulas e Canos.
 - Pré-condições: `engine` deve estar disponível com componentes registráveis.
 - Entrada:
   - `engine`: instância do motor de simulação.
 - Saída: controlador de monitor com métodos internos de atualização.
 - Pós-condições:
-  - O monitor exibe séries de tempo para tanques, curvas de operação para bombas e pressão ao longo da distância para Canos.
+  - O monitor exibe séries de tempo para tanques, curvas de operação para bombas, curvas por abertura para válvulas e pressão ao longo da distância para Canos.
   - O histórico de slots de gráfico é gerenciado automaticamente.
   - O botão de exportação de JSON de bomba é habilitado quando aplicável.
-  - O gráfico de Cano ancora o perfil na pressão física de saída do componente de origem; quando o trecho sai de uma válvula, a queda própria da válvula é descontada do perfil para evitar dupla contagem.
+  - O gráfico de válvula usa o perfil selecionado e mostra `Cv` efetivo, `Delta P` estimado na vazão atual, `K` equivalente e ponto operacional.
+  - O gráfico de Cano ancora o perfil em `pipeInletPressureBar` e aplica `pipePressureDropBar`, evitando dupla contagem de perdas próprias de componentes passantes.
+  - Para Canos depois de válvula, bomba ou trocador, `pipeInletPressureBar` representa a pressão física entregue pelo componente passante, não uma pressão recalculada a partir da saída/dreno.
   - A mesma semântica deve ser usada no painel de propriedades e na exportação tabular para `Delta P no Cano`, `Pressão na origem` e `Pressão de chegada`.
 - Interface com o usuário: atualiza visualmente o painel de gráficos e histórico de monitoramento.
 
@@ -908,6 +915,7 @@ A seguir, a lista completa de módulos e símbolos exportados.
 - `js/infrastructure/charts/PumpChartAdapter.js`: applyPumpChartPresentation, buildPumpCurveDatasets, createPumpChart, refreshPumpChart
 - `js/infrastructure/charts/PipePressureChartAdapter.js`: buildPipePressureProfile, createPipePressureChart, refreshPipePressureChart
 - `js/infrastructure/charts/TankChartAdapter.js`: createEmptyMonitorChart, createTankVolumeChart, refreshEmptyMonitorChartPresentation, refreshTankVolumeChart, resolveTankChartColors
+- `js/infrastructure/charts/ValveChartAdapter.js`: applyValveChartPresentation, buildValveCurveDatasets, createValveChart, refreshValveChart
 - `js/infrastructure/dom/ComponentVisualConfig.js`: GRID_SIZE, colorPort, labelStyle
 - `js/infrastructure/dom/ComponentVisualFactory.js`: FabricaDeEquipamentos, obterProximaTag, updatePortStates
 - `js/infrastructure/dom/ComponentVisualRegistry.js`: clearComponentVisualRegistry, createConnectionEndpointDefinition, getComponentPortElement, getComponentVisual, getRegisteredComponentVisualPosition, registerComponentVisual, removeAllComponentVisualElements, unregisterComponentVisual
@@ -944,7 +952,8 @@ A seguir, a lista completa de módulos e símbolos exportados.
 - `js/presentation/i18n/LanguageManager.js`: TEXTS, applyLanguageToDocument, createTranslationProxy, getComponentTagPrefix, getFluidNameVariants, getLanguage, isEnglishLanguage, localizeElement, setLanguage, subscribeLanguageChanges, t, translateDefaultComponentTag, translateFluidName, translateLiteral
 - `js/presentation/monitoring/MonitorSlotHistory.js`: createMonitorSlotHistory
 - `js/presentation/monitoring/PipePressureProfile.js`: resolvePipePressureProfile, resolvePipePressureProfileOptions
-- `js/presentation/properties/ComponentPropertiesPresenter.js`: getComponentTypeKey, renderComponentProperties
+- `js/presentation/monitoring/SinkPressureProfile.js`: resolveSinkPressureProfile
+- `js/presentation/properties/ComponentPropertiesPresenter.js`: disposeComponentPropertyBindings, getComponentTypeKey, renderComponentProperties
 - `js/presentation/properties/ConnectionPropertiesPresenter.js`: renderConnectionProperties
 - `js/presentation/properties/DefaultPropertiesPresenter.js`: renderDefaultProperties
 - `js/presentation/properties/PropertyDomAdapter.js`: bind, byId, isActive, setDisabled, setDisplay, setHtml, setText, setValue, setValueWhenBlurred, valueOf

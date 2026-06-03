@@ -1004,6 +1004,19 @@ export class NodalHydraulicSolver {
             );
             const totalLossCoeff = branch.baseLossCoeff + pipeHydraulics.distributedLossCoeff;
             const totalLossBar = pressureLossFromFlow(flowLps, branch.areaM2, fluid.densidade, totalLossCoeff);
+            const pipeDistributedLossBar = pressureLossFromFlow(
+                flowLps,
+                branch.areaM2,
+                fluid.densidade,
+                pipeHydraulics.distributedLossCoeff
+            );
+            const pipeLocalLossBar = pressureLossFromFlow(
+                flowLps,
+                branch.areaM2,
+                fluid.densidade,
+                Math.max(0, connection.perdaLocalK || 0)
+            );
+            const pipePressureDropBar = pipeDistributedLossBar + pipeLocalLossBar;
             const responseTimeS = this.hydraulicModel.getConnectionResponseTimeS(connection, branch.geometry, fluid);
             const fromPressureBar = getNodePressure(pressureByNodeId, branch.fromNodeId, result.fromPressureBar);
             const toPressureBar = getNodePressure(pressureByNodeId, branch.toNodeId, result.toPressureBar);
@@ -1020,6 +1033,11 @@ export class NodalHydraulicSolver {
             state.backPressureBar = toPressureBar;
             state.velocityMps = pipeHydraulics.velocityMps;
             state.deltaPBar = Math.max(0, fromPressureBar + branch.staticHeadBar - toPressureBar);
+            state.pipeInletPressureBar = fromPressureBar;
+            state.pipePressureDropBar = pipePressureDropBar;
+            state.pipeOutletPressureBar = Math.max(0, fromPressureBar + branch.staticHeadBar - pipePressureDropBar);
+            state.pipeDistributedLossBar = pipeDistributedLossBar;
+            state.pipeLocalLossBar = pipeLocalLossBar;
             state.totalLossBar = totalLossBar;
             state.targetLossBar = 0;
             state.lengthM = branch.geometry.lengthM;

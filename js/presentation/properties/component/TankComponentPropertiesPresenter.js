@@ -412,12 +412,13 @@ export const TANK_PROPERTIES_PRESENTER = {
             );
         });
 
-        comp.subscribe((dados) => {
+        const unsubscribeComponent = comp.subscribe((dados) => {
             if (dados.tipo === COMPONENT_EVENTS.SETPOINT_UPDATE) {
                 atualizarEstadoControleNivel();
             }
         });
 
         atualizarEstadoControleNivel();
+        return unsubscribeComponent;
     }
 };

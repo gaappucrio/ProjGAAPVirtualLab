@@ -59,6 +59,10 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
                 ${makeUnitLabel('Vazão atual', 'flow', TOOLTIP.heatExchangerFlow)}
                 <input type="text" id="disp-hx-flow" ${hintAttr(TOOLTIP.heatExchangerFlow)} value="${displayUnitValue('flow', comp.fluxoReal, 2)}" disabled>
             </div>
+            <div class="prop-group">
+                ${makeLabel('Queda de pressão atual', TOOLTIP.heatExchangerPressureDrop)}
+                <input type="text" id="disp-hx-deltap" ${hintAttr(TOOLTIP.heatExchangerPressureDrop)} value="${displayUnitValue('pressure', comp.deltaPAtualBar, 2)}" disabled>
+            </div>
         `;
 
         const advancedContent = `
@@ -73,10 +77,6 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
             <div class="prop-group">
                 ${makeLabel('Efetividade atual', TOOLTIP.heatExchangerEffectiveness)}
                 <input type="text" id="disp-hx-effectiveness" ${hintAttr(TOOLTIP.heatExchangerEffectiveness)} value="${(comp.efetividadeAtual * 100).toFixed(1)}%" disabled>
-            </div>
-            <div class="prop-group">
-                ${makeLabel('Queda de pressão atual', TOOLTIP.heatExchangerPressureDrop)}
-                <input type="text" id="disp-hx-deltap" ${hintAttr(TOOLTIP.heatExchangerPressureDrop)} value="${displayUnitValue('pressure', comp.deltaPAtualBar, 2)}" disabled>
             </div>
         `;
 

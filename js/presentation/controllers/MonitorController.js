@@ -1,8 +1,10 @@
 import { BombaLogica } from '../../domain/components/BombaLogica.js';
 import { ConnectionModel } from '../../domain/models/ConnectionModel.js';
 import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
+import { ValvulaLogica } from '../../domain/components/ValvulaLogica.js';
 import { createPipePressureChart, refreshPipePressureChart } from '../../infrastructure/charts/PipePressureChartAdapter.js';
 import { createPumpChart, refreshPumpChart } from '../../infrastructure/charts/PumpChartAdapter.js';
+import { createValveChart, refreshValveChart } from '../../infrastructure/charts/ValveChartAdapter.js';
 import {
     createEmptyMonitorChart,
     createTankVolumeChart,
@@ -25,6 +27,7 @@ export function createMonitorController({ engine }) {
     let tankSampleTimer = 0;
     let chartedTankId = null;
     let chartedPumpId = null;
+    let chartedValveId = null;
     let chartedConnectionId = null;
     let monitorChartMode = 'empty';
     let expandedMonitorCharts = [null, null];
@@ -61,6 +64,7 @@ export function createMonitorController({ engine }) {
     function getMonitorChartKind(component) {
         if (component instanceof TanqueLogico) return 'tank';
         if (component instanceof BombaLogica) return 'pump';
+        if (component instanceof ValvulaLogica) return 'valve';
         if (component instanceof ConnectionModel) return 'pipe';
         return null;
     }
@@ -68,6 +72,7 @@ export function createMonitorController({ engine }) {
     function getMonitorChartKindLabel(kind) {
         if (kind === 'tank') return t('chart.tank');
         if (kind === 'pump') return t('chart.pump');
+        if (kind === 'valve') return t('chart.valve');
         if (kind === 'pipe') return t('chart.pipe');
         return t('chart.component');
     }
@@ -162,6 +167,7 @@ export function createMonitorController({ engine }) {
         setCompactMonitorMode('empty');
         chartedTankId = null;
         chartedPumpId = null;
+        chartedValveId = null;
         chartedConnectionId = null;
         refreshCompactPumpExportButton(null);
     }
@@ -184,6 +190,7 @@ export function createMonitorController({ engine }) {
         setCompactMonitorMode('tank');
         chartedTankId = component.id;
         chartedPumpId = null;
+        chartedValveId = null;
         chartedConnectionId = null;
         refreshCompactPumpExportButton(null);
     }
@@ -195,6 +202,10 @@ export function createMonitorController({ engine }) {
 
     function createPumpMonitorChartInstance(ctx, component) {
         return createPumpChart(ctx, component, { expanded: isExpanded() });
+    }
+
+    function createValveMonitorChartInstance(ctx, component) {
+        return createValveChart(ctx, component, { expanded: isExpanded() });
     }
 
     function createPipeMonitorChartInstance(ctx, connection) {
@@ -281,6 +292,7 @@ export function createMonitorController({ engine }) {
         setCompactMonitorMode('pump');
         chartedPumpId = component.id;
         chartedTankId = null;
+        chartedValveId = null;
         chartedConnectionId = null;
         refreshCompactPumpExportButton(component);
     }
@@ -288,6 +300,26 @@ export function createMonitorController({ engine }) {
     function refreshPumpMonitorChartInstance(chart, component) {
         if (!(component instanceof BombaLogica) || !chart) return;
         refreshPumpChart(chart, component, { expanded: isExpanded() });
+    }
+
+    function createValveCompactChart(component) {
+        const ctx = getCompactChartContext();
+        if (!ctx) return;
+
+        destroyCompactChart();
+        compactChart = createValveMonitorChartInstance(ctx, component);
+
+        setCompactMonitorMode('valve');
+        chartedValveId = component.id;
+        chartedPumpId = null;
+        chartedTankId = null;
+        chartedConnectionId = null;
+        refreshCompactPumpExportButton(null);
+    }
+
+    function refreshValveMonitorChartInstance(chart, component) {
+        if (!(component instanceof ValvulaLogica) || !chart) return;
+        refreshValveChart(chart, component, { expanded: isExpanded() });
     }
 
     function createPipeCompactChart(connection) {
@@ -300,6 +332,7 @@ export function createMonitorController({ engine }) {
         setCompactMonitorMode('pipe');
         chartedConnectionId = connection.id;
         chartedPumpId = null;
+        chartedValveId = null;
         chartedTankId = null;
         refreshCompactPumpExportButton(null);
     }
@@ -337,6 +370,24 @@ export function createMonitorController({ engine }) {
         }
     }
 
+    function refreshValveCompactChart(component) {
+        if (!(component instanceof ValvulaLogica) || !compactChart || monitorChartMode !== 'valve' || chartedValveId !== component.id) {
+            return;
+        }
+
+        refreshValveMonitorChartInstance(compactChart, component);
+        refreshCompactPumpExportButton(null);
+    }
+
+    function refreshCompactValveMonitorChart() {
+        if (monitorChartMode !== 'valve' || !chartedValveId || !compactChart) return;
+
+        const valve = engine.componentes.find((component) => component.id === chartedValveId);
+        if (valve instanceof ValvulaLogica) {
+            refreshValveCompactChart(valve);
+        }
+    }
+
     function refreshPumpCompactChart(component) {
         if (!(component instanceof BombaLogica) || !compactChart || monitorChartMode !== 'pump' || chartedPumpId !== component.id) {
             return;
@@ -364,6 +415,16 @@ export function createMonitorController({ engine }) {
                 refreshPumpCompactChart(bomba);
             } else {
                 refreshCompactPumpExportButton(null);
+            }
+            return;
+        }
+
+        if (monitorChartMode === 'valve') {
+            const valve = engine.componentes.find((component) => component.id === chartedValveId);
+            if (valve instanceof ValvulaLogica) {
+                refreshValveCompactChart(valve);
+            } else {
+                createEmptyCompactChart();
             }
             return;
         }
@@ -459,6 +520,9 @@ export function createMonitorController({ engine }) {
         if (entry.kind === 'pump') {
             return t('chart.pumpSubtitle');
         }
+        if (entry.kind === 'valve') {
+            return t('chart.valveSubtitle');
+        }
         if (entry.kind === 'pipe') {
             return t('chart.pipeSubtitle', {
                 pressureUnit: getUnitSymbol('pressure'),
@@ -498,6 +562,10 @@ export function createMonitorController({ engine }) {
 
         if (component instanceof BombaLogica) {
             return createPumpMonitorChartInstance(ctx, component);
+        }
+
+        if (component instanceof ValvulaLogica) {
+            return createValveMonitorChartInstance(ctx, component);
         }
 
         if (component instanceof ConnectionModel) {
@@ -605,6 +673,8 @@ export function createMonitorController({ engine }) {
                 syncTankMonitorChart(chart, entry.component);
             } else if (entry.component instanceof BombaLogica) {
                 refreshPumpMonitorChartInstance(chart, entry.component);
+            } else if (entry.component instanceof ValvulaLogica) {
+                refreshValveMonitorChartInstance(chart, entry.component);
             } else if (entry.component instanceof ConnectionModel) {
                 refreshPipeMonitorChartInstance(chart, entry.component);
             }
@@ -656,6 +726,7 @@ export function createMonitorController({ engine }) {
 
         refreshCompactTankMonitorChart();
         refreshCompactPumpMonitorChart();
+        refreshCompactValveMonitorChart();
         refreshCompactPipeMonitorChart();
         refreshExpandedMonitorCharts();
     }
@@ -664,6 +735,13 @@ export function createMonitorController({ engine }) {
         if (!(component instanceof BombaLogica)) return;
 
         refreshPumpCompactChart(component);
+        if (isExpanded()) refreshExpandedMonitorCharts();
+    }
+
+    function refreshValveMonitorCharts(component) {
+        if (!(component instanceof ValvulaLogica)) return;
+
+        refreshValveCompactChart(component);
         if (isExpanded()) refreshExpandedMonitorCharts();
     }
 
@@ -694,6 +772,17 @@ export function createMonitorController({ engine }) {
                 createPumpCompactChart(component);
             } else {
                 refreshPumpCompactChart(component);
+            }
+            if (isExpanded()) renderExpandedMonitorCharts();
+            return;
+        }
+
+        if (component instanceof ValvulaLogica) {
+            rememberMonitorChartComponent(component);
+            if (monitorChartMode !== 'valve' || chartedValveId !== component.id) {
+                createValveCompactChart(component);
+            } else {
+                refreshValveCompactChart(component);
             }
             if (isExpanded()) renderExpandedMonitorCharts();
             return;
@@ -732,6 +821,7 @@ export function createMonitorController({ engine }) {
         refreshSelection,
         refreshPresentation,
         refreshPump: refreshPumpMonitorCharts,
+        refreshValve: refreshValveMonitorCharts,
         handleSimulationUpdate
     };
 }

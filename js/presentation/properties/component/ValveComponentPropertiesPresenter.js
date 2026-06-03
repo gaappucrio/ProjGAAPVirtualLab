@@ -332,7 +332,7 @@ export const VALVE_PROPERTIES_PRESENTER = {
             notifyPanelRefresh();
         });
 
-        comp.subscribe((dados) => {
+        const unsubscribeComponent = comp.subscribe((dados) => {
             if (dados.tipo === COMPONENT_EVENTS.STATE && slider) {
                 sincronizarBloqueioSetpoint();
                 slider.value = dados.grau;
@@ -356,5 +356,6 @@ export const VALVE_PROPERTIES_PRESENTER = {
         sincronizarBloqueioSetpoint();
         atualizarDescricaoPerfil();
         atualizarDescricaoCaracteristica();
+        return unsubscribeComponent;
     }
 };
