@@ -80,7 +80,7 @@ Este módulo instancia o engine, conecta serviços de visual, cria controladores
 - O usuário deve arrastar componentes da paleta para o workspace.
 - O usuário deve conectar portas de saída a portas de entrada para criar conexões.
 - O usuário deve editar propriedades de componentes e conexões no painel de propriedades.
-- O usuário deve poder ativar o uso de diâmetro personalizado de tubulação em opções avançadas do trecho; por padrão, a simulação usa uma referência didática fixa.
+- O usuário deve poder ativar o uso de diâmetro personalizado de tubulação em opções avançadas do Cano; por padrão, a simulação usa uma referência didática fixa.
 - O usuário deve poder selecionar múltiplos componentes por caixa de seleção ou `Ctrl+clique`.
 - O usuário deve poder duplicar seleções com `Ctrl+C` / `Ctrl+V`.
 - O usuário deve poder desfazer/refazer alterações com `Ctrl+Z` / `Ctrl+Y`.

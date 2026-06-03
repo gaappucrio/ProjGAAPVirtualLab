@@ -77,7 +77,7 @@ test('seleção múltipla mantém contrato de componente único e limpa conexõe
     store.selectConnection(connection);
     assert.equal(store.selectedConnection, connection);
     assert.equal(store.selectedComponent, null);
-    assert.equal(store.selectedComponents.size, 0, 'Selecionar trecho deve limpar seleção múltipla');
+    assert.equal(store.selectedComponents.size, 0, 'Selecionar Cano deve limpar seleção múltipla');
 });
 
 test('remoção de atuador desativa controle de nível inconsistente', () => {

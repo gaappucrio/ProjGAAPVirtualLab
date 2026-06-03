@@ -97,7 +97,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 
 ### 2.6 Conexões e Tubulações
 
-- Diâmetro interno do trecho como propriedade física direta: o valor editado sempre altera área, velocidade, Reynolds, perda distribuída e tempo de residência.
+- Diâmetro interno do Cano como propriedade física direta: o valor editado sempre altera área, velocidade, Reynolds, perda distribuída e tempo de residência.
 - Comprimento hidráulico total.
 - Comprimento extra equivalente.
 - Rugosidade absoluta.
@@ -107,9 +107,9 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Fator de atrito Darcy.
 - Regime de escoamento.
 - Tempo de resposta hidráulica.
-- Tempo de residência no trecho calculado pelo volume interno da tubulação dividido pela vazão atual.
+- Tempo de residência no Cano calculado pelo volume interno da tubulação dividido pela vazão atual.
 - Diâmetro sugerido por continuidade, usando vazão de referência e velocidade desejada.
-- Vazão de referência editável no painel avançado do trecho, com botão para capturar a vazão atual/alvo como base estável do cálculo de diâmetro sugerido. Essa vazão não força nem limita a vazão real da rede.
+- Vazão de referência editável no painel avançado do Cano, com botão para capturar a vazão atual/alvo como base estável do cálculo de diâmetro sugerido. Essa vazão não força nem limita a vazão real da rede.
 
 ### 2.7 Monitoramento
 
@@ -145,9 +145,9 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Exportação dos dados atuais da simulação em arquivo `.xls` compatível com planilhas.
 - Tabela de resumo com data da exportação e estado de altura relativa.
 - Tabela de componentes com nome, tipo, identificadores, posição, conexões, pressões, vazões e parâmetros específicos de fontes, saídas, bombas, válvulas e tanques.
-- Tabela de conexões com origem, destino, diâmetro, rugosidade, perdas, vazões, pressões, geometria, Reynolds, fator de atrito, regime e fluido do trecho.
+- Tabela de conexões com origem, destino, diâmetro, rugosidade, perdas, vazões, pressões, geometria, Reynolds, fator de atrito, regime e fluido do Cano.
 - As unidades exibidas nas tabelas exportadas seguem as preferências selecionadas na interface para pressão, vazão, comprimento, volume e temperatura, em vez de expor apenas as unidades internas do motor.
-- A exportação inclui tempo de residência do tanque e tempo de residência de cada trecho.
+- A exportação inclui tempo de residência do tanque e tempo de residência de cada Cano.
 - A exportação foi mantida focada em dados tabulares para comparação com DWSIM, sem anexar gráficos ao arquivo.
 - A exportação pontual de bomba gera um `.json` separado no formato de CurveSet esperado pelo DWSIM, com `Name`, `Description`, `ImpellerDiameter`, `ImpellerSpeed`, `ImpellerDiameterUnit`, `CurveHead`, `CurvePower`, `CurveEfficiency` e `CurveNPSHr`. As curvas usam arrays `X/Y` com vazão em `m3/s`; carga e NPSHr em `m`, potência estimada em `kW` e eficiência em `%`.
 
@@ -515,7 +515,7 @@ Características:
 - Mistura fluidos em componentes passantes com múltiplas entradas.
 - Corrige perdas locais por Reynolds e viscosidade, evitando que fluidos viscosos sejam favorecidos artificialmente apenas pela menor densidade.
 - Resolve bombas ativas a jusante de tanques de forma implícita, permitindo sucção acima da vazão gravitacional passiva e limitando o resultado por curva da bomba, perdas do ramo e NPSH.
-- Componentes passantes não duplicam a perda base do trecho a jusante; válvulas abertas com `K=0` aplicam apenas a perda física equivalente ao `Cv`, de modo que `Cv` muito alto se aproxima de um tubo de comprimento hidráulico equivalente.
+- Componentes passantes não duplicam a perda base do Cano a jusante; válvulas abertas com `K=0` aplicam apenas a perda física equivalente ao `Cv`, de modo que `Cv` muito alto se aproxima de um tubo de comprimento hidráulico equivalente.
 - Atuadores em bloqueio total também bloqueiam os ramos adjacentes no solver nodal e no relaxamento transiente: válvula com abertura efetiva zero e bomba com acionamento efetivo zero não deixam conexões a montante ou jusante manterem vazão artificial.
 
 ### 7.1 Conservação de Massa

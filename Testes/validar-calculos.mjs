@@ -83,7 +83,7 @@ test('tempo de residencia usa volume dividido pela vazao volumetrica', () => {
         diameterM: 0.1
     }));
     const pipeResidenceS = calculateConnectionResidenceTimeS(connection, { lengthM: 10 }, 5);
-    approx(pipeResidenceS, 15.7079632679, 1e-9, 'Tempo de residencia no trecho');
+    approx(pipeResidenceS, 15.7079632679, 1e-9, 'Tempo de residencia no Cano');
 
     const tank = new TanqueLogico('T-res', 'T-res', 0, 0);
     tank.volumeAtual = 500;

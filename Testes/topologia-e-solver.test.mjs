@@ -107,7 +107,7 @@ test('módulos de domínio não importam engine global, DOM, Chart ou controller
     });
 });
 
-test('trecho que sai da fonte usa o fluido definido na entrada', () => {
+test('Cano que sai da fonte usa o fluido definido na entrada', () => {
     const engine = createEngine();
     const fonte = new FonteLogica('F-01', 'inlet-01', 0, 0);
     const dreno = new DrenoLogico('D-01', 'outlet-01', 160, 0);

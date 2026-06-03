@@ -110,7 +110,7 @@ const COMPONENT_COLUMNS = [
 ];
 
 const CONNECTION_COLUMNS = [
-    'Nome do trecho',
+    'Nome do Cano',
     'Componente de origem',
     'Tipo de origem',
     'Componente de destino',
@@ -127,7 +127,7 @@ const CONNECTION_COLUMNS = [
     'Vazão atual (L/s)',
     'Vazão alvo (L/s)',
     'Velocidade atual (m/s)',
-    'Delta P no trecho (bar)',
+    'Delta P no Cano (bar)',
     'Perda total (bar)',
     'Pressão na origem (bar)',
     'Pressão de chegada (bar)',
@@ -135,13 +135,13 @@ const CONNECTION_COLUMNS = [
     'Comprimento hidráulico total (m)',
     'Comprimento reto/esquemático (m)',
     'Desnível hidráulico (m)',
-    'Tempo de residência no trecho (s)',
+    'Tempo de residência no Cano (s)',
     'Tempo de resposta (s)',
     'Reynolds',
     'Fator de atrito Darcy',
     'Rugosidade relativa',
     'Regime',
-    'Fluido no trecho',
+    'Fluido no Cano',
     'Densidade do fluido (kg/m³)',
     'Viscosidade do fluido (Pa.s)',
     'Cor visual do fluido'
@@ -242,7 +242,7 @@ const EXPORT_LABELS_EN = {
     'Ganho integral Ki': 'Integral gain Ki',
     'Ganho derivativo Kd': 'Derivative gain Kd',
     'Alerta de saturação ativo': 'Saturation alert active',
-    'Nome do trecho': 'Line name',
+    'Nome do Cano': 'Line name',
     'Componente de origem': 'Source component',
     'Tipo de origem': 'Source type',
     'Componente de destino': 'Target component',
@@ -259,7 +259,7 @@ const EXPORT_LABELS_EN = {
     'Vazão atual': 'Current flow',
     'Vazão alvo': 'Target flow',
     'Velocidade atual': 'Current velocity',
-    'Delta P no trecho': 'Line delta P',
+    'Delta P no Cano': 'Line delta P',
     'Perda total': 'Total loss',
     'Pressão na origem': 'Source pressure',
     'Pressão de chegada': 'Arrival pressure',
@@ -267,12 +267,12 @@ const EXPORT_LABELS_EN = {
     'Comprimento hidráulico total': 'Total hydraulic length',
     'Comprimento reto/esquemático': 'Straight/schematic length',
     'Desnível hidráulico': 'Hydraulic elevation difference',
-    'Tempo de residência no trecho': 'Line residence time',
+    'Tempo de residência no Cano': 'Line residence time',
     'Tempo de resposta': 'Response time',
     'Fator de atrito Darcy': 'Darcy friction factor',
     'Rugosidade relativa': 'Relative roughness',
     Regime: 'Regime',
-    'Fluido no trecho': 'Fluid in line',
+    'Fluido no Cano': 'Fluid in line',
     'Viscosidade do fluido': 'Fluid viscosity'
 };
 
@@ -319,7 +319,7 @@ const LOCALIZED_VALUE_COLUMNS = new Set([
 const FLUID_NAME_COLUMNS = new Set([
     'Nome do fluido',
     'Fluido no tanque',
-    'Fluido no trecho'
+    'Fluido no Cano'
 ]);
 
 function numberValue(value, digits = null) {
@@ -346,7 +346,7 @@ function translateExportValue(value) {
 
 function translateGeneratedLineName(value) {
     if (!isEnglishLanguage()) return value;
-    const match = String(value ?? '').match(/^Trecho\s+(\d+)$/);
+    const match = String(value ?? '').match(/^Cano\s+(\d+)$/);
     return match ? `Line ${match[1]}` : value;
 }
 
@@ -402,7 +402,7 @@ function displayCellValue(column, value) {
     const rule = getUnitRule(column);
     if (value === '') return value;
 
-    if (column === 'Nome do trecho') return translateGeneratedLineName(value);
+    if (column === 'Nome do Cano') return translateGeneratedLineName(value);
     if (FLUID_NAME_COLUMNS.has(column)) return translateFluidName(value);
     if (LOCALIZED_VALUE_COLUMNS.has(column)) return translateExportValue(value);
 
@@ -593,7 +593,7 @@ function buildConnectionRow(engine, connection, index) {
     const fluid = state?.fluid || engine.hydraulicContext?.getConnectionFluid?.(connection);
 
     return {
-        'Nome do trecho': `Trecho ${index + 1}`,
+        'Nome do Cano': `Cano ${index + 1}`,
         'Componente de origem': source?.tag || connection.sourceId || '',
         'Tipo de origem': source ? getComponentType(source) : '',
         'Componente de destino': target?.tag || connection.targetId || '',
@@ -610,7 +610,7 @@ function buildConnectionRow(engine, connection, index) {
         'Vazão atual (L/s)': numberValue(state?.flowLps, 5),
         'Vazão alvo (L/s)': numberValue(state?.targetFlowLps, 5),
         'Velocidade atual (m/s)': numberValue(state?.velocityMps, 5),
-        'Delta P no trecho (bar)': numberValue(state?.deltaPBar, 5),
+        'Delta P no Cano (bar)': numberValue(state?.deltaPBar, 5),
         'Perda total (bar)': numberValue(state?.totalLossBar, 5),
         'Pressão na origem (bar)': numberValue(state?.sourcePressureBar, 5),
         'Pressão de chegada (bar)': numberValue(state?.outletPressureBar, 5),
@@ -618,7 +618,7 @@ function buildConnectionRow(engine, connection, index) {
         'Comprimento hidráulico total (m)': numberValue(geometry?.lengthM ?? state?.lengthM, 5),
         'Comprimento reto/esquemático (m)': numberValue(geometry?.straightLengthM ?? state?.straightLengthM, 5),
         'Desnível hidráulico (m)': numberValue(geometry?.headGainM ?? state?.headGainM, 5),
-        'Tempo de residência no trecho (s)': numberValue(calculateConnectionResidenceTimeS(
+        'Tempo de residência no Cano (s)': numberValue(calculateConnectionResidenceTimeS(
             connection,
             { ...geometry, lengthM: state?.lengthM || geometry?.lengthM },
             state?.flowLps
@@ -628,7 +628,7 @@ function buildConnectionRow(engine, connection, index) {
         'Fator de atrito Darcy': numberValue(state?.frictionFactor, 6),
         'Rugosidade relativa': numberValue(state?.relativeRoughness, 8),
         Regime: state?.regime || '',
-        'Fluido no trecho': fluid?.nome || '',
+        'Fluido no Cano': fluid?.nome || '',
         'Densidade do fluido (kg/m³)': numberValue(fluid?.densidade, 3),
         'Viscosidade do fluido (Pa.s)': numberValue(fluid?.viscosidadeDinamicaPaS, 6),
         'Cor visual do fluido': fluid ? getFluidVisualStyle(fluid).stroke : ''

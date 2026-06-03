@@ -2387,7 +2387,7 @@
 
   .pipe-line:hover
 
-  /* ESTILO PARA CANO QUANDO O MOUSE ESTÁ SOBRE ELE  */
+  /* ESTILO PARA Cano QUANDO O MOUSE ESTÁ SOBRE ELE  */
       {
       stroke: #bdc3c7;
       /* Define a cor do traçado dos canos quando o mouse está sobre eles, criando um efeito de destaque visual que chama a atenção dos usuários para os canos e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para os canos no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os canos no workspace */
@@ -2409,16 +2409,16 @@
 
   .pipe-line.selected
 
-  /* ESTILO PARA CANO SELECIONADO  */
+  /* ESTILO PARA Cano SELECIONADO  */
       {
       stroke: #e74c3c;
       /* Define a cor do traçado dos canos selecionados, criando um destaque visual que chama a atenção dos usuários para os canos selecionados e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para os canos no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os canos no workspace */
       stroke-width: 6;
       /* Define a largura do traçado dos canos selecionados */
       filter: drop-shadow(0px 0px 5px rgba(231, 76, 60, 0.5));
-      /* Adiciona uma sombra ao cano selecionado */
+      /* Adiciona uma sombra ao Cano selecionado */
       cursor: pointer;
-      /* Define o cursor do mouse para indicar que o cano é clicável */
+      /* Define o cursor do mouse para indicar que o Cano é clicável */
   }
 
   .pipe-flow-label
@@ -2462,7 +2462,7 @@
       }
   }
 
-  /* A animação de fluxo cria um efeito de movimento ao longo do cano, dando a impressão de que o fluido está fluindo. */
+  /* A animação de fluxo cria um efeito de movimento ao longo do Cano, dando a impressão de que o fluido está fluindo. */
   /* O stroke-dashoffset é animado para criar esse efeito.*/
   .water-stream
 

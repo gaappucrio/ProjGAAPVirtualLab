@@ -76,8 +76,8 @@ export function renderConnectionProperties({
 
     const basicContent = `
         <div class="prop-group">
-            <label title="${TOOLTIPS.conexao.trecho}">${TOOLTIPS.conexao.titulo}</label>
-            <input type="text" title="${TOOLTIPS.conexao.trecho}" value="${labels.sourceLabel} -> ${labels.targetLabel}" disabled>
+            <label title="${TOOLTIPS.conexao.Cano}">${TOOLTIPS.conexao.titulo}</label>
+            <input type="text" title="${TOOLTIPS.conexao.Cano}" value="${labels.sourceLabel} -> ${labels.targetLabel}" disabled>
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.diametro}">Diâmetro Interno (${getUnitSymbol('length')})</label>
@@ -88,11 +88,11 @@ export function renderConnectionProperties({
             <input type="text" id="disp-pipe-flow" title="${TOOLTIPS.conexao.vazaoAtual}" value="${displayUnitValue('flow', state.flowLps, 2)}" disabled>
         </div>
         <div class="prop-group">
-            <label title="Fluido atualmente transportado neste trecho.">Fluido no Trecho</label>
-            <input type="text" id="disp-pipe-fluid" title="Fluido atualmente transportado neste trecho." value="${formatFluidName(currentFluid)}" disabled>
+            <label title="Fluido atualmente transportado neste Cano.">Fluido no Cano</label>
+            <input type="text" id="disp-pipe-fluid" title="Fluido atualmente transportado neste Cano." value="${formatFluidName(currentFluid)}" disabled>
         </div>
         <div class="prop-group">
-            <label title="${TOOLTIPS.conexao.deltaPTrecho}">Queda de Pressão no Trecho (${getUnitSymbol('pressure')})</label>
+            <label title="${TOOLTIPS.conexao.deltaPTrecho}">Queda de Pressão no Cano (${getUnitSymbol('pressure')})</label>
             <input type="text" id="disp-pipe-deltap" title="${TOOLTIPS.conexao.deltaPTrecho}" value="${displayUnitValue('pressure', state.deltaPBar, 3)}" disabled>
         </div>
         <div class="prop-group">
@@ -153,12 +153,12 @@ export function renderConnectionProperties({
             <input type="text" id="disp-pipe-regime" title="${TOOLTIPS.conexao.regime}" value="${translateLiteral(state.regime)}" disabled>
         </div>
         <div class="prop-group">
-            <label title="Densidade do fluido ou mistura que está no trecho.">Densidade do Fluido (kg/m³)</label>
-            <input type="text" id="disp-pipe-fluid-density" title="Densidade do fluido ou mistura que está no trecho." value="${(currentFluid?.densidade || 0).toFixed(1)}" disabled>
+            <label title="Densidade do fluido ou mistura que está no Cano.">Densidade do Fluido (kg/m³)</label>
+            <input type="text" id="disp-pipe-fluid-density" title="Densidade do fluido ou mistura que está no Cano." value="${(currentFluid?.densidade || 0).toFixed(1)}" disabled>
         </div>
         <div class="prop-group">
-            <label title="Viscosidade dinâmica do fluido ou mistura que está no trecho.">Viscosidade do Fluido (Pa.s)</label>
-            <input type="text" id="disp-pipe-fluid-viscosity" title="Viscosidade dinâmica do fluido ou mistura que está no trecho." value="${(currentFluid?.viscosidadeDinamicaPaS || 0).toFixed(5)}" disabled>
+            <label title="Viscosidade dinâmica do fluido ou mistura que está no Cano.">Viscosidade do Fluido (Pa.s)</label>
+            <input type="text" id="disp-pipe-fluid-viscosity" title="Viscosidade dinâmica do fluido ou mistura que está no Cano." value="${(currentFluid?.viscosidadeDinamicaPaS || 0).toFixed(5)}" disabled>
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.respostaHidraulica}">Resposta Hidráulica (s)</label>
@@ -171,7 +171,7 @@ export function renderConnectionProperties({
         ${renderPropertyTabs({
             basicContent,
             advancedContent,
-            advancedDescription: 'Os parâmetros desta aba refinam perdas distribuídas, perdas locais e a resposta transitória da linha. São úteis quando você quer aproximar melhor a hidráulica do trecho.'
+            advancedDescription: 'Os parâmetros desta aba refinam perdas distribuídas, perdas locais e a resposta transitória da linha. São úteis quando você quer aproximar melhor a hidráulica do Cano.'
         })}
     `;
     localizeElement(propContent);
