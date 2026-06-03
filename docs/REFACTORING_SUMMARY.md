@@ -77,6 +77,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - A característica da válvula altera a área hidráulica efetiva e a perda local.
 - O `Cv` é convertido para um coeficiente de perda equivalente pela relação industrial `Q = Cv * sqrt(DeltaP/SG)`, permitindo comparação mais direta com ferramentas como DWSIM.
 - Integração com controle de nível de tanque.
+- Com PA ativo, o tanque modula a abertura da válvula; parâmetros de projeto como `Cv`, `K`, característica, rangeabilidade e tempo de curso permanecem locais da válvula e só mudam por edição explícita ou ajuste didático aplicado naquela válvula.
 
 ### 2.5 Tanque
 
@@ -515,6 +516,7 @@ Características:
 - Corrige perdas locais por Reynolds e viscosidade, evitando que fluidos viscosos sejam favorecidos artificialmente apenas pela menor densidade.
 - Resolve bombas ativas a jusante de tanques de forma implícita, permitindo sucção acima da vazão gravitacional passiva e limitando o resultado por curva da bomba, perdas do ramo e NPSH.
 - Componentes passantes não duplicam a perda base do trecho a jusante; válvulas abertas com `K=0` aplicam apenas a perda física equivalente ao `Cv`, de modo que `Cv` muito alto se aproxima de um tubo de comprimento hidráulico equivalente.
+- Atuadores em bloqueio total também bloqueiam os ramos adjacentes no solver nodal e no relaxamento transiente: válvula com abertura efetiva zero e bomba com acionamento efetivo zero não deixam conexões a montante ou jusante manterem vazão artificial.
 
 ### 7.1 Conservação de Massa
 
@@ -578,6 +580,7 @@ Propriedades principais:
 Comportamento:
 
 - A rampa limita a mudança do acionamento efetivo.
+- Acionamento efetivo igual a zero representa a bomba parada como bloqueio hidráulico ideal no simulador; o limite de vazão fica nulo e as conexões vizinhas são zeradas para não criar escoamento em nós mortos.
 - A pressão gerada depende do acionamento e da vazão.
 - A eficiência varia ao redor do ponto de melhor eficiência.
 - O NPSHr varia com vazão e acionamento.
@@ -609,9 +612,12 @@ Perfis:
 - Abertura rápida: maior passagem no início e curso mais rápido.
 - Personalizado: edição individual.
 
-O controle de nível pode assumir temporariamente o controle da válvula e restaurar os parâmetros manuais ao ser liberado.
+O controle de nível pode assumir temporariamente o controle da abertura da válvula e restaurar a abertura manual ao ser liberado. Para manter fidelidade física, o PA não redesenha `Cv`, `K`, característica, rangeabilidade nem tempo de curso; esses valores representam geometria/projeto da válvula e permanecem locais ao componente.
+
+Com abertura efetiva zero, a válvula retorna área hidráulica e `Cv` nulos. O solver trata esse estado como fronteira fechada ideal, portanto a queda de pressão pode existir estaticamente, mas a vazão estacionária através da válvula e das conexões imediatamente ligadas a ela é zero.
 
 O diagnóstico de dimensionamento fica em `domain/services/ValveSizingDiagnostics.js`. Ele avalia abertura efetiva, vazão, queda de pressão e perda local equivalente para identificar quando a válvula está virando gargalo hidráulico. O painel da válvula exibe um alerta didático quando a abertura está alta e a queda de pressão ainda é relevante, com ação para colocar o perfil em `custom`, aumentar Cv e reduzir K dentro dos limites do simulador. O diagnóstico não implementa ainda verificação de classe pressão-temperatura ou material da válvula.
+O ajuste de dimensionamento atua somente na instância selecionada e fica separado do controlador de nível; clicar para ajustar uma válvula não altera outras válvulas da mesma ilha ou de ilhas hidráulicas independentes.
 
 ### 8.5 `TanqueLogico`
 
@@ -819,7 +825,9 @@ Coberturas importantes:
 - Bomba ativa na saída de tanque aumentando vazão sem manter o limite puramente gravitacional do tanque.
 - Válvula totalmente aberta, com `Cv` alto e `K=0`, aplica apenas a perda física equivalente ao `Cv` e se aproxima de tubo equivalente quando o `Cv` é suficientemente alto.
 - Válvula comandada por set point com abertura subvisual, exibida como `0.0%`, fecha hidraulicamente e não mantém vazamento residual.
+- Controle de nível preserva `Cv`, `K`, perfil, característica, rangeabilidade e tempo de curso das válvulas, modulando apenas abertura; o ajuste didático de dimensionamento altera somente a válvula selecionada.
 - Válvula em malha fechada com tanques e altura relativa ligada não cria nem consome massa; o teste confere inventário total dos tanques e balanço entrada/saída da válvula.
+- Malha com tanques, bomba desligada e válvula fechada não mantém fluxo em conexões adjacentes aos atuadores, mesmo quando o solver nodal é escolhido por haver ciclo dirigido.
 - Sistemas hidráulicos desconectados são resolvidos por ilha quando alguma malha fechada exige solver nodal; uma malha fechada isolada não altera volumes, vazões ou controle de set point de outra ilha aberta.
 - Diagnóstico de malha fechada antes do solver nodal experimental.
 - Exportação/importação de fluxograma completo.
@@ -828,7 +836,7 @@ Coberturas importantes:
 Auditoria dos testes:
 
 - A suite executada por `npm.cmd test` cobre os 6 arquivos listados acima.
-- A execução atual possui 92 testes passantes. Os arquivos de teste contêm 492 ocorrências de `assert.*` na suíte principal.
+- A execução atual possui 93 testes passantes. Os arquivos de teste contêm 501 ocorrências de `assert.*` na suíte principal.
 - Nao foi encontrado padrao trivial como `assert.ok(true)`, `assert.equal(true, true)`, `print(true)` ou `console.log` usado como teste na suite principal.
 - Os testes exercitam resultados observaveis: valores numericos, estado de stores, eventos, HTML gerado, regras de camadas, ausencia de dependencias indevidas e comportamento do solver.
 - O antigo `test-phase1.mjs` foi removido em 2026-05-27 porque importava fachadas ja eliminadas (`ConnectionServiceRuntime.js` e `PortPositionCalculator.js`) e nao fazia parte do script `npm test`.
@@ -992,6 +1000,8 @@ ver lugar:
 - Resolvido em 2026-05-26: seleção do solver passou a respeitar ilhas hidráulicas desconectadas. Se uma ilha tem malha fechada, apenas ela usa o solver nodal; ilhas abertas continuam no solver push-based, preservando o comportamento de set point, volumes e vazões de sistemas completamente isolados.
 
 - Resolvido em 2026-05-26: fechamento de válvula sob set point corrigido. Aberturas abaixo da resolução visual de `0.0%` passam a ser normalizadas para fechamento real, e os parâmetros hidráulicos retornam área e Cv nulos para impedir vazamento residual.
+- Resolvido em 2026-06-01: vazão indevida em malhas nodais com bomba desligada e válvula fechada. O problema era que o ramo interno do atuador ficava bloqueado, mas as conexões adjacentes ainda eram montadas como ramos passivos; quando o solver nodal encontrava nós mortos ou matriz singular, a última estimativa podia preservar fluxo visual e numérico atravessando o conjunto. A solução foi tratar válvula com abertura efetiva zero e bomba com acionamento efetivo zero como bloqueios hidráulicos também nas conexões vizinhas, mantendo Bernoulli/perdas para componentes abertos e impondo vazão estacionária nula para atuadores realmente fechados.
+- Resolvido em 2026-06-01: o PA do tanque deixava a impressão de ajuste global de válvulas porque, além de comandar abertura, ele reescrevia perfil, `Cv` e `K` das válvulas controladas a cada tick. Isso não é realista para uma válvula física, já que `Cv`, perdas e característica representam geometria/projeto. A solução foi limitar o PA à modulação de abertura e manter o ajuste de dimensionamento como ação explícita, local e isolada da válvula selecionada.
 - Resolvido em 2026-05-26: sistema de múltiplos componentes avaliado com adição de válvulas durante a simulação. Conexões novas em simulação já iniciada passam a entrar com rampa hidráulica curta, evitando queda brusca inicial no nível do tanque sem alterar o regime permanente.
 - Resolvido em 2026-05-27: oscilacao do set point em sistemas com valvula de entrada e saida corrigida. O controle entra em repouso com histerese ao atingir o PA, fecha hidraulicamente as valvulas controladas, zera fluxo residual em conexoes bloqueadas por valvula fechada e restaura a abertura manual ao sair do modo de set point.
 - Resolvido em 2026-05-27: ganhos padrão do PI reescalados para erro normalizado. Fora da banda morta, erros pequenos agora comandam aberturas parciais nas válvulas; a saturação em 100% fica reservada para desvios grandes.
