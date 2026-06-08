@@ -472,7 +472,7 @@ export class HydraulicBranchModel {
                 availableFlowLps: comp.vazaoMaxima,
                 pressureBar: comp.pressaoFonteBar,
                 hydraulicAreaM2: areaM2,
-                connectionBaseLossCoeff: 1,
+                connectionBaseLossCoeff: 0,
                 localLossCoeff: DEFAULT_ENTRY_LOSS,
                 fluid: comp.fluidoEntrada || this.context.fluidoOperante
             };

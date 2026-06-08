@@ -66,7 +66,14 @@ const COMPONENT_COLUMNS = [
     'Abertura desejada (%)',
     'Abertura efetiva (%)',
     'Coeficiente Cv',
+    'Unidade do coeficiente da válvula',
+    'Coeficiente exibido da válvula',
+    'Coeficiente Kv',
     'Coeficiente de perda K',
+    'Perda de estrangulamento ativa',
+    'K físico do Cv efetivo',
+    'K de estrangulamento aplicado',
+    'K total efetivo da válvula',
     'Perfil da válvula',
     'Característica da válvula',
     'Rangeabilidade',
@@ -201,7 +208,14 @@ const EXPORT_LABELS_EN = {
     'Abertura desejada': 'Target opening',
     'Abertura efetiva': 'Effective opening',
     'Coeficiente Cv': 'Cv coefficient',
+    'Unidade do coeficiente da válvula': 'Valve coefficient unit',
+    'Coeficiente exibido da válvula': 'Displayed valve coefficient',
+    'Coeficiente Kv': 'Kv coefficient',
     'Coeficiente de perda K': 'K loss coefficient',
+    'Perda de estrangulamento ativa': 'Throttling loss active',
+    'K físico do Cv efetivo': 'Physical K from effective Cv',
+    'K de estrangulamento aplicado': 'Applied throttling K',
+    'K total efetivo da válvula': 'Total effective valve K',
     'Perfil da válvula': 'Valve profile',
     'Característica da válvula': 'Valve characteristic',
     Rangeabilidade: 'Rangeability',
@@ -526,11 +540,19 @@ function buildComponentRow(component) {
     }
 
     if (component instanceof ValvulaLogica) {
+        const parametrosValvula = component.getParametrosHidraulicos?.();
         row['Válvula aberta'] = booleanValue(component.aberta);
         row['Abertura desejada (%)'] = numberValue(component.grauAbertura, 3);
         row['Abertura efetiva (%)'] = numberValue(component.aberturaEfetiva, 3);
         row['Coeficiente Cv'] = numberValue(component.cv, 5);
+        row['Unidade do coeficiente da válvula'] = component.getUnidadeCoeficienteVazao?.()?.toUpperCase?.() || 'CV';
+        row['Coeficiente exibido da válvula'] = numberValue(component.getCoeficienteVazaoNaUnidade?.(), 5);
+        row['Coeficiente Kv'] = numberValue(component.getCoeficienteVazaoNaUnidade?.('kv'), 5);
         row['Coeficiente de perda K'] = numberValue(component.perdaLocalK, 5);
+        row['Perda de estrangulamento ativa'] = booleanValue(component.considerarPerdaEstrangulamento === true);
+        row['K físico do Cv efetivo'] = numberValue(parametrosValvula?.lossFromCv, 5);
+        row['K de estrangulamento aplicado'] = numberValue(parametrosValvula?.appliedThrottlingLoss, 5);
+        row['K total efetivo da válvula'] = numberValue(parametrosValvula?.localLossCoeff, 5);
         row['Perfil da válvula'] = component.perfilCaracteristica || '';
         row['Característica da válvula'] = component.tipoCaracteristica || '';
         row.Rangeabilidade = numberValue(component.rangeabilidade, 5);

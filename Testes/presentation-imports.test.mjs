@@ -48,6 +48,7 @@ test('exportação registra altura relativa sem anexar gráficos', async () => {
     const { buildExportHtml } = await import('../js/presentation/export/SimulationDataExporter.js');
     const { BombaLogica } = await import('../js/domain/components/BombaLogica.js');
     const { TanqueLogico } = await import('../js/domain/components/TanqueLogico.js');
+    const { ValvulaLogica } = await import('../js/domain/components/ValvulaLogica.js');
 
     const tanque = new TanqueLogico('tank-01', 'Tanque-01', 10, 20);
     tanque.capacidadeMaxima = 1000;
@@ -61,8 +62,14 @@ test('exportação registra altura relativa sem anexar gráficos', async () => {
     bomba.fluxoReal = 18;
     bomba.cargaGeradaBar = 3.2;
 
+    const valvula = new ValvulaLogica('valve-export', 'V-Export', 180, 40);
+    valvula.aplicarPerfilCaracteristica('custom');
+    valvula.setCoeficienteVazao(280);
+    valvula.setUnidadeCoeficienteVazao('kv');
+    valvula.setConsiderarPerdaEstrangulamento(true);
+
     const html = buildExportHtml({
-        componentes: [tanque, bomba],
+        componentes: [tanque, bomba, valvula],
         conexoes: [],
         usarAlturaRelativa: true
     });
@@ -73,6 +80,13 @@ test('exportação registra altura relativa sem anexar gráficos', async () => {
     assert.match(html, /Ligada/);
     assert.match(html, /Tanque-01/);
     assert.match(html, /Bomba-01/);
+    assert.match(html, /Unidade do coeficiente da v\u00e1lvula/);
+    assert.match(html, /Coeficiente exibido da v\u00e1lvula/);
+    assert.match(html, /Coeficiente Kv/);
+    assert.match(html, /Perda de estrangulamento ativa/);
+    assert.match(html, /K f\u00edsico do Cv efetivo/);
+    assert.match(html, /K de estrangulamento aplicado/);
+    assert.match(html, /KV/);
     assert.doesNotMatch(html, /Gr\u00e1ficos dos componentes/);
     assert.doesNotMatch(html, /export-chart-svg/);
 });
@@ -499,6 +513,7 @@ test('clipboard de componentes preserva propriedades clonaveis e sufixo por idio
     } = await import('../js/presentation/controllers/ClipboardController.js');
     const { FonteLogica } = await import('../js/domain/components/FonteLogica.js');
     const { BombaLogica } = await import('../js/domain/components/BombaLogica.js');
+    const { ValvulaLogica } = await import('../js/domain/components/ValvulaLogica.js');
     const { TanqueLogico } = await import('../js/domain/components/TanqueLogico.js');
     const { TrocadorCalorLogico } = await import('../js/domain/components/TrocadorCalorLogico.js');
     const { setLanguage } = await import('../js/presentation/i18n/LanguageManager.js');
@@ -552,6 +567,24 @@ test('clipboard de componentes preserva propriedades clonaveis e sufixo por idio
     assert.equal(bombaClone.vazaoNominal, 123);
     assert.equal(bombaClone.pressaoMaxima, 6.5);
     assert.equal(bombaClone.tempoRampaSegundos, 2.75);
+
+    const valvula = new ValvulaLogica('valve-clipboard-01', 'V-01', 0, 0);
+    valvula.setUnidadeCoeficienteVazao('kv');
+    valvula.aplicarPerfilCaracteristica('custom');
+    valvula.setCoeficienteVazao(240);
+    valvula.setConsiderarPerdaEstrangulamento(true);
+
+    const valvulaSnapshot = createComponentClipboardSnapshot(valvula);
+    const valvulaClone = new ValvulaLogica('valve-clipboard-02', 'V-02', 0, 0);
+    applyComponentClipboardSnapshot(valvulaSnapshot, valvulaClone, {
+        tag: buildClonedComponentTag(valvulaSnapshot.tag)
+    });
+
+    assert.equal(valvulaSnapshot.properties.unidadeCoeficienteVazao, 'kv');
+    assert.equal(valvulaSnapshot.properties.considerarPerdaEstrangulamento, true);
+    assert.equal(valvulaClone.unidadeCoeficienteVazao, 'kv');
+    assert.equal(valvulaClone.cv, 240);
+    assert.equal(valvulaClone.considerarPerdaEstrangulamento, true);
 
     const tanque = new TanqueLogico('tank-01', 'T-01', 0, 0);
     tanque.setpointAtivo = true;
@@ -847,7 +880,7 @@ test('monitor de pipe prioriza perda real separada do Cano', async () => {
 });
 
 test('grafico de valvula usa perfil selecionado e ponto operacional', async () => {
-    const { ValvulaLogica } = await import('../js/domain/components/ValvulaLogica.js');
+    const { ValvulaLogica, cvToKv } = await import('../js/domain/components/ValvulaLogica.js');
     const { buildValveCurveDatasets } = await import('../js/infrastructure/charts/ValveChartAdapter.js');
     const { setUnitPreference } = await import('../js/presentation/units/DisplayUnits.js');
 
@@ -868,6 +901,7 @@ test('grafico de valvula usa perfil selecionado e ponto operacional', async () =
         }
     }));
     valvula.aplicarPerfilCaracteristica('quick_opening');
+    valvula.setUnidadeCoeficienteVazao('kv');
     valvula.setAbertura(50);
     valvula.fluxoReal = 7.908;
     valvula.deltaPAtualBar = 0.0437;
@@ -876,11 +910,14 @@ test('grafico de valvula usa perfil selecionado e ponto operacional', async () =
     const quarterOpening = datasets.cvPoints.find((point) => point.x === 25);
 
     assert.equal(datasets.pressureUnit, 'kPa');
+    assert.equal(datasets.coefficientUnit, 'kv');
+    assert.equal(datasets.coefficientUnitLabel, 'Kv');
     assert.equal(datasets.currentOpeningPercent, 50);
     assert.equal(Number(datasets.currentPressureDrop.toFixed(2)), 4.37);
-    assert.ok(quarterOpening.y > valvula.cv * 0.25, 'perfil de abertura rapida deve liberar Cv acima da curva linear');
+    assert.ok(quarterOpening.y > cvToKv(valvula.cv * 0.25), 'perfil de abertura rapida deve liberar Kv acima da curva linear');
     assert.ok(datasets.currentEffectiveCv > valvula.cv * 0.5);
     assert.ok(datasets.currentEffectiveCv < valvula.cv);
+    assert.equal(Number(datasets.currentEffectiveFlowCoefficient.toFixed(6)), Number(cvToKv(datasets.currentEffectiveCv).toFixed(6)));
     assert.ok(datasets.pressureDropPoints.some((point) => Number(point.y) > 0));
     assert.ok(datasets.lossCoeffPoints.some((point) => Number(point.y) > valvula.perdaLocalK));
 });

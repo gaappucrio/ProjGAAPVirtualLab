@@ -796,6 +796,38 @@ test('fonte limitada por vazao nao sustenta pressao nominal no dreno', () => {
     );
 });
 
+test('fonte sem limite de vazao nao aplica perda oculta antes do primeiro cano', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-no-hidden-loss', 'F-no-hidden-loss', 0, 0);
+    const dreno = new DrenoLogico('D-no-hidden-loss', 'D-no-hidden-loss', 160, 0);
+
+    fonte.pressaoFonteBar = 0.5;
+    fonte.vazaoMaxima = 500;
+    dreno.pressaoSaidaBar = 0;
+    fonte.conectarSaida(dreno);
+
+    const connection = new ConnectionModel({ sourceId: fonte.id, targetId: dreno.id });
+    engine.add(fonte);
+    engine.add(dreno);
+    engine.addConnection(connection);
+
+    runPhysicsSteps(engine, 120, 0.1);
+
+    const state = engine.getConnectionState(connection);
+
+    assert.equal(connection.perdaLocalK, 0, 'Cano deve iniciar sem K local manual');
+    assert.equal(dreno.perdaEntradaK, 0, 'Dreno deve iniciar sem K de entrada manual');
+    assert.ok(state.flowLps < fonte.vazaoMaxima, 'Fonte nao deve estar saturada por vazao maxima');
+    assert.ok(
+        Math.abs(state.pipeInletPressureBar - fonte.pressaoFonteBar) < 1e-9,
+        `Primeiro Cano deve iniciar na pressao configurada da fonte: ${state.pipeInletPressureBar}`
+    );
+    assert.ok(
+        Math.abs(state.pipeLocalLossBar) < 1e-12,
+        `K local zerado nao deve gerar perda localizada no Cano: ${state.pipeLocalLossBar}`
+    );
+});
+
 test('solver automatico usa modelo nodal em circuito fechado com bomba', () => {
     const engine = createEngine();
     const bomba = new BombaLogica('P-loop', 'P-loop', 0, 0);

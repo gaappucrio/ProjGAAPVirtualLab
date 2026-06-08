@@ -34,7 +34,7 @@ export class TanqueLogico extends ComponenteFisico {
         this.lastQout = 0;
         this.alturaUtilMetros = 2.4;
         this.coeficienteSaida = 0.82;
-        this.perdaEntradaK = 1.0;
+        this.perdaEntradaK = 0;
         this.alturaBocalEntradaM = 2.2;
         this.alturaBocalSaidaM = 0.1;
         this.volumeInicial = 0;

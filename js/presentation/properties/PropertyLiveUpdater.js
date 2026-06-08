@@ -3,7 +3,10 @@ import { DrenoLogico } from '../../domain/components/DrenoLogico.js';
 import { FonteLogica } from '../../domain/components/FonteLogica.js';
 import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
 import { TrocadorCalorLogico } from '../../domain/components/TrocadorCalorLogico.js';
-import { ValvulaLogica } from '../../domain/components/ValvulaLogica.js';
+import {
+    VALVE_FLOW_COEFFICIENT_UNITS,
+    ValvulaLogica
+} from '../../domain/components/ValvulaLogica.js';
 import {
     getCurrentDesignFlowCandidateLps,
     getSuggestedDiameterForConnection
@@ -294,7 +297,10 @@ function updateValveValues(engine, component, { monitorController } = {}) {
     const abEl = byId('input-abertura');
     const numInput = byId('val-abertura');
     const cvInput = byId('input-cv');
+    const unidadeCoeficienteInput = byId('input-unidade-coeficiente-valvula');
+    const coeficienteLabel = byId('label-coeficiente-valvula');
     const perdaInput = byId('input-perda-k');
+    const perdaEstrangulamentoInput = byId('input-perda-estrangulamento-valvula');
     const perfilInput = byId('input-perfil-valvula');
     const caracteristicaInput = byId('input-caracteristica-valvula');
     const rangeabilidadeInput = byId('input-rangeabilidade-valvula');
@@ -308,10 +314,11 @@ function updateValveValues(engine, component, { monitorController } = {}) {
         .forEach((input) => {
             if (input) input.disabled = bloqueadaPorSetpoint;
         });
-    [cvInput, perdaInput, caracteristicaInput, rangeabilidadeInput, cursoInput]
+    [cvInput, perdaInput, perdaEstrangulamentoInput, caracteristicaInput, rangeabilidadeInput, cursoInput]
         .forEach((input) => {
             if (input) input.disabled = bloqueioParametros;
         });
+    if (unidadeCoeficienteInput) unidadeCoeficienteInput.disabled = false;
 
     if (abEl && !isActive(numInput) && !isActive(abEl)) {
         abEl.value = Math.round(component.grauAbertura);
@@ -319,8 +326,20 @@ function updateValveValues(engine, component, { monitorController } = {}) {
     }
     if (perfilInput && !isActive(perfilInput)) perfilInput.value = perfilAtual;
     if (caracteristicaInput && !isActive(caracteristicaInput)) caracteristicaInput.value = component.tipoCaracteristica;
-    if (cvInput && !isActive(cvInput)) cvInput.value = component.cv.toFixed(2);
+    const unidadeCoeficiente = component.getUnidadeCoeficienteVazao?.() === VALVE_FLOW_COEFFICIENT_UNITS.KV
+        ? VALVE_FLOW_COEFFICIENT_UNITS.KV
+        : VALVE_FLOW_COEFFICIENT_UNITS.CV;
+    const unidadeLabel = unidadeCoeficiente === VALVE_FLOW_COEFFICIENT_UNITS.KV ? 'Kv' : 'Cv';
+    if (unidadeCoeficienteInput && !isActive(unidadeCoeficienteInput)) unidadeCoeficienteInput.value = unidadeCoeficiente;
+    if (cvInput && !isActive(cvInput)) {
+        cvInput.value = (component.getCoeficienteVazaoNaUnidade?.(unidadeCoeficiente) ?? component.cv).toFixed(2);
+        cvInput.max = (component.getCoeficienteVazaoMaximoNaUnidade?.(unidadeCoeficiente) ?? 800).toFixed(2);
+    }
+    if (coeficienteLabel) coeficienteLabel.textContent = `Coeficiente de vazão (${unidadeLabel})`;
     if (perdaInput && !isActive(perdaInput)) perdaInput.value = component.perdaLocalK.toFixed(3);
+    if (perdaEstrangulamentoInput && !isActive(perdaEstrangulamentoInput)) {
+        perdaEstrangulamentoInput.checked = component.considerarPerdaEstrangulamento === true;
+    }
     if (rangeabilidadeInput && !isActive(rangeabilidadeInput)) rangeabilidadeInput.value = component.rangeabilidade;
     if (cursoInput && !isActive(cursoInput)) cursoInput.value = component.tempoCursoSegundos;
     setValue('disp-abertura-efetiva-valvula', component.aberturaEfetiva.toFixed(1));

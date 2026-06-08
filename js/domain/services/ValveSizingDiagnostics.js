@@ -140,7 +140,8 @@ export function aplicarAjusteDimensionamentoValvula(valve) {
     }
 
     valve?.aplicarPerfilCaracteristica?.('custom');
-    const cvAplicado = valve?.setCoeficienteVazao?.(diagnostico.cvSugerido) !== false;
+    const cvAplicado = (valve?.setCoeficienteVazaoCv?.(diagnostico.cvSugerido)
+        ?? valve?.setCoeficienteVazao?.(diagnostico.cvSugerido)) !== false;
     const kAplicado = valve?.setCoeficientePerda?.(diagnostico.perdaLocalKSugerida) !== false;
 
     return {

@@ -16,7 +16,10 @@ import {
     setValue,
     validateInputWithFeedback
 } from '../PropertyPresenterShared.js';
-import { VALVE_PROFILE_DEFINITIONS } from '../../../domain/components/ValvulaLogica.js';
+import {
+    VALVE_FLOW_COEFFICIENT_UNITS,
+    VALVE_PROFILE_DEFINITIONS
+} from '../../../domain/components/ValvulaLogica.js';
 
 function getThemeAwareValveAlertColors(isDark, severity) {
     if (severity === 'danger') {
@@ -61,6 +64,46 @@ function formatValveSizingMetrics(diagnostico) {
     ].join(' | ');
 }
 
+function getValveCoefficientUnit(comp) {
+    return comp.getUnidadeCoeficienteVazao?.() === VALVE_FLOW_COEFFICIENT_UNITS.KV
+        ? VALVE_FLOW_COEFFICIENT_UNITS.KV
+        : VALVE_FLOW_COEFFICIENT_UNITS.CV;
+}
+
+function getValveCoefficientUnitLabel(unit) {
+    return unit === VALVE_FLOW_COEFFICIENT_UNITS.KV ? 'Kv' : 'Cv';
+}
+
+function getValveCoefficientDisplayValue(comp, unit = getValveCoefficientUnit(comp)) {
+    return comp.getCoeficienteVazaoNaUnidade?.(unit) ?? comp.cv;
+}
+
+function getValveCoefficientMax(comp, unit = getValveCoefficientUnit(comp)) {
+    return comp.getCoeficienteVazaoMaximoNaUnidade?.(unit)
+        ?? (unit === VALVE_FLOW_COEFFICIENT_UNITS.KV ? 691.98 : 800);
+}
+
+function getValveCoefficientLabel(unit = VALVE_FLOW_COEFFICIENT_UNITS.CV) {
+    return `Coeficiente de vazão (${getValveCoefficientUnitLabel(unit)})`;
+}
+
+function updateValveCoefficientInput(comp, cvInput, unitInput, labelEl) {
+    const unit = getValveCoefficientUnit(comp);
+    const displayValue = getValveCoefficientDisplayValue(comp, unit);
+    const maxValue = getValveCoefficientMax(comp, unit);
+
+    if (unitInput && !isActive(unitInput)) unitInput.value = unit;
+    if (cvInput && !isActive(cvInput)) {
+        cvInput.value = displayValue.toFixed(2);
+        cvInput.max = maxValue.toFixed(2);
+        cvInput.title = TOOLTIP.valveCv;
+    }
+    if (labelEl) {
+        labelEl.textContent = getValveCoefficientLabel(unit);
+        labelEl.title = TOOLTIP.valveCv;
+    }
+}
+
 function renderValveSizingAlert(comp, controladaPorSetpoint) {
     const diagnostico = comp.getDiagnosticoDimensionamento?.();
     const visible = diagnostico?.ativo === true;
@@ -95,6 +138,10 @@ export const VALVE_PROPERTIES_PRESENTER = {
         const bloqueioParametrosAttr = controladaPorSetpoint || !perfilPersonalizado ? 'disabled' : '';
         const selectedProfileHint = profileHints[perfilAtual] ?? TOOLTIP.valveProfile;
         const selectedCharacteristicHint = characteristicHints[comp.tipoCaracteristica] ?? TOOLTIP.valveCharacteristic;
+        const unidadeCoeficiente = getValveCoefficientUnit(comp);
+        const valorCoeficiente = getValveCoefficientDisplayValue(comp, unidadeCoeficiente);
+        const maxCoeficiente = getValveCoefficientMax(comp, unidadeCoeficiente);
+        const considerarPerdaEstrangulamento = comp.considerarPerdaEstrangulamento === true;
         const basicContent = `
             <div class="prop-group">
                 <label ${hintAttr(TOOLTIP.valveOpening)}>Abertura
@@ -129,16 +176,29 @@ export const VALVE_PROPERTIES_PRESENTER = {
                     <option value="custom" title="${profileHints.custom}" ${perfilAtual === 'custom' ? 'selected' : ''}>Personalizado</option>
                 </select>
                 <p id="texto-perfil-valvula" title="${selectedProfileHint}" style="margin:6px 0 0; font-size:11px; line-height:1.45; color:#5f6f7f;">${selectedProfileHint}</p>
-                ${!controladaPorSetpoint && !perfilPersonalizado ? '<p style="margin:6px 0 0; font-size:11px; line-height:1.45; color:#7f8c8d;">Para alterar Cv, K, curva, rangeabilidade ou tempo de curso individualmente, selecione o perfil Personalizado.</p>' : ''}
-                ${controladaPorSetpoint ? '<p style="margin:6px 0 0; font-size:11px; line-height:1.45; color:#c0392b;">Com o ponto de ajuste ativo, o tanque modula somente a abertura; desative o PA para alterar Cv, K, curva, rangeabilidade ou tempo de curso.</p>' : ''}
+                ${!controladaPorSetpoint && !perfilPersonalizado ? '<p style="margin:6px 0 0; font-size:11px; line-height:1.45; color:#7f8c8d;">Para alterar unidade, Cv/Kv, K, estrangulamento, curva, rangeabilidade ou tempo de curso individualmente, selecione o perfil Personalizado.</p>' : ''}
+                ${controladaPorSetpoint ? '<p style="margin:6px 0 0; font-size:11px; line-height:1.45; color:#c0392b;">Com o ponto de ajuste ativo, o tanque modula somente a abertura; desative o PA para alterar unidade, Cv/Kv, K, estrangulamento, curva, rangeabilidade ou tempo de curso.</p>' : ''}
             </div>
             <div class="prop-group">
-                ${makeLabel('Coeficiente de vazão (Cv)', TOOLTIP.valveCv)}
-                <input type="number" id="input-cv" ${hintAttr(TOOLTIP.valveCv)} value="${comp.cv.toFixed(2)}" step="0.1" min="0.1" max="800" ${bloqueioParametrosAttr}>
+                ${makeLabel('Unidade do coeficiente de vazão', TOOLTIP.valveFlowCoefficientUnit)}
+                <select id="input-unidade-coeficiente-valvula" ${hintAttr(TOOLTIP.valveFlowCoefficientUnit)}>
+                    <option value="cv" ${unidadeCoeficiente === VALVE_FLOW_COEFFICIENT_UNITS.CV ? 'selected' : ''}>Cv</option>
+                    <option value="kv" ${unidadeCoeficiente === VALVE_FLOW_COEFFICIENT_UNITS.KV ? 'selected' : ''}>Kv</option>
+                </select>
+            </div>
+            <div class="prop-group">
+                <label id="label-coeficiente-valvula" ${hintAttr(TOOLTIP.valveCv)}>${getValveCoefficientLabel(unidadeCoeficiente)}</label>
+                <input type="number" id="input-cv" ${hintAttr(TOOLTIP.valveCv)} value="${valorCoeficiente.toFixed(2)}" step="0.1" min="0.1" max="${maxCoeficiente.toFixed(2)}" ${bloqueioParametrosAttr}>
             </div>
             <div class="prop-group">
                 ${makeLabel('Coeficiente de perda (K)', TOOLTIP.valveK)}
                 <input type="number" id="input-perda-k" ${hintAttr(TOOLTIP.valveK)} value="${comp.perdaLocalK.toFixed(3)}" step="0.01" min="0.0" max="100" ${bloqueioParametrosAttr}>
+            </div>
+            <div class="prop-group">
+                <label ${hintAttr(TOOLTIP.valveThrottlingLoss)} style="display:flex; align-items:center; gap:8px;">
+                    <input type="checkbox" id="input-perda-estrangulamento-valvula" ${hintAttr(TOOLTIP.valveThrottlingLoss)} ${considerarPerdaEstrangulamento ? 'checked' : ''} ${bloqueioParametrosAttr}>
+                    <span>Considerar perda de estrangulamento</span>
+                </label>
             </div>
             <div class="prop-group">
                 ${makeLabel('Característica da válvula', TOOLTIP.valveCharacteristic)}
@@ -162,7 +222,7 @@ export const VALVE_PROPERTIES_PRESENTER = {
         return renderPropertyTabs({
             basicContent,
             advancedContent,
-            advancedDescription: 'Aba indicada para escolher perfis de válvula. Use Personalizado quando quiser ajustar Cv, K, característica, rangeabilidade e tempo de curso individualmente.'
+            advancedDescription: 'Aba indicada para escolher perfis de válvula. Use Personalizado quando quiser ajustar unidade, Cv/Kv, K, estrangulamento, característica, rangeabilidade e tempo de curso individualmente.'
         });
     },
     bind: (comp) => {
@@ -170,7 +230,10 @@ export const VALVE_PROPERTIES_PRESENTER = {
         const slider = byId('input-abertura');
         const numInput = byId('val-abertura');
         const cvInput = byId('input-cv');
+        const unidadeCoeficienteInput = byId('input-unidade-coeficiente-valvula');
+        const coeficienteLabel = byId('label-coeficiente-valvula');
         const perdaInput = byId('input-perda-k');
+        const perdaEstrangulamentoInput = byId('input-perda-estrangulamento-valvula');
         const perfilInput = byId('input-perfil-valvula');
         const caracteristicaInput = byId('input-caracteristica-valvula');
         const rangeabilidadeInput = byId('input-rangeabilidade-valvula');
@@ -204,9 +267,10 @@ export const VALVE_PROPERTIES_PRESENTER = {
             [slider, numInput, perfilInput].forEach((input) => {
                 if (input) input.disabled = bloqueada;
             });
-            [cvInput, perdaInput, caracteristicaInput, rangeabilidadeInput, cursoInput].forEach((input) => {
+            [cvInput, perdaInput, perdaEstrangulamentoInput, caracteristicaInput, rangeabilidadeInput, cursoInput].forEach((input) => {
                 if (input) input.disabled = bloqueioParametros;
             });
+            if (unidadeCoeficienteInput) unidadeCoeficienteInput.disabled = false;
         };
         const parametrosAvancadosEditaveis = () => !valvulaBloqueadaPorSetpoint() && perfilEhPersonalizado();
         const refreshValvePanel = () => {
@@ -254,20 +318,30 @@ export const VALVE_PROPERTIES_PRESENTER = {
             comp.aplicarPerfilCaracteristica(event.target.value);
             atualizarDescricaoPerfil();
             atualizarDescricaoCaracteristica();
+            updateValveCoefficientInput(comp, cvInput, unidadeCoeficienteInput, coeficienteLabel);
+            notifyPanelRefresh();
+        });
+        bind('input-unidade-coeficiente-valvula', 'change', (event) => {
+            comp.setUnidadeCoeficienteVazao?.(event.target.value);
+            updateValveCoefficientInput(comp, cvInput, unidadeCoeficienteInput, coeficienteLabel);
             notifyPanelRefresh();
         });
         bind('input-cv', 'change', (event) => {
             if (!parametrosAvancadosEditaveis()) {
-                event.target.value = comp.cv.toFixed(2);
+                updateValveCoefficientInput(comp, cvInput, unidadeCoeficienteInput, coeficienteLabel);
                 sincronizarBloqueioSetpoint();
                 return;
             }
+            const unidade = getValveCoefficientUnit(comp);
+            const label = getValveCoefficientLabel(unidade);
+            const maximo = getValveCoefficientMax(comp, unidade);
             validateInputWithFeedback(
                 event.target,
-                (value, name) => InputValidator.validateNumber(value, 0.05, 800, name),
-                'Coeficiente Cv',
-                (validated) => { comp.setCoeficienteVazao(validated); }
+                (value, name) => InputValidator.validateNumber(value, 0.05, maximo, name),
+                label,
+                (validated) => { comp.setCoeficienteVazao(validated, { unidade }); }
             );
+            updateValveCoefficientInput(comp, cvInput, unidadeCoeficienteInput, coeficienteLabel);
         });
         bind('input-perda-k', 'change', (event) => {
             if (!parametrosAvancadosEditaveis()) {
@@ -281,6 +355,15 @@ export const VALVE_PROPERTIES_PRESENTER = {
                 'Coeficiente de perda K',
                 (validated) => { comp.setCoeficientePerda(validated); }
             );
+        });
+        bind('input-perda-estrangulamento-valvula', 'change', (event) => {
+            if (!parametrosAvancadosEditaveis()) {
+                event.target.checked = comp.considerarPerdaEstrangulamento === true;
+                sincronizarBloqueioSetpoint();
+                return;
+            }
+            comp.setConsiderarPerdaEstrangulamento?.(event.target.checked);
+            notifyPanelRefresh();
         });
         bind('input-caracteristica-valvula', 'change', (event) => {
             if (!parametrosAvancadosEditaveis()) {
@@ -339,8 +422,11 @@ export const VALVE_PROPERTIES_PRESENTER = {
                 numInput.value = dados.grau;
                 if (perfilInput && !isActive(perfilInput)) perfilInput.value = getPerfilAtual();
                 if (caracteristicaInput && !isActive(caracteristicaInput)) caracteristicaInput.value = comp.tipoCaracteristica;
-                if (cvInput && !isActive(cvInput)) cvInput.value = comp.cv.toFixed(2);
+                updateValveCoefficientInput(comp, cvInput, unidadeCoeficienteInput, coeficienteLabel);
                 if (perdaInput && !isActive(perdaInput)) perdaInput.value = comp.perdaLocalK.toFixed(3);
+                if (perdaEstrangulamentoInput && !isActive(perdaEstrangulamentoInput)) {
+                    perdaEstrangulamentoInput.checked = comp.considerarPerdaEstrangulamento === true;
+                }
                 if (rangeabilidadeInput && !isActive(rangeabilidadeInput)) rangeabilidadeInput.value = comp.rangeabilidade;
                 if (cursoInput && !isActive(cursoInput)) cursoInput.value = comp.tempoCursoSegundos;
                 if (ajusteDimensionamentoButton) {
@@ -356,6 +442,7 @@ export const VALVE_PROPERTIES_PRESENTER = {
         sincronizarBloqueioSetpoint();
         atualizarDescricaoPerfil();
         atualizarDescricaoCaracteristica();
+        updateValveCoefficientInput(comp, cvInput, unidadeCoeficienteInput, coeficienteLabel);
         return unsubscribeComponent;
     }
 };

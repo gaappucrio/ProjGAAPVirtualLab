@@ -11,7 +11,13 @@ import {
     TrocadorCalorLogico,
     calcularSaidaTrocadorCalor
 } from '../js/domain/components/TrocadorCalorLogico.js';
-import { VALVE_PROFILE_DEFINITIONS, ValvulaLogica } from '../js/domain/components/ValvulaLogica.js';
+import {
+    VALVE_FLOW_COEFFICIENT_UNITS,
+    VALVE_PROFILE_DEFINITIONS,
+    ValvulaLogica,
+    cvToKv,
+    kvToCv
+} from '../js/domain/components/ValvulaLogica.js';
 import { pressureLossFromFlow, smoothFirstOrder } from '../js/domain/components/BaseComponente.js';
 import { ConnectionModel } from '../js/domain/models/ConnectionModel.js';
 import {
@@ -501,6 +507,21 @@ test('dinamica transitoria nao avanca quando o passo de tempo e zero', () => {
     approx(smoothFirstOrder(2, 10, -0.1, 1), 2, 1e-12, 'Suavizacao de primeira ordem deve ignorar dt negativo');
 });
 
+test('componentes hidraulicos nascem sem perda K manual', () => {
+    const conexao = new ConnectionModel({ sourceId: 'A', targetId: 'B' });
+    const dreno = new DrenoLogico('D-default', 'D-default', 0, 0);
+    const tanque = new TanqueLogico('T-default', 'T-default', 0, 0);
+    const trocador = new TrocadorCalorLogico('HX-default', 'HX-default', 0, 0);
+    const valvula = new ValvulaLogica('V-default', 'V-default', 0, 0);
+
+    approx(conexao.perdaLocalK, 0, 1e-12, 'Cano sem K local padrao');
+    approx(dreno.perdaEntradaK, 0, 1e-12, 'Saida sem K de entrada padrao');
+    approx(tanque.perdaEntradaK, 0, 1e-12, 'Tanque sem K de entrada padrao');
+    approx(trocador.perdaLocalK, 0, 1e-12, 'Trocador sem K local padrao');
+    approx(valvula.perdaLocalK, 0, 1e-12, 'Valvula sem K manual padrao');
+    assert.equal(valvula.considerarPerdaEstrangulamento, false, 'Perda de estrangulamento fica desligada por padrao');
+});
+
 test('característica da válvula altera capacidade hidráulica na mesma abertura', () => {
     const valvula = new ValvulaLogica('V-02', 'V-02', 0, 0);
     valvula.aberturaEfetiva = 50;
@@ -579,6 +600,72 @@ test('valvula aberta com K zero aplica apenas a perda física do Cv', () => {
     assert.ok(parametrosCvAlto.localLossCoeff < parametros.localLossCoeff, 'Cv maior deve reduzir a perda da válvula');
 });
 
+test('perda de estrangulamento da valvula e opcional e separada do Cv', () => {
+    const valvula = new ValvulaLogica('V-throttle', 'V-throttle', 0, 0);
+    valvula.aplicarPerfilCaracteristica('custom');
+    valvula.setCoeficienteVazao(280);
+    valvula.setCoeficientePerda(0);
+    valvula.setTipoCaracteristica('quick_opening');
+    valvula.aberturaEfetiva = 50;
+
+    const semEstrangulamento = valvula.getParametrosHidraulicos();
+    assert.equal(valvula.considerarPerdaEstrangulamento, false);
+    approx(semEstrangulamento.appliedThrottlingLoss, 0, 1e-12, 'Estrangulamento desligado nao soma K');
+    approx(
+        semEstrangulamento.localLossCoeff,
+        semEstrangulamento.lossFromCv,
+        1e-12,
+        'Modo padrao usa Cv efetivo sem K extra de estrangulamento'
+    );
+
+    assert.equal(valvula.setConsiderarPerdaEstrangulamento(true), true);
+    const comEstrangulamento = valvula.getParametrosHidraulicos();
+    approx(
+        comEstrangulamento.appliedThrottlingLoss,
+        comEstrangulamento.throttlingLoss,
+        1e-12,
+        'Toggle ligado aplica o K de estrangulamento calculado'
+    );
+    approx(
+        comEstrangulamento.localLossCoeff,
+        comEstrangulamento.lossFromCv + comEstrangulamento.throttlingLoss,
+        1e-12,
+        'K total soma Cv e estrangulamento quando habilitado'
+    );
+    assert.ok(
+        comEstrangulamento.localLossCoeff > semEstrangulamento.localLossCoeff,
+        'Estrangulamento habilitado aumenta a restricao'
+    );
+});
+
+test('coeficiente da valvula alterna entre Cv e Kv sem mudar a fisica', () => {
+    const valvula = new ValvulaLogica('V-unidade', 'V-unidade', 0, 0);
+    valvula.aplicarPerfilCaracteristica('custom');
+    valvula.setCoeficientePerda(0);
+    valvula.setTipoCaracteristica('linear');
+    valvula.aberturaEfetiva = 100;
+
+    assert.equal(valvula.getUnidadeCoeficienteVazao(), VALVE_FLOW_COEFFICIENT_UNITS.CV);
+    assert.equal(valvula.setCoeficienteVazao(280), true);
+    approx(valvula.cv, 280, 1e-12, 'Cv canonico inicial');
+    approx(valvula.getCoeficienteVazaoNaUnidade('kv'), cvToKv(280), 1e-12, 'Valor equivalente em Kv');
+
+    const perdaAntes = valvula.getParametrosHidraulicos().localLossCoeff;
+    assert.equal(valvula.setUnidadeCoeficienteVazao('kv'), true);
+
+    approx(valvula.cv, 280, 1e-12, 'Trocar unidade nao altera Cv canonico');
+    approx(valvula.getCoeficienteVazaoNaUnidade(), cvToKv(280), 1e-12, 'Display em Kv');
+    approx(valvula.getParametrosHidraulicos().localLossCoeff, perdaAntes, 1e-12, 'Trocar unidade nao muda perda');
+
+    assert.equal(valvula.setCoeficienteVazao(280, { unidade: 'kv' }), true);
+    approx(valvula.cv, kvToCv(280), 1e-12, 'Entrada em Kv vira Cv canonico');
+    approx(valvula.getCoeficienteVazaoNaUnidade(), 280, 1e-12, 'Display preserva valor digitado em Kv');
+
+    assert.equal(valvula.setCoeficienteVazaoCv(280), true);
+    approx(valvula.cv, 280, 1e-12, 'API explicita em Cv independe da unidade exibida');
+    approx(valvula.getCoeficienteVazaoNaUnidade(), cvToKv(280), 1e-12, 'Display volta ao equivalente em Kv');
+});
+
 test('diagnostico de dimensionamento da valvula sugere liberar passagem quando ha gargalo', () => {
     const valvula = new ValvulaLogica('V-sizing', 'V-sizing', 0, 0);
     valvula.aplicarPerfilCaracteristica('custom');
@@ -642,6 +729,11 @@ test('perfis da válvula aplicam propriedades e modo personalizado libera ediç�
     assert.equal(valvula.tipoCaracteristica, perfilRapido.tipoCaracteristica);
     approx(valvula.cv, perfilRapido.cv, 1e-12, 'Cv do perfil de abertura rápida');
     approx(valvula.perdaLocalK, perfilRapido.perdaLocalK, 1e-12, 'K do perfil de abertura rápida');
+    assert.equal(
+        valvula.considerarPerdaEstrangulamento,
+        perfilRapido.considerarPerdaEstrangulamento,
+        'Modo de estrangulamento do perfil de abertura rapida'
+    );
     assert.equal(valvula.rangeabilidade, perfilRapido.rangeabilidade);
     assert.equal(valvula.tempoCursoSegundos, perfilRapido.tempoCursoSegundos);
 
@@ -677,6 +769,7 @@ test('controle de nível modula abertura sem redesenhar Cv ou K da válvula', ()
     valvula.aplicarPerfilCaracteristica('custom');
     valvula.setCoeficienteVazao(7);
     valvula.setCoeficientePerda(1.3);
+    valvula.setConsiderarPerdaEstrangulamento(true);
     valvula.setTipoCaracteristica('equal_percentage');
     valvula.setRangeabilidade(120);
     valvula.setTempoCurso(1.5);
@@ -689,6 +782,7 @@ test('controle de nível modula abertura sem redesenhar Cv ou K da válvula', ()
     assert.equal(valvula.perfilCaracteristica, 'custom');
     approx(valvula.cv, 7, 1e-12, 'Cv de projeto deve permanecer local e fixo durante o PA');
     approx(valvula.perdaLocalK, 1.3, 1e-12, 'K de projeto deve permanecer local e fixo durante o PA');
+    assert.equal(valvula.considerarPerdaEstrangulamento, true, 'Modo de estrangulamento permanece local durante o PA');
     assert.equal(valvula.tipoCaracteristica, 'equal_percentage');
     assert.equal(valvula.rangeabilidade, 120);
     assert.equal(valvula.tempoCursoSegundos, 1.5);
@@ -702,6 +796,7 @@ test('controle de nível modula abertura sem redesenhar Cv ou K da válvula', ()
     assert.equal(valvula.perfilCaracteristica, 'custom');
     approx(valvula.cv, 7, 1e-12, 'Aumento de demanda deve atuar pela abertura, nao por Cv global');
     approx(valvula.perdaLocalK, 1.3, 1e-12, 'Aumento de demanda nao deve reduzir K automaticamente');
+    assert.equal(valvula.considerarPerdaEstrangulamento, true, 'Aumento de demanda nao altera modo de estrangulamento');
     assert.equal(valvula.grauAbertura, 50);
 
     valvula.aplicarControleNivel({
@@ -714,6 +809,7 @@ test('controle de nível modula abertura sem redesenhar Cv ou K da válvula', ()
     assert.equal(valvula.tempoCursoSegundos, 1.5);
     approx(valvula.cv, 7, 1e-12, 'Alta demanda tambem nao deve reforcar Cv automaticamente');
     approx(valvula.perdaLocalK, 1.3, 1e-12, 'Alta demanda tambem nao deve reduzir K automaticamente');
+    assert.equal(valvula.considerarPerdaEstrangulamento, true, 'Alta demanda nao altera modo de estrangulamento');
     assert.equal(valvula.grauAbertura, 90);
 
     valvula.liberarControleNivel('T-01');
@@ -721,6 +817,7 @@ test('controle de nível modula abertura sem redesenhar Cv ou K da válvula', ()
     assert.equal(valvula.perfilCaracteristica, 'custom');
     approx(valvula.cv, 7, 1e-12, 'Cv restaurado após liberar controle de nível');
     approx(valvula.perdaLocalK, 1.3, 1e-12, 'K restaurado após liberar controle de nível');
+    assert.equal(valvula.considerarPerdaEstrangulamento, true, 'Modo de estrangulamento restaurado apos liberar controle de nivel');
     assert.equal(valvula.tipoCaracteristica, 'equal_percentage');
     assert.equal(valvula.rangeabilidade, 120);
     assert.equal(valvula.tempoCursoSegundos, 1.5);

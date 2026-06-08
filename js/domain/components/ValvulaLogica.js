@@ -12,16 +12,24 @@ const PERFIL_PADRAO = 'equal_percentage';
 const GPM_PER_M3S = 15850.323141489;
 const PA_PER_PSI = 6894.757293168;
 const WATER_DENSITY_REFERENCE_KG_M3 = 999.016;
+const KV_PER_CV = 0.8649786130809;
 const TIPOS_CARACTERISTICA = Object.freeze(['equal_percentage', 'linear', 'quick_opening']);
 const LIMIAR_FECHAMENTO_PERCENTUAL = 0.05;
 const LIMIAR_FECHAMENTO_NORMALIZADO = LIMIAR_FECHAMENTO_PERCENTUAL / 100;
+const CONSIDERAR_PERDA_ESTRANGULAMENTO_PADRAO = false;
+
+export const VALVE_FLOW_COEFFICIENT_UNITS = Object.freeze({
+    CV: 'cv',
+    KV: 'kv'
+});
 
 export const VALVE_PROFILE_DEFINITIONS = Object.freeze({
     equal_percentage: Object.freeze({
         id: 'equal_percentage',
         tipoCaracteristica: 'equal_percentage',
         cv: 160.0,
-        perdaLocalK: 1.0,
+        perdaLocalK: 0,
+        considerarPerdaEstrangulamento: CONSIDERAR_PERDA_ESTRANGULAMENTO_PADRAO,
         rangeabilidade: 30,
         tempoCursoSegundos: 6.0
     }),
@@ -29,7 +37,8 @@ export const VALVE_PROFILE_DEFINITIONS = Object.freeze({
         id: 'linear',
         tipoCaracteristica: 'linear',
         cv: 220.0,
-        perdaLocalK: 0.75,
+        perdaLocalK: 0,
+        considerarPerdaEstrangulamento: CONSIDERAR_PERDA_ESTRANGULAMENTO_PADRAO,
         rangeabilidade: 50,
         tempoCursoSegundos: 4.0
     }),
@@ -37,7 +46,8 @@ export const VALVE_PROFILE_DEFINITIONS = Object.freeze({
         id: 'quick_opening',
         tipoCaracteristica: 'quick_opening',
         cv: 280.0,
-        perdaLocalK: 0.35,
+        perdaLocalK: 0,
+        considerarPerdaEstrangulamento: CONSIDERAR_PERDA_ESTRANGULAMENTO_PADRAO,
         rangeabilidade: 15,
         tempoCursoSegundos: 2.0
     }),
@@ -55,9 +65,25 @@ function normalizarPerfil(perfilId) {
     return VALVE_PROFILE_DEFINITIONS[perfilId] ? perfilId : PERFIL_PADRAO;
 }
 
+function normalizarUnidadeCoeficienteVazao(unidade) {
+    return unidade === VALVE_FLOW_COEFFICIENT_UNITS.KV
+        ? VALVE_FLOW_COEFFICIENT_UNITS.KV
+        : VALVE_FLOW_COEFFICIENT_UNITS.CV;
+}
+
 function normalizarAberturaPercentual(valor) {
     const abertura = clamp(Number(valor) || 0, 0, 100);
     return abertura <= LIMIAR_FECHAMENTO_PERCENTUAL ? 0 : abertura;
+}
+
+export function cvToKv(cv) {
+    const numero = Number(cv);
+    return (Number.isFinite(numero) ? numero : 0) * KV_PER_CV;
+}
+
+export function kvToCv(kv) {
+    const numero = Number(kv);
+    return (Number.isFinite(numero) ? numero : 0) / KV_PER_CV;
 }
 
 function cvToLossCoeff(cv, areaM2) {
@@ -80,7 +106,9 @@ export class ValvulaLogica extends ComponenteFisico {
         this.fluxoReal = 0;
         const perfilPadrao = VALVE_PROFILE_DEFINITIONS[PERFIL_PADRAO];
         this.cv = perfilPadrao.cv;
+        this.unidadeCoeficienteVazao = VALVE_FLOW_COEFFICIENT_UNITS.CV;
         this.perdaLocalK = perfilPadrao.perdaLocalK;
+        this.considerarPerdaEstrangulamento = perfilPadrao.considerarPerdaEstrangulamento;
         this.perfilCaracteristica = perfilPadrao.id;
         this.tipoCaracteristica = perfilPadrao.tipoCaracteristica;
         this.rangeabilidade = perfilPadrao.rangeabilidade;
@@ -97,7 +125,9 @@ export class ValvulaLogica extends ComponenteFisico {
             grau: this.grauAbertura,
             grauEfetivo: this.aberturaEfetiva,
             cv: this.cv,
+            unidadeCoeficienteVazao: this.unidadeCoeficienteVazao,
             perdaLocalK: this.perdaLocalK,
+            considerarPerdaEstrangulamento: this.considerarPerdaEstrangulamento,
             perfilCaracteristica: this.perfilCaracteristica,
             tipoCaracteristica: this.tipoCaracteristica,
             rangeabilidade: this.rangeabilidade,
@@ -109,6 +139,34 @@ export class ValvulaLogica extends ComponenteFisico {
 
     estaControladaPorSetpoint() {
         return this._controleNivelAtivo || this.getSimulationContext().queries.isValvulaBloqueadaPorSetpoint(this) === true;
+    }
+
+    getUnidadeCoeficienteVazao() {
+        this.unidadeCoeficienteVazao = normalizarUnidadeCoeficienteVazao(this.unidadeCoeficienteVazao);
+        return this.unidadeCoeficienteVazao;
+    }
+
+    getCoeficienteVazaoNaUnidade(unidade = this.getUnidadeCoeficienteVazao()) {
+        const unidadeNormalizada = normalizarUnidadeCoeficienteVazao(unidade);
+        return unidadeNormalizada === VALVE_FLOW_COEFFICIENT_UNITS.KV
+            ? cvToKv(this.cv)
+            : this.cv;
+    }
+
+    getCoeficienteVazaoMaximoNaUnidade(unidade = this.getUnidadeCoeficienteVazao()) {
+        const unidadeNormalizada = normalizarUnidadeCoeficienteVazao(unidade);
+        return unidadeNormalizada === VALVE_FLOW_COEFFICIENT_UNITS.KV
+            ? cvToKv(CV_MAX)
+            : CV_MAX;
+    }
+
+    setUnidadeCoeficienteVazao(unidade, options = {}) {
+        const unidadeNormalizada = normalizarUnidadeCoeficienteVazao(unidade);
+        if (unidadeNormalizada === this.getUnidadeCoeficienteVazao()) return true;
+
+        this.unidadeCoeficienteVazao = unidadeNormalizada;
+        if (options.silent !== true) this._notificarEstado();
+        return true;
     }
 
     getCharacteristicFactor(opening) {
@@ -134,7 +192,10 @@ export class ValvulaLogica extends ComponenteFisico {
                 characteristicFactor: 0,
                 effectiveCv: 0,
                 hydraulicAreaM2: 0,
-                localLossCoeff: 1e6
+                localLossCoeff: 1e6,
+                lossFromCv: 0,
+                throttlingLoss: 0,
+                appliedThrottlingLoss: 0
             };
         }
 
@@ -144,14 +205,18 @@ export class ValvulaLogica extends ComponenteFisico {
         const hydraulicAreaM2 = this.getAreaConexaoM2() * hydraulicAreaFactor;
         const throttlingLoss = Math.max(0, (1 / Math.max(FATOR_MINIMO_AREA, characteristicFactor)) - 1);
         const lossFromCv = cvToLossCoeff(effectiveCv, hydraulicAreaM2);
-        const localLossCoeff = Math.max(0, this.perdaLocalK + throttlingLoss + lossFromCv);
+        const appliedThrottlingLoss = this.considerarPerdaEstrangulamento ? throttlingLoss : 0;
+        const localLossCoeff = Math.max(0, this.perdaLocalK + appliedThrottlingLoss + lossFromCv);
 
         return {
             opening: aberturaNormalizada,
             characteristicFactor,
             effectiveCv,
             hydraulicAreaM2,
-            localLossCoeff
+            localLossCoeff,
+            lossFromCv,
+            throttlingLoss,
+            appliedThrottlingLoss
         };
     }
 
@@ -196,6 +261,7 @@ export class ValvulaLogica extends ComponenteFisico {
         this.tipoCaracteristica = perfil.tipoCaracteristica;
         this.cv = perfil.cv;
         this.perdaLocalK = perfil.perdaLocalK;
+        this.considerarPerdaEstrangulamento = perfil.considerarPerdaEstrangulamento ?? CONSIDERAR_PERDA_ESTRANGULAMENTO_PADRAO;
         this.rangeabilidade = perfil.rangeabilidade;
         this.tempoCursoSegundos = perfil.tempoCursoSegundos;
     }
@@ -208,11 +274,22 @@ export class ValvulaLogica extends ComponenteFisico {
         return true;
     }
 
+    setCoeficienteVazaoCv(valor, options = {}) {
+        return this.setCoeficienteVazao(valor, {
+            ...options,
+            unidade: VALVE_FLOW_COEFFICIENT_UNITS.CV
+        });
+    }
+
     setCoeficienteVazao(valor, options = {}) {
         if (!this._podeEditarParametros(options)) return false;
 
         const numero = Number(valor);
-        this.cv = clamp(Number.isFinite(numero) ? numero : this.cv, 0.05, CV_MAX);
+        const unidade = normalizarUnidadeCoeficienteVazao(options.unidade ?? options.unit ?? VALVE_FLOW_COEFFICIENT_UNITS.CV);
+        const valorCv = unidade === VALVE_FLOW_COEFFICIENT_UNITS.KV
+            ? kvToCv(numero)
+            : numero;
+        this.cv = clamp(Number.isFinite(valorCv) ? valorCv : this.cv, 0.05, CV_MAX);
         this._marcarPerfilPersonalizado(options);
         this._notificarEstado();
         return true;
@@ -223,6 +300,18 @@ export class ValvulaLogica extends ComponenteFisico {
 
         const numero = Number(valor);
         this.perdaLocalK = clamp(Number.isFinite(numero) ? numero : 0, 0, 100);
+        this._marcarPerfilPersonalizado(options);
+        this._notificarEstado();
+        return true;
+    }
+
+    setConsiderarPerdaEstrangulamento(valor, options = {}) {
+        if (!this._podeEditarParametros(options)) return false;
+
+        this.considerarPerdaEstrangulamento = valor === true
+            || valor === 'true'
+            || valor === '1'
+            || valor === 1;
         this._marcarPerfilPersonalizado(options);
         this._notificarEstado();
         return true;
@@ -264,7 +353,9 @@ export class ValvulaLogica extends ComponenteFisico {
                 grauAbertura: this.grauAbertura,
                 aberturaEfetiva: this.aberturaEfetiva,
                 cv: this.cv,
+                unidadeCoeficienteVazao: this.unidadeCoeficienteVazao,
                 perdaLocalK: this.perdaLocalK,
+                considerarPerdaEstrangulamento: this.considerarPerdaEstrangulamento,
                 perfilCaracteristica: this.perfilCaracteristica,
                 tipoCaracteristica: this.tipoCaracteristica,
                 rangeabilidade: this.rangeabilidade,
@@ -299,7 +390,9 @@ export class ValvulaLogica extends ComponenteFisico {
             this.grauAbertura = this._parametrosManuaisControleNivel.grauAbertura;
             this.aberturaEfetiva = this._parametrosManuaisControleNivel.aberturaEfetiva;
             this.cv = this._parametrosManuaisControleNivel.cv;
+            this.unidadeCoeficienteVazao = normalizarUnidadeCoeficienteVazao(this._parametrosManuaisControleNivel.unidadeCoeficienteVazao);
             this.perdaLocalK = this._parametrosManuaisControleNivel.perdaLocalK;
+            this.considerarPerdaEstrangulamento = this._parametrosManuaisControleNivel.considerarPerdaEstrangulamento === true;
             this.perfilCaracteristica = this._parametrosManuaisControleNivel.perfilCaracteristica;
             this.tipoCaracteristica = this._parametrosManuaisControleNivel.tipoCaracteristica;
             this.rangeabilidade = this._parametrosManuaisControleNivel.rangeabilidade;

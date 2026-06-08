@@ -1,4 +1,8 @@
 import { pressureLossFromFlow } from '../../domain/components/BaseComponente.js';
+import {
+    VALVE_FLOW_COEFFICIENT_UNITS,
+    cvToKv
+} from '../../domain/components/ValvulaLogica.js';
 import { getUnitSymbol, toDisplayValue } from '../../presentation/units/DisplayUnits.js';
 import { t } from '../../presentation/i18n/LanguageManager.js';
 
@@ -74,6 +78,24 @@ function getValveFluid(component) {
         || { densidade: DEFAULT_WATER_DENSITY_KG_M3 };
 }
 
+function getValveCoefficientUnit(component) {
+    return component.getUnidadeCoeficienteVazao?.() === VALVE_FLOW_COEFFICIENT_UNITS.KV
+        ? VALVE_FLOW_COEFFICIENT_UNITS.KV
+        : VALVE_FLOW_COEFFICIENT_UNITS.CV;
+}
+
+function getValveCoefficientUnitLabel(unit) {
+    return unit === VALVE_FLOW_COEFFICIENT_UNITS.KV ? 'Kv' : 'Cv';
+}
+
+function displayCoefficientFromCv(cv, unit) {
+    return unit === VALVE_FLOW_COEFFICIENT_UNITS.KV ? cvToKv(cv) : cv;
+}
+
+function getEffectiveCoefficientLabel(datasets) {
+    return t('chart.effectiveFlowCoefficient', { unit: datasets.coefficientUnitLabel });
+}
+
 function getScaleProfile({ expanded = false } = {}) {
     return {
         titleFontSize: expanded ? 13 : 10,
@@ -96,6 +118,8 @@ export function buildValveCurveDatasets(component) {
     const pressureUnit = getUnitSymbol('pressure');
     const flowUnit = getUnitSymbol('flow');
     const fluid = getValveFluid(component);
+    const coefficientUnit = getValveCoefficientUnit(component);
+    const coefficientUnitLabel = getValveCoefficientUnitLabel(coefficientUnit);
     const density = finiteNumber(fluid?.densidade, DEFAULT_WATER_DENSITY_KG_M3);
     const currentFlowLps = Math.max(0, finiteNumber(component.fluxoReal, 0));
     const currentOpeningPercent = Math.max(0, Math.min(100, finiteNumber(
@@ -117,7 +141,10 @@ export function buildValveCurveDatasets(component) {
             ? pressureLossFromFlow(currentFlowLps, params.hydraulicAreaM2, density, params.localLossCoeff)
             : null;
 
-        cvPoints.push({ x: openingPercent, y: finiteNumber(params.effectiveCv, 0) });
+        cvPoints.push({
+            x: openingPercent,
+            y: finiteNumber(displayCoefficientFromCv(params.effectiveCv, coefficientUnit), 0)
+        });
         pressureDropPoints.push({
             x: openingPercent,
             y: pressureDropBar === null ? null : toDisplayValue('pressure', pressureDropBar)
@@ -152,11 +179,18 @@ export function buildValveCurveDatasets(component) {
         currentOpeningPercent,
         currentPressureDrop,
         currentEffectiveCv: finiteNumber(currentParams.effectiveCv, 0),
+        currentEffectiveFlowCoefficient: finiteNumber(displayCoefficientFromCv(currentParams.effectiveCv, coefficientUnit), 0),
+        coefficientUnit,
+        coefficientUnitLabel,
         currentLossCoeff: finiteNumber(currentParams.localLossCoeff, 0),
         currentFlow,
         flowUnit,
         pressureUnit,
-        cvAxisMax: Math.max(1, getMaxPointValue(cvPoints) * 1.08, finiteNumber(component.cv, 0) * 1.08),
+        cvAxisMax: Math.max(
+            1,
+            getMaxPointValue(cvPoints) * 1.08,
+            finiteNumber(displayCoefficientFromCv(component.cv, coefficientUnit), 0) * 1.08
+        ),
         pressureAxisMin: useLogPressureScale
             ? getMinPositivePointValue(pressureDropPoints) * 0.85
             : 0,
@@ -210,7 +244,7 @@ export function applyValveChartPresentation(chart, datasets, { expanded = false 
     chart.options.scales.yPressure.grid.color = colors.grid;
     chart.options.scales.yPressure.border.color = colors.border;
 
-    chart.options.scales.yCv.title.text = t('chart.effectiveCv');
+    chart.options.scales.yCv.title.text = getEffectiveCoefficientLabel(datasets);
     chart.options.scales.yCv.title.font = { size: profile.titleFontSize };
     chart.options.scales.yCv.title.color = colors.label;
     chart.options.scales.yCv.ticks.font = { size: profile.secondaryTickFontSize };
@@ -258,7 +292,7 @@ export function createValveChart(ctx, component, { expanded = false } = {}) {
         data: {
             datasets: [
                 {
-                    label: t('chart.effectiveCv'),
+                    label: getEffectiveCoefficientLabel(datasets),
                     data: datasets.cvPoints,
                     borderColor: VALVE_CHART_COLORS.cv,
                     backgroundColor: VALVE_CHART_COLORS.cvFill,
@@ -364,7 +398,7 @@ export function createValveChart(ctx, component, { expanded = false } = {}) {
                     position: 'right',
                     grid: { drawOnChartArea: false },
                     border: { color: getGridColors().border },
-                    title: { display: true, text: t('chart.effectiveCv') },
+                    title: { display: true, text: getEffectiveCoefficientLabel(datasets) },
                     ticks: { maxTicksLimit: 5, color: getGridColors().tick }
                 },
                 yLoss: {
@@ -390,7 +424,7 @@ export function refreshValveChart(chart, component, { expanded = false } = {}) {
     if (!chart) return;
 
     const datasets = buildValveCurveDatasets(component);
-    chart.data.datasets[0].label = t('chart.effectiveCv');
+    chart.data.datasets[0].label = getEffectiveCoefficientLabel(datasets);
     chart.data.datasets[0].data = datasets.cvPoints;
     chart.data.datasets[1].label = t('chart.estimatedPressureDrop');
     chart.data.datasets[1].data = datasets.pressureDropPoints;
