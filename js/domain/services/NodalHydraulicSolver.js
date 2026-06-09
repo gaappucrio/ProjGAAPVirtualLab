@@ -633,6 +633,8 @@ export class NodalHydraulicSolver {
             target,
             areaM2,
             geometry,
+            sourceOutletLossCoeff,
+            targetEntryLossCoeff,
             baseLossCoeff: Math.max(0, 1 + connection.perdaLocalK + sourceOutletLossCoeff + targetEntryLossCoeff),
             staticHeadBar: pressureFromHeadBar(geometry.headGainM, fluid.densidade),
             fluid,
@@ -1016,6 +1018,12 @@ export class NodalHydraulicSolver {
                 fluid.densidade,
                 Math.max(0, connection.perdaLocalK || 0)
             );
+            const targetEntryLossBar = pressureLossFromFlow(
+                flowLps,
+                branch.areaM2,
+                fluid.densidade,
+                Math.max(0, branch.targetEntryLossCoeff || 0)
+            );
             const pipePressureDropBar = pipeDistributedLossBar + pipeLocalLossBar;
             const responseTimeS = this.hydraulicModel.getConnectionResponseTimeS(connection, branch.geometry, fluid);
             const fromPressureBar = getNodePressure(pressureByNodeId, branch.fromNodeId, result.fromPressureBar);
@@ -1039,7 +1047,7 @@ export class NodalHydraulicSolver {
             state.pipeDistributedLossBar = pipeDistributedLossBar;
             state.pipeLocalLossBar = pipeLocalLossBar;
             state.totalLossBar = totalLossBar;
-            state.targetLossBar = 0;
+            state.targetLossBar = targetEntryLossBar;
             state.lengthM = branch.geometry.lengthM;
             state.straightLengthM = branch.geometry.straightLengthM;
             state.headGainM = branch.geometry.headGainM;

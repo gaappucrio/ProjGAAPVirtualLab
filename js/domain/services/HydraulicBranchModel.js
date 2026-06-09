@@ -385,6 +385,53 @@ export class HydraulicBranchModel {
         return component instanceof ValvulaLogica || component instanceof BombaLogica || component instanceof TrocadorCalorLogico;
     }
 
+    getPhysicalOutletPressureBar(component) {
+        if (!this.isPassThroughComponent(component)) return null;
+
+        const outletPressureBar = finiteNumber(component?.pressaoSaidaAtualBar, null);
+        if (outletPressureBar !== null) return Math.max(0, outletPressureBar);
+
+        const inletPressureBar = finiteNumber(component?.pressaoEntradaAtualBar, null);
+        const componentPressureDropBar = finiteNumber(component?.deltaPAtualBar, null);
+        if (inletPressureBar === null || componentPressureDropBar === null) return null;
+
+        return Math.max(0, inletPressureBar - Math.max(0, componentPressureDropBar));
+    }
+
+    reconcileConnectionPressureStatesFromComponentDrops() {
+        this.context.conexoes.forEach((conn) => {
+            const state = this.context.getConnectionState(conn);
+            if ((state.flowLps || 0) <= EPSILON_FLOW) return;
+
+            const source = this.context.getComponentById(conn.sourceId);
+            const sourceOutletPressureBar = this.getPhysicalOutletPressureBar(source);
+            if (sourceOutletPressureBar === null) return;
+
+            const geometry = this.context.getConnectionGeometry(conn);
+            const fluid = state.fluid || this.context.getConnectionFluid(conn) || this.context.fluidoOperante;
+            const staticHeadBar = pressureFromHeadBar(
+                finiteNumber(state.headGainM, geometry?.headGainM || 0),
+                fluid?.densidade || 1000
+            );
+            const pipePressureDropBar = Math.max(0, finiteNumber(
+                state.pipePressureDropBar,
+                finiteNumber(state.pipeDistributedLossBar, 0) + finiteNumber(state.pipeLocalLossBar, 0)
+            ));
+            const targetLossBar = Math.max(0, finiteNumber(state.targetLossBar, 0));
+            const pipeOutletPressureBar = Math.max(0, sourceOutletPressureBar + staticHeadBar - pipePressureDropBar);
+            const arrivalPressureBar = Math.max(0, pipeOutletPressureBar - targetLossBar);
+
+            state.sourcePressureBar = sourceOutletPressureBar;
+            state.pipeInletPressureBar = sourceOutletPressureBar;
+            state.pipePressureDropBar = pipePressureDropBar;
+            state.pipeOutletPressureBar = pipeOutletPressureBar;
+            state.pressureBar = pipeOutletPressureBar;
+            state.outletPressureBar = arrivalPressureBar;
+            state.deltaPBar = Math.max(0, sourceOutletPressureBar + staticHeadBar - pipeOutletPressureBar);
+            state.totalLossBar = pipePressureDropBar + targetLossBar;
+        });
+    }
+
     balancePassThroughMass() {
         const componentsFromDownstream = [...this.context.componentes].reverse();
 

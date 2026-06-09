@@ -834,13 +834,34 @@ test('perfil de pressao do pipe pode usar pressao fisica de saida da origem', as
     ]);
 });
 
-test('monitor de pipe desconta perda propria da valvula na origem', async () => {
+test('monitor de pipe usa pressao de saida da valvula quando Cano ainda nao separou perfil', async () => {
     const { resolvePipePressureProfileOptions } = await import('../js/presentation/monitoring/PipePressureProfile.js');
 
     const options = resolvePipePressureProfileOptions({
         source: {
             pressaoEntradaAtualBar: 0.42518,
-            pressaoSaidaAtualBar: 0.13317,
+            pressaoSaidaAtualBar: 0.37283,
+            deltaPAtualBar: 0.05235
+        },
+        state: {
+            flowLps: 8.65916,
+            sourcePressureBar: 0.13317,
+            pressureBar: 0.03517,
+            deltaPBar: 0.09799,
+            pipeInletPressureBar: 0.13317
+        }
+    });
+
+    assert.ok(Math.abs(options.sourcePressureBar - 0.37283) < 1e-9);
+    assert.ok(Math.abs(options.pressureDropBar - 0.04564) < 1e-9);
+});
+
+test('monitor de pipe usa diferenca direta de pressao somente como fallback', async () => {
+    const { resolvePipePressureProfileOptions } = await import('../js/presentation/monitoring/PipePressureProfile.js');
+
+    const options = resolvePipePressureProfileOptions({
+        source: {
+            pressaoEntradaAtualBar: 0.42518,
             deltaPAtualBar: 0.05235
         },
         state: {
@@ -941,7 +962,7 @@ test('presenter da fonte preserva custom selecionado mesmo com valores de preset
     assert.doesNotMatch(html, /<option value="agua" selected>/);
 });
 
-test('presenter da saida exibe pressao final calculada', async () => {
+test('presenter da saida usa extremo fisico do Cano a jusante da valvula', async () => {
     const { DrenoLogico } = await import('../js/domain/components/DrenoLogico.js');
     const { SINK_PROPERTIES_PRESENTER } = await import('../js/presentation/properties/component/BoundaryComponentPropertiesPresenter.js');
     const { setPresentationEngine } = await import('../js/presentation/context/PresentationEngineContext.js');
@@ -949,15 +970,27 @@ test('presenter da saida exibe pressao final calculada', async () => {
 
     setUnitPreference('pressure', 'kpa');
     const dreno = new DrenoLogico('D-01', 'Saida-01', 0, 0);
-    dreno.pressaoSaidaBar = 0.0296;
-    dreno.pressaoEntradaAtualBar = 0.0296;
-    const inputConnection = { id: 'conn-out', targetId: dreno.id };
+    dreno.pressaoSaidaBar = 0;
+    dreno.pressaoEntradaAtualBar = 0;
+    const valvula = {
+        id: 'V-01',
+        pressaoEntradaAtualBar: 0.5096,
+        pressaoSaidaAtualBar: 0.225,
+        deltaPAtualBar: 0.2846
+    };
+    const inputConnection = { id: 'conn-out', sourceId: valvula.id, targetId: dreno.id };
     setPresentationEngine({
         getInputConnections: () => [inputConnection],
+        getComponentById: (id) => (id === valvula.id ? valvula : null),
         getConnectionState: () => ({
             flowLps: 7.9,
-            pipeOutletPressureBar: 0.35,
-            pressureBar: 0.35
+            sourcePressureBar: 0.0818,
+            pressureBar: 0.0818,
+            deltaPBar: 0.0111,
+            pipeInletPressureBar: 0.0818,
+            pipePressureDropBar: 0.0111,
+            pipeOutletPressureBar: 0.0818,
+            targetLossBar: 0
         }),
         notify: () => {}
     });
@@ -967,9 +1000,9 @@ test('presenter da saida exibe pressao final calculada', async () => {
 
         assert.match(html, /Press\u00e3o final da rede/);
         assert.match(html, /id="disp-pressao-final-dreno"/);
-        assert.match(html, /value="35\.00"/);
+        assert.match(html, /value="21\.39"/);
         assert.match(html, /id="disp-deltap-entrada-dreno"/);
-        assert.match(html, /value="32\.04"/);
+        assert.match(html, /value="0\.00"/);
         assert.match(html, /Perda de entrada \(K\)/);
     } finally {
         setPresentationEngine(null);

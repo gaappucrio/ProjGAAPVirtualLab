@@ -570,7 +570,7 @@ Propriedades principais:
 - Vazão recebida.
 
 O dreno aceita vazão e impõe contrapressão.
-No painel, `Contrapressão imposta` é a fronteira após a perda de entrada do dreno. `Pressão final da rede` é a pressão no extremo do Cano que chega à saída, antes do `perdaEntradaK`. A diferença entre esses valores aparece como `Queda na entrada da saída`, evitando confundir a perda do dreno com a queda do Cano.
+No painel, `Contrapressão imposta` é a fronteira configurada da saída. `Pressão final da rede` é a pressão no extremo do Cano que chega à saída, recomposta pelas quedas reais dos componentes a montante e pela perda própria do Cano. `Queda na entrada da saída` mostra somente a perda de entrada associada ao `perdaEntradaK`; com `K=0`, ela permanece zerada mesmo que a rede chegue à saída com pressão residual.
 
 ### 8.3 `BombaLogica`
 
@@ -1037,6 +1037,5 @@ O sistema já possui suporte funcional para montagem visual, seleção múltipla
 - Resolvido em 2026-06-03: risco de vazamento de memória por listeners de UI. Visuais de componentes registravam `ENGINE.subscribe`, `logica.subscribe`, idioma e unidades sem descarte garantido ao remover componentes ou limpar canvas; além disso, binds do painel de propriedades acumulavam `comp.subscribe` em re-renderizações. O registro visual agora executa funções de limpeza, `createElevationUpdater` aceita gancho de cleanup, e os presenters de bomba/válvula/tanque retornam `unsubscribe` para descarte pelo `ComponentPropertiesPresenter`.
 
 
-Nota: Verificar diferença de pressao no pefil linear da válvula, há um valor fantasma visível pelo grafico de monitoramento adicionando perda de pressao após a saída da valvula. se baseando nos valores de perda de pressao de cada componente as pressoes batem corretamente no sistema, o problema surge após a valvula, analisar na terca isso.
-O mesmo vale para o Igual porcentagem e quick opening. OS valores estão muito mais proximos ao simulador do Wagner Ajustar amanhã.
-Confirmar que esse cálculo é feito diretamente via diferença de pressao ou nao.
+- Resolvido em 2026-06-09: a queda fantasma no Cano `V-01 -> Saída-01` estava no caminho de apresentação do perfil, não na rangeabilidade nem no cálculo de `Cv/Kv` da válvula. O solver mantém a queda própria da válvula calculada pelo modelo hidráulico; para o gráfico do Cano a jusante, o monitor agora ancora o início do trecho na pressão física de saída do componente (`pressaoSaidaAtualBar`) quando há `deltaPAtualBar` de uma válvula/componente passante. A diferença direta `pressaoEntradaAtualBar - deltaPAtualBar` fica apenas como fallback quando a saída física não estiver disponível, evitando descontar visualmente uma perda que já pertence à válvula.
+- Resolvido em 2026-06-09: a aba de propriedades da Saída podia mostrar `Pressão final da rede` abaixo do extremo exibido no gráfico do Cano e ainda interpretar a diferença até a contrapressão como `Queda na entrada da saída`. Após a sincronização física dos componentes, o estado das conexões a jusante de válvula/bomba/trocador agora é reconciliado com a pressão física de saída do componente menos a perda real do Cano. A Saída passa a usar esse extremo recomposto e a exibir como queda de entrada apenas `targetLossBar`/`perdaEntradaK`; em cenários com `K=0`, a queda da Saída fica `0` e a pressão final acompanha o último Cano.

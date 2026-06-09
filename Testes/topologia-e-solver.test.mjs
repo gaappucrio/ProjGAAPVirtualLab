@@ -31,6 +31,7 @@ function runSinglePhysicsStep(engine, dt = 0.1) {
     engine.componentes.forEach((component) => {
         component.sincronizarMetricasFisicas(engine.hydraulicContext.getComponentFluid(component) || engine.fluidoOperante);
     });
+    engine.reconcileConnectionPressureStatesFromComponentDrops();
 }
 
 function runPhysicsSteps(engine, steps = 120, dt = 0.1) {
@@ -49,6 +50,7 @@ function runAutomaticPhysicsStep(engine, dt = 0.1) {
         if (component instanceof TanqueLogico) component.atualizarFisica(dt, fluid);
         else component.sincronizarMetricasFisicas(fluid);
     });
+    engine.reconcileConnectionPressureStatesFromComponentDrops();
 }
 
 function runAutomaticPhysicsSteps(engine, steps = 60, dt = 0.1) {
@@ -68,6 +70,7 @@ function runControlledAutomaticPhysicsStep(engine, dt = 0.1) {
         if (component instanceof TanqueLogico) component.atualizarFisica(dt, fluid);
         else component.sincronizarMetricasFisicas(fluid);
     });
+    engine.reconcileConnectionPressureStatesFromComponentDrops();
 }
 
 function runControlledAutomaticPhysicsSteps(engine, steps = 60, dt = 0.1) {
@@ -471,6 +474,69 @@ test('cano a jusante de valvula usa pressao fisica apos queda da valvula', () =>
     assert.ok(
         downstreamState.pipeInletPressureBar > dreno.pressaoSaidaBar + downstreamState.pipePressureDropBar,
         `Pressao inicial do cano nao deve ser recalculada pela saida: entrada=${downstreamState.pipeInletPressureBar}, dreno=${dreno.pressaoSaidaBar}, perdaCano=${downstreamState.pipePressureDropBar}`
+    );
+});
+
+test('saida apos valvula equal percentage usa pressoes recompostas por perdas reais', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-valve-eq-outlet', 'Entrada-01', 0, 0);
+    const valvula = new ValvulaLogica('V-valve-eq-outlet', 'V-01', 120, 0);
+    const dreno = new DrenoLogico('D-valve-eq-outlet', 'Saida-01', 240, 0);
+
+    fonte.pressaoFonteBar = 0.5;
+    fonte.vazaoMaxima = 500;
+    fonte.atualizarFluidoEntrada(FLUID_PRESETS.agua, { presetId: 'agua' });
+    dreno.pressaoSaidaBar = 0;
+    dreno.perdaEntradaK = 0;
+    valvula.aplicarPerfilCaracteristica('equal_percentage');
+    valvula.setCoeficienteVazao(280);
+    valvula.setCoeficientePerda(0);
+    valvula.setAbertura(50);
+    valvula.aberturaEfetiva = 50;
+
+    fonte.conectarSaida(valvula);
+    valvula.conectarSaida(dreno);
+
+    const entradaValvula = new ConnectionModel({
+        sourceId: fonte.id,
+        targetId: valvula.id,
+        diameterM: 0.08,
+        extraLengthM: 1,
+        perdaLocalK: 0
+    });
+    const saidaValvula = new ConnectionModel({
+        sourceId: valvula.id,
+        targetId: dreno.id,
+        diameterM: 0.08,
+        extraLengthM: 1,
+        perdaLocalK: 0
+    });
+
+    [fonte, valvula, dreno].forEach((component) => engine.add(component));
+    [entradaValvula, saidaValvula].forEach((connection) => engine.addConnection(connection));
+    runPhysicsSteps(engine, 80, 0.1);
+
+    const downstreamState = engine.getConnectionState(saidaValvula);
+    const expectedPipeOutletBar = Math.max(0, valvula.pressaoSaidaAtualBar - downstreamState.pipePressureDropBar);
+
+    assert.ok(valvula.deltaPAtualBar > 0, 'Valvula deve registrar queda propria');
+    assert.ok(downstreamState.pipePressureDropBar > 0, 'Cano a jusante deve registrar perda propria');
+    assert.ok(
+        Math.abs(downstreamState.pipeInletPressureBar - valvula.pressaoSaidaAtualBar) < 1e-9,
+        `Inicio do Cano deve usar a saida fisica da valvula: ${downstreamState.pipeInletPressureBar} vs ${valvula.pressaoSaidaAtualBar}`
+    );
+    assert.ok(
+        Math.abs(downstreamState.pipeOutletPressureBar - expectedPipeOutletBar) < 1e-9,
+        `Fim do Cano deve descontar somente a perda do Cano: esperado=${expectedPipeOutletBar}, obtido=${downstreamState.pipeOutletPressureBar}`
+    );
+    assert.ok(
+        Math.abs(downstreamState.pressureBar - downstreamState.pipeOutletPressureBar) < 1e-9,
+        'Pressao de chegada exibida deve seguir o extremo final do Cano'
+    );
+    assert.equal(downstreamState.targetLossBar, 0, 'K zerado da saida nao deve criar queda de entrada');
+    assert.ok(
+        Math.abs(downstreamState.outletPressureBar - downstreamState.pipeOutletPressureBar) < 1e-9,
+        'Sem perda de entrada, pressao recebida pela saida deve igualar o extremo do Cano'
     );
 });
 

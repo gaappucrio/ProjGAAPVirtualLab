@@ -511,6 +511,10 @@ export class SistemaSimulacao extends Observable {
         return this.resolvePushBasedNetwork(dt);
     }
 
+    reconcileConnectionPressureStatesFromComponentDrops() {
+        this.hydraulicBranchModel.reconcileConnectionPressureStatesFromComponentDrops();
+    }
+
     updatePipesVisual() {
         connectionVisualUpdater?.();
         this.tickPipeline.notifySetpointActuators();

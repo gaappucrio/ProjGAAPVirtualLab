@@ -11,6 +11,7 @@ import {
 } from '../../domain/services/ResidenceTime.js';
 import { isEnglishLanguage, translateFluidName, translateLiteral } from '../i18n/LanguageManager.js';
 import { resolvePipePressureProfile } from '../monitoring/PipePressureProfile.js';
+import { resolveSinkPressureProfile } from '../monitoring/SinkPressureProfile.js';
 import { formatUnitValue, getUnitPreferences, getUnitSymbol } from '../units/DisplayUnits.js';
 
 const EXPORT_METADATA_COLUMNS = [
@@ -44,6 +45,8 @@ const COMPONENT_COLUMNS = [
     'Pressão atmosférica (bar)',
     'Cor visual do fluido',
     'Pressão de descarga (bar)',
+    'Pressão final da rede (bar)',
+    'Queda na entrada da saída (bar)',
     'Perda de entrada K',
     'Vazão recebida (L/s)',
     'Bomba ligada',
@@ -186,6 +189,8 @@ const EXPORT_LABELS_EN = {
     'Pressão atmosférica': 'Atmospheric pressure',
     'Cor visual do fluido': 'Fluid visual color',
     'Pressão de descarga': 'Discharge pressure',
+    'Pressão final da rede': 'Final network pressure',
+    'Queda na entrada da saída': 'Outlet inlet pressure drop',
     'Perda de entrada K': 'Inlet loss K',
     'Vazão recebida': 'Received flow',
     'Bomba ligada': 'Pump on',
@@ -503,7 +508,7 @@ function buildBaseComponentRow(component) {
     };
 }
 
-function buildComponentRow(component) {
+function buildComponentRow(component, engine = null) {
     const row = buildBaseComponentRow(component);
 
     if (component instanceof FonteLogica) {
@@ -515,7 +520,10 @@ function buildComponentRow(component) {
     }
 
     if (component instanceof DrenoLogico) {
+        const pressureProfile = resolveSinkPressureProfile({ engine, sink: component });
         row['Pressão de descarga (bar)'] = numberValue(component.pressaoSaidaBar, 5);
+        row['Pressão final da rede (bar)'] = numberValue(pressureProfile.finalNetworkPressureBar, 5);
+        row['Queda na entrada da saída (bar)'] = numberValue(pressureProfile.entryPressureDropBar, 5);
         row['Perda de entrada K'] = numberValue(component.perdaEntradaK, 5);
         row['Vazão recebida (L/s)'] = numberValue(component.vazaoRecebidaLps, 5);
     }
@@ -685,7 +693,7 @@ function renderTable(title, columns, rows) {
 export function buildExportHtml(engine) {
     const timestamp = new Date();
     const metadataRows = displayUnitRows(buildExportMetadataRows(engine, timestamp));
-    const componentRows = displayUnitRows(engine.componentes.map(buildComponentRow));
+    const componentRows = displayUnitRows(engine.componentes.map((component) => buildComponentRow(component, engine)));
     const connectionRows = displayUnitRows(engine.conexoes.map((connection, index) => buildConnectionRow(engine, connection, index)));
     const metadataColumns = displayUnitColumns(EXPORT_METADATA_COLUMNS);
     const componentColumns = displayUnitColumns(COMPONENT_COLUMNS);

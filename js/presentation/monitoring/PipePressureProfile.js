@@ -6,17 +6,31 @@ function finiteNumber(value, fallback = null) {
 }
 
 function resolveSourceOutletPressureBar(source) {
+    const outletPressureBar = finiteNumber(source?.pressaoSaidaAtualBar);
+    if (outletPressureBar !== null) return outletPressureBar;
+
     const inletPressureBar = finiteNumber(source?.pressaoEntradaAtualBar);
     const componentPressureDropBar = finiteNumber(source?.deltaPAtualBar);
     if (inletPressureBar !== null && componentPressureDropBar !== null && componentPressureDropBar > 0) {
         return Math.max(0, inletPressureBar - componentPressureDropBar);
     }
 
-    return finiteNumber(source?.pressaoSaidaAtualBar);
+    return null;
+}
+
+function shouldPreferComponentOutletPressure(source) {
+    const outletPressureBar = finiteNumber(source?.pressaoSaidaAtualBar);
+    const componentPressureDropBar = finiteNumber(source?.deltaPAtualBar);
+    return outletPressureBar !== null
+        && componentPressureDropBar !== null
+        && componentPressureDropBar > 0;
 }
 
 export function resolvePipePressureProfileOptions({ state = {}, source = null } = {}) {
-    const sourcePressureBar = finiteNumber(state.pipeInletPressureBar, resolveSourceOutletPressureBar(source));
+    const sourceOutletPressureBar = resolveSourceOutletPressureBar(source);
+    const sourcePressureBar = shouldPreferComponentOutletPressure(source)
+        ? sourceOutletPressureBar
+        : finiteNumber(state.pipeInletPressureBar, sourceOutletPressureBar);
     if (sourcePressureBar === null || state.flowLps <= FLOW_EPSILON_LPS) return {};
 
     const resolvedSourcePressureBar = finiteNumber(state.sourcePressureBar, 0);
