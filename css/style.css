@@ -1097,8 +1097,8 @@
       /* Justificar o conteúdo dentro dos botões de colapsar horizontalmente ao centro, garantindo que os ícones de seta sejam centralizados e visualmente equilibrados para os usuários, além de criar um visual mais profissional para os botões de colapsar */
       cursor: pointer;
       /* Cursor de ponteiro para indicar que os botões de colapsar são interativos e podem ser clicados pelos usuários, melhorando a experiência do usuário ao interagir com os painéis laterais e incentivando a exploração das funcionalidades de colapsar/expandir os painéis */
-      z-index: 60;
-      /* Garantir que os botões de colapsar fiquem acima dos painéis laterais e do workspace principal, permitindo que eles sejam facilmente acessíveis e visíveis para os usuários, mesmo quando os painéis estiverem cheios de conteúdo ou quando o workspace estiver ocupado com muitos componentes e conexões, além de criar um visual mais organizado e profissional para os botões de colapsar */
+      z-index: 10;
+      /* Mesma camada dos paineis laterais; evita que os toggles flutuem sobre o monitor detalhado. */
       color: #7f8c8d;
       /* Cor do texto para os ícones de seta nos botões de colapsar, proporcionando um contraste suave com o fundo branco dos botões e garantindo que os ícones sejam facilmente visíveis para os usuários, além de criar um visual mais consistente e profissional para os botões de colapsar, especialmente quando combinados com as bordas e sombras sutis para destacar os botões */
       font-size: 12px;
