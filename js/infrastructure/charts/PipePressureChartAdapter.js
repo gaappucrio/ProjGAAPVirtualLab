@@ -77,12 +77,16 @@ function getPressureProfileEndpointBar(state = {}, overrides = {}) {
     };
 }
 
-export function buildPipePressureProfile(connection, state = {}, geometry = {}, options = {}) {
+function getPipeLengthM(connection, state = {}, geometry = {}) {
     const rawLengthM = Math.max(
         0,
         finiteNumber(state.lengthM, finiteNumber(geometry.lengthM, connection?.extraLengthM || 0))
     );
-    const lengthM = rawLengthM > 0 ? rawLengthM : 1;
+    return rawLengthM > 0 ? rawLengthM : 1;
+}
+
+export function buildPipePressureProfile(connection, state = {}, geometry = {}, options = {}) {
+    const lengthM = getPipeLengthM(connection, state, geometry);
     const { sourcePressureBar, endPressureBar } = getPressureProfileEndpointBar(state, {
         sourcePressureBar: options.sourcePressureBar,
         pressureDropBar: options.pressureDropBar
@@ -117,6 +121,65 @@ export function buildPipePressureProfile(connection, state = {}, geometry = {}, 
         lengthUnit,
         pressureUnit,
         lengthAxisMax: toDisplayValue('length', lengthM),
+        pressureAxisMax: Math.max(1, maxPressure * 1.08),
+        pressureAxisMin: minPressure < 0 ? minPressure * 1.08 : 0
+    };
+}
+
+export function buildCompositePipePressureProfile(sections = []) {
+    const pressureUnit = getUnitSymbol('pressure');
+    const lengthUnit = getUnitSymbol('length');
+    const pressurePoints = [];
+    const endpointPoints = [];
+    let offsetM = 0;
+
+    sections.forEach((section, sectionIndex) => {
+        const gapBeforeM = sectionIndex > 0
+            ? Math.max(0, finiteNumber(section.gapBeforeM, 0))
+            : 0;
+
+        if (gapBeforeM > 0 && pressurePoints.length > 0) {
+            pressurePoints.push({ x: toDisplayValue('length', offsetM), y: null });
+            offsetM += gapBeforeM;
+            pressurePoints.push({ x: toDisplayValue('length', offsetM), y: null });
+        }
+
+        const lengthM = getPipeLengthM(section.connection, section.state, section.geometry);
+        const { sourcePressureBar, endPressureBar } = getPressureProfileEndpointBar(section.state, {
+            sourcePressureBar: section.sourcePressureBar,
+            pressureDropBar: section.pressureDropBar
+        });
+
+        for (let pointIndex = 0; pointIndex <= PIPE_PRESSURE_POINT_COUNT; pointIndex += 1) {
+            const fraction = pointIndex / PIPE_PRESSURE_POINT_COUNT;
+            const distanceM = offsetM + (lengthM * fraction);
+            const pressureBar = sourcePressureBar + ((endPressureBar - sourcePressureBar) * fraction);
+            pressurePoints.push({
+                x: toDisplayValue('length', distanceM),
+                y: toDisplayValue('pressure', pressureBar)
+            });
+        }
+
+        endpointPoints.push(
+            { x: toDisplayValue('length', offsetM), y: toDisplayValue('pressure', sourcePressureBar) },
+            { x: toDisplayValue('length', offsetM + lengthM), y: toDisplayValue('pressure', endPressureBar) }
+        );
+        offsetM += lengthM;
+    });
+
+    const yValues = pressurePoints
+        .map((point) => point.y)
+        .filter((value) => Number.isFinite(Number(value)));
+    const maxPressure = Math.max(0, ...yValues);
+    const minPressure = Math.min(0, ...yValues);
+    const lengthAxisMax = Math.max(1, toDisplayValue('length', offsetM || 1));
+
+    return {
+        pressurePoints,
+        endpointPoints,
+        lengthUnit,
+        pressureUnit,
+        lengthAxisMax,
         pressureAxisMax: Math.max(1, maxPressure * 1.08),
         pressureAxisMin: minPressure < 0 ? minPressure * 1.08 : 0
     };
@@ -300,6 +363,124 @@ export function refreshPipePressureChart(
         `${t('chart.distance')}: ${Number(ctx[0].parsed.x).toFixed(2)} ${profileData.lengthUnit}`;
     chart.options.plugins.tooltip.callbacks.label = (ctx) =>
         `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)} ${profileData.pressureUnit}`;
+
+    applyPipePressureChartPresentation(chart, profileData, { expanded });
+    chart.update('none');
+}
+
+export function createCompositePipePressureChart(
+    ctx,
+    sections = [],
+    { expanded = false, label = '' } = {}
+) {
+    const profileData = buildCompositePipePressureProfile(sections);
+
+    const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            datasets: [
+                {
+                    label: label ? `${t('chart.pressure')}: ${label}` : t('chart.pressure'),
+                    data: profileData.pressurePoints,
+                    borderColor: PIPE_CHART_COLORS.pressure,
+                    backgroundColor: PIPE_CHART_COLORS.pressureFill,
+                    borderWidth: 2.5,
+                    fill: true,
+                    tension: 0.12,
+                    pointRadius: 0,
+                    pointHoverRadius: 5,
+                    spanGaps: false,
+                    borderCapStyle: 'round',
+                    borderJoinStyle: 'round'
+                },
+                {
+                    label: t('chart.endpoints'),
+                    type: 'scatter',
+                    data: profileData.endpointPoints,
+                    borderColor: PIPE_CHART_COLORS.endpointBorder,
+                    backgroundColor: PIPE_CHART_COLORS.endpoint,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    pointBorderWidth: 1.5,
+                    clip: false
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: { mode: 'nearest', intersect: false },
+            layout: { padding: { top: 8, right: 8, left: 4, bottom: 0 } },
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        boxWidth: 8,
+                        boxHeight: 8,
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        padding: 12,
+                        font: { size: 10 }
+                    }
+                },
+                tooltip: {
+                    backgroundColor: getGridColors().tooltipBg,
+                    borderColor: getGridColors().tooltipBorder,
+                    borderWidth: 1,
+                    padding: 10,
+                    displayColors: true,
+                    titleColor: '#ffffff',
+                    bodyColor: '#ffffff',
+                    callbacks: {
+                        title: (ctx) => `${t('chart.distance')}: ${Number(ctx[0].parsed.x).toFixed(2)} ${profileData.lengthUnit}`,
+                        label: (ctx) => Number.isFinite(Number(ctx.parsed.y))
+                            ? `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)} ${profileData.pressureUnit}`
+                            : ''
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    type: 'linear',
+                    title: { display: true, text: `${t('chart.distance')} (${profileData.lengthUnit})` },
+                    ticks: { maxTicksLimit: 6, color: getGridColors().tick },
+                    grid: { color: getGridColors().grid },
+                    border: { color: getGridColors().border }
+                },
+                y: {
+                    type: 'linear',
+                    title: { display: true, text: `${t('chart.pressure')} (${profileData.pressureUnit})` },
+                    ticks: { maxTicksLimit: 5, color: getGridColors().tick },
+                    grid: { color: getGridColors().grid },
+                    border: { color: getGridColors().border }
+                }
+            }
+        }
+    });
+
+    applyPipePressureChartPresentation(chart, profileData, { expanded });
+    chart.update('none');
+    return chart;
+}
+
+export function refreshCompositePipePressureChart(
+    chart,
+    sections = [],
+    { expanded = false, label = '' } = {}
+) {
+    if (!chart) return;
+
+    const profileData = buildCompositePipePressureProfile(sections);
+    chart.data.datasets[0].label = label ? `${t('chart.pressure')}: ${label}` : t('chart.pressure');
+    chart.data.datasets[0].data = profileData.pressurePoints;
+    chart.data.datasets[1].label = t('chart.endpoints');
+    chart.data.datasets[1].data = profileData.endpointPoints;
+    chart.options.plugins.tooltip.callbacks.title = (ctx) =>
+        `${t('chart.distance')}: ${Number(ctx[0].parsed.x).toFixed(2)} ${profileData.lengthUnit}`;
+    chart.options.plugins.tooltip.callbacks.label = (ctx) => Number.isFinite(Number(ctx.parsed.y))
+        ? `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)} ${profileData.pressureUnit}`
+        : '';
 
     applyPipePressureChartPresentation(chart, profileData, { expanded });
     chart.update('none');

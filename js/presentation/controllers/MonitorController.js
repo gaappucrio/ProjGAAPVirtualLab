@@ -2,7 +2,12 @@ import { BombaLogica } from '../../domain/components/BombaLogica.js';
 import { ConnectionModel } from '../../domain/models/ConnectionModel.js';
 import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
 import { ValvulaLogica } from '../../domain/components/ValvulaLogica.js';
-import { createPipePressureChart, refreshPipePressureChart } from '../../infrastructure/charts/PipePressureChartAdapter.js';
+import {
+    createCompositePipePressureChart,
+    createPipePressureChart,
+    refreshCompositePipePressureChart,
+    refreshPipePressureChart
+} from '../../infrastructure/charts/PipePressureChartAdapter.js';
 import { createPumpChart, refreshPumpChart } from '../../infrastructure/charts/PumpChartAdapter.js';
 import { createValveChart, refreshValveChart } from '../../infrastructure/charts/ValveChartAdapter.js';
 import {
@@ -13,6 +18,7 @@ import {
 } from '../../infrastructure/charts/TankChartAdapter.js';
 import { exportPumpDwsimJson } from '../export/PumpDwsimJsonExporter.js';
 import { createMonitorSlotHistory } from '../monitoring/MonitorSlotHistory.js';
+import { canMergePipeMonitorEntries, isPipeMonitorEntry } from '../monitoring/PipeMonitorGrouping.js';
 import { resolvePipePressureProfileOptions } from '../monitoring/PipePressureProfile.js';
 import { getUnitSymbol } from '../units/DisplayUnits.js';
 import { t } from '../i18n/LanguageManager.js';
@@ -20,6 +26,7 @@ import { t } from '../i18n/LanguageManager.js';
 const MAX_MONITOR_CHART_HISTORY = 2;
 const MONITOR_LIVE_REFRESH_INTERVAL_S = 0.1;
 const MONITOR_TANK_SAMPLE_INTERVAL_S = 0.25;
+const PIXELS_PER_METER_FOR_MONITOR_GAP = 80;
 
 export function createMonitorController({ engine }) {
     let compactChart = null;
@@ -31,6 +38,7 @@ export function createMonitorController({ engine }) {
     let chartedConnectionId = null;
     let monitorChartMode = 'empty';
     let expandedMonitorCharts = [null, null];
+    let draggedMonitorIndex = null;
     const monitorTankSeries = new Map();
     const monitorChartHistory = createMonitorSlotHistory({
         maxEntries: MAX_MONITOR_CHART_HISTORY,
@@ -74,10 +82,24 @@ export function createMonitorController({ engine }) {
         if (kind === 'pump') return t('chart.pump');
         if (kind === 'valve') return t('chart.valve');
         if (kind === 'pipe') return t('chart.pipe');
+        if (kind === 'pipeGroup') return t('chart.pipeGroup');
         return t('chart.component');
     }
 
+    function getPipeGroupConnections(entry) {
+        if (entry?.kind !== 'pipeGroup' || !Array.isArray(entry.ids)) return [];
+
+        return entry.ids
+            .map((id) => engine.conexoes.find((candidate) => candidate.id === id))
+            .filter((connection) => connection instanceof ConnectionModel);
+    }
+
     function getMonitorChartComponent(entry) {
+        if (entry.kind === 'pipeGroup') {
+            const connections = getPipeGroupConnections(entry);
+            return connections.length > 0 ? connections : null;
+        }
+
         if (entry.kind === 'pipe') {
             const connection = engine.conexoes.find((candidate) => candidate.id === entry.id);
             return getMonitorChartKind(connection) === entry.kind ? connection : null;
@@ -101,13 +123,124 @@ export function createMonitorController({ engine }) {
         return resolvePipePressureProfileOptions({ state, source });
     }
 
+    function getConnectionLengthM(connection) {
+        const geometry = engine.getConnectionGeometry(connection);
+        return Math.max(0, Number(geometry?.lengthM) || 0);
+    }
+
+    function getVisualGapBetweenComponentsM(sourceComponentId, targetComponentId) {
+        const source = engine.getComponentById?.(sourceComponentId);
+        const target = engine.getComponentById?.(targetComponentId);
+        if (!source || !target) return 1;
+
+        const dx = (Number(target.x) || 0) - (Number(source.x) || 0);
+        const dy = (Number(target.y) || 0) - (Number(source.y) || 0);
+        return Math.max(1, Math.sqrt((dx * dx) + (dy * dy)) / PIXELS_PER_METER_FOR_MONITOR_GAP);
+    }
+
+    function getShortestUnselectedPathLengthM(sourceComponentId, targetComponentId, blockedConnectionIds = new Set()) {
+        if (!sourceComponentId || !targetComponentId) return null;
+        if (sourceComponentId === targetComponentId) return 0;
+
+        const distances = new Map([[sourceComponentId, 0]]);
+        const queue = [sourceComponentId];
+
+        while (queue.length > 0) {
+            queue.sort((a, b) => distances.get(a) - distances.get(b));
+            const currentId = queue.shift();
+            const currentDistance = distances.get(currentId);
+
+            if (currentId === targetComponentId) return currentDistance;
+
+            engine.conexoes.forEach((connection) => {
+                if (blockedConnectionIds.has(connection.id) || connection.sourceId !== currentId) return;
+
+                const nextDistance = currentDistance + getConnectionLengthM(connection);
+                const previousDistance = distances.get(connection.targetId);
+                if (previousDistance !== undefined && previousDistance <= nextDistance) return;
+
+                distances.set(connection.targetId, nextDistance);
+                queue.push(connection.targetId);
+            });
+        }
+
+        return null;
+    }
+
+    function isConnectionBefore(a, b, blockedConnectionIds = new Set()) {
+        if (!(a instanceof ConnectionModel) || !(b instanceof ConnectionModel)) return false;
+        if (a.targetId === b.sourceId) return true;
+        return getShortestUnselectedPathLengthM(a.targetId, b.sourceId, blockedConnectionIds) !== null;
+    }
+
+    function orderPipeGroupConnections(connections) {
+        const selectedIds = new Set(connections.map((connection) => connection.id));
+        return [...connections].sort((a, b) => {
+            if (isConnectionBefore(a, b, selectedIds)) return -1;
+            if (isConnectionBefore(b, a, selectedIds)) return 1;
+
+            const sourceA = engine.getComponentById?.(a.sourceId);
+            const sourceB = engine.getComponentById?.(b.sourceId);
+            const xA = Number(sourceA?.x) || 0;
+            const xB = Number(sourceB?.x) || 0;
+            if (xA !== xB) return xA - xB;
+            return (Number(sourceA?.y) || 0) - (Number(sourceB?.y) || 0);
+        });
+    }
+
+    function getPipeGapBeforeSection(previousConnection, currentConnection, blockedConnectionIds) {
+        if (!previousConnection || !currentConnection) return 0;
+        if (previousConnection.targetId === currentConnection.sourceId) return 0;
+
+        const pathLengthM = getShortestUnselectedPathLengthM(
+            previousConnection.targetId,
+            currentConnection.sourceId,
+            blockedConnectionIds
+        );
+        return pathLengthM ?? getVisualGapBetweenComponentsM(previousConnection.targetId, currentConnection.sourceId);
+    }
+
+    function buildPipeGroupSections(connections = []) {
+        const orderedConnections = orderPipeGroupConnections(connections);
+        const selectedIds = new Set(orderedConnections.map((connection) => connection.id));
+
+        return orderedConnections.map((connection, index) => {
+            const state = engine.getConnectionState(connection);
+            const source = engine.getComponentById?.(connection?.sourceId);
+            const previousConnection = index > 0 ? orderedConnections[index - 1] : null;
+
+            return {
+                connection,
+                state,
+                geometry: engine.getConnectionGeometry(connection),
+                label: getConnectionMonitorLabel(connection),
+                gapBeforeM: getPipeGapBeforeSection(previousConnection, connection, selectedIds),
+                ...resolvePipePressureProfileOptions({ state, source })
+            };
+        });
+    }
+
     function getMonitorChartTitle(entry) {
         if (entry?.kind === 'pipe') return getConnectionMonitorLabel(entry.component);
+        if (entry?.kind === 'pipeGroup') {
+            return t('chart.pipeGroupTitle', { count: entry.component?.length || 0 });
+        }
         return entry?.component?.tag || getMonitorChartKindLabel(entry?.kind);
     }
 
+    function isMonitorChartEntryValid(entry) {
+        if (entry?.kind === 'pipeGroup') {
+            return Array.isArray(entry.ids)
+                && entry.ids.length > 0
+                && getPipeGroupConnections(entry).length === entry.ids.length
+                && canMergePipeMonitorEntries(entry, entry, engine.conexoes);
+        }
+
+        return Boolean(getMonitorChartComponent(entry));
+    }
+
     function pruneMonitorChartHistory() {
-        monitorChartHistory.prune((entry) => Boolean(getMonitorChartComponent(entry)));
+        monitorChartHistory.prune(isMonitorChartEntryValid);
     }
 
     function getMonitorChartEntries() {
@@ -218,6 +351,21 @@ export function createMonitorController({ engine }) {
                 expanded: isExpanded(),
                 label: getConnectionMonitorLabel(connection),
                 ...getPipePressureProfileOptions(connection)
+            }
+        );
+    }
+
+    function getPipeGroupLabel(connections = []) {
+        return t('chart.pipeGroupLegend', { count: connections.length });
+    }
+
+    function createPipeGroupMonitorChartInstance(ctx, connections = []) {
+        return createCompositePipePressureChart(
+            ctx,
+            buildPipeGroupSections(connections),
+            {
+                expanded: isExpanded(),
+                label: getPipeGroupLabel(connections)
             }
         );
     }
@@ -352,6 +500,19 @@ export function createMonitorController({ engine }) {
         );
     }
 
+    function refreshPipeGroupMonitorChartInstance(chart, connections = []) {
+        if (!chart || !Array.isArray(connections) || connections.length === 0) return;
+
+        refreshCompositePipePressureChart(
+            chart,
+            buildPipeGroupSections(connections),
+            {
+                expanded: isExpanded(),
+                label: getPipeGroupLabel(connections)
+            }
+        );
+    }
+
     function refreshPipeCompactChart(connection) {
         if (!(connection instanceof ConnectionModel) || !compactChart || monitorChartMode !== 'pipe' || chartedConnectionId !== connection.id) {
             return;
@@ -477,6 +638,84 @@ export function createMonitorController({ engine }) {
         renderExpandedMonitorCharts();
     }
 
+    function isPipeLikeEntry(entry) {
+        return isPipeMonitorEntry(entry);
+    }
+
+    function getMonitorHistoryEntryAt(index) {
+        return monitorChartHistory.getEntries()[index] || null;
+    }
+
+    function applyMonitorCardDrop(sourceIndex, targetIndex) {
+        const sourceEntry = getMonitorHistoryEntryAt(sourceIndex);
+        const targetEntry = getMonitorHistoryEntryAt(targetIndex);
+        if (!sourceEntry || !targetEntry || sourceIndex === targetIndex) return false;
+
+        const shouldMergePipeProfiles = isPipeLikeEntry(sourceEntry)
+            && isPipeLikeEntry(targetEntry)
+            && canMergePipeMonitorEntries(sourceEntry, targetEntry, engine.conexoes);
+        const result = shouldMergePipeProfiles
+            ? monitorChartHistory.mergePipesAt(sourceIndex, targetIndex)
+            : monitorChartHistory.swapAt(sourceIndex, targetIndex);
+
+        if (result.changed) renderExpandedMonitorCharts();
+        return result.changed;
+    }
+
+    function clearMonitorDragState() {
+        draggedMonitorIndex = null;
+        document.querySelectorAll('.chart-compare-card.is-dragging, .chart-compare-card.is-drop-target')
+            .forEach((card) => {
+                card.classList.remove('is-dragging', 'is-drop-target');
+            });
+    }
+
+    function bindExpandedChartCardDrag(elements, index, entry) {
+        const card = elements?.card;
+        if (!card) return;
+
+        card.dataset.monitorIndex = String(index);
+        card.draggable = Boolean(entry);
+        card.title = entry ? t('chart.dragHint') : '';
+
+        if (card.dataset.monitorDragBound === 'true') return;
+
+        card.dataset.monitorDragBound = 'true';
+        card.addEventListener('dragstart', (event) => {
+            if (!card.draggable || event.target?.closest?.('button')) {
+                event.preventDefault();
+                return;
+            }
+
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', card.dataset.monitorIndex || '');
+            draggedMonitorIndex = Number(card.dataset.monitorIndex);
+            card.classList.add('is-dragging');
+        });
+        card.addEventListener('dragover', (event) => {
+            const sourceIndex = Number(draggedMonitorIndex);
+            const targetIndex = Number(card.dataset.monitorIndex);
+            if (!Number.isInteger(sourceIndex) || sourceIndex === targetIndex || !card.draggable) return;
+
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+            card.classList.add('is-drop-target');
+        });
+        card.addEventListener('dragleave', () => {
+            card.classList.remove('is-drop-target');
+        });
+        card.addEventListener('drop', (event) => {
+            const sourceIndex = Number.isInteger(draggedMonitorIndex)
+                ? draggedMonitorIndex
+                : Number(event.dataTransfer.getData('text/plain'));
+            const targetIndex = Number(card.dataset.monitorIndex);
+            event.preventDefault();
+            clearMonitorDragState();
+            applyMonitorCardDrop(sourceIndex, targetIndex);
+        });
+        card.addEventListener('dragend', clearMonitorDragState);
+    }
+
     function ensureExpandedChartDismissButton(elements, index) {
         if (!elements?.header) return null;
 
@@ -529,6 +768,13 @@ export function createMonitorController({ engine }) {
                 lengthUnit: getUnitSymbol('length')
             });
         }
+        if (entry.kind === 'pipeGroup') {
+            return t('chart.pipeGroupSubtitle', {
+                count: entry.component?.length || 0,
+                pressureUnit: getUnitSymbol('pressure'),
+                lengthUnit: getUnitSymbol('length')
+            });
+        }
         return '';
     }
 
@@ -572,6 +818,10 @@ export function createMonitorController({ engine }) {
             return createPipeMonitorChartInstance(ctx, component);
         }
 
+        if (Array.isArray(component) && component.every((item) => item instanceof ConnectionModel)) {
+            return createPipeGroupMonitorChartInstance(ctx, component);
+        }
+
         return null;
     }
 
@@ -600,6 +850,7 @@ export function createMonitorController({ engine }) {
             const entry = entries[index];
             const exportButton = ensureExpandedPumpExportButton(elements, index);
             const dismissButton = ensureExpandedChartDismissButton(elements, index);
+            bindExpandedChartCardDrag(elements, index, entry);
 
             if (!elements.card) continue;
 
@@ -677,6 +928,8 @@ export function createMonitorController({ engine }) {
                 refreshValveMonitorChartInstance(chart, entry.component);
             } else if (entry.component instanceof ConnectionModel) {
                 refreshPipeMonitorChartInstance(chart, entry.component);
+            } else if (Array.isArray(entry.component)) {
+                refreshPipeGroupMonitorChartInstance(chart, entry.component);
             }
         });
     }

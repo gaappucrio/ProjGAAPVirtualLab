@@ -41,14 +41,14 @@ function getValveSizingAlertState(diagnostico) {
     if (diagnostico?.status === 'undersized') {
         return {
             title: 'Válvula restritiva',
-            message: 'A válvula está muito aberta e ainda consome uma parcela alta da pressão disponível. Aumente o Cv ou reduza K para liberar a passagem sem mascarar a perda nos canos.',
+            message: 'A válvula manual está muito aberta e ainda consome uma parcela alta da pressão disponível. Aumente o Cv ou reduza K manual para liberar a passagem sem mascarar a perda nos canos.',
             ...colors
         };
     }
 
     return {
         title: 'Válvula no limite',
-        message: 'A queda de pressão na válvula já é relevante para a abertura atual. O sistema ainda opera, mas a válvula pode estar virando o gargalo hidráulico.',
+        message: 'A queda de pressão na válvula manual já é relevante para a abertura atual. O sistema ainda opera, mas vale revisar Cv, K ou o perfil se ela não deveria limitar a rede.',
         ...colors
     };
 }
@@ -150,7 +150,7 @@ export const VALVE_PROPERTIES_PRESENTER = {
                     </span>
                 </label>
                 <input type="range" id="input-abertura" min="0" max="100" value="${Math.round(comp.grauAbertura)}" ${hintAttr(TOOLTIP.valveOpening)} ${bloqueioAttr}>
-                ${controladaPorSetpoint ? '<p style="margin:6px 0 0; font-size:11px; color:#c0392b;">Válvula sob controle do ponto de ajuste do tanque. Abertura e perfil são ajustados automaticamente.</p>' : ''}
+                ${controladaPorSetpoint ? '<p style="margin:6px 0 0; font-size:11px; color:#c0392b;">Válvula sob controle do ponto de ajuste do tanque. O PA modula a abertura; o perfil ainda pode ser alterado na aba Avançado.</p>' : ''}
             </div>
             ${renderValveSizingAlert(comp, controladaPorSetpoint)}
             <div class="prop-group">
@@ -169,7 +169,7 @@ export const VALVE_PROPERTIES_PRESENTER = {
         const advancedContent = `
             <div class="prop-group">
                 ${makeLabel('Perfil da válvula', TOOLTIP.valveProfile)}
-                <select id="input-perfil-valvula" ${hintAttr(selectedProfileHint)} ${bloqueioAttr}>
+                <select id="input-perfil-valvula" ${hintAttr(selectedProfileHint)}>
                     <option value="equal_percentage" title="${profileHints.equal_percentage}" ${perfilAtual === 'equal_percentage' ? 'selected' : ''}>Controle fino</option>
                     <option value="linear" title="${profileHints.linear}" ${perfilAtual === 'linear' ? 'selected' : ''}>Resposta linear</option>
                     <option value="quick_opening" title="${profileHints.quick_opening}" ${perfilAtual === 'quick_opening' ? 'selected' : ''}>Abertura rápida</option>
@@ -177,7 +177,7 @@ export const VALVE_PROPERTIES_PRESENTER = {
                 </select>
                 <p id="texto-perfil-valvula" title="${selectedProfileHint}" style="margin:6px 0 0; font-size:11px; line-height:1.45; color:#5f6f7f;">${selectedProfileHint}</p>
                 ${!controladaPorSetpoint && !perfilPersonalizado ? '<p style="margin:6px 0 0; font-size:11px; line-height:1.45; color:#7f8c8d;">Para alterar unidade, Cv/Kv, K, estrangulamento, curva, rangeabilidade ou tempo de curso individualmente, selecione o perfil Personalizado.</p>' : ''}
-                ${controladaPorSetpoint ? '<p style="margin:6px 0 0; font-size:11px; line-height:1.45; color:#c0392b;">Com o ponto de ajuste ativo, o tanque modula somente a abertura; desative o PA para alterar unidade, Cv/Kv, K, estrangulamento, curva, rangeabilidade ou tempo de curso.</p>' : ''}
+                ${controladaPorSetpoint ? '<p style="margin:6px 0 0; font-size:11px; line-height:1.45; color:#c0392b;">Com o ponto de ajuste ativo, trocar o perfil altera a geometria/curva usada pelo controle. Cv/Kv, K, estrangulamento, curva, rangeabilidade e tempo de curso continuam bloqueados para evitar ajustes finos acidentais durante a malha fechada.</p>' : ''}
             </div>
             <div class="prop-group">
                 ${makeLabel('Unidade do coeficiente de vazão', TOOLTIP.valveFlowCoefficientUnit)}
@@ -264,9 +264,10 @@ export const VALVE_PROPERTIES_PRESENTER = {
         const sincronizarBloqueioSetpoint = () => {
             const bloqueada = valvulaBloqueadaPorSetpoint();
             const bloqueioParametros = bloqueada || !perfilEhPersonalizado();
-            [slider, numInput, perfilInput].forEach((input) => {
+            [slider, numInput].forEach((input) => {
                 if (input) input.disabled = bloqueada;
             });
+            if (perfilInput) perfilInput.disabled = false;
             [cvInput, perdaInput, perdaEstrangulamentoInput, caracteristicaInput, rangeabilidadeInput, cursoInput].forEach((input) => {
                 if (input) input.disabled = bloqueioParametros;
             });
@@ -309,13 +310,7 @@ export const VALVE_PROPERTIES_PRESENTER = {
         bind('input-abertura', 'input', (event) => updateFromSlider(event.target.value));
         bind('val-abertura', 'change', (event) => updateFromInput(event.target.value));
         bind('input-perfil-valvula', 'change', (event) => {
-            if (valvulaBloqueadaPorSetpoint()) {
-                event.target.value = getPerfilAtual();
-                sincronizarBloqueioSetpoint();
-                return;
-            }
-
-            comp.aplicarPerfilCaracteristica(event.target.value);
+            comp.aplicarPerfilCaracteristica(event.target.value, { allowDuringSetpoint: true });
             atualizarDescricaoPerfil();
             atualizarDescricaoCaracteristica();
             updateValveCoefficientInput(comp, cvInput, unidadeCoeficienteInput, coeficienteLabel);

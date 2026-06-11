@@ -7,7 +7,9 @@ export const DEFAULT_LEVEL_CONTROLLER_CONFIG = Object.freeze({
     reactivationBand: 0.0075,
     outputMin: -1,
     outputMax: 1,
-    derivativeScale: 1
+    derivativeScale: 1,
+    fuzzyIntegralGain: 0.3,
+    fuzzyIntegralLimit: 2.6
 });
 
 export const LEVEL_CONTROLLER_MODES = Object.freeze({
@@ -195,6 +197,12 @@ export function calculateFuzzyLevelControl({
     const derivativeScale = Number.isFinite(config.derivativeScale) && config.derivativeScale > 0
         ? config.derivativeScale
         : DEFAULT_LEVEL_CONTROLLER_CONFIG.derivativeScale;
+    const fuzzyIntegralGain = Number.isFinite(config.fuzzyIntegralGain) && config.fuzzyIntegralGain > 0
+        ? config.fuzzyIntegralGain
+        : DEFAULT_LEVEL_CONTROLLER_CONFIG.fuzzyIntegralGain;
+    const fuzzyIntegralLimit = Number.isFinite(config.fuzzyIntegralLimit) && config.fuzzyIntegralLimit > 0
+        ? config.fuzzyIntegralLimit
+        : DEFAULT_LEVEL_CONTROLLER_CONFIG.fuzzyIntegralLimit;
     const shouldEnterRest = errorAbs <= deadband;
     const shouldMaintainRest = state.resting && errorAbs <= reactivationBand;
 
@@ -217,10 +225,15 @@ export function calculateFuzzyLevelControl({
     }
 
     state.resting = false;
+    if (state.lastError !== undefined && state.lastError * error < 0) {
+        state.integral = 0;
+    }
+
     const derivative = safeDt > 0 ? (error - (state.lastError || 0)) / safeDt : 0;
     state.lastError = error;
     state.derivative = Number.isFinite(derivative) ? derivative : 0;
-    state.integral = 0;
+    state.integral += error * safeDt;
+    state.integral = clamp(state.integral, -fuzzyIntegralLimit, fuzzyIntegralLimit);
 
     const normalizedRate = clamp(state.derivative / derivativeScale, -1, 1);
     const errorMembership = fuzzify(error, FUZZY_ERROR_SETS);
@@ -239,14 +252,18 @@ export function calculateFuzzyLevelControl({
         });
     });
 
-    const rawOutput = activationSum > 0 ? weightedSum / activationSum : 0;
+    const fuzzyOutput = activationSum > 0 ? weightedSum / activationSum : 0;
+    const rawOutput = fuzzyOutput + (fuzzyIntegralGain * state.integral);
     const u = clamp(rawOutput, outputMin, outputMax);
+    if (u !== rawOutput && fuzzyIntegralGain > 0) {
+        state.integral = clamp((u - fuzzyOutput) / fuzzyIntegralGain, -fuzzyIntegralLimit, fuzzyIntegralLimit);
+    }
 
     return {
         u,
         rawOutput,
         error,
-        integral: 0,
+        integral: state.integral,
         derivative: state.derivative,
         inRest: false,
         saturated: u !== rawOutput,

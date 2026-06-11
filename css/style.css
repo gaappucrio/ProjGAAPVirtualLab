@@ -1883,6 +1883,20 @@
       overflow: hidden;
   }
 
+  .chart-compare-card[draggable="true"] {
+      cursor: grab;
+  }
+
+  .chart-compare-card.is-dragging {
+      opacity: 0.72;
+      cursor: grabbing;
+  }
+
+  .chart-compare-card.is-drop-target {
+      border-color: #3498db;
+      box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  }
+
   /* Se o script injetar 'hidden' no slot secundário, ele some e o primário estica */
   .chart-compare-card[hidden] {
       display: none;

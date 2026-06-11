@@ -795,6 +795,57 @@ test('perfil de pressao do pipe usa pressao resolvida ao longo da distancia', as
     ]);
 });
 
+test('perfil aglutinado de canos preserva trechos e lacunas visuais', async () => {
+    const { ConnectionModel } = await import('../js/domain/models/ConnectionModel.js');
+    const { buildCompositePipePressureProfile } = await import('../js/infrastructure/charts/PipePressureChartAdapter.js');
+    const { setUnitPreference } = await import('../js/presentation/units/DisplayUnits.js');
+
+    setUnitPreference('pressure', 'kpa');
+    setUnitPreference('length', 'm');
+
+    const primeiroCano = new ConnectionModel({
+        sourceId: 'Entrada-01',
+        targetId: 'Tanque-01'
+    });
+    const segundoCano = new ConnectionModel({
+        sourceId: 'V-01',
+        targetId: 'Saida-01'
+    });
+
+    const profile = buildCompositePipePressureProfile([
+        {
+            connection: primeiroCano,
+            state: {
+                sourcePressureBar: 5,
+                pressureBar: 4.7,
+                lengthM: 1
+            },
+            geometry: { lengthM: 1 }
+        },
+        {
+            connection: segundoCano,
+            state: {
+                sourcePressureBar: 2.4,
+                pressureBar: 2.1,
+                lengthM: 2
+            },
+            geometry: { lengthM: 2 },
+            gapBeforeM: 3
+        }
+    ]);
+
+    assert.equal(profile.pressureUnit, 'kPa');
+    assert.equal(profile.lengthUnit, 'm');
+    assert.equal(profile.lengthAxisMax, 6);
+    assert.equal(profile.pressurePoints.filter((point) => point.y === null).length, 2);
+    assert.deepEqual(profile.endpointPoints, [
+        { x: 0, y: 500 },
+        { x: 1, y: 470 },
+        { x: 4, y: 240 },
+        { x: 6, y: 210 }
+    ]);
+});
+
 test('perfil de pressao do pipe pode usar pressao fisica de saida da origem', async () => {
     const { ConnectionModel } = await import('../js/domain/models/ConnectionModel.js');
     const { buildPipePressureProfile } = await import('../js/infrastructure/charts/PipePressureChartAdapter.js');

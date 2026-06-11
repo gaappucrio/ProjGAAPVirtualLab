@@ -1310,6 +1310,61 @@ test('malha fechada em ilha isolada nao altera sistema aberto com set point', ()
     });
 });
 
+test('controlador fuzzy de nivel com valvula somente na saida remove offset estacionario', () => {
+    const engine = createEngine();
+    engine.usarAlturaRelativa = true;
+
+    const fonte = new FonteLogica('F-fuzzy', 'Fonte-fuzzy', 0, 0);
+    const bomba = new BombaLogica('B-fuzzy', 'Bomba-fuzzy', 80, 0);
+    const tanque = new TanqueLogico('T-fuzzy', 'Tanque-fuzzy', 160, 0);
+    const valvulaSaida = new ValvulaLogica('VS-fuzzy', 'VS-fuzzy', 240, 0);
+    const dreno = new DrenoLogico('D-fuzzy', 'Dreno-fuzzy', 320, 0);
+
+    fonte.pressaoFonteBar = 1.5;
+    bomba.vazaoNominal = 15;
+    bomba.pressaoMaxima = 2;
+    bomba.grauAcionamento = 100;
+    bomba.acionamentoEfetivo = 100;
+    valvulaSaida.aplicarPerfilCaracteristica('linear');
+    valvulaSaida.setCoeficientePerda(0);
+    valvulaSaida.setAbertura(100);
+    valvulaSaida.aberturaEfetiva = 100;
+    tanque.capacidadeMaxima = 1000;
+    tanque.volumeAtual = 300;
+    tanque.setpoint = 50;
+    tanque.controladorNivelModo = 'fuzzy';
+
+    fonte.conectarSaida(bomba);
+    bomba.conectarSaida(tanque);
+    tanque.conectarSaida(valvulaSaida);
+    valvulaSaida.conectarSaida(dreno);
+
+    [fonte, bomba, tanque, valvulaSaida, dreno].forEach((component) => engine.add(component));
+    [
+        new ConnectionModel({ sourceId: fonte.id, targetId: bomba.id, perdaLocalK: 0 }),
+        new ConnectionModel({ sourceId: bomba.id, targetId: tanque.id, perdaLocalK: 0 }),
+        new ConnectionModel({ sourceId: tanque.id, targetId: valvulaSaida.id, perdaLocalK: 0 }),
+        new ConnectionModel({ sourceId: valvulaSaida.id, targetId: dreno.id, perdaLocalK: 0 })
+    ].forEach((connection) => engine.addConnection(connection));
+
+    const resultadoSetpoint = tanque.setSetpointAtivo(true);
+    assert.equal(resultadoSetpoint.ativado, true);
+
+    runControlledAutomaticPhysicsSteps(engine, 2000, 0.1);
+
+    const nivelFinal = tanque.getNivelNormalizado();
+    assert.ok(
+        Math.abs(nivelFinal - 0.5) < 0.01,
+        `Fuzzy deve convergir para perto do setpoint: nivel=${nivelFinal}`
+    );
+    assert.equal(tanque._ultimoEstadoControle.emRepouso, false, 'Controle somente na saida nao deve fechar a valvula por banda morta');
+    assert.ok(valvulaSaida.grauAbertura > 0, 'Valvula de saida deve manter abertura de equilibrio');
+    assert.ok(
+        Math.abs(tanque.lastQin - tanque.lastQout) < 0.1,
+        `Vazoes devem ficar praticamente balanceadas: in=${tanque.lastQin}, out=${tanque.lastQout}`
+    );
+});
+
 test('recirculacao tanque bomba tanque conserva inventario do tanque', () => {
     const engine = createEngine();
     const tanque = new TanqueLogico('T-loop', 'T-loop', 0, 0);

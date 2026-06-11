@@ -24,6 +24,7 @@ const PRESSAO_MAXIMA_DIMENSIONAMENTO_BOMBA_BAR = 20;
 const PRESSAO_MAXIMA_AJUSTE_FONTE_BAR = 20;
 const BANDA_MORTA_SETPOINT_NORMALIZADA = 0.0025;
 const BANDA_REATIVACAO_SETPOINT_NORMALIZADA = 0.0075;
+const TEMPO_MINIMO_ALERTA_SATURACAO_S = 1.5;
 
 export class TanqueLogico extends ComponenteFisico {
     constructor(id, tag, x, y) {
@@ -58,6 +59,7 @@ export class TanqueLogico extends ComponenteFisico {
         };
         this._valvulasControleNivel = new Set();
         this._bombasMantidasControleNivel = new Map();
+        this._tempoCandidatoSaturacao = 0;
     }
 
     getNivelNormalizado() {
@@ -473,9 +475,10 @@ export class TanqueLogico extends ComponenteFisico {
         };
     }
 
-    _atualizarAlertaSaturacao(fluido) {
+    _atualizarAlertaSaturacao(fluido, dt = TEMPO_MINIMO_ALERTA_SATURACAO_S) {
         if (!this.setpointAtivo) {
             this.alertaSaturacao = null;
+            this._tempoCandidatoSaturacao = 0;
             return;
         }
 
@@ -488,10 +491,18 @@ export class TanqueLogico extends ComponenteFisico {
             > (resumo.vazaoSaidaLimiteSetpointLps * FATOR_EXCESSO_ENTRADA);
         const drenandoEmDirecaoAoSetpoint = erro < TOLERANCIA_ERRO_SATURACAO
             && resumo.vazaoSaidaAtualLps > (resumo.vazaoEntradaAtualLps * FATOR_DRENAGEM_TRANSITORIA_SETPOINT);
-        const saturado = u <= U_SAIDA_TOTALMENTE_ABERTA
+        const candidatoSaturacao = u <= U_SAIDA_TOTALMENTE_ABERTA
             && erro < TOLERANCIA_ERRO_SATURACAO
             && entradaExcedeCapacidadeNoSetpoint
             && !drenandoEmDirecaoAoSetpoint;
+        const safeDt = Number.isFinite(dt) && dt > 0
+            ? dt
+            : TEMPO_MINIMO_ALERTA_SATURACAO_S;
+
+        this._tempoCandidatoSaturacao = candidatoSaturacao
+            ? this._tempoCandidatoSaturacao + safeDt
+            : 0;
+        const saturado = this._tempoCandidatoSaturacao >= TEMPO_MINIMO_ALERTA_SATURACAO_S;
 
         this.alertaSaturacao = saturado
             ? {
@@ -635,6 +646,8 @@ export class TanqueLogico extends ComponenteFisico {
 
         const atuadores = this.getAtuadoresControleNivel();
         const valvulasControle = [...atuadores.valvulasEntrada, ...atuadores.valvulasSaida];
+        const usarRepousoPorBanda = atuadores.valvulasEntrada.length > 0
+            && atuadores.valvulasSaida.length > 0;
         const modoControle = this.controladorNivelModo === LEVEL_CONTROLLER_MODES.FUZZY
             ? LEVEL_CONTROLLER_MODES.FUZZY
             : LEVEL_CONTROLLER_MODES.PID;
@@ -648,8 +661,8 @@ export class TanqueLogico extends ComponenteFisico {
             kd: this.kd,
             state: this._levelControllerState,
             config: {
-                deadband: BANDA_MORTA_SETPOINT_NORMALIZADA,
-                reactivationBand: BANDA_REATIVACAO_SETPOINT_NORMALIZADA,
+                deadband: usarRepousoPorBanda ? BANDA_MORTA_SETPOINT_NORMALIZADA : 0,
+                reactivationBand: usarRepousoPorBanda ? BANDA_REATIVACAO_SETPOINT_NORMALIZADA : 0,
                 outputMin: -1,
                 outputMax: 1
             }
@@ -710,6 +723,7 @@ export class TanqueLogico extends ComponenteFisico {
             modo: this.controladorNivelModo || LEVEL_CONTROLLER_MODES.PID
         };
         this.alertaSaturacao = null;
+        this._tempoCandidatoSaturacao = 0;
     }
 
     _notificarVolume() {
@@ -739,7 +753,7 @@ export class TanqueLogico extends ComponenteFisico {
         const fluidoAtual = this.getFluidoConteudo();
         this.pressaoFundoBar = this.getPressaoHidrostaticaBar(fluidoAtual);
         this.sincronizarMetricasFisicas(fluidoAtual);
-        this._atualizarAlertaSaturacao(fluidoAtual);
+        this._atualizarAlertaSaturacao(fluidoAtual, dt);
 
         this._notificarVolume();
     }

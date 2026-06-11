@@ -179,6 +179,28 @@ test('controlador fuzzy de nivel usa pertinencia trapezoidal triangular e media 
     assert.equal(selectedResult.mode, LEVEL_CONTROLLER_MODES.FUZZY);
     assert.ok(selectedResult.u < 0, 'Erro negativo deve abrir atuadores de saida');
 
+    const biasState = createLevelControllerState();
+    biasState.lastError = -0.04;
+    const firstBiasResult = calculateFuzzyLevelControl({
+        setpoint: 0.5,
+        measurement: 0.54,
+        dt: 0.2,
+        state: biasState,
+        config: { deadband: 0, reactivationBand: 0 }
+    });
+    let accumulatedBiasResult = firstBiasResult;
+    for (let i = 0; i < 40; i += 1) {
+        accumulatedBiasResult = calculateFuzzyLevelControl({
+            setpoint: 0.5,
+            measurement: 0.54,
+            dt: 0.2,
+            state: biasState,
+            config: { deadband: 0, reactivationBand: 0 }
+        });
+    }
+    assert.ok(accumulatedBiasResult.integral < firstBiasResult.integral, 'Erro persistente deve acumular compensacao integral');
+    assert.ok(accumulatedBiasResult.u < firstBiasResult.u, 'Compensacao integral fuzzy deve reduzir offset estacionario');
+
     const restResult = calculateFuzzyLevelControl({
         setpoint: 0.5,
         measurement: 0.501,
@@ -693,6 +715,49 @@ test('diagnostico de dimensionamento da valvula sugere liberar passagem quando h
     assert.ok(valvula.perdaLocalK < 12, 'Ajuste deve reduzir K');
 });
 
+test('diagnostico da valvula nao confunde perda fisica do Cv com K manual', () => {
+    const valvula = new ValvulaLogica('V-sizing-ok', 'V-sizing-ok', 0, 0);
+
+    valvula.aplicarPerfilCaracteristica('equal_percentage');
+    valvula.setCoeficientePerda(0);
+    valvula.setAbertura(100);
+    valvula.aberturaEfetiva = 100;
+    valvula.fluxoReal = 31.1 / 3.6;
+    valvula.pressaoEntradaAtualBar = 0.45;
+    valvula.pressaoSaidaAtualBar = 0.3996;
+    valvula.deltaPAtualBar = 0.0504;
+
+    const diagnostico = valvula.getDiagnosticoDimensionamento();
+
+    assert.equal(diagnostico.status, 'ok');
+    assert.equal(diagnostico.ativo, false);
+    assert.equal(diagnostico.perdaLocalKAtual, 0);
+    assert.ok(diagnostico.perdaLocalTotalK > diagnostico.perdaLocalAjustavelK);
+});
+
+test('diagnostico da valvula fica silencioso quando a abertura alta vem do set point', () => {
+    const valvula = new ValvulaLogica('V-sizing-sp', 'V-sizing-sp', 0, 0);
+
+    valvula.aplicarPerfilCaracteristica('custom');
+    valvula.setCoeficienteVazao(18);
+    valvula.setCoeficientePerda(12);
+    valvula.aplicarControleNivel({ abertura: 100, ownerId: 'T-01' });
+    valvula.aberturaEfetiva = 100;
+    valvula.fluxoReal = 18;
+    valvula.pressaoEntradaAtualBar = 1.2;
+    valvula.pressaoSaidaAtualBar = 0.2;
+    valvula.deltaPAtualBar = 1.0;
+
+    const diagnostico = valvula.getDiagnosticoDimensionamento();
+    const ajuste = valvula.aplicarAjusteDimensionamento();
+
+    assert.equal(diagnostico.status, 'controlled');
+    assert.equal(diagnostico.statusFisico, 'undersized');
+    assert.equal(diagnostico.ativo, false);
+    assert.equal(diagnostico.suprimidoPorSetpoint, true);
+    assert.equal(ajuste.aplicado, false);
+});
+
 test('ajuste de dimensionamento da valvula altera somente a valvula selecionada', () => {
     const valvulaSelecionada = new ValvulaLogica('V-sizing-target', 'V-sizing-target', 0, 0);
     const valvulaIsolada = new ValvulaLogica('V-sizing-other', 'V-sizing-other', 0, 0);
@@ -821,6 +886,29 @@ test('controle de nível modula abertura sem redesenhar Cv ou K da válvula', ()
     assert.equal(valvula.tipoCaracteristica, 'equal_percentage');
     assert.equal(valvula.rangeabilidade, 120);
     assert.equal(valvula.tempoCursoSegundos, 1.5);
+});
+
+test('perfil da valvula pode mudar durante controle de nivel e permanece apos liberar PA', () => {
+    const valvula = new ValvulaLogica('V-profile-sp', 'V-profile-sp', 0, 0);
+
+    valvula.aplicarPerfilCaracteristica('linear');
+    valvula.setAbertura(35);
+    valvula.aplicarControleNivel({ abertura: 80, ownerId: 'T-01' });
+
+    assert.equal(valvula.estaControladaPorSetpoint(), true);
+    assert.equal(valvula.grauAbertura, 80);
+    assert.equal(valvula.aplicarPerfilCaracteristica('quick_opening'), true);
+    assert.equal(valvula.perfilCaracteristica, 'quick_opening');
+    assert.equal(valvula.tipoCaracteristica, 'quick_opening');
+    approx(valvula.cv, VALVE_PROFILE_DEFINITIONS.quick_opening.cv, 1e-12, 'Perfil escolhido durante PA altera Cv de projeto');
+
+    valvula.liberarControleNivel('T-01');
+
+    assert.equal(valvula.estaControladaPorSetpoint(), false);
+    assert.equal(valvula.grauAbertura, 35, 'Liberar PA restaura a abertura manual');
+    assert.equal(valvula.perfilCaracteristica, 'quick_opening', 'Perfil escolhido pelo usuario durante PA deve persistir');
+    assert.equal(valvula.tipoCaracteristica, 'quick_opening');
+    approx(valvula.cv, VALVE_PROFILE_DEFINITIONS.quick_opening.cv, 1e-12);
 });
 
 test('controle de nível atua nas válvulas e mantem bomba operacional em 100%', () => {
@@ -957,7 +1045,11 @@ test('diagnóstico de saturação dimensiona bomba sem ajustar fonte de entrada'
         1e-9,
         'Bomba deve ser dimensionada abaixo da capacidade de saída no set point'
     );
-    tanque._atualizarAlertaSaturacao(engine.fluidoOperante);
+    tanque._atualizarAlertaSaturacao(engine.fluidoOperante, 0.1);
+    assert.equal(tanque.alertaSaturacao, null, 'Alerta nao deve aparecer em um transiente curto de saturacao');
+    for (let i = 0; i < 14; i += 1) {
+        tanque._atualizarAlertaSaturacao(engine.fluidoOperante, 0.1);
+    }
     assert.equal(tanque.alertaSaturacao?.ativo, true, 'Alerta deve usar a capacidade de saída estimada no nível do set point');
 
     tanque.lastQin = 10;

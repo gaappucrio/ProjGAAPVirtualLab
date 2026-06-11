@@ -47,14 +47,14 @@ function pressureDropFraction(valve, deltaPBar) {
     return clamp(deltaPBar / availablePressureBar, 0, 1);
 }
 
-function severityFrom({ flowLps, openingPercent, deltaPBar, fraction, localLossCoeff }) {
+function severityFrom({ flowLps, openingPercent, deltaPBar, fraction, adjustableLossCoeff }) {
     if (flowLps <= EPSILON_FLOW || openingPercent <= 0 || deltaPBar <= EPSILON_FLOW) return 'ok';
 
     const danger = openingPercent >= OPENING_DANGER_PERCENT
         && (
             deltaPBar >= PRESSURE_DROP_DANGER_BAR
             || fraction >= PRESSURE_FRACTION_DANGER
-            || localLossCoeff >= K_DANGER
+            || adjustableLossCoeff >= K_DANGER
         );
     if (danger) return 'undersized';
 
@@ -62,7 +62,7 @@ function severityFrom({ flowLps, openingPercent, deltaPBar, fraction, localLossC
         && (
             deltaPBar >= PRESSURE_DROP_WARNING_BAR
             || fraction >= PRESSURE_FRACTION_WARNING
-            || localLossCoeff >= K_WARNING
+            || adjustableLossCoeff >= K_WARNING
         );
     return warning ? 'attention' : 'ok';
 }
@@ -101,21 +101,31 @@ export function diagnosticarDimensionamentoValvula(valve) {
     const deltaPBar = getPressureDropBar(valve);
     const fraction = pressureDropFraction(valve, deltaPBar);
     const localLossCoeff = Math.max(0, finiteNumber(parametros.localLossCoeff, 0));
+    const adjustableLossCoeff = Math.max(
+        0,
+        finiteNumber(valve?.perdaLocalK, 0)
+            + finiteNumber(parametros.appliedThrottlingLoss, 0)
+    );
     const severity = severityFrom({
         flowLps,
         openingPercent,
         deltaPBar,
         fraction,
-        localLossCoeff
+        adjustableLossCoeff
     });
+    const controlledBySetpoint = valve?.estaControladaPorSetpoint?.() === true;
+    const status = controlledBySetpoint && severity !== 'ok' ? 'controlled' : severity;
 
     return {
-        status: severity,
-        ativo: severity !== 'ok',
+        status,
+        statusFisico: severity,
+        ativo: severity !== 'ok' && !controlledBySetpoint,
+        suprimidoPorSetpoint: controlledBySetpoint && severity !== 'ok',
         fluxoLps: flowLps,
         aberturaPercent: openingPercent,
         quedaPressaoBar: deltaPBar,
         perdaLocalTotalK: localLossCoeff,
+        perdaLocalAjustavelK: adjustableLossCoeff,
         cvAtual: Math.max(CV_MIN, finiteNumber(valve?.cv, CV_MIN)),
         perdaLocalKAtual: clamp(finiteNumber(valve?.perdaLocalK, 0), K_MIN, K_MAX),
         ...buildSuggestions(valve, deltaPBar, fraction)

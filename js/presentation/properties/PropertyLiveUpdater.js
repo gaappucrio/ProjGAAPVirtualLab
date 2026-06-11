@@ -211,7 +211,7 @@ function getValveSizingAlertState(diagnostico) {
             ? {
                 severity,
                 title: 'Válvula restritiva',
-                message: 'A válvula está muito aberta e ainda consome uma parcela alta da pressão disponível. Aumente o Cv ou reduza K para liberar a passagem sem mascarar a perda nos canos.',
+                message: 'A válvula manual está muito aberta e ainda consome uma parcela alta da pressão disponível. Aumente o Cv ou reduza K manual para liberar a passagem sem mascarar a perda nos canos.',
                 border: '#e74c3c',
                 background: '#2d1b1b',
                 color: '#ff6b6b',
@@ -220,7 +220,7 @@ function getValveSizingAlertState(diagnostico) {
             : {
                 severity,
                 title: 'Válvula restritiva',
-                message: 'A válvula está muito aberta e ainda consome uma parcela alta da pressão disponível. Aumente o Cv ou reduza K para liberar a passagem sem mascarar a perda nos canos.',
+                message: 'A válvula manual está muito aberta e ainda consome uma parcela alta da pressão disponível. Aumente o Cv ou reduza K manual para liberar a passagem sem mascarar a perda nos canos.',
                 border: '#c0392b',
                 background: '#fdeaea',
                 color: '#922b21',
@@ -232,7 +232,7 @@ function getValveSizingAlertState(diagnostico) {
         ? {
             severity,
             title: 'Válvula no limite',
-            message: 'A queda de pressão na válvula já é relevante para a abertura atual. O sistema ainda opera, mas a válvula pode estar virando o gargalo hidráulico.',
+            message: 'A queda de pressão na válvula manual já é relevante para a abertura atual. O sistema ainda opera, mas vale revisar Cv, K ou o perfil se ela não deveria limitar a rede.',
             border: '#f39c12',
             background: '#2d2418',
             color: '#f0b36b',
@@ -241,7 +241,7 @@ function getValveSizingAlertState(diagnostico) {
         : {
             severity,
             title: 'Válvula no limite',
-            message: 'A queda de pressão na válvula já é relevante para a abertura atual. O sistema ainda opera, mas a válvula pode estar virando o gargalo hidráulico.',
+            message: 'A queda de pressão na válvula manual já é relevante para a abertura atual. O sistema ainda opera, mas vale revisar Cv, K ou o perfil se ela não deveria limitar a rede.',
             border: '#e67e22',
             background: '#fff3e6',
             color: '#a84300',
@@ -310,10 +310,11 @@ function updateValveValues(engine, component, { monitorController } = {}) {
     const perfilAtual = component.perfilCaracteristica ?? 'custom';
     const bloqueioParametros = bloqueadaPorSetpoint || perfilAtual !== 'custom';
 
-    [abEl, numInput, perfilInput]
+    [abEl, numInput]
         .forEach((input) => {
             if (input) input.disabled = bloqueadaPorSetpoint;
         });
+    if (perfilInput) perfilInput.disabled = false;
     [cvInput, perdaInput, perdaEstrangulamentoInput, caracteristicaInput, rangeabilidadeInput, cursoInput]
         .forEach((input) => {
             if (input) input.disabled = bloqueioParametros;

@@ -624,13 +624,13 @@ Perfis:
 - Abertura rápida: maior passagem no início e curso mais rápido.
 - Personalizado: edição individual.
 
-O controle de nível pode assumir temporariamente o controle da abertura da válvula e restaurar a abertura manual ao ser liberado. Para manter fidelidade física, o PA não redesenha `Cv`, `K`, característica, rangeabilidade nem tempo de curso; esses valores representam geometria/projeto da válvula e permanecem locais ao componente.
+O controle de nível pode assumir temporariamente o controle da abertura da válvula e restaurar a abertura manual ao ser liberado. Para manter fidelidade física, o PA não redesenha `Cv`, `K`, característica, rangeabilidade nem tempo de curso por conta própria; esses valores representam geometria/projeto da válvula e permanecem locais ao componente. O usuário ainda pode trocar o perfil da válvula enquanto o PA está ativo para comparar a resposta da malha, e essa escolha persiste após liberar o controle.
 
 Com abertura efetiva zero, a válvula retorna área hidráulica e `Cv` nulos. O solver trata esse estado como fronteira fechada ideal, portanto a queda de pressão pode existir estaticamente, mas a vazão estacionária através da válvula e das conexões imediatamente ligadas a ela é zero.
 
 O coeficiente de vazão da válvula é armazenado internamente como `Cv`. A UI pode exibir e editar o mesmo coeficiente como `Cv` ou `Kv`; ao digitar `Kv`, o valor é convertido para `Cv` antes de entrar no modelo hidráulico. Alternar a unidade não altera `Cv`, `K`, abertura, curva característica nem queda de pressão calculada. Exportação, clipboard/snapshots e gráfico de válvula preservam a unidade escolhida, mantendo também a coluna canônica de `Cv` para auditoria.
 
-O diagnóstico de dimensionamento fica em `domain/services/ValveSizingDiagnostics.js`. Ele avalia abertura efetiva, vazão, queda de pressão e perda local equivalente para identificar quando a válvula está virando gargalo hidráulico. O painel da válvula exibe um alerta didático quando a abertura está alta e a queda de pressão ainda é relevante, com ação para colocar o perfil em `custom`, aumentar Cv e reduzir K dentro dos limites do simulador. O diagnóstico não implementa ainda verificação de classe pressão-temperatura ou material da válvula.
+O diagnóstico de dimensionamento fica em `domain/services/ValveSizingDiagnostics.js`. Ele avalia abertura efetiva, vazão, queda de pressão e perdas ajustáveis (`K` manual e estrangulamento aplicado) para identificar quando uma válvula manual está virando gargalo hidráulico. O painel da válvula exibe um alerta didático quando a abertura está alta e a queda de pressão ainda é relevante, com ação para colocar o perfil em `custom`, aumentar Cv e reduzir K dentro dos limites do simulador. Válvulas sob controle de set point suprimem esse alerta local; nesses casos, saturação real da malha aparece pelo alerta global do tanque. O diagnóstico não implementa ainda verificação de classe pressão-temperatura ou material da válvula.
 O ajuste de dimensionamento atua somente na instância selecionada e fica separado do controlador de nível; clicar para ajustar uma válvula não altera outras válvulas da mesma ilha ou de ilhas hidráulicas independentes.
 
 ### 8.5 `TanqueLogico`
@@ -661,7 +661,7 @@ Comportamento:
 - A matemática de controle e o estado interno vivem em `domain/services/LevelController.js`; o tanque apenas fornece medição/set point e traduz a saída `u` em abertura de válvulas.
 - O modo fuzzy usa funções trapezoidais nas extremidades (`NB`, `PB`), triangulares nas regiões intermediárias/centrais (`NS`, `ZE`, `PS`) e defuzzificação por média ponderada de singletons. Isso mantém saturação previsível nos extremos e resposta suave perto do set point.
 - O set point só pode ser ativado se houver válvula diretamente conectada à saída.
-- O alerta de saturação compara a vazão de entrada com a capacidade estimada de saída no nível do set point.
+- O alerta de saturação compara a vazão de entrada com a capacidade estimada de saída no nível do set point e exige persistência do candidato de saturação antes de recomendar ajuste de bomba ou fonte, evitando ruído em transientes curtos.
 - A apresentação do alerta de saturação fica em `TankSaturationAlertPresenter`, usando popup global no topo, botão de ação de dimensionamento e botão `x` para dispensar o aviso atual.
 - Entradas simultâneas com fluidos diferentes atualizam a composição armazenada.
 
@@ -855,7 +855,7 @@ Coberturas importantes:
 - Bomba ativa na saída de tanque aumentando vazão sem manter o limite puramente gravitacional do tanque.
 - Válvula totalmente aberta, com `Cv` alto e `K=0`, aplica apenas a perda física equivalente ao `Cv` e se aproxima de tubo equivalente quando o `Cv` é suficientemente alto.
 - Válvula comandada por set point com abertura subvisual, exibida como `0.0%`, fecha hidraulicamente e não mantém vazamento residual.
-- Controle de nível preserva `Cv`, `K`, perfil, característica, rangeabilidade e tempo de curso das válvulas, modulando apenas abertura; o ajuste didático de dimensionamento altera somente a válvula selecionada.
+- Controle de nível modula apenas abertura automaticamente; `Cv`, `K`, característica, rangeabilidade e tempo de curso continuam parâmetros de projeto. O perfil pode ser trocado manualmente durante o PA para comparar respostas da malha, e o ajuste didático de dimensionamento altera somente a válvula selecionada quando ela não está sob controle de set point.
 - Válvula em malha fechada com tanques e altura relativa ligada não cria nem consome massa; o teste confere inventário total dos tanques e balanço entrada/saída da válvula.
 - Malha com tanques, bomba desligada e válvula fechada não mantém fluxo em conexões adjacentes aos atuadores, mesmo quando o solver nodal é escolhido por haver ciclo dirigido.
 - Sistemas hidráulicos desconectados são resolvidos por ilha quando alguma malha fechada exige solver nodal; uma malha fechada isolada não altera volumes, vazões ou controle de set point de outra ilha aberta.

@@ -165,6 +165,7 @@ export class ValvulaLogica extends ComponenteFisico {
         if (unidadeNormalizada === this.getUnidadeCoeficienteVazao()) return true;
 
         this.unidadeCoeficienteVazao = unidadeNormalizada;
+        this._sincronizarParametrosControleNivel();
         if (options.silent !== true) this._notificarEstado();
         return true;
     }
@@ -251,6 +252,19 @@ export class ValvulaLogica extends ComponenteFisico {
         this.perfilCaracteristica = PERFIL_PERSONALIZADO;
     }
 
+    _sincronizarParametrosControleNivel() {
+        if (!this._parametrosManuaisControleNivel) return;
+
+        this._parametrosManuaisControleNivel.cv = this.cv;
+        this._parametrosManuaisControleNivel.unidadeCoeficienteVazao = this.unidadeCoeficienteVazao;
+        this._parametrosManuaisControleNivel.perdaLocalK = this.perdaLocalK;
+        this._parametrosManuaisControleNivel.considerarPerdaEstrangulamento = this.considerarPerdaEstrangulamento;
+        this._parametrosManuaisControleNivel.perfilCaracteristica = this.perfilCaracteristica;
+        this._parametrosManuaisControleNivel.tipoCaracteristica = this.tipoCaracteristica;
+        this._parametrosManuaisControleNivel.rangeabilidade = this.rangeabilidade;
+        this._parametrosManuaisControleNivel.tempoCursoSegundos = this.tempoCursoSegundos;
+    }
+
     _aplicarPerfilBase(perfilId) {
         const perfilNormalizado = normalizarPerfil(perfilId);
         const perfil = VALVE_PROFILE_DEFINITIONS[perfilNormalizado];
@@ -267,9 +281,13 @@ export class ValvulaLogica extends ComponenteFisico {
     }
 
     aplicarPerfilCaracteristica(perfilId, options = {}) {
-        if (!this._podeEditarParametros(options)) return false;
+        const permitirDuranteSetpoint = this.estaControladaPorSetpoint()
+            && options.fromSetpoint !== true
+            && options.allowDuringSetpoint !== false;
+        if (!permitirDuranteSetpoint && !this._podeEditarParametros(options)) return false;
 
         this._aplicarPerfilBase(perfilId);
+        this._sincronizarParametrosControleNivel();
         this._notificarEstado();
         return true;
     }
