@@ -403,8 +403,8 @@ test('valvula totalmente aberta com Cv alto se aproxima de tubo equivalente', ()
         tanque.conectarSaida(valvula);
         valvula.conectarSaida(dreno);
 
-        const entradaValvula = new ConnectionModel({ sourceId: tanque.id, targetId: valvula.id, perdaLocalK: 0 });
-        const saidaValvula = new ConnectionModel({ sourceId: valvula.id, targetId: dreno.id, perdaLocalK: 0 });
+        const entradaValvula = new ConnectionModel({ sourceId: tanque.id, targetId: valvula.id, extraLengthM: 0, perdaLocalK: 0 });
+        const saidaValvula = new ConnectionModel({ sourceId: valvula.id, targetId: dreno.id, extraLengthM: 0, perdaLocalK: 0 });
 
         [tanque, valvula, dreno].forEach((component) => engine.add(component));
         [entradaValvula, saidaValvula].forEach((connection) => engine.addConnection(connection));
@@ -599,8 +599,8 @@ test('conexoes adicionadas com simulacao em andamento entram em rampa hidraulica
         tanque.conectarSaida(valvula);
         valvula.conectarSaida(dreno);
 
-        const entradaValvula = new ConnectionModel({ sourceId: tanque.id, targetId: valvula.id });
-        const saidaValvula = new ConnectionModel({ sourceId: valvula.id, targetId: dreno.id });
+        const entradaValvula = new ConnectionModel({ sourceId: tanque.id, targetId: valvula.id, extraLengthM: 0 });
+        const saidaValvula = new ConnectionModel({ sourceId: valvula.id, targetId: dreno.id, extraLengthM: 0 });
         engine.addConnection(entradaValvula);
         engine.addConnection(saidaValvula);
         conexoes.push(entradaValvula, saidaValvula);
@@ -834,7 +834,7 @@ test('fonte limitada por vazao nao sustenta pressao nominal no dreno', () => {
     dreno.pressaoSaidaBar = 0;
     fonte.conectarSaida(dreno);
 
-    const connection = new ConnectionModel({ sourceId: fonte.id, targetId: dreno.id });
+    const connection = new ConnectionModel({ sourceId: fonte.id, targetId: dreno.id, extraLengthM: 0 });
     engine.add(fonte);
     engine.add(dreno);
     engine.addConnection(connection);
@@ -1341,10 +1341,10 @@ test('controlador fuzzy de nivel com valvula somente na saida remove offset esta
 
     [fonte, bomba, tanque, valvulaSaida, dreno].forEach((component) => engine.add(component));
     [
-        new ConnectionModel({ sourceId: fonte.id, targetId: bomba.id, perdaLocalK: 0 }),
-        new ConnectionModel({ sourceId: bomba.id, targetId: tanque.id, perdaLocalK: 0 }),
-        new ConnectionModel({ sourceId: tanque.id, targetId: valvulaSaida.id, perdaLocalK: 0 }),
-        new ConnectionModel({ sourceId: valvulaSaida.id, targetId: dreno.id, perdaLocalK: 0 })
+        new ConnectionModel({ sourceId: fonte.id, targetId: bomba.id, extraLengthM: 0, perdaLocalK: 0 }),
+        new ConnectionModel({ sourceId: bomba.id, targetId: tanque.id, extraLengthM: 0, perdaLocalK: 0 }),
+        new ConnectionModel({ sourceId: tanque.id, targetId: valvulaSaida.id, extraLengthM: 0, perdaLocalK: 0 }),
+        new ConnectionModel({ sourceId: valvulaSaida.id, targetId: dreno.id, extraLengthM: 0, perdaLocalK: 0 })
     ].forEach((connection) => engine.addConnection(connection));
 
     const resultadoSetpoint = tanque.setSetpointAtivo(true);

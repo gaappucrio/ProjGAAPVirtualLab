@@ -1,5 +1,6 @@
 import { getUnitSymbol, toDisplayValue } from '../../presentation/units/DisplayUnits.js';
 import { t } from '../../presentation/i18n/LanguageManager.js';
+import { DEFAULT_PIPE_SCHEMATIC_LENGTH_M } from '../../domain/units/HydraulicUnits.js';
 
 const PIPE_PRESSURE_POINT_COUNT = 32;
 
@@ -30,6 +31,11 @@ function finiteNumber(value, fallback = 0) {
 
 function hasFiniteNumber(value) {
     return Number.isFinite(Number(value));
+}
+
+function getConnectionFallbackLengthM(connection) {
+    const extraLengthM = Math.max(0, finiteNumber(connection?.extraLengthM, 0));
+    return DEFAULT_PIPE_SCHEMATIC_LENGTH_M + extraLengthM;
 }
 
 function formatAxisTick(value) {
@@ -80,9 +86,9 @@ function getPressureProfileEndpointBar(state = {}, overrides = {}) {
 function getPipeLengthM(connection, state = {}, geometry = {}) {
     const rawLengthM = Math.max(
         0,
-        finiteNumber(state.lengthM, finiteNumber(geometry.lengthM, connection?.extraLengthM || 0))
+        finiteNumber(state.lengthM, finiteNumber(geometry.lengthM, getConnectionFallbackLengthM(connection)))
     );
-    return rawLengthM > 0 ? rawLengthM : 1;
+    return rawLengthM > 0 ? rawLengthM : DEFAULT_PIPE_SCHEMATIC_LENGTH_M;
 }
 
 export function buildPipePressureProfile(connection, state = {}, geometry = {}, options = {}) {

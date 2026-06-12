@@ -1912,13 +1912,18 @@
       background: rgba(255, 255, 255, 0.88);
   }
 
+  .chart-compare-dismiss,
+  .chart-pump-export-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+  }
+
   .chart-compare-dismiss {
       flex: 0 0 auto;
       width: 28px;
       height: 28px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
       border: 1px solid #d8e3ea;
       border-radius: 50%;
       background: #ffffff;
@@ -1926,7 +1931,6 @@
       font-size: 14px;
       font-weight: 700;
       line-height: 1;
-      cursor: pointer;
       transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   }
 
@@ -1949,9 +1953,6 @@
       z-index: 5;
       min-width: 44px;
       height: 28px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
       padding: 0 9px;
       border: 1px solid #cfdde7;
       border-radius: 8px;
@@ -1960,7 +1961,6 @@
       font-size: 11px;
       font-weight: 700;
       line-height: 1;
-      cursor: pointer;
       box-shadow: 0 4px 12px rgba(20, 50, 80, 0.12);
       transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
   }
@@ -1978,7 +1978,7 @@
       display: none;
   }
 
-  .chart-pump-export-button.is-compact-action{
+  .chart-pump-export-button.is-compact-action {
       display: none;
   }
 
@@ -2063,36 +2063,20 @@
 
 
 
-  .btn-maximize-chart
-
-  /* BOTÃO PARA MAXIMIZAR O GRÁFICO  */
-      {
+  .btn-maximize-chart {
       background: #ecf0f1;
-      /* Fundo cinza claro para o botão de maximizar o gráfico, criando um contraste suave com o fundo branco do gráfico e garantindo que o botão seja facilmente identificável para os usuários, além de criar um visual mais consistente e profissional para o gráfico de monitoramento, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para o gráfico maximizado */
       border: none;
-      /* Remove a borda para o botão de maximizar o gráfico, criando um visual mais limpo e profissional para o botão maximizado, além de permitir que o destaque visual seja controlado por meio de outras propriedades CSS, como a sombra e as bordas arredondadas, para criar um efeito de destaque mais elegante e profissional para o botão de maximizar o gráfico */
       cursor: pointer;
-      /* Define o cursor como ponteiro ao passar sobre o botão de maximizar o gráfico, indicando que ele é clicável e proporcionando uma melhor experiência do usuário */
       padding: 4px 8px;
-      /* Preenchimento interno para o botão de maximizar o gráfico, garantindo que ele tenha espaço suficiente para respirar e melhorando a legibilidade e a estética geral do design */
       border-radius: 4px;
-      /* Borda arredondada para o botão de maximizar o gráfico, criando um visual mais amigável e atraente, além de destacar o botão e torná-lo mais identificável para os usuários */
       font-size: 11px;
-      /* Tamanho da fonte para o botão de maximizar o gráfico, garantindo que ele seja legível e proporcional ao design geral do layout */
       float: right;
-      /* Posiciona o botão de maximizar o gráfico à direita do gráfico de monitoramento */
       font-weight: bold;
-      /* Negrito para o botão de maximizar o gráfico, criando um destaque visual que chama a atenção dos usuários para o botão e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para o gráfico de monitoramento, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para o gráfico maximizado */
       color: #2c3e50;
-      /* Cor do texto para o botão de maximizar o gráfico, garantindo que ele seja legível e proporcional ao design geral do layout */
   }
 
-  .btn-maximize-chart:hover
-
-  /* HOVER PARA O BOTÃO DE MAXIMIZAR O GRÁFICO  */
-      {
+  .btn-maximize-chart:hover {
       background: #bdc3c7;
-      /* Fundo cinza médio para o botão de maximizar o gráfico quando o mouse está sobre ele, criando um efeito de destaque que melhora a experiência do usuário e proporciona uma interação mais intuitiva com o botão */
   }
 
   .btn-maximize-chart.is-close-mode {

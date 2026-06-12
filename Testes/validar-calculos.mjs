@@ -43,7 +43,10 @@ import {
 import { buildPumpCurveDatasets } from '../js/infrastructure/charts/PumpChartAdapter.js';
 import {
     DEFAULT_ATMOSPHERIC_PRESSURE_BAR,
+    DEFAULT_PIPE_EXTRA_LENGTH_M,
+    DEFAULT_PIPE_SCHEMATIC_LENGTH_M,
     DEFAULT_SOURCE_MAX_FLOW_LPS,
+    DEFAULT_SOURCE_PRESSURE_BAR,
     pressureFromHeadBar
 } from '../js/domain/units/HydraulicUnits.js';
 
@@ -60,6 +63,34 @@ function createEngine() {
     engine.fluidoOperante.densidade = 1000;
     return engine;
 }
+
+test('padroes iniciais usam fonte de 150 kPa e cano esquematico de 100 m', () => {
+    const engine = new SistemaSimulacao();
+    const fonte = new FonteLogica('F-default', 'Entrada-default', 0, 0);
+    const dreno = new DrenoLogico('D-default', 'Saida-default', 160, 0);
+    const connection = new ConnectionModel({
+        sourceId: fonte.id,
+        targetId: dreno.id
+    });
+
+    engine.add(fonte);
+    engine.add(dreno);
+    engine.addConnection(connection);
+
+    const geometry = engine.getConnectionGeometry(connection);
+
+    assert.equal(DEFAULT_PIPE_SCHEMATIC_LENGTH_M, 1);
+    assert.equal(DEFAULT_PIPE_EXTRA_LENGTH_M, 99);
+    assert.equal(connection.extraLengthM, 99);
+    assert.equal(DEFAULT_SOURCE_PRESSURE_BAR, 1.5);
+    assert.equal(fonte.pressaoFonteBar, 1.5);
+    assert.equal(fonte.pressaoFonteBar * 100, 150);
+    assert.equal(geometry.straightLengthM, 1);
+    assert.equal(geometry.lengthM, 100);
+
+    connection.extraLengthM = 0;
+    assert.equal(engine.getConnectionGeometry(connection).lengthM, 1);
+});
 
 test('dimensionamento por continuidade calcula diâmetro a partir de vazão e velocidade', () => {
     const flowM3s = 0.026995881908059335;

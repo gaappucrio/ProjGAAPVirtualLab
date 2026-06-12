@@ -795,6 +795,33 @@ test('perfil de pressao do pipe usa pressao resolvida ao longo da distancia', as
     ]);
 });
 
+test('perfil de pressao do pipe usa comprimento total padrao no fallback', async () => {
+    const { ConnectionModel } = await import('../js/domain/models/ConnectionModel.js');
+    const { buildPipePressureProfile } = await import('../js/infrastructure/charts/PipePressureChartAdapter.js');
+    const { setUnitPreference } = await import('../js/presentation/units/DisplayUnits.js');
+
+    setUnitPreference('pressure', 'kpa');
+    setUnitPreference('length', 'm');
+
+    const connection = new ConnectionModel({
+        sourceId: 'F-01',
+        targetId: 'D-01'
+    });
+    const profile = buildPipePressureProfile(
+        connection,
+        {
+            sourcePressureBar: 1.5,
+            pressureBar: 1.4
+        },
+        {}
+    );
+
+    assert.equal(connection.extraLengthM, 99);
+    assert.equal(profile.lengthAxisMax, 100);
+    assert.equal(profile.pressurePoints.at(-1).x, 100);
+    assert.deepEqual(profile.endpointPoints.map((point) => point.x), [0, 100]);
+});
+
 test('perfil aglutinado de canos preserva trechos e lacunas visuais', async () => {
     const { ConnectionModel } = await import('../js/domain/models/ConnectionModel.js');
     const { buildCompositePipePressureProfile } = await import('../js/infrastructure/charts/PipePressureChartAdapter.js');
