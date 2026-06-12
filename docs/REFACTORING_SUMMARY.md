@@ -57,7 +57,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Curva de pressão/carga em função da vazão.
 - Curva de eficiência.
 - Curva de NPSHr.
-- Cálculo de NPSHa, NPSHr atual, margem contra cavitação e condição de sucção.
+- Cálculo de NPSHa, NPSH requerido, margem contra cavitação e condição de sucção.
 - Fator de cavitação reduzindo desempenho quando NPSHa é insuficiente, podendo zerar a capacidade efetiva quando a sucção é fisicamente inviável.
 - Estado `Cavitando` separado do aviso preventivo de risco quando o solver já reduziu o desempenho da bomba por NPSH insuficiente.
 - Detecção explícita de falta de líquido na sucção da bomba, separada do cálculo de cavitação por NPSH.
@@ -583,9 +583,8 @@ Propriedades principais:
 - Acionamento.
 - Acionamento efetivo.
 - Eficiência hidráulica.
-- NPSHr de referência.
-- NPSHa atual.
-- NPSHr atual.
+- NPSH disponível.
+- NPSH requerido.
 - Margem de NPSH.
 - Fator de cavitação.
 

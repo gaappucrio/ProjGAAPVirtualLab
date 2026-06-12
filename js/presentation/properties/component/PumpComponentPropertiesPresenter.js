@@ -220,10 +220,6 @@ export const PUMP_PROPERTIES_PRESENTER = {
                 <input type="number" id="input-eficiencia-bomba" ${hintAttr(TOOLTIP.pumpEfficiency)} value="${(comp.eficienciaHidraulica * 100).toFixed(0)}" step="1" min="20" max="100">
             </div>
             <div class="prop-group">
-                ${makeUnitLabel('NPSHr de referência', 'length', TOOLTIP.pumpNpshr)}
-                <input type="number" id="input-npsh-bomba" ${hintAttr(TOOLTIP.pumpNpshr)} value="${displayEditableUnitValue('length', comp.npshRequeridoM, 3)}" step="${displayStep('length', 0.05)}" min="${displayBound('length', 0.5)}" max="${displayBound('length', 50)}">
-            </div>
-            <div class="prop-group">
                 ${makeLabel('Tempo de rampa (s)', TOOLTIP.pumpRamp)}
                 <input type="number" id="input-rampa-bomba" ${hintAttr(TOOLTIP.pumpRamp)} value="${comp.tempoRampaSegundos}" step="0.1" min="0" max="20">
             </div>
@@ -232,11 +228,11 @@ export const PUMP_PROPERTIES_PRESENTER = {
                 <input type="text" id="disp-acionamento-real-bomba" ${hintAttr(TOOLTIP.pumpEffectiveDrive)} value="${comp.acionamentoEfetivo.toFixed(1)}" disabled>
             </div>
             <div class="prop-group">
-                ${makeUnitLabel('NPSHa atual', 'length', TOOLTIP.pumpCurrentNpsha)}
+                ${makeUnitLabel('NPSH disponível', 'length', TOOLTIP.pumpCurrentNpsha)}
                 <input type="text" id="disp-npsha-bomba" ${hintAttr(TOOLTIP.pumpCurrentNpsha)} value="${displayUnitValue('length', comp.npshDisponivelM, 2)}" disabled>
             </div>
             <div class="prop-group">
-                ${makeUnitLabel('NPSHr atual', 'length', TOOLTIP.pumpCurrentNpshr)}
+                ${makeUnitLabel('NPSH requerido', 'length', TOOLTIP.pumpCurrentNpshr)}
                 <input type="text" id="disp-npshr-atual-bomba" ${hintAttr(TOOLTIP.pumpCurrentNpshr)} value="${displayUnitValue('length', npshRequeridoAtualM, 2)}" disabled>
             </div>
             <div class="prop-group">

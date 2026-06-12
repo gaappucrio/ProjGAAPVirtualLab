@@ -57,8 +57,8 @@ const COMPONENT_COLUMNS = [
     'Eficiência hidráulica nominal',
     'Eficiência atual',
     'NPSHr referência (m)',
-    'NPSHr atual (m)',
-    'NPSHa atual (m)',
+    'NPSH requerido (m)',
+    'NPSH disponível (m)',
     'Margem NPSH (m)',
     'Fator de cavitação',
     'Tempo de rampa (s)',
@@ -200,9 +200,9 @@ const EXPORT_LABELS_EN = {
     'Pressão máxima da bomba': 'Pump maximum pressure',
     'Eficiência hidráulica nominal': 'Nominal hydraulic efficiency',
     'Eficiência atual': 'Current efficiency',
-    'NPSHr referência': 'Reference NPSHr',
-    'NPSHr atual': 'Current NPSHr',
-    'NPSHa atual': 'Current NPSHa',
+    'NPSHr referência': '',
+    'NPSH requerido': 'Required NPSH',
+    'NPSH disponível': 'Avaiable NPSH',
     'Margem NPSH': 'NPSH margin',
     'Fator de cavitação': 'Cavitation factor',
     'Tempo de rampa': 'Ramp time',
@@ -537,8 +537,8 @@ function buildComponentRow(component, engine = null) {
         row['Eficiência hidráulica nominal'] = numberValue(component.eficienciaHidraulica, 5);
         row['Eficiência atual'] = numberValue(component.eficienciaAtual, 5);
         row['NPSHr referência (m)'] = numberValue(component.npshRequeridoM, 5);
-        row['NPSHr atual (m)'] = numberValue(component.npshRequeridoAtualM, 5);
-        row['NPSHa atual (m)'] = numberValue(component.npshDisponivelM, 5);
+        row['NPSH requerido (m)'] = numberValue(component.npshRequeridoAtualM, 5);
+        row['NPSH disponível (m)'] = numberValue(component.npshDisponivelM, 5);
         row['Margem NPSH (m)'] = numberValue(component.margemNpshM, 5);
         row['Fator de cavitação'] = numberValue(component.fatorCavitacaoAtual, 5);
         row['Tempo de rampa (s)'] = numberValue(component.tempoRampaSegundos, 5);
