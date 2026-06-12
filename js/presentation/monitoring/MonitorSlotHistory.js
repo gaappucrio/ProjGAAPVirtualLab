@@ -1,7 +1,7 @@
 import { getPipeMonitorEntryIds, isPipeMonitorEntry } from './PipeMonitorGrouping.js';
 
 export function createMonitorSlotHistory({ maxEntries = 2, onRemove = () => {} } = {}) {
-    const entries = [];
+    const entries = Array.from({ length: maxEntries }, () => null);
 
     function getEntryIds(entry) {
         return isPipeMonitorEntry(entry)
@@ -25,26 +25,20 @@ export function createMonitorSlotHistory({ maxEntries = 2, onRemove = () => {} }
         return { id: entry.id, kind: entry.kind };
     }
 
-    function hasEntry(entry) {
-        const ids = getEntryIds(entry);
-        return entries.some((candidate) => {
-            if (candidate.kind === 'pipeGroup' && entry.kind === 'pipe') {
-                return getEntryIds(candidate).includes(entry.id);
-            }
-
-            if (entry.kind === 'pipeGroup' && candidate.kind === 'pipe') {
-                return ids.includes(candidate.id);
-            }
-
-            return candidate.id === entry.id;
+    function findEntryMatchIndex(entry) {
+        return entries.findIndex((candidate) => {
+            if (!candidate) return false;
+            return candidate.kind === entry.kind && candidate.id === entry.id;
         });
     }
 
     function snapshot() {
-        return entries.map((entry) => ({
-            ...entry,
-            ...(Array.isArray(entry.ids) ? { ids: [...entry.ids] } : {})
-        }));
+        return entries.map((entry) => entry
+            ? {
+                ...entry,
+                ...(Array.isArray(entry.ids) ? { ids: [...entry.ids] } : {})
+            }
+            : null);
     }
 
     function remember(entry) {
@@ -53,16 +47,17 @@ export function createMonitorSlotHistory({ maxEntries = 2, onRemove = () => {} }
             return { changed: false, entries: snapshot() };
         }
 
-        if (hasEntry(normalizedEntry)) {
+        const existingIndex = findEntryMatchIndex(normalizedEntry);
+        if (existingIndex >= 0) {
             return { changed: false, entries: snapshot() };
         }
 
-        entries.push(normalizedEntry);
-
-        while (entries.length > maxEntries) {
-            onRemove(entries.shift());
+        const emptyIndex = entries.findIndex((candidate) => !candidate);
+        if (emptyIndex < 0) {
+            return { changed: false, entries: snapshot() };
         }
 
+        entries[emptyIndex] = normalizedEntry;
         return { changed: true, entries: snapshot() };
     }
 
@@ -76,6 +71,8 @@ export function createMonitorSlotHistory({ maxEntries = 2, onRemove = () => {} }
             || target < 0
             || source >= entries.length
             || target >= entries.length
+            || !entries[source]
+            || !entries[target]
             || source === target
         ) {
             return { changed: false, entries: snapshot() };
@@ -114,10 +111,9 @@ export function createMonitorSlotHistory({ maxEntries = 2, onRemove = () => {} }
             kind: 'pipeGroup',
             ids
         };
-        const targetAfterRemoval = source < target ? target - 1 : target;
 
-        entries.splice(source, 1);
-        entries[targetAfterRemoval] = mergedEntry;
+        entries[target] = mergedEntry;
+        entries[source] = null;
 
         return { changed: true, entries: snapshot() };
     }
@@ -125,10 +121,11 @@ export function createMonitorSlotHistory({ maxEntries = 2, onRemove = () => {} }
     function prune(isValidEntry) {
         let changed = false;
         for (let index = entries.length - 1; index >= 0; index -= 1) {
+            if (!entries[index]) continue;
             if (isValidEntry(entries[index])) continue;
 
             onRemove(entries[index]);
-            entries.splice(index, 1);
+            entries[index] = null;
             changed = true;
         }
 
@@ -141,7 +138,12 @@ export function createMonitorSlotHistory({ maxEntries = 2, onRemove = () => {} }
             return { changed: false, entries: snapshot() };
         }
 
-        const [removedEntry] = entries.splice(numericIndex, 1);
+        const removedEntry = entries[numericIndex];
+        if (!removedEntry) {
+            return { changed: false, entries: snapshot() };
+        }
+
+        entries[numericIndex] = null;
         onRemove(removedEntry);
 
         return { changed: true, entries: snapshot() };

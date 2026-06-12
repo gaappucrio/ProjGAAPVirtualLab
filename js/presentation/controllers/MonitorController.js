@@ -39,6 +39,7 @@ export function createMonitorController({ engine }) {
     let monitorChartMode = 'empty';
     let expandedMonitorCharts = [null, null];
     let draggedMonitorIndex = null;
+    let blockedMonitorSelectionLabel = '';
     const monitorTankSeries = new Map();
     const monitorChartHistory = createMonitorSlotHistory({
         maxEntries: MAX_MONITOR_CHART_HISTORY,
@@ -115,6 +116,11 @@ export function createMonitorController({ engine }) {
         const sourceLabel = source?.tag || connection?.sourceId || t('chart.pipe');
         const targetLabel = target?.tag || connection?.targetId || t('chart.pipe');
         return `${sourceLabel} -> ${targetLabel}`;
+    }
+
+    function getMonitorComponentLabel(component, kind = getMonitorChartKind(component)) {
+        if (kind === 'pipe') return getConnectionMonitorLabel(component);
+        return component?.tag || getMonitorChartKindLabel(kind);
     }
 
     function getPipePressureProfileOptions(connection) {
@@ -246,11 +252,12 @@ export function createMonitorController({ engine }) {
     function getMonitorChartEntries() {
         pruneMonitorChartHistory();
         return monitorChartHistory.getEntries()
-            .map((entry) => ({
-                ...entry,
-                component: getMonitorChartComponent(entry)
-            }))
-            .filter((entry) => entry.component);
+            .map((entry) => entry
+                ? {
+                    ...entry,
+                    component: getMonitorChartComponent(entry)
+                }
+                : null);
     }
 
     function resetTankMonitorSeries(component) {
@@ -285,9 +292,14 @@ export function createMonitorController({ engine }) {
         const kind = getMonitorChartKind(component);
         if (!kind) return false;
 
-        monitorChartHistory.remember({ id: component.id, kind });
+        const result = monitorChartHistory.remember({ id: component.id, kind });
+        const alreadyDisplayed = monitorChartHistory.getEntries()
+            .some((entry) => entry?.id === component.id && entry.kind === kind);
+        blockedMonitorSelectionLabel = result.changed || alreadyDisplayed
+            ? ''
+            : getMonitorComponentLabel(component, kind);
         if (kind === 'tank') ensureTankMonitorSeries(component);
-        return true;
+        return result.changed;
     }
 
     function createEmptyCompactChart() {
@@ -635,6 +647,7 @@ export function createMonitorController({ engine }) {
         const result = monitorChartHistory.removeAt(index);
         if (!result.changed) return;
 
+        blockedMonitorSelectionLabel = '';
         renderExpandedMonitorCharts();
     }
 
@@ -658,7 +671,10 @@ export function createMonitorController({ engine }) {
             ? monitorChartHistory.mergePipesAt(sourceIndex, targetIndex)
             : monitorChartHistory.swapAt(sourceIndex, targetIndex);
 
-        if (result.changed) renderExpandedMonitorCharts();
+        if (result.changed) {
+            blockedMonitorSelectionLabel = '';
+            renderExpandedMonitorCharts();
+        }
         return result.changed;
     }
 
@@ -783,15 +799,18 @@ export function createMonitorController({ engine }) {
         const status = document.getElementById('chart-max-status');
 
         if (badge) {
-            const count = entries.length;
+            const count = entries.filter(Boolean).length;
             badge.textContent = t('chart.badge', { count });
         }
 
         if (!status) return;
 
-        if (entries.length >= 2) {
+        const activeCount = entries.filter(Boolean).length;
+        if (blockedMonitorSelectionLabel) {
+            status.textContent = t('chart.statusSlotsFull', { item: blockedMonitorSelectionLabel });
+        } else if (activeCount >= 2) {
             status.textContent = t('chart.statusCompare');
-        } else if (entries.length === 1) {
+        } else if (activeCount === 1) {
             status.textContent = t('chart.statusOne');
         } else {
             status.textContent = t('chart.statusEmpty');
@@ -894,9 +913,11 @@ export function createMonitorController({ engine }) {
         if (!isExpanded()) return;
 
         const entries = getMonitorChartEntries();
-        const activeCharts = expandedMonitorCharts.filter(Boolean).length;
-        const shouldRebuild = entries.length !== activeCharts || entries.some((entry, index) => {
+        const activeEntryCount = entries.filter(Boolean).length;
+        const activeChartCount = expandedMonitorCharts.filter(Boolean).length;
+        const shouldRebuild = activeEntryCount !== activeChartCount || entries.some((entry, index) => {
             const elements = getExpandedChartElements(index);
+            if (!entry) return Boolean(expandedMonitorCharts[index]);
             return !expandedMonitorCharts[index]
                 || elements.canvas?.dataset.monitorEntryId !== String(entry.id)
                 || elements.canvas?.dataset.monitorEntryKind !== entry.kind;
@@ -910,6 +931,8 @@ export function createMonitorController({ engine }) {
         updateExpandedMonitorHeader(entries);
 
         entries.forEach((entry, index) => {
+            if (!entry) return;
+
             const chart = expandedMonitorCharts[index];
             const elements = getExpandedChartElements(index);
             const exportButton = ensureExpandedPumpExportButton(elements, index);
@@ -954,6 +977,7 @@ export function createMonitorController({ engine }) {
         }
 
         getMonitorChartEntries().forEach((entry) => {
+            if (!entry) return;
             if (entry.kind === 'tank') tankIds.add(entry.id);
         });
 

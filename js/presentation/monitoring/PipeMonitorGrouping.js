@@ -37,6 +37,25 @@ function buildComponentAdjacency(connections = []) {
     return adjacency;
 }
 
+function buildDirectedComponentAdjacency(connections = []) {
+    const adjacency = new Map();
+
+    const ensureComponent = (componentId) => {
+        if (!adjacency.has(componentId)) adjacency.set(componentId, new Set());
+        return adjacency.get(componentId);
+    };
+
+    connections.forEach((connection) => {
+        const [sourceId, targetId] = getConnectionEndpoints(connection);
+        if (!sourceId || !targetId) return;
+
+        ensureComponent(sourceId).add(targetId);
+        ensureComponent(targetId);
+    });
+
+    return adjacency;
+}
+
 function findReachableComponents(startComponentId, adjacency) {
     const visited = new Set();
     const queue = [startComponentId];
@@ -52,6 +71,34 @@ function findReachableComponents(startComponentId, adjacency) {
     }
 
     return visited;
+}
+
+function hasDirectedPath(sourceComponentId, targetComponentId, adjacency) {
+    if (!sourceComponentId || !targetComponentId) return false;
+    if (sourceComponentId === targetComponentId) return true;
+    return findReachableComponents(sourceComponentId, adjacency).has(targetComponentId);
+}
+
+function isConnectionBeforeInRoute(a, b, directedAdjacency) {
+    const [, aTargetId] = getConnectionEndpoints(a);
+    const [bSourceId] = getConnectionEndpoints(b);
+    return hasDirectedPath(aTargetId, bSourceId, directedAdjacency);
+}
+
+function canOrderConnectionsOnDirectedRoute(connections = [], allConnections = []) {
+    if (connections.length <= 1) return true;
+
+    const directedAdjacency = buildDirectedComponentAdjacency(allConnections);
+    const orderedConnections = [...connections].sort((a, b) => {
+        if (isConnectionBeforeInRoute(a, b, directedAdjacency)) return -1;
+        if (isConnectionBeforeInRoute(b, a, directedAdjacency)) return 1;
+        return 0;
+    });
+
+    return orderedConnections.every((connection, index) => {
+        if (index === 0) return true;
+        return isConnectionBeforeInRoute(orderedConnections[index - 1], connection, directedAdjacency);
+    });
 }
 
 export function canMergePipeMonitorEntries(sourceEntry, targetEntry, connections = []) {
@@ -77,5 +124,5 @@ export function canMergePipeMonitorEntries(sourceEntry, targetEntry, connections
 
     return selectedConnections.every((connection) =>
         getConnectionEndpoints(connection).every((componentId) => reachableComponents.has(componentId))
-    );
+    ) && canOrderConnectionsOnDirectedRoute(selectedConnections, connections);
 }
