@@ -101,7 +101,6 @@ const COMPONENT_COLUMNS = [
     'Elevação do bocal de entrada (m)',
     'Elevação do bocal de saída (m)',
     'Coeficiente de descarga do tanque',
-    'Perda de entrada do tanque K',
     'Pressão no fundo do tanque (bar)',
     'Vazão de entrada do tanque (L/s)',
     'Vazão de saída do tanque (L/s)',
@@ -113,7 +112,6 @@ const COMPONENT_COLUMNS = [
     'Cor visual do fluido no tanque',
     'Set point ativo',
     'Set point (%)',
-    'Modo do controlador de nível',
     'Ganho proporcional Kp',
     'Ganho integral Ki',
     'Ganho derivativo Kd',
@@ -245,7 +243,6 @@ const EXPORT_LABELS_EN = {
     'Elevação do bocal de entrada': 'Inlet nozzle elevation',
     'Elevação do bocal de saída': 'Outlet nozzle elevation',
     'Coeficiente de descarga do tanque': 'Tank discharge coefficient',
-    'Perda de entrada do tanque K': 'Tank inlet loss K',
     'Pressão no fundo do tanque': 'Tank bottom pressure',
     'Vazão de entrada do tanque': 'Tank inlet flow',
     'Vazão de saída do tanque': 'Tank outlet flow',
@@ -257,7 +254,6 @@ const EXPORT_LABELS_EN = {
     'Cor visual do fluido no tanque': 'Tank fluid visual color',
     'Set point ativo': 'Set point active',
     'Set point': 'Set point',
-    'Modo do controlador de nível': 'Level controller mode',
     'Ganho proporcional Kp': 'Proportional gain Kp',
     'Ganho integral Ki': 'Integral gain Ki',
     'Ganho derivativo Kd': 'Derivative gain Kd',
@@ -312,9 +308,6 @@ const EXPORT_VALUE_TRANSLATIONS_EN = {
     oleo_leve: 'Light oil',
     glicol_30: 'Glycol 30%',
     custom: 'Custom',
-    'Determinístico (PID)': 'Deterministic (PID)',
-    pid: 'Deterministic PID',
-    fuzzy: 'Fuzzy',
     equal_percentage: 'Equal percentage',
     linear: 'Linear',
     quick_opening: 'Quick opening'
@@ -329,7 +322,6 @@ const LOCALIZED_VALUE_COLUMNS = new Set([
     'Bomba ligada',
     'Válvula aberta',
     'Set point ativo',
-    'Modo do controlador de nível',
     'Alerta de saturação ativo',
     'Perfil da válvula',
     'Característica da válvula',
@@ -592,7 +584,6 @@ function buildComponentRow(component, engine = null) {
         row['Elevação do bocal de entrada (m)'] = numberValue(component.alturaBocalEntradaM, 5);
         row['Elevação do bocal de saída (m)'] = numberValue(component.alturaBocalSaidaM, 5);
         row['Coeficiente de descarga do tanque'] = numberValue(component.coeficienteSaida, 5);
-        row['Perda de entrada do tanque K'] = numberValue(component.perdaEntradaK, 5);
         row['Pressão no fundo do tanque (bar)'] = numberValue(component.pressaoFundoBar, 5);
         row['Vazão de entrada do tanque (L/s)'] = numberValue(component.lastQin, 5);
         row['Vazão de saída do tanque (L/s)'] = numberValue(component.lastQout, 5);
@@ -604,9 +595,6 @@ function buildComponentRow(component, engine = null) {
         row['Cor visual do fluido no tanque'] = fluid ? getFluidVisualStyle(fluid).stroke : '';
         row['Set point ativo'] = booleanValue(component.setpointAtivo);
         row['Set point (%)'] = numberValue(component.setpoint, 3);
-        row['Modo do controlador de nível'] = component.controladorNivelModo === 'fuzzy'
-            ? 'Fuzzy'
-            : 'Determinístico (PID)';
         row['Ganho proporcional Kp'] = numberValue(component.kp, 5);
         row['Ganho integral Ki'] = numberValue(component.ki, 5);
         row['Ganho derivativo Kd'] = numberValue(component.kd, 5);

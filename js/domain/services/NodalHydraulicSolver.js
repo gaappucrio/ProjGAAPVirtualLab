@@ -490,10 +490,10 @@ export class NodalHydraulicSolver {
             } else if (component instanceof DrenoLogico) {
                 inputNode.fixedPressureBar = Math.max(0, finiteNumber(component.pressaoSaidaBar, 0));
             } else if (component instanceof TanqueLogico) {
-                inputNode.fixedPressureBar = component.getBackPressureAtInletBar(fluid, this.context.usarAlturaRelativa);
-                outputNode.fixedPressureBar = component.temLiquidoDisponivelSaida?.(this.context.usarAlturaRelativa) === false
-                    ? 0
-                    : component.getPressaoDisponivelSaidaBar(fluid, this.context.usarAlturaRelativa);
+                const connectionPressureBar = component.getPressaoConexaoSemPerdaBar?.(fluid, this.context.usarAlturaRelativa)
+                    ?? component.getPressaoDisponivelSaidaBar(fluid, this.context.usarAlturaRelativa);
+                inputNode.fixedPressureBar = connectionPressureBar;
+                outputNode.fixedPressureBar = connectionPressureBar;
             }
 
             const internalBranch = this.createInternalBranch(component, inputNode.id, outputNode.id, fluid);
@@ -703,14 +703,12 @@ export class NodalHydraulicSolver {
 
     getSourceOutletLossCoeff(source) {
         if (source instanceof FonteLogica) return DEFAULT_ENTRY_LOSS;
-        if (source instanceof TanqueLogico) {
-            return 1.0 / Math.max(0.15, source.coeficienteSaida * source.coeficienteSaida);
-        }
+        if (source instanceof TanqueLogico) return 0;
         return 0;
     }
 
     getBoundaryTargetEntryLossCoeff(target) {
-        if (target instanceof TanqueLogico || target instanceof DrenoLogico) {
+        if (target instanceof DrenoLogico) {
             return Math.max(0, target.perdaEntradaK || 0);
         }
         return 0;

@@ -58,5 +58,8 @@ export function areaFromDiameter(diameterM) {
 }
 
 export function pressureFromHeadBar(headM, density) {
-    return (density * GRAVITY * headM) / BAR_TO_PA;
+    const safeHeadM = Number(headM);
+    const safeDensity = Number(density);
+    if (!Number.isFinite(safeHeadM) || !Number.isFinite(safeDensity) || safeDensity <= 0) return 0;
+    return (safeDensity * GRAVITY * safeHeadM) / BAR_TO_PA;
 }

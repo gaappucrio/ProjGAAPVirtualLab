@@ -127,7 +127,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Gráficos de bomba exibem um botão `JSON` no canto superior direito para baixar os dados da bomba sem exportar a planta inteira.
 - Gráfico de pressão por distância para Canos, usando a pressão física de entrada do trecho como ponto inicial e a perda real do próprio Cano como queda exibida.
 - Quando o Cano sai de um componente passante com perda própria, como válvula ou trocador, a queda do componente fica separada da queda do Cano; a queda da válvula continua aparecendo no painel da válvula, e o gráfico do Cano mostra apenas a queda do trecho.
-- Quando a origem do Cano é um componente passante, a pressão inicial do trecho permanece ancorada na saída física desse componente; retropropagação a partir de dreno/tanque só pode recalcular pressão de fronteiras não passantes, como fonte ou tanque.
+- Quando a origem do Cano é um componente passante, a pressão inicial do trecho permanece ancorada na saída física desse componente; tanques pressurizados usam a pressão recebida na entrada como pressão de saída, sem queda interna atribuída ao tanque.
 - Painel da saída separa contrapressão imposta, pressão final da rede antes da perda de entrada do dreno, queda na entrada da saída e `K` de entrada.
 - Redimensionamento e atualização dos gráficos por adaptadores de Chart.js.
 
@@ -209,7 +209,7 @@ Responsabilidades:
 
 - Representar componentes físicos.
 - Calcular vazões, perdas e propriedades hidráulicas.
-- Calcular controle de nível em serviço puro, separado da dinâmica do tanque, com modos PID determinístico e fuzzy.
+- Calcular controle de nível PID em serviço puro, separado da dinâmica do tanque.
 - Modelar conexões puramente lógicas.
 - Emitir eventos de componentes lógicos sem depender da camada de aplicação.
 - Preservar regras de controle e comportamento físico sem acesso visual.
@@ -474,7 +474,7 @@ Quando a altura relativa está ligada:
 
 - A geometria lógica considera desníveis entre portas.
 - A carga estática influencia pressão e vazão.
-- Bocais do tanque influenciam contrapressão e disponibilidade de saída.
+- Bocais do tanque continuam definindo a disponibilidade hidrostática de saída quando o tanque atua como reservatório; quando há entrada pressurizada, a pressão de conexão é neutra entre entrada e saída do tanque.
 - A interface mostra `Elev.` e `Δy` com a convenção física de `y` positivo para cima, enquanto o solver mantém internamente a convenção do canvas, onde `y` positivo aponta para baixo.
 
 Quando está desligada:
@@ -648,17 +648,17 @@ Propriedades principais:
 - Vazão de saída.
 - Fluido de conteúdo.
 - Set point.
-- Modo do controlador de nível (`PID` determinístico ou `Fuzzy`).
-- Ganhos PID (`Kp`, `Ki`, `Kd`) no modo determinístico.
+- Ganhos PID (`Kp`, `Ki`, `Kd`).
 - Ganhos padrão reescalados para erro normalizado (`Kp = 4`, `Ki = 0.6`, `Kd = 0`), permitindo modulação parcial de válvulas em vez de saturação imediata em aberto/fechado. Com `Kd = 0`, o comportamento segue equivalente ao PI anterior.
+- O tanque não possui mais parâmetro de perda de entrada própria; quando há entrada pressurizada, entrada e saída usam a mesma pressão de conexão.
 
 Comportamento:
 
 - Volume evolui por balanço: `volume += (Qin - Qout) * dt`.
 - Pressão no fundo vem da carga hidrostática.
+- Pressão hidrostática de saída continua disponível quando o tanque atua como reservatório; com entrada pressurizada, o tanque é neutro em pressão e não cria queda entre o Cano de entrada e o Cano de saída.
 - O controle de nível atua em válvulas de entrada e saída.
 - A matemática de controle e o estado interno vivem em `domain/services/LevelController.js`; o tanque apenas fornece medição/set point e traduz a saída `u` em abertura de válvulas.
-- O modo fuzzy usa funções trapezoidais nas extremidades (`NB`, `PB`), triangulares nas regiões intermediárias/centrais (`NS`, `ZE`, `PS`) e defuzzificação por média ponderada de singletons. Isso mantém saturação previsível nos extremos e resposta suave perto do set point.
 - O set point só pode ser ativado se houver válvula diretamente conectada à saída.
 - O alerta de saturação compara a vazão de entrada com a capacidade estimada de saída no nível do set point e exige persistência do candidato de saturação antes de recomendar ajuste de bomba ou fonte, evitando ruído em transientes curtos.
 - A apresentação do alerta de saturação fica em `TankSaturationAlertPresenter`, usando popup global no topo, botão de ação de dimensionamento e botão `x` para dispensar o aviso atual.
@@ -826,7 +826,7 @@ Coberturas importantes:
 - Perfis de válvula.
 - Curvas de bomba e NPSH.
 - Resumo de ajuste de pressão do set point.
-- Controlador de nível como serviço puro, com estado externo ao tanque, incluindo modo PID e modo fuzzy.
+- Controlador de nível PID como serviço puro, com estado externo ao tanque.
 - Topologia sem DOM.
 - Solver com fluxo em série.
 - Solver com bifurcação.
@@ -852,6 +852,7 @@ Coberturas importantes:
 - Pressão atmosférica igual em todos os presets padrão.
 - Água escoando mais rápido que óleo leve em ramais equivalentes para tanque.
 - Bomba ativa na saída de tanque aumentando vazão sem manter o limite puramente gravitacional do tanque.
+- Tanque pressurizado mantendo a mesma pressão entre Cano de entrada e Cano de saída, inclusive quando a entrada chega após bomba no mesmo passo de simulação.
 - Válvula totalmente aberta, com `Cv` alto e `K=0`, aplica apenas a perda física equivalente ao `Cv` e se aproxima de tubo equivalente quando o `Cv` é suficientemente alto.
 - Válvula comandada por set point com abertura subvisual, exibida como `0.0%`, fecha hidraulicamente e não mantém vazamento residual.
 - Controle de nível modula apenas abertura automaticamente; `Cv`, `K`, característica, rangeabilidade e tempo de curso continuam parâmetros de projeto. O perfil pode ser trocado manualmente durante o PA para comparar respostas da malha, e o ajuste didático de dimensionamento altera somente a válvula selecionada quando ela não está sob controle de set point.
@@ -859,13 +860,14 @@ Coberturas importantes:
 - Malha com tanques, bomba desligada e válvula fechada não mantém fluxo em conexões adjacentes aos atuadores, mesmo quando o solver nodal é escolhido por haver ciclo dirigido.
 - Sistemas hidráulicos desconectados são resolvidos por ilha quando alguma malha fechada exige solver nodal; uma malha fechada isolada não altera volumes, vazões ou controle de set point de outra ilha aberta.
 - Diagnóstico de malha fechada antes do solver nodal experimental.
+- Cálculos hidráulicos defensivos sem `NaN` quando fluido ou geometria ainda não foram resolvidos em estados intermediários.
 - Exportação/importação de fluxograma completo.
 - Configuracao visual de componentes centralizada em `infrastructure/dom/ComponentVisualConfig.js`, sem manter o antigo `js/Config.js` como fachada solta.
 
 Auditoria dos testes:
 
-- A suite executada por `npm.cmd test` cobre os 6 arquivos listados acima.
-- A execução atual possui 93 testes passantes. Os arquivos de teste contêm 501 ocorrências de `assert.*` na suíte principal.
+- A suite executada por `npm test` cobre os 6 arquivos listados acima.
+- A execução atual possui 120 testes passantes. Os arquivos de teste contêm 741 ocorrências de `assert.*`/`approx(...)` na suíte principal.
 - Nao foi encontrado padrao trivial como `assert.ok(true)`, `assert.equal(true, true)`, `print(true)` ou `console.log` usado como teste na suite principal.
 - Os testes exercitam resultados observaveis: valores numericos, estado de stores, eventos, HTML gerado, regras de camadas, ausencia de dependencias indevidas e comportamento do solver.
 - O antigo `test-phase1.mjs` foi removido em 2026-05-27 porque importava fachadas ja eliminadas (`ConnectionServiceRuntime.js` e `PortPositionCalculator.js`) e nao fazia parte do script `npm test`.
@@ -1019,12 +1021,16 @@ Próximos passos concluídos em 2026-05-27:
 
 O projeto está em um estado estruturalmente muito melhor que a versão monolítica inicial. A física principal está concentrada no domínio, a aplicação orquestra o tick e a topologia, a apresentação foi dividida em controllers e presenters, e a infraestrutura visual está separada em adaptadores.
 
-O sistema já possui suporte funcional para montagem visual, seleção múltipla por retângulo, clonagem de componentes e sistemas por teclado, desfazer por `Ctrl+Z`, simulação hidráulica, bombas, válvulas, tanques, set point com controle PID/fuzzy, monitoramento, unidades, tooltips, tutorial integrado, internacionalização, modo escuro, mistura de fluidos, cores visuais por fluido, setas de tubos coerentes com componentes rotacionados, popup de saturação do set point, exportação tabular de dados nas unidades selecionadas pelo usuário e testes automatizados. A base trata propriedades de fluido por entrada, composição por conexão e conteúdo misturado em tanques, desde que as fronteiras entre domínio, aplicação, apresentação e infraestrutura continuem sendo respeitadas.
+O sistema já possui suporte funcional para montagem visual, seleção múltipla por retângulo, clonagem de componentes e sistemas por teclado, desfazer por `Ctrl+Z`, simulação hidráulica, bombas, válvulas, tanques, set point com controle PID, monitoramento, unidades, tooltips, tutorial integrado, internacionalização, modo escuro, mistura de fluidos, cores visuais por fluido, setas de tubos coerentes com componentes rotacionados, popup de saturação do set point, exportação tabular de dados nas unidades selecionadas pelo usuário e testes automatizados. A base trata propriedades de fluido por entrada, composição por conexão e conteúdo misturado em tanques, desde que as fronteiras entre domínio, aplicação, apresentação e infraestrutura continuem sendo respeitadas.
 
 
 - Registrado em 2026-05-29: comparação GAAP/DWSIM para válvula com perfil de abertura rápida. No caso observado (`Cv=280`, abertura `50%`, rangeabilidade `15`, vazão aproximada `28.47 m³/h`), o DWSIM calculou queda de aproximadamente `2.77 kPa`, coerente com perda quase pura por `Cv_eff = 280 * sqrt(0.5) ~= 198`. Naquele momento o GAAP calculava aproximadamente `4.37 kPa` porque `ValvulaLogica.getParametrosHidraulicos()` somava `perdaLocalK + throttlingLoss + lossFromCv`; portanto o resultado incluía `Cv` efetivo, `K` configurado e perda adicional por estrangulamento. A compatibilidade de comparação direta com DWSIM/IEC 60534 foi endereçada na atualização de 2026-06-08, deixando o estrangulamento como opção avançada desligada por padrão.
 - Registrado em 2026-06-08: comparação GAAP/DWSIM revisada com `perdaLocalK=0` nos componentes e válvula DWSIM em `General Service Kv/Cv (IEC 60534)`, opção `CV`, `Cv(max)=280`, abertura `50%`, característica `Quick Opening` e parâmetro `15`. O DWSIM mostra `Actual Flow Coefficient = 170.681`; esse número é coerente como `Kv` visualmente exibido, pois convertido dá `Cv ~= 197.3`, quase `280 * sqrt(0.5) ~= 198.0`. A queda da válvula em torno de `3.03 kPa` fica, portanto, muito próxima de uma leitura de `Cv` puro/IEC para essa abertura. Antes da correção abaixo, a diferença remanescente no GAAP vinha principalmente do modelo hidráulico padrão da válvula, que ainda somava perda de estrangulamento ao termo de `Cv`, e dos perfis de Cano do DWSIM que incluem `Border Inlet [17]` e `Border Exit [25]` em seções de `0.1 m`; logo `K=0` manual não elimina todos os acessórios do perfil hidráulico comparado.
-- Resolvido em 2026-06-08: os coeficientes `K` manuais agora nascem zerados em Canos, saída/dreno, tanque, trocador de calor e perfis de válvula. A fonte também deixou de aplicar uma perda de entrada implícita antes do primeiro Cano (`connectionBaseLossCoeff=0` para `FonteLogica`), então, quando a fonte não está limitada por `vazaoMaxima`, o perfil inicial passa a partir da pressão de fronteira configurada, descontando apenas atrito distribuído, desnível e perdas explicitamente informadas. Isso corrige o caso em que uma fonte de `50 kPa` podia exibir o primeiro trecho começando perto de `47 kPa` sem o usuário ter configurado um acessório. Se a fonte bater no limite de vazão, a pressão efetiva da rede ainda pode cair porque o modelo trata `vazaoMaxima` como capacidade da fronteira.
+- Resolvido em 2026-06-08: os coeficientes `K` manuais agora nascem zerados em Canos, saída/dreno, trocador de calor e perfis de válvula. A fonte também deixou de aplicar uma perda de entrada implícita antes do primeiro Cano (`connectionBaseLossCoeff=0` para `FonteLogica`), então, quando a fonte não está limitada por `vazaoMaxima`, o perfil inicial passa a partir da pressão de fronteira configurada, descontando apenas atrito distribuído, desnível e perdas explicitamente informadas. Isso corrige o caso em que uma fonte de `50 kPa` podia exibir o primeiro trecho começando perto de `47 kPa` sem o usuário ter configurado um acessório. Se a fonte bater no limite de vazão, a pressão efetiva da rede ainda pode cair porque o modelo trata `vazaoMaxima` como capacidade da fronteira.
+- Resolvido em 2026-06-15: a seleção de modo do set point foi removida completamente. O controle de nível do tanque agora expõe e executa somente PID, sem seletor de modo, sem exportação de modo, sem cópia de propriedades antigas e sem referências residuais em testes, documentação ou internacionalização.
+- Resolvido em 2026-06-15: comparação GAAP/DWSIM mostrou que o tanque estava aparecendo como queda de pressão entre o Cano de entrada e o Cano de saída. O solver agora trata o tanque pressurizado como conexão neutra: a pressão que chega ao tanque é a pressão usada na saída, enquanto perdas continuam sendo atribuídas aos Canos, válvulas, bombas, trocadores e drenos. Quando o tanque não tem entrada ativa, ele ainda pode fornecer pressão hidrostática como reservatório.
+- Resolvido em 2026-06-15: o parâmetro de perda de entrada própria do reservatório foi removido do domínio, painel de propriedades, clipboard, exportação e assinaturas de alerta, porque esse componente não representa mais perda própria de entrada. O `perdaEntradaK` permanece apenas em drenos/saídas, onde ainda modela a perda de entrada da fronteira de descarga.
+- Resolvido em 2026-06-15: revisão final de robustez físico-química. As fórmulas centrais foram mantidas nas hipóteses físicas já adotadas pelo simulador: Darcy-Weisbach com fator de Darcy/Swamee-Jain, Reynolds, Bernoulli para perdas locais, `Cv/Kv` equivalente para válvulas, NPSH com pressão absoluta e pressão de vapor, mistura volumétrica/mássica com balanço de energia sensível e trocador por efetividade `1 - exp(-NTU)`. Cálculos hidrostáticos e hidráulica de Cano passaram a tolerar fluido/geometria ausentes em estados intermediários sem gerar `NaN` ou exceção, preservando resultado físico quando os dados estão válidos.
 - Resolvido em 2026-06-08: a válvula separa `lossFromCv`, `throttlingLoss` calculado e `appliedThrottlingLoss`. Por padrão, `considerarPerdaEstrangulamento=false`, então a queda segue o caminho `Cv/Kv efetivo + K manual`; na aba avançada o usuário pode habilitar a penalidade adicional de estrangulamento por abertura parcial. A exportação agora mostra `Perda de estrangulamento ativa`, `K físico do Cv efetivo`, `K de estrangulamento aplicado` e `K total efetivo da válvula`, facilitando comparação direta com leituras DWSIM/IEC de `Cv`/`Kv` puro.
 - Resolvido em 2026-06-03: o gráfico de pressão do Cano após uma válvula podia mostrar pressão incompatível com a queda registrada no painel da válvula. A causa era misturar a pressão efetiva interna do ramo com a pressão física de saída do componente e, em seguida, contabilizar novamente a perda própria da válvula no perfil do Cano. A semântica foi corrigida para usar `pipeInletPressureBar` e `pipePressureDropBar`, separando a queda própria da válvula da queda real do trecho.
 - Resolvido em 2026-06-03: o Cano a jusante de componente passante ainda podia ser ancorado perto da pressão do dreno quando o ramo era limitado pela vazão recebida. A retropropagação de pressão por vazão limitada agora se aplica apenas a origens não passantes; para válvulas, bombas e trocadores, `pipeInletPressureBar` permanece na saída física do componente.

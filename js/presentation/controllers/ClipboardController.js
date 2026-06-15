@@ -63,14 +63,12 @@ const CLONEABLE_PROPERTIES_BY_TYPE = {
         'volumeAtual',
         'alturaUtilMetros',
         'coeficienteSaida',
-        'perdaEntradaK',
         'alturaBocalEntradaM',
         'alturaBocalSaidaM',
         'volumeInicial',
         'fluidoConteudo',
         'setpointAtivo',
         'setpoint',
-        'controladorNivelModo',
         'kp',
         'ki',
         'kd'
@@ -191,7 +189,9 @@ export function createComponentGroupClipboardSnapshot(components, connections = 
 export function applyComponentClipboardSnapshot(snapshot, component, { tag } = {}) {
     if (!snapshot || !component) return component;
 
+    const allowedProperties = new Set(getCloneablePropertyKeys(snapshot.type));
     Object.entries(snapshot.properties || {}).forEach(([key, value]) => {
+        if (!allowedProperties.has(key)) return;
         component[key] = cloneSnapshotValue(value);
     });
 

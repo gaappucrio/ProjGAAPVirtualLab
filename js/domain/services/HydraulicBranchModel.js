@@ -269,7 +269,7 @@ export class HydraulicBranchModel {
 
     getTargetBackPressureBar(target, fluid = this.context.getComponentFluid(target)) {
         if (target instanceof TanqueLogico) {
-            return target.getBackPressureAtInletBar(fluid, this.context.usarAlturaRelativa);
+            return 0;
         }
         if (target instanceof DrenoLogico) return target.pressaoSaidaBar;
         return 0;
@@ -367,7 +367,7 @@ export class HydraulicBranchModel {
             return opening <= 0 ? 1e6 : 0;
         }
         if (target instanceof BombaLogica) return 0;
-        if (target instanceof TanqueLogico) return target.perdaEntradaK;
+        if (target instanceof TanqueLogico) return 0;
         if (target instanceof DrenoLogico) return target.perdaEntradaK;
         return 0;
     }
@@ -398,37 +398,73 @@ export class HydraulicBranchModel {
         return Math.max(0, inletPressureBar - Math.max(0, componentPressureDropBar));
     }
 
-    reconcileConnectionPressureStatesFromComponentDrops() {
-        this.context.conexoes.forEach((conn) => {
+    getPressurizedTankOutletPressureBar(component) {
+        if (!(component instanceof TanqueLogico)) return null;
+
+        let totalFlowLps = 0;
+        let weightedPressureBar = 0;
+        this.context.getInputConnections(component).forEach((conn) => {
             const state = this.context.getConnectionState(conn);
-            if ((state.flowLps || 0) <= EPSILON_FLOW) return;
+            const flowLps = Math.max(0, finiteNumber(state.flowLps, 0));
+            if (flowLps <= EPSILON_FLOW) return;
 
-            const source = this.context.getComponentById(conn.sourceId);
-            const sourceOutletPressureBar = this.getPhysicalOutletPressureBar(source);
-            if (sourceOutletPressureBar === null) return;
-
-            const geometry = this.context.getConnectionGeometry(conn);
-            const fluid = state.fluid || this.context.getConnectionFluid(conn) || this.context.fluidoOperante;
-            const staticHeadBar = pressureFromHeadBar(
-                finiteNumber(state.headGainM, geometry?.headGainM || 0),
-                fluid?.densidade || 1000
+            const pressureBar = finiteNumber(
+                state.outletPressureBar,
+                finiteNumber(state.pipeOutletPressureBar, null)
             );
-            const pipePressureDropBar = Math.max(0, finiteNumber(
-                state.pipePressureDropBar,
-                finiteNumber(state.pipeDistributedLossBar, 0) + finiteNumber(state.pipeLocalLossBar, 0)
-            ));
-            const targetLossBar = Math.max(0, finiteNumber(state.targetLossBar, 0));
-            const pipeOutletPressureBar = Math.max(0, sourceOutletPressureBar + staticHeadBar - pipePressureDropBar);
-            const arrivalPressureBar = Math.max(0, pipeOutletPressureBar - targetLossBar);
+            if (pressureBar === null) return;
 
-            state.sourcePressureBar = sourceOutletPressureBar;
-            state.pipeInletPressureBar = sourceOutletPressureBar;
-            state.pipePressureDropBar = pipePressureDropBar;
-            state.pipeOutletPressureBar = pipeOutletPressureBar;
-            state.pressureBar = pipeOutletPressureBar;
-            state.outletPressureBar = arrivalPressureBar;
-            state.deltaPBar = Math.max(0, sourceOutletPressureBar + staticHeadBar - pipeOutletPressureBar);
-            state.totalLossBar = pipePressureDropBar + targetLossBar;
+            totalFlowLps += flowLps;
+            weightedPressureBar += Math.max(0, pressureBar) * flowLps;
+        });
+
+        if (totalFlowLps <= EPSILON_FLOW) return null;
+        return weightedPressureBar / totalFlowLps;
+    }
+
+    reconcileConnectionPressureStatesFromComponentDrops() {
+        const reconcileWithSourcePressure = (resolveSourcePressureBar) => {
+            this.context.conexoes.forEach((conn) => {
+                const state = this.context.getConnectionState(conn);
+                if ((state.flowLps || 0) <= EPSILON_FLOW) return;
+
+                const source = this.context.getComponentById(conn.sourceId);
+                const sourceOutletPressureBar = resolveSourcePressureBar(source);
+                if (sourceOutletPressureBar === null) return;
+
+                const geometry = this.context.getConnectionGeometry(conn);
+                const fluid = state.fluid || this.context.getConnectionFluid(conn) || this.context.fluidoOperante;
+                const staticHeadBar = pressureFromHeadBar(
+                    finiteNumber(state.headGainM, geometry?.headGainM || 0),
+                    fluid?.densidade || 1000
+                );
+                const pipePressureDropBar = Math.max(0, finiteNumber(
+                    state.pipePressureDropBar,
+                    finiteNumber(state.pipeDistributedLossBar, 0) + finiteNumber(state.pipeLocalLossBar, 0)
+                ));
+                const targetLossBar = Math.max(0, finiteNumber(state.targetLossBar, 0));
+                const pipeOutletPressureBar = Math.max(0, sourceOutletPressureBar + staticHeadBar - pipePressureDropBar);
+                const arrivalPressureBar = Math.max(0, pipeOutletPressureBar - targetLossBar);
+
+                state.sourcePressureBar = sourceOutletPressureBar;
+                state.pipeInletPressureBar = sourceOutletPressureBar;
+                state.pipePressureDropBar = pipePressureDropBar;
+                state.pipeOutletPressureBar = pipeOutletPressureBar;
+                state.pressureBar = pipeOutletPressureBar;
+                state.outletPressureBar = arrivalPressureBar;
+                state.deltaPBar = Math.max(0, sourceOutletPressureBar + staticHeadBar - pipeOutletPressureBar);
+                state.totalLossBar = pipePressureDropBar + targetLossBar;
+            });
+        };
+
+        reconcileWithSourcePressure((source) => this.getPhysicalOutletPressureBar(source));
+        reconcileWithSourcePressure((source) => {
+            const pressureBar = this.getPressurizedTankOutletPressureBar(source);
+            if (pressureBar !== null && source instanceof TanqueLogico) {
+                source.pressaoEntradaAtualBar = pressureBar;
+                source.pressaoSaidaAtualBar = pressureBar;
+            }
+            return pressureBar;
         });
     }
 
@@ -529,13 +565,17 @@ export class HydraulicBranchModel {
             if (!estimating && comp.jaEmitiuIntrinseco()) return null;
             const fluid = comp.getFluidoSaidaAtual?.(this.context.getComponentFluid(comp)) || this.context.getComponentFluid(comp);
             const availableFromInventory = dt > 0 ? comp.volumeAtual / dt : MAX_NETWORK_FLOW_LPS;
-            const hydrostaticPressureBar = comp.getPressaoDisponivelSaidaBar(fluid, this.context.usarAlturaRelativa);
-            const localLossCoeff = 1.0 / Math.max(0.15, comp.coeficienteSaida * comp.coeficienteSaida);
+            const hasPressurizedInlet = comp.temEntradaPressurizada?.() === true;
+            const pressureBar = comp.getPressaoConexaoSemPerdaBar?.(fluid, this.context.usarAlturaRelativa)
+                ?? comp.getPressaoDisponivelSaidaBar(fluid, this.context.usarAlturaRelativa);
+            const localLossCoeff = hasPressurizedInlet
+                ? 0
+                : 1.0 / Math.max(0.15, comp.coeficienteSaida * comp.coeficienteSaida);
             return {
                 availableFlowLps: availableFromInventory,
-                pressureBar: hydrostaticPressureBar,
+                pressureBar,
                 hydraulicAreaM2: areaM2,
-                connectionBaseLossCoeff: 1,
+                connectionBaseLossCoeff: hasPressurizedInlet ? 0 : 1,
                 localLossCoeff,
                 fluid
             };
@@ -895,7 +935,7 @@ export class HydraulicBranchModel {
         const staticHeadBar = pressureFromHeadBar(estimate.geometry.headGainM, density);
         const targetIsActivePump = target instanceof BombaLogica && target.getDriveAtual() > EPSILON_FLOW;
         const targetEntryLossBar = lossBreakdown.targetEntryLossBar;
-        const targetIsPressureBoundary = target instanceof TanqueLogico || target instanceof DrenoLogico;
+        const targetIsPressureBoundary = target instanceof DrenoLogico;
         const sourceCanBackCalculateBoundaryPressure = !this.isPassThroughComponent(comp);
         const hydraulicCapacityLps = estimate.pressureCapacityLps ?? estimate.capacityLps ?? 0;
         const branchWasFlowLimited = flowLps + EPSILON_FLOW < hydraulicCapacityLps;

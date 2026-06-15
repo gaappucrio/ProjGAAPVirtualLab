@@ -35,6 +35,8 @@ export class HydraulicNetworkSolver {
         const queue = [];
         let queueIndex = 0;
         const visits = new Map();
+        const initialTankSources = [];
+        let initialTanksQueued = false;
         const enqueue = (comp) => {
             if (!comp) return;
             const nextVisits = (visits.get(comp.id) || 0) + 1;
@@ -45,13 +47,22 @@ export class HydraulicNetworkSolver {
 
         network.componentes.forEach((comp) => {
             if (comp instanceof FonteLogica) enqueue(comp);
-            else if (comp instanceof TanqueLogico && comp.volumeAtual > EPSILON_FLOW) enqueue(comp);
+        });
+        network.componentes.forEach((comp) => {
+            if (comp instanceof TanqueLogico && comp.volumeAtual > EPSILON_FLOW) initialTankSources.push(comp);
         });
 
         let steps = 0;
         if (DEBUG_PHYSICS) console.log(`[Solver] Iniciando com ${network.componentes.length} componentes, máx ${MAX_QUEUE_STEPS} iterações`);
 
-        while (queueIndex < queue.length && steps < MAX_QUEUE_STEPS) {
+        while (steps < MAX_QUEUE_STEPS) {
+            if (queueIndex >= queue.length) {
+                if (initialTanksQueued) break;
+                initialTanksQueued = true;
+                initialTankSources.forEach(enqueue);
+                if (queueIndex >= queue.length) break;
+            }
+
             steps += 1;
             const comp = queue[queueIndex++];
             if (!hydraulicModel.hasPendingEmission(comp, dt)) continue;

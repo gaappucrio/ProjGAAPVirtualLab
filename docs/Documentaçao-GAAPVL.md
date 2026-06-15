@@ -17,7 +17,7 @@ Responsabilidade: conter a regra física, modelos de componentes e serviços hid
 Principais módulos:
 - `domain/components/` — classes lógicas de componentes, como bomba, tanque, válvula, fonte e dreno.
 - `domain/models/ConnectionModel.js` — definição de conexão lógica entre componentes.
-- `domain/services/` — solver hidráulico, cálculo de perdas, análise de rede, hidráulica de tubulação, tempo de residência e controle de nível PID/fuzzy.
+- `domain/services/` — solver hidráulico, cálculo de perdas, análise de rede, hidráulica de tubulação, tempo de residência e controle de nível PID.
 - `domain/context/SimulationContext.js` — contexto de simulação com parâmetros físicos e unidades.
 
 Interface com outros módulos:
@@ -97,7 +97,7 @@ Este módulo instancia o engine, conecta serviços de visual, cria controladores
 
 - Bombas devem ter curvas de carga, eficiência e NPSHr.
 - Válvulas devem ter abertura desejada, tempo de curso, perfil de característica e alerta didático de subdimensionamento hidráulico por queda de pressão.
-- Tanques devem calcular pressão hidrostática e permitir controle de set point por controlador de nível separado da dinâmica física do tanque, com alternância avançada entre PID determinístico e fuzzy.
+- Tanques devem calcular pressão hidrostática, permitir controle de set point por controlador de nível PID separado da dinâmica física e não introduzir queda própria entre o Cano de entrada e o Cano de saída quando houver entrada pressurizada.
 - Tanques e tubulações devem exibir tempo de residência atual quando houver vazão suficiente.
 - Fontes devem definir fluido, pressão de alimentação e vazão máxima; a pressão dirige a vazão resolvida e a vazão máxima limita a capacidade entregue quando a fonte satura. A vazão máxima padrão da entrada é `32 m³/h`.
 - Drenos devem manter contrapressão de saída, exibir a pressão final da rede antes da perda de entrada e explicitar a queda causada pelo `K` de entrada.
@@ -906,7 +906,7 @@ A seguir, a lista completa de módulos e símbolos exportados.
 - `js/domain/services/HydraulicBranchModel.js`: HydraulicBranchModel
 - `js/domain/services/HydraulicNetworkAnalyzer.js`: analyzeHydraulicNetwork
 - `js/domain/services/HydraulicNetworkSolver.js`: HydraulicNetworkSolver
-- `js/domain/services/LevelController.js`: DEFAULT_LEVEL_CONTROLLER_CONFIG, LEVEL_CONTROLLER_MODES, calculateFuzzyLevelControl, calculateLevelControl, calculatePidLevelControl, createLevelControllerState, resetLevelControllerState
+- `js/domain/services/LevelController.js`: DEFAULT_LEVEL_CONTROLLER_CONFIG, calculateLevelControl, calculatePidLevelControl, createLevelControllerState, resetLevelControllerState
 - `js/domain/services/NodalHydraulicSolver.js`: NodalHydraulicSolver
 - `js/domain/services/PipeHydraulics.js`: classifyFlowRegime, darcyFrictionFactor, diameterFromFlowVelocity, diameterFromM3sVelocity, ensureConnectionDesignFlowLps, ensureConnectionProperties, getConnectionResponseTimeS, getCurrentDesignFlowCandidateLps, getPipeHydraulics, getSuggestedDiameterForConnection, reynoldsFromFlow
 - `js/domain/services/ResidenceTime.js`: calculateConnectionResidenceTimeS, calculateResidenceTimeS, calculateTankResidenceTimeS, getTankResidenceFlowBasis

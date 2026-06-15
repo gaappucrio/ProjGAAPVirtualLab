@@ -25,7 +25,9 @@ import {
     diameterFromFlowVelocity,
     diameterFromM3sVelocity,
     ensureConnectionProperties,
+    getConnectionResponseTimeS,
     getCurrentDesignFlowCandidateLps,
+    getPipeHydraulics,
     getSuggestedDiameterForConnection
 } from '../js/domain/services/PipeHydraulics.js';
 import {
@@ -34,8 +36,6 @@ import {
     calculateTankResidenceTimeS
 } from '../js/domain/services/ResidenceTime.js';
 import {
-    LEVEL_CONTROLLER_MODES,
-    calculateFuzzyLevelControl,
     calculateLevelControl,
     calculatePidLevelControl,
     createLevelControllerState
@@ -181,66 +181,17 @@ test('controlador PID de nivel calcula saida continua com estado separado do tan
 
     approx(pidResult.u, 0.303, 1e-12, 'Termo derivativo deve participar quando Kd for maior que zero');
     approx(pidResult.derivative, 0.5, 1e-12, 'Derivada do erro fica no estado do controlador');
-});
 
-test('controlador fuzzy de nivel usa pertinencia trapezoidal triangular e media ponderada', () => {
-    const state = createLevelControllerState();
-
-    const fuzzyResult = calculateFuzzyLevelControl({
-        setpoint: 0.5,
-        measurement: 0.45,
-        dt: 0.1,
-        state
-    });
-
-    assert.equal(fuzzyResult.mode, LEVEL_CONTROLLER_MODES.FUZZY);
-    assert.equal(fuzzyResult.inRest, false);
-    assert.ok(fuzzyResult.u > 0, 'Erro positivo deve abrir atuadores de entrada');
-    assert.ok(fuzzyResult.u <= 1, 'Saida fuzzy deve permanecer normalizada');
-    assert.ok(fuzzyResult.derivative > 0, 'Taxa de erro deve alimentar a base fuzzy');
-
-    const selectedResult = calculateLevelControl({
-        mode: LEVEL_CONTROLLER_MODES.FUZZY,
+    const wrapperResult = calculateLevelControl({
         setpoint: 0.5,
         measurement: 0.55,
         dt: 0.1,
+        kp: 4,
+        ki: 0.6,
         state: createLevelControllerState()
     });
 
-    assert.equal(selectedResult.mode, LEVEL_CONTROLLER_MODES.FUZZY);
-    assert.ok(selectedResult.u < 0, 'Erro negativo deve abrir atuadores de saida');
-
-    const biasState = createLevelControllerState();
-    biasState.lastError = -0.04;
-    const firstBiasResult = calculateFuzzyLevelControl({
-        setpoint: 0.5,
-        measurement: 0.54,
-        dt: 0.2,
-        state: biasState,
-        config: { deadband: 0, reactivationBand: 0 }
-    });
-    let accumulatedBiasResult = firstBiasResult;
-    for (let i = 0; i < 40; i += 1) {
-        accumulatedBiasResult = calculateFuzzyLevelControl({
-            setpoint: 0.5,
-            measurement: 0.54,
-            dt: 0.2,
-            state: biasState,
-            config: { deadband: 0, reactivationBand: 0 }
-        });
-    }
-    assert.ok(accumulatedBiasResult.integral < firstBiasResult.integral, 'Erro persistente deve acumular compensacao integral');
-    assert.ok(accumulatedBiasResult.u < firstBiasResult.u, 'Compensacao integral fuzzy deve reduzir offset estacionario');
-
-    const restResult = calculateFuzzyLevelControl({
-        setpoint: 0.5,
-        measurement: 0.501,
-        dt: 0.1,
-        state
-    });
-
-    assert.equal(restResult.inRest, true);
-    assert.equal(restResult.u, 0);
+    assert.ok(wrapperResult.u < 0, 'Erro negativo deve abrir atuadores de saida');
 });
 
 test('propriedades hidraulicas de conexao preservam zero fisico e reparam invalidos', () => {
@@ -299,6 +250,22 @@ test('perda de pressao preserva coeficiente zero e atrito laminar Darcy', () => 
         1e-12,
         'Fator de Darcy laminar proximo da transicao'
     );
+});
+
+test('calculos hidraulicos toleram fluido e geometria ausentes sem NaN', () => {
+    const conexao = ensureConnectionProperties(new ConnectionModel({ sourceId: 'A', targetId: 'B' }));
+    const hidraulica = getPipeHydraulics(conexao, null, conexao.areaM2, 1, undefined, undefined);
+    const tempoResposta = getConnectionResponseTimeS(conexao, null, null);
+    const tanque = new TanqueLogico('T-robust', 'T-robust', 0, 0);
+
+    tanque.capacidadeMaxima = 1000;
+    tanque.volumeAtual = 500;
+
+    assert.ok(Number.isFinite(hidraulica.distributedLossCoeff), 'Coeficiente distribuido deve ficar finito sem geometria');
+    assert.ok(Number.isFinite(hidraulica.reynolds), 'Reynolds deve ficar finito sem fluido explicito');
+    assert.ok(Number.isFinite(tempoResposta), 'Tempo de resposta deve ficar finito sem fluido/geometria');
+    assert.ok(Number.isFinite(tanque.getPressaoConexaoSemPerdaBar()), 'Pressao do tanque deve ficar finita sem fluido explicito');
+    assert.equal(pressureFromHeadBar(1, undefined), 0, 'Pressao por altura invalida deve ser zerada, nao NaN');
 });
 
 test('tanque normaliza altura util e bocais para manter hidrostatica fisica', () => {
@@ -569,7 +536,6 @@ test('componentes hidraulicos nascem sem perda K manual', () => {
 
     approx(conexao.perdaLocalK, 0, 1e-12, 'Cano sem K local padrao');
     approx(dreno.perdaEntradaK, 0, 1e-12, 'Saida sem K de entrada padrao');
-    approx(tanque.perdaEntradaK, 0, 1e-12, 'Tanque sem K de entrada padrao');
     approx(trocador.perdaLocalK, 0, 1e-12, 'Trocador sem K local padrao');
     approx(valvula.perdaLocalK, 0, 1e-12, 'Valvula sem K manual padrao');
     assert.equal(valvula.considerarPerdaEstrangulamento, false, 'Perda de estrangulamento fica desligada por padrao');

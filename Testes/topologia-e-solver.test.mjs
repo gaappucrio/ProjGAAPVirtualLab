@@ -894,6 +894,95 @@ test('fonte sem limite de vazao nao aplica perda oculta antes do primeiro cano',
     );
 });
 
+test('tanque pressurizado nao reduz pressao entre cano de entrada e cano de saida', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-tank-neutral', 'F-tank-neutral', 0, 0);
+    const tanque = new TanqueLogico('T-tank-neutral', 'T-tank-neutral', 160, 0);
+    const dreno = new DrenoLogico('D-tank-neutral', 'D-tank-neutral', 320, 0);
+
+    fonte.pressaoFonteBar = 1.2;
+    fonte.vazaoMaxima = 80;
+    tanque.volumeAtual = 500;
+    tanque.capacidadeMaxima = 1000;
+    tanque.alturaUtilMetros = 2;
+    tanque.fluidoConteudo = { ...FLUID_PRESETS.agua };
+    dreno.pressaoSaidaBar = 0;
+
+    fonte.conectarSaida(tanque);
+    tanque.conectarSaida(dreno);
+
+    const entradaTanque = new ConnectionModel({ sourceId: fonte.id, targetId: tanque.id });
+    const saidaTanque = new ConnectionModel({ sourceId: tanque.id, targetId: dreno.id });
+    engine.add(fonte);
+    engine.add(tanque);
+    engine.add(dreno);
+    engine.addConnection(entradaTanque);
+    engine.addConnection(saidaTanque);
+
+    runSinglePhysicsStep(engine);
+
+    const entradaState = engine.getConnectionState(entradaTanque);
+    const saidaState = engine.getConnectionState(saidaTanque);
+
+    assert.ok(entradaState.flowLps > 0, 'Tanque deve receber vazao da fonte');
+    assert.ok(saidaState.flowLps > 0, 'Tanque com inventario deve entregar vazao na saida');
+    assert.ok(
+        Math.abs(saidaState.sourcePressureBar - entradaState.outletPressureBar) < 1e-9,
+        `Tanque nao deve reduzir a pressao entre entrada e saida: entrada=${entradaState.outletPressureBar}, saida=${saidaState.sourcePressureBar}`
+    );
+    assert.ok(
+        Math.abs(tanque.pressaoSaidaAtualBar - tanque.pressaoEntradaAtualBar) < 1e-9,
+        `Metricas do tanque devem manter pressao de entrada e saida iguais: entrada=${tanque.pressaoEntradaAtualBar}, saida=${tanque.pressaoSaidaAtualBar}`
+    );
+});
+
+test('tanque usa pressao recebida apos bomba antes de emitir no mesmo passo', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-pump-tank-neutral', 'F-pump-tank-neutral', 0, 0);
+    const bomba = new BombaLogica('P-pump-tank-neutral', 'P-pump-tank-neutral', 120, 0);
+    const tanque = new TanqueLogico('T-pump-tank-neutral', 'T-pump-tank-neutral', 240, 0);
+    const dreno = new DrenoLogico('D-pump-tank-neutral', 'D-pump-tank-neutral', 360, 0);
+
+    fonte.pressaoFonteBar = 1.2;
+    fonte.vazaoMaxima = 80;
+    bomba.vazaoNominal = 40;
+    bomba.pressaoMaxima = 3;
+    bomba.grauAcionamento = 100;
+    bomba.acionamentoEfetivo = 100;
+    tanque.volumeAtual = 500;
+    tanque.capacidadeMaxima = 1000;
+    tanque.alturaUtilMetros = 2;
+    tanque.fluidoConteudo = { ...FLUID_PRESETS.agua };
+    dreno.pressaoSaidaBar = 0;
+
+    fonte.conectarSaida(bomba);
+    bomba.conectarSaida(tanque);
+    tanque.conectarSaida(dreno);
+
+    const fonteBomba = new ConnectionModel({ sourceId: fonte.id, targetId: bomba.id });
+    const entradaTanque = new ConnectionModel({ sourceId: bomba.id, targetId: tanque.id });
+    const saidaTanque = new ConnectionModel({ sourceId: tanque.id, targetId: dreno.id });
+    engine.add(fonte);
+    engine.add(bomba);
+    engine.add(tanque);
+    engine.add(dreno);
+    engine.addConnection(fonteBomba);
+    engine.addConnection(entradaTanque);
+    engine.addConnection(saidaTanque);
+
+    runSinglePhysicsStep(engine);
+
+    const entradaState = engine.getConnectionState(entradaTanque);
+    const saidaState = engine.getConnectionState(saidaTanque);
+
+    assert.ok(entradaState.flowLps > 0, 'Bomba deve alimentar o tanque no mesmo passo');
+    assert.ok(saidaState.flowLps > 0, 'Tanque deve emitir depois de receber pressao da bomba');
+    assert.ok(
+        Math.abs(saidaState.sourcePressureBar - entradaState.outletPressureBar) < 1e-9,
+        `Tanque deve usar a pressao entregue pela bomba: entrada=${entradaState.outletPressureBar}, saida=${saidaState.sourcePressureBar}`
+    );
+});
+
 test('solver automatico usa modelo nodal em circuito fechado com bomba', () => {
     const engine = createEngine();
     const bomba = new BombaLogica('P-loop', 'P-loop', 0, 0);
@@ -1123,7 +1212,6 @@ test('valvula em malha fechada com tanques nao cria fluido com altura relativa',
         tanque.alturaUtilMetros = 2.4;
         tanque.alturaBocalEntradaM = 0;
         tanque.alturaBocalSaidaM = 0;
-        tanque.perdaEntradaK = 1;
         tanque.coeficienteSaida = 0.82;
     });
     tanqueAlto.volumeAtual = 85;
@@ -1308,61 +1396,6 @@ test('malha fechada em ilha isolada nao altera sistema aberto com set point', ()
             `Conexao ${index} da ilha aberta deve manter a mesma vazao: base=${flowLps}, comMalha=${comMalha.vazoesLps[index]}`
         );
     });
-});
-
-test('controlador fuzzy de nivel com valvula somente na saida remove offset estacionario', () => {
-    const engine = createEngine();
-    engine.usarAlturaRelativa = true;
-
-    const fonte = new FonteLogica('F-fuzzy', 'Fonte-fuzzy', 0, 0);
-    const bomba = new BombaLogica('B-fuzzy', 'Bomba-fuzzy', 80, 0);
-    const tanque = new TanqueLogico('T-fuzzy', 'Tanque-fuzzy', 160, 0);
-    const valvulaSaida = new ValvulaLogica('VS-fuzzy', 'VS-fuzzy', 240, 0);
-    const dreno = new DrenoLogico('D-fuzzy', 'Dreno-fuzzy', 320, 0);
-
-    fonte.pressaoFonteBar = 1.5;
-    bomba.vazaoNominal = 15;
-    bomba.pressaoMaxima = 2;
-    bomba.grauAcionamento = 100;
-    bomba.acionamentoEfetivo = 100;
-    valvulaSaida.aplicarPerfilCaracteristica('linear');
-    valvulaSaida.setCoeficientePerda(0);
-    valvulaSaida.setAbertura(100);
-    valvulaSaida.aberturaEfetiva = 100;
-    tanque.capacidadeMaxima = 1000;
-    tanque.volumeAtual = 300;
-    tanque.setpoint = 50;
-    tanque.controladorNivelModo = 'fuzzy';
-
-    fonte.conectarSaida(bomba);
-    bomba.conectarSaida(tanque);
-    tanque.conectarSaida(valvulaSaida);
-    valvulaSaida.conectarSaida(dreno);
-
-    [fonte, bomba, tanque, valvulaSaida, dreno].forEach((component) => engine.add(component));
-    [
-        new ConnectionModel({ sourceId: fonte.id, targetId: bomba.id, extraLengthM: 0, perdaLocalK: 0 }),
-        new ConnectionModel({ sourceId: bomba.id, targetId: tanque.id, extraLengthM: 0, perdaLocalK: 0 }),
-        new ConnectionModel({ sourceId: tanque.id, targetId: valvulaSaida.id, extraLengthM: 0, perdaLocalK: 0 }),
-        new ConnectionModel({ sourceId: valvulaSaida.id, targetId: dreno.id, extraLengthM: 0, perdaLocalK: 0 })
-    ].forEach((connection) => engine.addConnection(connection));
-
-    const resultadoSetpoint = tanque.setSetpointAtivo(true);
-    assert.equal(resultadoSetpoint.ativado, true);
-
-    runControlledAutomaticPhysicsSteps(engine, 2000, 0.1);
-
-    const nivelFinal = tanque.getNivelNormalizado();
-    assert.ok(
-        Math.abs(nivelFinal - 0.5) < 0.01,
-        `Fuzzy deve convergir para perto do setpoint: nivel=${nivelFinal}`
-    );
-    assert.equal(tanque._ultimoEstadoControle.emRepouso, false, 'Controle somente na saida nao deve fechar a valvula por banda morta');
-    assert.ok(valvulaSaida.grauAbertura > 0, 'Valvula de saida deve manter abertura de equilibrio');
-    assert.ok(
-        Math.abs(tanque.lastQin - tanque.lastQout) < 0.1,
-        `Vazoes devem ficar praticamente balanceadas: in=${tanque.lastQin}, out=${tanque.lastQout}`
-    );
 });
 
 test('recirculacao tanque bomba tanque conserva inventario do tanque', () => {

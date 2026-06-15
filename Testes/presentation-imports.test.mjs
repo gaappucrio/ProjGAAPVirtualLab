@@ -589,7 +589,6 @@ test('clipboard de componentes preserva propriedades clonaveis e sufixo por idio
     const tanque = new TanqueLogico('tank-01', 'T-01', 0, 0);
     tanque.setpointAtivo = true;
     tanque.setpoint = 62;
-    tanque.controladorNivelModo = 'fuzzy';
     tanque.kp = 5.5;
     tanque.ki = 0.7;
     tanque.kd = 0.3;
@@ -603,7 +602,6 @@ test('clipboard de componentes preserva propriedades clonaveis e sufixo por idio
     assert.equal(tanqueClone.tag, 'T-01 - copia');
     assert.equal(tanqueClone.setpointAtivo, true);
     assert.equal(tanqueClone.setpoint, 62);
-    assert.equal(tanqueClone.controladorNivelModo, 'fuzzy');
     assert.equal(tanqueClone.kp, 5.5);
     assert.equal(tanqueClone.ki, 0.7);
     assert.equal(tanqueClone.kd, 0.3);
