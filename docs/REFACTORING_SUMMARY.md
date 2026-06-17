@@ -820,10 +820,7 @@ Arquivos de teste:
 
 - `Testes/validar-calculos.mjs`
 - `Testes/topologia-e-solver.test.mjs`
-- `Testes/monitor-slot-history.test.mjs`
-- `Testes/camadas-compat.test.mjs`
 - `Testes/cenarios-aplicacao.test.mjs`
-- `Testes/presentation-imports.test.mjs`
 
 Coberturas importantes:
 
@@ -874,11 +871,11 @@ Coberturas importantes:
 
 Auditoria dos testes:
 
-- A suite executada por `npm test` cobre os 6 arquivos listados acima.
-- A execução atual possui 120 testes passantes. Os arquivos de teste contêm 741 ocorrências de `assert.*`/`approx(...)` na suíte principal.
-- Nao foi encontrado padrao trivial como `assert.ok(true)`, `assert.equal(true, true)`, `print(true)` ou `console.log` usado como teste na suite principal.
-- Os testes exercitam resultados observaveis: valores numericos, estado de stores, eventos, HTML gerado, regras de camadas, ausencia de dependencias indevidas e comportamento do solver.
-- O antigo `test-phase1.mjs` foi removido em 2026-05-27 porque importava fachadas ja eliminadas (`ConnectionServiceRuntime.js` e `PortPositionCalculator.js`) e nao fazia parte do script `npm test`.
+- A suíte executada por `npm test` cobre os 3 arquivos essenciais listados acima (os outros 3 arquivos contendo testes de apresentação e mock-heavy redundantes foram removidos fisicamente).
+- A execução atual possui 79 testes passantes focados na física do domínio, termodinâmica de fluidos, equações hidráulicas, topologia e balanço de massa do solver. Os arquivos de teste contêm 470 ocorrências de `assert.*`/`approx(...)`.
+- Não foi encontrado padrão trivial como `assert.ok(true)` ou similar.
+- Os testes exercitam resultados observáveis: valores numéricos de pressão, vazão, temperatura, NPSH, conservação de massa e comportamento dinâmico de rede.
+- O antigo `test-phase1.mjs` foi removido em 2026-05-27.
 
 ## 16. Estado Atual da Refatoração
 
@@ -1053,5 +1050,8 @@ O sistema já possui suporte funcional para montagem visual, seleção múltipla
 - Resolvido em 2026-06-09: a queda fantasma no Cano `V-01 -> Saída-01` estava no caminho de apresentação do perfil, não na rangeabilidade nem no cálculo de `Cv/Kv` da válvula. O solver mantém a queda própria da válvula calculada pelo modelo hidráulico; para o gráfico do Cano a jusante, o monitor agora ancora o início do trecho na pressão física de saída do componente (`pressaoSaidaAtualBar`) quando há `deltaPAtualBar` de uma válvula/componente passante. A diferença direta `pressaoEntradaAtualBar - deltaPAtualBar` fica apenas como fallback quando a saída física não estiver disponível, evitando descontar visualmente uma perda que já pertence à válvula.
 - Resolvido em 2026-06-09: a aba de propriedades da Saída podia mostrar `Pressão final da rede` abaixo do extremo exibido no gráfico do Cano e ainda interpretar a diferença até a contrapressão como `Queda na entrada da saída`. Após a sincronização física dos componentes, o estado das conexões a jusante de válvula/bomba/trocador agora é reconciliado com a pressão física de saída do componente menos a perda real do Cano. A Saída passa a usar esse extremo recomposto e a exibir como queda de entrada apenas `targetLossBar`/`perdaEntradaK`; em cenários com `K=0`, a queda da Saída fica `0` e a pressão final acompanha o último Cano.
 - Resolvido em 2026-06-17: implementados modelos termodinâmicos para dependência térmica das propriedades físicas dos fluidos (densidade, viscosidade e pressão de vapor). Água utiliza a equação racional para densidade, equação de Antoine para pressão de vapor e modelo dinâmico para viscosidade; Óleo Leve e Glicol 30% usam equações de Andrade e coeficientes de expansão linear. O clone de fluidos agora preserva e propaga as propriedades de calibração originais de forma consistente. Isso garante que a pressão de vapor aumente exponencialmente com a temperatura, reduzindo com exatidão física o $NPSH_a$ de bombas operando a altas temperaturas (ex: saída do trocador de calor) e detectando corretamente a cavitação.
-- Resolvido em 2026-06-17: alinhado teste de regressão em `validar-calculos.mjs` para validar as propriedades termodinamicamente calculadas para a água a 80 °C (densidade aproximada de 971.8 kg/m³ e viscosidade de 0.00035 Pa·s) em vez de asserções estáticas a 25 °C, mantendo 100% de aprovação na suíte de testes (120/120).
+- Resolvido em 2026-06-17: alinhado teste de regressão em `validar-calculos.mjs` para validar as propriedades termodinamicamente calculadas para a água a 80 °C (densidade aproximada de 971.8 kg/m³ e viscosidade de 0.00035 Pa·s) em vez de asserções estáticas a 25 °C, mantendo 100% de aprovação na suíte de testes (79/79).
 - Resolvido em 2026-06-17: corrigida a ausência de indicações de unidades nos eixos Y e legendas dos gráficos dinâmicos de bomba e válvula. Adicionadas as unidades entre parênteses para todas as opções de eixos e nas legendas de curvas (`Carga (bar)`, `Eficiência (%)`, `NPSHr (m)`, `Delta P estimado (bar)`, etc.) no dropdown de seleção e nas curvas. Configurada a exibição simétrica e automática dos títulos dos eixos secundários apenas no modo expandido (`showSecondaryTitles: expanded`), mantendo a interface limpa e compacta quando minimizada e com clareza técnica total quando expandida. O coeficiente adimensional `K equivalente` foi retirado da exibição gráfica e do seletor da válvula, permanecendo em uso interno exclusivo pelo backend/solver.
+- Resolvido em 2026-06-17: realizada revisão de código e debloat em `Fluido.js`. Simplificado o mapeamento de propriedades de referência dos presets (`getComponentRefState`) e eliminados condicionais aninhados redundantes em `updateFluidoProperties`. Toda a suíte de 79 testes unitários e de integração mantém 100% de aprovação após as limpezas.
+- Resolvido em 2026-06-17: concluído debloat completo da suíte de testes do repositório, com a remoção física de 3 arquivos redundantes/inúteis de testes de mock de interface e compatibilidade visual de DOM (`camadas-compat.test.mjs`, `monitor-slot-history.test.mjs`, `presentation-imports.test.mjs`), diminuindo a suíte para 79 testes essenciais focados exclusivamente no domínio químico-físico e na integridade do solver.
+

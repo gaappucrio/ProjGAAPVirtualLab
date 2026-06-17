@@ -23,42 +23,32 @@ function isMixture(fluido) {
 
 function getComponentRefState(name, fluido) {
     const normName = name.toLowerCase();
-    
+    let isPure = false;
+    let preset = { temp: 25, density: 997, vaporPressure: 0.0317, viscosity: 0.00089 };
+
     if (normName.includes('água') || normName.includes('agua')) {
-        const isPure = fluido && (fluido.nome || '').toLowerCase().includes('água') && !isMixture(fluido);
+        isPure = fluido && (fluido.nome || '').toLowerCase().includes('água') && !isMixture(fluido);
+        preset = { temp: 25, density: 997, vaporPressure: 0.0317, viscosity: 0.00089 };
+    } else if (normName.includes('óleo') || normName.includes('oleo') || normName.includes('oil')) {
+        isPure = fluido && ((fluido.nome || '').toLowerCase().includes('óleo') || (fluido.nome || '').toLowerCase().includes('oil')) && !isMixture(fluido);
+        preset = { temp: 25, density: 860, vaporPressure: 0.003, viscosity: 0.035 };
+    } else if (normName.includes('glicol') || normName.includes('glycol')) {
+        isPure = fluido && ((fluido.nome || '').toLowerCase().includes('glicol') || (fluido.nome || '').toLowerCase().includes('glycol')) && !isMixture(fluido);
+        preset = { temp: 25, density: 1045, vaporPressure: 0.02, viscosity: 0.0035 };
+    } else {
         return {
-            temp: isPure && fluido.refTemperatura !== undefined ? fluido.refTemperatura : 25,
-            density: isPure && fluido.refDensidade !== undefined ? fluido.refDensidade : 997,
-            vaporPressure: isPure && fluido.refPressaoVaporBar !== undefined ? fluido.refPressaoVaporBar : 0.0317,
-            viscosity: isPure && fluido.refViscosidadeDinamicaPaS !== undefined ? fluido.refViscosidadeDinamicaPaS : 0.00089
-        };
-    }
-    
-    if (normName.includes('óleo') || normName.includes('oleo') || normName.includes('oil')) {
-        const isPure = fluido && ((fluido.nome || '').toLowerCase().includes('óleo') || (fluido.nome || '').toLowerCase().includes('oil')) && !isMixture(fluido);
-        return {
-            temp: isPure && fluido.refTemperatura !== undefined ? fluido.refTemperatura : 25,
-            density: isPure && fluido.refDensidade !== undefined ? fluido.refDensidade : 860,
-            vaporPressure: isPure && fluido.refPressaoVaporBar !== undefined ? fluido.refPressaoVaporBar : 0.003,
-            viscosity: isPure && fluido.refViscosidadeDinamicaPaS !== undefined ? fluido.refViscosidadeDinamicaPaS : 0.035
-        };
-    }
-    
-    if (normName.includes('glicol') || normName.includes('glycol')) {
-        const isPure = fluido && ((fluido.nome || '').toLowerCase().includes('glicol') || (fluido.nome || '').toLowerCase().includes('glycol')) && !isMixture(fluido);
-        return {
-            temp: isPure && fluido.refTemperatura !== undefined ? fluido.refTemperatura : 25,
-            density: isPure && fluido.refDensidade !== undefined ? fluido.refDensidade : 1045,
-            vaporPressure: isPure && fluido.refPressaoVaporBar !== undefined ? fluido.refPressaoVaporBar : 0.02,
-            viscosity: isPure && fluido.refViscosidadeDinamicaPaS !== undefined ? fluido.refViscosidadeDinamicaPaS : 0.0035
+            temp: fluido && fluido.refTemperatura !== undefined ? fluido.refTemperatura : DEFAULT_FLUID_TEMPERATURE,
+            density: fluido && fluido.refDensidade !== undefined ? fluido.refDensidade : DEFAULT_FLUID_DENSITY,
+            vaporPressure: fluido && fluido.refPressaoVaporBar !== undefined ? fluido.refPressaoVaporBar : DEFAULT_FLUID_VAPOR_PRESSURE_BAR,
+            viscosity: fluido && fluido.refViscosidadeDinamicaPaS !== undefined ? fluido.refViscosidadeDinamicaPaS : DEFAULT_FLUID_VISCOSITY_PA_S
         };
     }
 
     return {
-        temp: fluido && fluido.refTemperatura !== undefined ? fluido.refTemperatura : DEFAULT_FLUID_TEMPERATURE,
-        density: fluido && fluido.refDensidade !== undefined ? fluido.refDensidade : DEFAULT_FLUID_DENSITY,
-        vaporPressure: fluido && fluido.refPressaoVaporBar !== undefined ? fluido.refPressaoVaporBar : DEFAULT_FLUID_VAPOR_PRESSURE_BAR,
-        viscosity: fluido && fluido.refViscosidadeDinamicaPaS !== undefined ? fluido.refViscosidadeDinamicaPaS : DEFAULT_FLUID_VISCOSITY_PA_S
+        temp: isPure && fluido.refTemperatura !== undefined ? fluido.refTemperatura : preset.temp,
+        density: isPure && fluido.refDensidade !== undefined ? fluido.refDensidade : preset.density,
+        vaporPressure: isPure && fluido.refPressaoVaporBar !== undefined ? fluido.refPressaoVaporBar : preset.vaporPressure,
+        viscosity: isPure && fluido.refViscosidadeDinamicaPaS !== undefined ? fluido.refViscosidadeDinamicaPaS : preset.viscosity
     };
 }
 
@@ -242,8 +232,6 @@ export function updateFluidoProperties(fluido, dados = {}) {
     const hasExplicitVapor = dados.pressaoVaporBar !== undefined;
 
     if (hasExplicitDensity || hasExplicitTemp || hasExplicitVisc || hasExplicitVapor) {
-        const tempForRef = hasExplicitTemp ? Number(dados.temperatura) : fluido.temperatura;
-        
         if (hasExplicitDensity && dados.refDensidade === undefined) {
             fluido.refDensidade = positiveNumber(dados.densidade, DEFAULT_FLUID_DENSITY, 1);
         }
@@ -254,9 +242,7 @@ export function updateFluidoProperties(fluido, dados = {}) {
             fluido.refPressaoVaporBar = positiveNumber(dados.pressaoVaporBar, DEFAULT_FLUID_VAPOR_PRESSURE_BAR, 0.0001);
         }
         if (dados.refTemperatura === undefined) {
-            if (hasExplicitTemp || hasExplicitDensity || hasExplicitVisc || hasExplicitVapor) {
-                fluido.refTemperatura = tempForRef;
-            }
+            fluido.refTemperatura = hasExplicitTemp ? Number(dados.temperatura) : fluido.temperatura;
         }
     }
 
