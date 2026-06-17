@@ -90,7 +90,7 @@ function getScaleProfile({ expanded = false } = {}) {
         maxTicksY: expanded ? 6 : 5,
         pointRadius: expanded ? 6 : 5,
         pointHoverRadius: expanded ? 8 : 7,
-        showSecondaryTitles: false,
+        showSecondaryTitles: expanded,
         layoutPadding: expanded
             ? { top: 10, right: 10, left: 8, bottom: 2 }
             : { top: 8, right: 6, left: 4, bottom: 0 }
@@ -181,6 +181,7 @@ export function applyPumpChartPresentation(chart, datasets, { expanded = false }
         chart.options.scales.yHead.display = true;
         chart.options.scales.yHead.position = 'right';
         chart.options.scales.yHead.grid.drawOnChartArea = false;
+        chart.options.scales.yHead.title.display = profile.showSecondaryTitles;
 
         chart.options.scales.yNpsh.display = false;
     } else if (yAxisMode === 'yNpsh') {
@@ -193,6 +194,7 @@ export function applyPumpChartPresentation(chart, datasets, { expanded = false }
         chart.options.scales.yHead.display = true;
         chart.options.scales.yHead.position = 'right';
         chart.options.scales.yHead.grid.drawOnChartArea = false;
+        chart.options.scales.yHead.title.display = profile.showSecondaryTitles;
 
         chart.options.scales.yEff.display = false;
     }
@@ -217,7 +219,7 @@ export function createPumpChart(ctx, component, { expanded = false, yAxisMode = 
         data: {
             datasets: [
                 {
-                    label: t('chart.head'),
+                    label: `${t('chart.head')} (${datasets.pressureUnit})`,
                     data: datasets.headPoints,
                     borderColor: PUMP_CHART_COLORS.head,
                     backgroundColor: PUMP_CHART_COLORS.headFill,
@@ -230,7 +232,7 @@ export function createPumpChart(ctx, component, { expanded = false, yAxisMode = 
                     borderJoinStyle: 'round'
                 },
                 {
-                    label: t('chart.efficiency'),
+                    label: `${t('chart.efficiency')} (%)`,
                     data: datasets.efficiencyPoints,
                     borderColor: PUMP_CHART_COLORS.efficiency,
                     backgroundColor: PUMP_CHART_COLORS.efficiencyFill,
@@ -243,7 +245,7 @@ export function createPumpChart(ctx, component, { expanded = false, yAxisMode = 
                     borderJoinStyle: 'round'
                 },
                 {
-                    label: 'NPSHr',
+                    label: `NPSHr (${datasets.lengthUnit})`,
                     data: datasets.npshPoints,
                     borderColor: PUMP_CHART_COLORS.npsh,
                     backgroundColor: PUMP_CHART_COLORS.npshFill,
@@ -300,15 +302,15 @@ export function createPumpChart(ctx, component, { expanded = false, yAxisMode = 
                         title: (ctx) => `${t('chart.flow')}: ${Number(ctx[0].parsed.x).toFixed(2)} ${datasets.flowUnit}`,
                         label: (ctx) => {
                             if (ctx.dataset.yAxisID === 'yHead') {
-                                return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.pressureUnit}`;
+                                return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)}`;
                             }
                             if (ctx.dataset.yAxisID === 'yEff') {
-                                return `${t('chart.efficiency')}: ${Number(ctx.parsed.y).toFixed(1)} %`;
+                                return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(1)}`;
                             }
                             if (ctx.dataset.yAxisID === 'yNpsh') {
-                                return `NPSHr: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.lengthUnit}`;
+                                return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)}`;
                             }
-                            return `${t('chart.currentPoint')}: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.pressureUnit}`;
+                            return `${t('chart.currentPoint')}: ${Number(ctx.parsed.y).toFixed(2)}`;
                         }
                     }
                 }
@@ -375,11 +377,11 @@ export function refreshPumpChart(chart, component, { expanded = false } = {}) {
         currentY = toDisplayValue('length', component.npshRequeridoAtualM || component.npshRequeridoM || 0);
     }
 
-    chart.data.datasets[0].label = t('chart.head');
+    chart.data.datasets[0].label = `${t('chart.head')} (${datasets.pressureUnit})`;
     chart.data.datasets[0].data = datasets.headPoints;
-    chart.data.datasets[1].label = t('chart.efficiency');
+    chart.data.datasets[1].label = `${t('chart.efficiency')} (%)`;
     chart.data.datasets[1].data = datasets.efficiencyPoints;
-    chart.data.datasets[2].label = 'NPSHr';
+    chart.data.datasets[2].label = `NPSHr (${datasets.lengthUnit})`;
     chart.data.datasets[2].data = datasets.npshPoints;
     chart.data.datasets[3].label = t('chart.operation');
     chart.data.datasets[3].data = [{ x: datasets.currentFlow, y: currentY }];
@@ -388,15 +390,15 @@ export function refreshPumpChart(chart, component, { expanded = false } = {}) {
     chart.options.plugins.tooltip.callbacks.title = (ctx) => `${t('chart.flow')}: ${Number(ctx[0].parsed.x).toFixed(2)} ${datasets.flowUnit}`;
     chart.options.plugins.tooltip.callbacks.label = (ctx) => {
         if (ctx.dataset.yAxisID === 'yHead') {
-            return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.pressureUnit}`;
+            return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)}`;
         }
         if (ctx.dataset.yAxisID === 'yEff') {
-            return `${t('chart.efficiency')}: ${Number(ctx.parsed.y).toFixed(1)} %`;
+            return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(1)}`;
         }
         if (ctx.dataset.yAxisID === 'yNpsh') {
-            return `NPSHr: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.lengthUnit}`;
+            return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)}`;
         }
-        return `${t('chart.currentPoint')}: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.pressureUnit}`;
+        return `${t('chart.currentPoint')}: ${Number(ctx.parsed.y).toFixed(2)}`;
     };
 
     applyPumpChartPresentation(chart, datasets, { expanded });

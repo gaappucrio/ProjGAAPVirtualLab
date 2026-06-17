@@ -597,11 +597,13 @@ export function createMonitorController({ engine }) {
     }
 
     function getAxisOptions(kind, component) {
+        const pressureUnit = getUnitSymbol('pressure');
+        const lengthUnit = getUnitSymbol('length');
         if (kind === 'pump') {
             return [
-                { value: 'yHead', label: t('chart.head') },
+                { value: 'yHead', label: `${t('chart.head')} (${pressureUnit})` },
                 { value: 'yEff', label: `${t('chart.efficiency')} (%)` },
-                { value: 'yNpsh', label: 'NPSHr' }
+                { value: 'yNpsh', label: `NPSHr (${lengthUnit})` }
             ];
         }
         if (kind === 'valve') {
@@ -611,7 +613,7 @@ export function createMonitorController({ engine }) {
                 unitLabel = unit === 'KV' ? 'Kv' : 'Cv';
             }
             return [
-                { value: 'yPressure', label: t('chart.estimatedPressureDrop') },
+                { value: 'yPressure', label: `${t('chart.estimatedPressureDrop')} (${pressureUnit})` },
                 { value: 'yCv', label: t('chart.effectiveFlowCoefficient', { unit: unitLabel }) },
                 { value: 'yLoss', label: t('chart.equivalentK') }
             ];

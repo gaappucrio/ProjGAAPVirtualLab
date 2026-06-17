@@ -108,6 +108,7 @@ function getScaleProfile({ expanded = false } = {}) {
         maxTicksY: expanded ? 6 : 5,
         pointRadius: expanded ? 6 : 5,
         pointHoverRadius: expanded ? 8 : 7,
+        showSecondaryTitles: expanded,
         layoutPadding: expanded
             ? { top: 10, right: 10, left: 8, bottom: 2 }
             : { top: 8, right: 6, left: 4, bottom: 0 }
@@ -277,6 +278,7 @@ export function applyValveChartPresentation(chart, datasets, { expanded = false 
         chart.options.scales.yCv.display = true;
         chart.options.scales.yCv.position = 'right';
         chart.options.scales.yCv.grid.drawOnChartArea = false;
+        chart.options.scales.yCv.title.display = profile.showSecondaryTitles;
 
         chart.options.scales.yLoss.display = false;
     } else if (yAxisMode === 'yCv') {
@@ -284,10 +286,12 @@ export function applyValveChartPresentation(chart, datasets, { expanded = false 
         chart.options.scales.yCv.position = 'left';
         chart.options.scales.yCv.grid.drawOnChartArea = true;
         chart.options.scales.yCv.grid.color = colors.grid;
+        chart.options.scales.yCv.title.display = true;
 
         chart.options.scales.yPressure.display = true;
         chart.options.scales.yPressure.position = 'right';
         chart.options.scales.yPressure.grid.drawOnChartArea = false;
+        chart.options.scales.yPressure.title.display = profile.showSecondaryTitles;
 
         chart.options.scales.yLoss.display = false;
     } else if (yAxisMode === 'yLoss') {
@@ -295,10 +299,12 @@ export function applyValveChartPresentation(chart, datasets, { expanded = false 
         chart.options.scales.yLoss.position = 'left';
         chart.options.scales.yLoss.grid.drawOnChartArea = true;
         chart.options.scales.yLoss.grid.color = colors.grid;
+        chart.options.scales.yLoss.title.display = true;
 
         chart.options.scales.yPressure.display = true;
         chart.options.scales.yPressure.position = 'right';
         chart.options.scales.yPressure.grid.drawOnChartArea = false;
+        chart.options.scales.yPressure.title.display = profile.showSecondaryTitles;
 
         chart.options.scales.yCv.display = false;
     }
@@ -313,7 +319,7 @@ function getTooltipLabel(ctx, datasets) {
     if (!Number.isFinite(value)) return ctx.dataset.label;
 
     if (ctx.dataset.yAxisID === 'yPressure') {
-        return `${ctx.dataset.label}: ${value.toFixed(2)} ${datasets.pressureUnit}`;
+        return `${ctx.dataset.label}: ${value.toFixed(2)}`;
     }
     if (ctx.dataset.yAxisID === 'yCv') {
         return `${ctx.dataset.label}: ${value.toFixed(2)}`;
@@ -321,7 +327,7 @@ function getTooltipLabel(ctx, datasets) {
     if (ctx.dataset.yAxisID === 'yLoss') {
         return `${ctx.dataset.label}: ${value.toFixed(3)}`;
     }
-    return `${t('chart.currentPoint')}: ${value.toFixed(2)} ${datasets.pressureUnit}`;
+    return `${t('chart.currentPoint')}: ${value.toFixed(2)}`;
 }
 
 export function createValveChart(ctx, component, { expanded = false, yAxisMode = 'yPressure' } = {}) {
@@ -352,7 +358,7 @@ export function createValveChart(ctx, component, { expanded = false, yAxisMode =
                     borderJoinStyle: 'round'
                 },
                 {
-                    label: t('chart.estimatedPressureDrop'),
+                    label: `${t('chart.estimatedPressureDrop')} (${datasets.pressureUnit})`,
                     data: datasets.pressureDropPoints,
                     borderColor: VALVE_CHART_COLORS.pressureDrop,
                     backgroundColor: VALVE_CHART_COLORS.pressureDropFill,
@@ -483,7 +489,7 @@ export function refreshValveChart(chart, component, { expanded = false } = {}) {
 
     chart.data.datasets[0].label = getEffectiveCoefficientLabel(datasets);
     chart.data.datasets[0].data = datasets.cvPoints;
-    chart.data.datasets[1].label = t('chart.estimatedPressureDrop');
+    chart.data.datasets[1].label = `${t('chart.estimatedPressureDrop')} (${datasets.pressureUnit})`;
     chart.data.datasets[1].data = datasets.pressureDropPoints;
     chart.data.datasets[2].label = t('chart.equivalentK');
     chart.data.datasets[2].data = datasets.lossCoeffPoints;

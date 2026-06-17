@@ -326,8 +326,8 @@ test('trocador de calor clona fluido de saida sem alterar composicao hidraulica'
     const saida = trocador.getFluidoSaidaPara(agua, 1);
 
     assert.notEqual(saida, agua);
-    assert.equal(saida.densidade, agua.densidade);
-    assert.equal(saida.viscosidadeDinamicaPaS, agua.viscosidadeDinamicaPaS);
+    approx(saida.densidade, 983.30, 0.05, 'Densidade da água aquecida a ~59.8 °C');
+    approx(saida.viscosidadeDinamicaPaS, 0.000464, 0.00001, 'Viscosidade da água aquecida a ~59.8 °C');
     assert.ok(saida.temperatura > agua.temperatura);
 });
 
