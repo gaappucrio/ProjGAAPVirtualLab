@@ -591,7 +591,7 @@ export function createMonitorController({ engine }) {
             return ['yHead', 'yEff', 'yNpsh'].includes(storedMode) ? storedMode : 'yHead';
         }
         if (kind === 'valve') {
-            return ['yPressure', 'yCv', 'yLoss'].includes(storedMode) ? storedMode : 'yPressure';
+            return ['yPressure', 'yCv'].includes(storedMode) ? storedMode : 'yPressure';
         }
         return null;
     }
@@ -614,8 +614,7 @@ export function createMonitorController({ engine }) {
             }
             return [
                 { value: 'yPressure', label: `${t('chart.estimatedPressureDrop')} (${pressureUnit})` },
-                { value: 'yCv', label: t('chart.effectiveFlowCoefficient', { unit: unitLabel }) },
-                { value: 'yLoss', label: t('chart.equivalentK') }
+                { value: 'yCv', label: t('chart.effectiveFlowCoefficient', { unit: unitLabel }) }
             ];
         }
         return [];
