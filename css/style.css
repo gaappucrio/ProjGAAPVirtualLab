@@ -2598,3 +2598,43 @@
 
       }
   }
+}
+
+/* Estilos para o seletor do eixo Y em tempo real nos gráficos */
+.chart-axis-select {
+    height: 28px;
+    padding: 0 8px;
+    border: 1px solid #bdc3c7;
+    border-radius: 4px;
+    background-color: #ffffff;
+    color: #2c3e50;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+}
+
+.chart-axis-select:hover {
+    border-color: #3498db;
+}
+
+body.theme-dark .chart-axis-select {
+    background-color: var(--gaap-input-bg) !important;
+    border-color: var(--gaap-border) !important;
+    color: var(--gaap-text) !important;
+}
+
+body.theme-dark .chart-axis-select:hover {
+    border-color: #3498db !important;
+}
+
+/* Gráficos Expandidos - Alinhamento Flexível */
+.chart-compare-card-header .chart-axis-select {
+    margin-left: auto;
+    margin-right: 8px;
+    height: 28px;
+    flex: 0 0 auto;
+}
+

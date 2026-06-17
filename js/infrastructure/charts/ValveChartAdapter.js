@@ -207,6 +207,7 @@ export function buildValveCurveDatasets(component) {
 export function applyValveChartPresentation(chart, datasets, { expanded = false } = {}) {
     if (!chart) return;
 
+    const yAxisMode = chart.yAxisMode || 'yPressure';
     const profile = getScaleProfile({ expanded });
     const colors = getGridColors();
 
@@ -241,7 +242,6 @@ export function applyValveChartPresentation(chart, datasets, { expanded = false 
     chart.options.scales.yPressure.ticks.callback = (value) => formatAxisTick(value);
     chart.options.scales.yPressure.min = datasets.pressureAxisMin;
     chart.options.scales.yPressure.max = datasets.pressureAxisMax;
-    chart.options.scales.yPressure.grid.color = colors.grid;
     chart.options.scales.yPressure.border.color = colors.border;
 
     chart.options.scales.yCv.title.text = getEffectiveCoefficientLabel(datasets);
@@ -261,7 +261,47 @@ export function applyValveChartPresentation(chart, datasets, { expanded = false 
     chart.options.scales.yLoss.ticks.font = { size: profile.secondaryTickFontSize };
     chart.options.scales.yLoss.ticks.maxTicksLimit = profile.maxTicksY;
     chart.options.scales.yLoss.ticks.color = colors.tick;
+    chart.options.scales.yLoss.ticks.callback = (value) => formatAxisTick(value);
     chart.options.scales.yLoss.border.color = colors.border;
+    chart.options.scales.yLoss.title.text = t('chart.equivalentK');
+    chart.options.scales.yLoss.title.font = { size: profile.titleFontSize };
+    chart.options.scales.yLoss.title.color = colors.label;
+
+    if (yAxisMode === 'yPressure') {
+        chart.options.scales.yPressure.display = true;
+        chart.options.scales.yPressure.position = 'left';
+        chart.options.scales.yPressure.grid.drawOnChartArea = true;
+        chart.options.scales.yPressure.grid.color = colors.grid;
+        chart.options.scales.yPressure.title.display = true;
+
+        chart.options.scales.yCv.display = true;
+        chart.options.scales.yCv.position = 'right';
+        chart.options.scales.yCv.grid.drawOnChartArea = false;
+
+        chart.options.scales.yLoss.display = false;
+    } else if (yAxisMode === 'yCv') {
+        chart.options.scales.yCv.display = true;
+        chart.options.scales.yCv.position = 'left';
+        chart.options.scales.yCv.grid.drawOnChartArea = true;
+        chart.options.scales.yCv.grid.color = colors.grid;
+
+        chart.options.scales.yPressure.display = true;
+        chart.options.scales.yPressure.position = 'right';
+        chart.options.scales.yPressure.grid.drawOnChartArea = false;
+
+        chart.options.scales.yLoss.display = false;
+    } else if (yAxisMode === 'yLoss') {
+        chart.options.scales.yLoss.display = true;
+        chart.options.scales.yLoss.position = 'left';
+        chart.options.scales.yLoss.grid.drawOnChartArea = true;
+        chart.options.scales.yLoss.grid.color = colors.grid;
+
+        chart.options.scales.yPressure.display = true;
+        chart.options.scales.yPressure.position = 'right';
+        chart.options.scales.yPressure.grid.drawOnChartArea = false;
+
+        chart.options.scales.yCv.display = false;
+    }
 
     chart.data.datasets[3].pointRadius = profile.pointRadius;
     chart.data.datasets[3].pointHoverRadius = profile.pointHoverRadius;
@@ -284,8 +324,15 @@ function getTooltipLabel(ctx, datasets) {
     return `${t('chart.currentPoint')}: ${value.toFixed(2)} ${datasets.pressureUnit}`;
 }
 
-export function createValveChart(ctx, component, { expanded = false } = {}) {
+export function createValveChart(ctx, component, { expanded = false, yAxisMode = 'yPressure' } = {}) {
     const datasets = buildValveCurveDatasets(component);
+
+    let currentY = datasets.currentPressureDrop;
+    if (yAxisMode === 'yCv') {
+        currentY = datasets.currentEffectiveFlowCoefficient;
+    } else if (yAxisMode === 'yLoss') {
+        currentY = datasets.currentLossCoeff;
+    }
 
     const chart = new Chart(ctx, {
         type: 'line',
@@ -334,14 +381,14 @@ export function createValveChart(ctx, component, { expanded = false } = {}) {
                 {
                     label: t('chart.operation'),
                     type: 'scatter',
-                    data: [{ x: datasets.currentOpeningPercent, y: datasets.currentPressureDrop }],
+                    data: [{ x: datasets.currentOpeningPercent, y: currentY }],
                     borderColor: VALVE_CHART_COLORS.operationBorder,
                     backgroundColor: VALVE_CHART_COLORS.operation,
                     pointRadius: 5,
                     pointHoverRadius: 6,
                     pointBorderWidth: 1.5,
                     clip: false,
-                    yAxisID: 'yPressure'
+                    yAxisID: yAxisMode
                 }
             ]
         },
@@ -415,15 +462,25 @@ export function createValveChart(ctx, component, { expanded = false } = {}) {
         }
     });
 
+    chart.yAxisMode = yAxisMode;
     applyValveChartPresentation(chart, datasets, { expanded });
-    chart.update('none');
+    chart.update();
     return chart;
 }
 
 export function refreshValveChart(chart, component, { expanded = false } = {}) {
     if (!chart) return;
 
+    const yAxisMode = chart.yAxisMode || 'yPressure';
     const datasets = buildValveCurveDatasets(component);
+
+    let currentY = datasets.currentPressureDrop;
+    if (yAxisMode === 'yCv') {
+        currentY = datasets.currentEffectiveFlowCoefficient;
+    } else if (yAxisMode === 'yLoss') {
+        currentY = datasets.currentLossCoeff;
+    }
+
     chart.data.datasets[0].label = getEffectiveCoefficientLabel(datasets);
     chart.data.datasets[0].data = datasets.cvPoints;
     chart.data.datasets[1].label = t('chart.estimatedPressureDrop');
@@ -431,11 +488,12 @@ export function refreshValveChart(chart, component, { expanded = false } = {}) {
     chart.data.datasets[2].label = t('chart.equivalentK');
     chart.data.datasets[2].data = datasets.lossCoeffPoints;
     chart.data.datasets[3].label = t('chart.operation');
-    chart.data.datasets[3].data = [{ x: datasets.currentOpeningPercent, y: datasets.currentPressureDrop }];
+    chart.data.datasets[3].data = [{ x: datasets.currentOpeningPercent, y: currentY }];
+    chart.data.datasets[3].yAxisID = yAxisMode;
     chart.options.plugins.tooltip.callbacks.title = (ctx) =>
         `${t('chart.opening')}: ${Number(ctx[0].parsed.x).toFixed(1)}%`;
     chart.options.plugins.tooltip.callbacks.label = (ctx) => getTooltipLabel(ctx, datasets);
 
     applyValveChartPresentation(chart, datasets, { expanded });
-    chart.update('none');
+    chart.update();
 }

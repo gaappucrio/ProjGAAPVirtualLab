@@ -124,6 +124,9 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Reabertura de componente já monitorado sem reinicializar a série do gráfico, inclusive após pausar a simulação.
 - Gráfico de curva e ponto de operação para bomba.
 - Gráfico de válvula por abertura, mostrando `Cv` efetivo, `Delta P` estimado na vazão atual e `K` equivalente conforme o perfil selecionado.
+- Gráficos de bomba e válvula possuem um dropdown de seleção de eixo Y em tempo real (exibido apenas no monitor detalhado expandido, não no modo compacto) para alternar qual variável é exibida no eixo principal (esquerdo):
+  - Bomba: permite alternar entre Carga (Head), Eficiência (%) e NPSHr. O ponto de operação é reposicionado automaticamente na curva e no eixo corretos.
+  - Válvula: permite alternar entre Delta P estimado, Coeficiente de vazão (Cv ou Kv efetivo) e K equivalente.
 - Gráficos de bomba exibem um botão `JSON` no canto superior direito para baixar os dados da bomba sem exportar a planta inteira.
 - Gráfico de pressão por distância para Canos, usando a pressão física de entrada do trecho como ponto inicial e a perda real do próprio Cano como queda exibida.
 - Quando o Cano sai de um componente passante com perda própria, como válvula ou trocador, a queda do componente fica separada da queda do Cano; a queda da válvula continua aparecendo no painel da válvula, e o gráfico do Cano mostra apenas a queda do trecho.
@@ -750,8 +753,13 @@ Funcionalidades:
 - Até dois gráficos simultâneos para comparação.
 - Histórico por slot para evitar perda ao alternar seleção.
 - Remoção individual de slots por botão `x`, compactando os gráficos restantes.
-- Séries de tanque monitorado são reaproveitadas ao selecionar novamente o componente, evitando reset visual quando a simulação está pausada.
 - Ajuste de altura do monitor detalhado por arraste da borda superior, em comportamento semelhante a uma janela.
+- Seleção de Eixo Y em Tempo Real:
+  - Adicionado suporte para alternância dinâmica do eixo Y em gráficos de múltiplos eixos (Bomba e Válvula) usando dropdowns `<select>` injetados dinamicamente no DOM.
+  - O eixo selecionado é posicionado à esquerda (`position: 'left'`) com gridlines internas ativas, enquanto o outro eixo visível é movido para a direita (`position: 'right'`) sem gridlines (para evitar poluição visual), e o terceiro é ocultado.
+  - O ponto de operação é atualizado em tempo real com o valor correspondente e associado ao `yAxisID` selecionado, garantindo precisão matemática e gráfica.
+  - O estado do eixo selecionado é retido por slot no monitor detalhado (`expandedChartYAxisModes`), persistindo inclusive durante atualizações de simulação em tempo real. No modo compacto (barra lateral de propriedades), o dropdown fica oculto para manter a simplicidade visual do painel.
+
 
 Semântica do gráfico de pressão do Cano:
 

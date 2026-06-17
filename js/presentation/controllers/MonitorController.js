@@ -40,6 +40,7 @@ export function createMonitorController({ engine }) {
     let expandedMonitorCharts = [null, null];
     let draggedMonitorIndex = null;
     let blockedMonitorSelectionLabel = '';
+    let expandedChartYAxisModes = ['yHead', 'yHead'];
     const monitorTankSeries = new Map();
     const monitorChartHistory = createMonitorSlotHistory({
         maxEntries: MAX_MONITOR_CHART_HISTORY,
@@ -61,7 +62,8 @@ export function createMonitorController({ engine }) {
     }
 
     function isExpanded() {
-        return document.getElementById('chart-wrapper')?.classList.contains('maximized') === true;
+        const wrapper = document.getElementById('chart-wrapper');
+        return wrapper?.classList.contains('maximized') === true && wrapper?.classList.contains('is-closing') === false;
     }
 
     function setCompactMonitorMode(mode) {
@@ -315,6 +317,7 @@ export function createMonitorController({ engine }) {
         chartedValveId = null;
         chartedConnectionId = null;
         refreshCompactPumpExportButton(null);
+        refreshCompactChartAxisSelector();
     }
 
     function createTankMonitorChartInstance(ctx, component, { resetSeries = false } = {}) {
@@ -338,6 +341,7 @@ export function createMonitorController({ engine }) {
         chartedValveId = null;
         chartedConnectionId = null;
         refreshCompactPumpExportButton(null);
+        refreshCompactChartAxisSelector();
     }
 
     function syncTankMonitorChart(chart, component, { update = true } = {}) {
@@ -345,12 +349,12 @@ export function createMonitorController({ engine }) {
         refreshTankVolumeChart(chart, component, ensureTankMonitorSeries(component), { update });
     }
 
-    function createPumpMonitorChartInstance(ctx, component) {
-        return createPumpChart(ctx, component, { expanded: isExpanded() });
+    function createPumpMonitorChartInstance(ctx, component, { yAxisMode } = {}) {
+        return createPumpChart(ctx, component, { expanded: isExpanded(), yAxisMode });
     }
 
-    function createValveMonitorChartInstance(ctx, component) {
-        return createValveChart(ctx, component, { expanded: isExpanded() });
+    function createValveMonitorChartInstance(ctx, component, { yAxisMode } = {}) {
+        return createValveChart(ctx, component, { expanded: isExpanded(), yAxisMode });
     }
 
     function createPipeMonitorChartInstance(ctx, connection) {
@@ -455,6 +459,7 @@ export function createMonitorController({ engine }) {
         chartedValveId = null;
         chartedConnectionId = null;
         refreshCompactPumpExportButton(component);
+        refreshCompactChartAxisSelector();
     }
 
     function refreshPumpMonitorChartInstance(chart, component) {
@@ -475,6 +480,7 @@ export function createMonitorController({ engine }) {
         chartedTankId = null;
         chartedConnectionId = null;
         refreshCompactPumpExportButton(null);
+        refreshCompactChartAxisSelector();
     }
 
     function refreshValveMonitorChartInstance(chart, component) {
@@ -495,6 +501,7 @@ export function createMonitorController({ engine }) {
         chartedValveId = null;
         chartedTankId = null;
         refreshCompactPumpExportButton(null);
+        refreshCompactChartAxisSelector();
     }
 
     function refreshPipeMonitorChartInstance(chart, connection) {
@@ -579,8 +586,140 @@ export function createMonitorController({ engine }) {
         }
     }
 
+    function getValidDefaultYAxisMode(kind, storedMode) {
+        if (kind === 'pump') {
+            return ['yHead', 'yEff', 'yNpsh'].includes(storedMode) ? storedMode : 'yHead';
+        }
+        if (kind === 'valve') {
+            return ['yPressure', 'yCv', 'yLoss'].includes(storedMode) ? storedMode : 'yPressure';
+        }
+        return null;
+    }
+
+    function getAxisOptions(kind, component) {
+        if (kind === 'pump') {
+            return [
+                { value: 'yHead', label: t('chart.head') },
+                { value: 'yEff', label: `${t('chart.efficiency')} (%)` },
+                { value: 'yNpsh', label: 'NPSHr' }
+            ];
+        }
+        if (kind === 'valve') {
+            let unitLabel = 'Cv/Kv';
+            if (component) {
+                const unit = component.getUnidadeCoeficienteVazao?.();
+                unitLabel = unit === 'KV' ? 'Kv' : 'Cv';
+            }
+            return [
+                { value: 'yPressure', label: t('chart.estimatedPressureDrop') },
+                { value: 'yCv', label: t('chart.effectiveFlowCoefficient', { unit: unitLabel }) },
+                { value: 'yLoss', label: t('chart.equivalentK') }
+            ];
+        }
+        return [];
+    }
+
+    function ensureChartAxisSelector(container, id, kind, chart, onSelect, component) {
+        if (!container) return null;
+
+        let selector = document.getElementById(id);
+        if (kind !== 'pump' && kind !== 'valve') {
+            if (selector) selector.style.display = 'none';
+            return null;
+        }
+
+        if (!selector) {
+            selector = document.createElement('select');
+            selector.id = id;
+            selector.className = 'chart-axis-select';
+            
+            const refElement = container.querySelector('.chart-compare-dismiss') || container.querySelector('.chart-pump-export-button');
+            if (refElement) {
+                container.insertBefore(selector, refElement);
+            } else {
+                container.appendChild(selector);
+            }
+        }
+
+        if (selector.parentElement !== container) {
+            const refElement = container.querySelector('.chart-compare-dismiss') || container.querySelector('.chart-pump-export-button');
+            if (refElement) {
+                container.insertBefore(selector, refElement);
+            } else {
+                container.appendChild(selector);
+            }
+        }
+
+        selector.style.display = '';
+
+        const expectedOptions = getAxisOptions(kind, component);
+        const currentOptions = Array.from(selector.options).map(o => o.value);
+        const optionsMatch = expectedOptions.length === currentOptions.length &&
+            expectedOptions.every((opt, idx) => opt.value === currentOptions[idx]);
+
+        if (!optionsMatch) {
+            selector.innerHTML = '';
+            expectedOptions.forEach(opt => {
+                const optionElement = document.createElement('option');
+                optionElement.value = opt.value;
+                optionElement.textContent = opt.label;
+                selector.appendChild(optionElement);
+            });
+        }
+
+        const activeMode = chart?.yAxisMode || (kind === 'pump' ? 'yHead' : 'yPressure');
+        selector.value = activeMode;
+
+        // Use direct property binding to completely replace old listeners and avoid stale closures
+        selector.onchange = (event) => {
+            const newMode = event.target.value;
+            onSelect(newMode);
+        };
+
+        return selector;
+    }
+
+    function refreshCompactChartAxisSelector() {
+        const id = 'chart-compact-axis-select';
+        const selector = document.getElementById(id);
+        if (selector) selector.remove();
+    }
+
+    function ensureExpandedChartAxisSelector(elements, index, entry) {
+        if (!elements?.header) return null;
+
+        const id = `chart-compare-axis-select-${index + 1}`;
+        const selector = document.getElementById(id);
+
+        if (!entry || !isExpanded()) {
+            if (selector) selector.style.display = 'none';
+            return null;
+        }
+
+        const kind = entry.kind;
+        const chart = expandedMonitorCharts[index];
+
+        return ensureChartAxisSelector(
+            elements.header,
+            id,
+            kind,
+            chart,
+            (newMode) => {
+                expandedChartYAxisModes[index] = newMode;
+                if (expandedMonitorCharts[index]) {
+                    expandedMonitorCharts[index].destroy();
+                    expandedMonitorCharts[index] = null;
+                }
+                refreshExpandedMonitorCharts();
+            },
+            entry.component
+        );
+    }
+
     function refreshPresentation() {
         if (!compactChart) return;
+
+        refreshCompactChartAxisSelector();
 
         if (monitorChartMode === 'pump') {
             const bomba = engine.componentes.find((component) => component.id === chartedPumpId);
@@ -766,6 +905,10 @@ export function createMonitorController({ engine }) {
             if (chart) chart.destroy();
         });
         expandedMonitorCharts = [null, null];
+        for (let i = 1; i <= 2; i++) {
+            const selector = document.getElementById(`chart-compare-axis-select-${i}`);
+            if (selector) selector.remove();
+        }
     }
 
     function getExpandedChartSubtitle(entry) {
@@ -817,7 +960,7 @@ export function createMonitorController({ engine }) {
         }
     }
 
-    function createExpandedMonitorChart(canvas, component) {
+    function createExpandedMonitorChart(canvas, component, { yAxisMode } = {}) {
         const ctx = canvas?.getContext('2d');
         if (!ctx) return null;
 
@@ -826,11 +969,11 @@ export function createMonitorController({ engine }) {
         }
 
         if (component instanceof BombaLogica) {
-            return createPumpMonitorChartInstance(ctx, component);
+            return createPumpMonitorChartInstance(ctx, component, { yAxisMode });
         }
 
         if (component instanceof ValvulaLogica) {
-            return createValveMonitorChartInstance(ctx, component);
+            return createValveMonitorChartInstance(ctx, component, { yAxisMode });
         }
 
         if (component instanceof ConnectionModel) {
@@ -877,6 +1020,7 @@ export function createMonitorController({ engine }) {
                 elements.card.hidden = index > 0;
                 if (dismissButton) dismissButton.hidden = true;
                 setPumpExportButtonState(exportButton, null);
+                ensureExpandedChartAxisSelector(elements, index, null);
                 if (elements.title) elements.title.textContent = t('chart.waiting');
                 if (elements.subtitle) elements.subtitle.textContent = '';
                 if (elements.canvasWrap) elements.canvasWrap.hidden = true;
@@ -901,7 +1045,14 @@ export function createMonitorController({ engine }) {
                 elements.canvas.dataset.monitorEntryKind = entry.kind;
             }
 
-            expandedMonitorCharts[index] = createExpandedMonitorChart(elements.canvas, entry.component);
+            const activeMode = getValidDefaultYAxisMode(entry.kind, expandedChartYAxisModes[index]);
+            expandedChartYAxisModes[index] = activeMode;
+
+            expandedMonitorCharts[index] = createExpandedMonitorChart(elements.canvas, entry.component, { yAxisMode: activeMode });
+            if (expandedMonitorCharts[index]) {
+                expandedMonitorCharts[index].yAxisMode = activeMode;
+            }
+            ensureExpandedChartAxisSelector(elements, index, entry);
         }
 
         requestAnimationFrame(() => {
@@ -942,6 +1093,8 @@ export function createMonitorController({ engine }) {
             setPumpExportButtonState(exportButton, entry.component);
             if (elements.title) elements.title.textContent = getMonitorChartTitle(entry);
             if (elements.subtitle) elements.subtitle.textContent = getExpandedChartSubtitle(entry);
+
+            ensureExpandedChartAxisSelector(elements, index, entry);
 
             if (entry.component instanceof TanqueLogico) {
                 syncTankMonitorChart(chart, entry.component);
