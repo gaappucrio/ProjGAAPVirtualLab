@@ -26,4 +26,3 @@ export function unregisterConnectionVisual(connection) {
     visualsByConnection.delete(connection);
     return visualRefs;
 }
-

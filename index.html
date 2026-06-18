@@ -28,6 +28,10 @@
         <button id="btn-import-flowchart" class="toolbar-toggle import-flowchart-button" type="button" title="Importa um fluxograma completo." style="display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid #dfe6e9; border-radius:999px; background:#f8fbfc; color:#2c3e50; font-size:13px; font-weight:700; cursor:pointer; user-select:none;">
             <span>Importar planta</span>
         </button>
+        <button id="btn-import-dwsim" class="toolbar-toggle import-dwsim-button" type="button" title="Importa uma simulação do DWSIM (.dwxmz ou .dwxm)." style="display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid #dfe6e9; border-radius:999px; background:#f8fbfc; color:#2c3e50; font-size:13px; font-weight:700; cursor:pointer; user-select:none;">
+            <span>Importar DWSIM</span>
+        </button>
+        <input type="file" id="input-import-dwsim" accept=".dwxmz,.dwxm,application/zip,application/xml,text/xml" hidden>
         <input type="file" id="input-import-flowchart" accept=".json,.gaap-flow.json,application/json" hidden>
         <label class="toolbar-toggle" for="toggle-language" title="Alterna os textos do laboratório entre português e inglês." style="display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid #dfe6e9; border-radius:999px; background:#f8fbfc; color:#2c3e50; font-size:13px; font-weight:700; cursor:pointer; user-select:none;">
             <input type="checkbox" id="toggle-language">

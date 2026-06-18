@@ -47,4 +47,3 @@ export const EngineEventPayloads = Object.freeze({
         conexao: connection
     })
 });
-

@@ -189,4 +189,3 @@ export function removeConnectionVisual(connection) {
     visual.labelHeight?.remove();
     visual.path?.remove();
 }
-
