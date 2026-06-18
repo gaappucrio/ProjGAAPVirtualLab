@@ -116,7 +116,6 @@ export class BombaLogica extends ComponenteFisico {
     recalcularMetricasDerivadasCurva() {
         const drive = this.getDriveAtual();
         const qMax = this.vazaoNominal * drive;
-        const curveFrac = qMax > EPSILON_FLOW ? 1 - Math.pow(clamp(this.fluxoReal / qMax, 0, 1), 2) : 0;
         const semBombeamento = drive <= 0.01 && Math.abs(this.fluxoReal) <= EPSILON_FLOW;
 
         this.eficienciaAtual = this.getEficienciaInstantanea(this.fluxoReal);
@@ -135,7 +134,7 @@ export class BombaLogica extends ComponenteFisico {
         }
         this.margemNpshM = this.npshDisponivelM - this.npshRequeridoAtualM;
         this.cargaGeradaBar = drive > 0
-            ? this.pressaoMaxima * drive * drive * Math.max(0.05, curveFrac) * this.fatorCavitacaoAtual
+            ? this.getCurvaPressaoBar(this.fluxoReal, drive) * this.fatorCavitacaoAtual
             : 0;
         this.pressaoDescargaAtualBar = this.pressaoSucaoAtualBar + this.cargaGeradaBar;
         this.pressaoSaidaAtualBar = this.pressaoDescargaAtualBar;

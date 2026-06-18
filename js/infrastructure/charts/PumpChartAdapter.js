@@ -90,7 +90,7 @@ function getScaleProfile({ expanded = false } = {}) {
         maxTicksY: expanded ? 6 : 5,
         pointRadius: expanded ? 6 : 5,
         pointHoverRadius: expanded ? 8 : 7,
-        showSecondaryTitles: false,
+        showSecondaryTitles: expanded,
         layoutPadding: expanded
             ? { top: 10, right: 10, left: 8, bottom: 2 }
             : { top: 8, right: 6, left: 4, bottom: 0 }
@@ -100,6 +100,7 @@ function getScaleProfile({ expanded = false } = {}) {
 export function applyPumpChartPresentation(chart, datasets, { expanded = false } = {}) {
     if (!chart) return;
 
+    const yAxisMode = chart.yAxisMode || 'yHead';
     const profile = getScaleProfile({ expanded });
     const colors = getGridColors();
 
@@ -134,11 +135,8 @@ export function applyPumpChartPresentation(chart, datasets, { expanded = false }
     chart.options.scales.yHead.suggestedMax = datasets.pressureAxisMax;
     chart.options.scales.yHead.ticks.color = colors.tick;
     chart.options.scales.yHead.ticks.callback = (value) => formatAxisTick(value);
-    chart.options.scales.yHead.grid.color = colors.grid;
     chart.options.scales.yHead.border.color = colors.border;
 
-    chart.options.scales.yEff.display = true;
-    chart.options.scales.yEff.title.display = profile.showSecondaryTitles;
     chart.options.scales.yEff.title.text = `${t('chart.efficiency')} (%)`;
     chart.options.scales.yEff.title.font = { size: profile.titleFontSize };
     chart.options.scales.yEff.title.color = colors.label;
@@ -146,9 +144,9 @@ export function applyPumpChartPresentation(chart, datasets, { expanded = false }
     chart.options.scales.yEff.ticks.maxTicksLimit = profile.maxTicksY;
     chart.options.scales.yEff.ticks.color = colors.tick;
     chart.options.scales.yEff.border.color = colors.border;
+    chart.options.scales.yEff.min = 0;
+    chart.options.scales.yEff.max = 100;
 
-    chart.options.scales.yNpsh.display = false;
-    chart.options.scales.yNpsh.title.display = false;
     chart.options.scales.yNpsh.title.text = `NPSHr (${datasets.lengthUnit})`;
     chart.options.scales.yNpsh.title.font = { size: profile.titleFontSize };
     chart.options.scales.yNpsh.ticks.font = { size: profile.secondaryTickFontSize };
@@ -157,22 +155,71 @@ export function applyPumpChartPresentation(chart, datasets, { expanded = false }
     chart.options.scales.yNpsh.max = datasets.npshAxisMax;
     chart.options.scales.yNpsh.suggestedMax = datasets.npshAxisMax;
     chart.options.scales.yNpsh.ticks.color = colors.tick;
+    chart.options.scales.yNpsh.ticks.callback = (value) => formatAxisTick(value);
     chart.options.scales.yNpsh.border.color = colors.border;
+
+    if (yAxisMode === 'yHead') {
+        chart.options.scales.yHead.display = true;
+        chart.options.scales.yHead.position = 'left';
+        chart.options.scales.yHead.grid.drawOnChartArea = true;
+        chart.options.scales.yHead.grid.color = colors.grid;
+        chart.options.scales.yHead.title.display = true;
+
+        chart.options.scales.yEff.display = true;
+        chart.options.scales.yEff.position = 'right';
+        chart.options.scales.yEff.grid.drawOnChartArea = false;
+        chart.options.scales.yEff.title.display = profile.showSecondaryTitles;
+
+        chart.options.scales.yNpsh.display = false;
+    } else if (yAxisMode === 'yEff') {
+        chart.options.scales.yEff.display = true;
+        chart.options.scales.yEff.position = 'left';
+        chart.options.scales.yEff.grid.drawOnChartArea = true;
+        chart.options.scales.yEff.grid.color = colors.grid;
+        chart.options.scales.yEff.title.display = true;
+
+        chart.options.scales.yHead.display = true;
+        chart.options.scales.yHead.position = 'right';
+        chart.options.scales.yHead.grid.drawOnChartArea = false;
+        chart.options.scales.yHead.title.display = profile.showSecondaryTitles;
+
+        chart.options.scales.yNpsh.display = false;
+    } else if (yAxisMode === 'yNpsh') {
+        chart.options.scales.yNpsh.display = true;
+        chart.options.scales.yNpsh.position = 'left';
+        chart.options.scales.yNpsh.grid.drawOnChartArea = true;
+        chart.options.scales.yNpsh.grid.color = colors.grid;
+        chart.options.scales.yNpsh.title.display = true;
+
+        chart.options.scales.yHead.display = true;
+        chart.options.scales.yHead.position = 'right';
+        chart.options.scales.yHead.grid.drawOnChartArea = false;
+        chart.options.scales.yHead.title.display = profile.showSecondaryTitles;
+
+        chart.options.scales.yEff.display = false;
+    }
 
     chart.data.datasets[3].pointRadius = profile.pointRadius;
     chart.data.datasets[3].pointHoverRadius = profile.pointHoverRadius;
     chart.data.datasets[3].pointBorderWidth = expanded ? 2 : 1.5;
 }
 
-export function createPumpChart(ctx, component, { expanded = false } = {}) {
+export function createPumpChart(ctx, component, { expanded = false, yAxisMode = 'yHead' } = {}) {
     const datasets = buildPumpCurveDatasets(component);
+
+    let currentY = datasets.currentHead;
+    if (yAxisMode === 'yEff') {
+        currentY = (component.eficienciaAtual || 0) * 100;
+    } else if (yAxisMode === 'yNpsh') {
+        currentY = toDisplayValue('length', component.npshRequeridoAtualM || component.npshRequeridoM || 0);
+    }
 
     const chart = new Chart(ctx, {
         type: 'line',
         data: {
             datasets: [
                 {
-                    label: t('chart.head'),
+                    label: `${t('chart.head')} (${datasets.pressureUnit})`,
                     data: datasets.headPoints,
                     borderColor: PUMP_CHART_COLORS.head,
                     backgroundColor: PUMP_CHART_COLORS.headFill,
@@ -185,7 +232,7 @@ export function createPumpChart(ctx, component, { expanded = false } = {}) {
                     borderJoinStyle: 'round'
                 },
                 {
-                    label: t('chart.efficiency'),
+                    label: `${t('chart.efficiency')} (%)`,
                     data: datasets.efficiencyPoints,
                     borderColor: PUMP_CHART_COLORS.efficiency,
                     backgroundColor: PUMP_CHART_COLORS.efficiencyFill,
@@ -198,7 +245,7 @@ export function createPumpChart(ctx, component, { expanded = false } = {}) {
                     borderJoinStyle: 'round'
                 },
                 {
-                    label: 'NPSHr',
+                    label: `NPSHr (${datasets.lengthUnit})`,
                     data: datasets.npshPoints,
                     borderColor: PUMP_CHART_COLORS.npsh,
                     backgroundColor: PUMP_CHART_COLORS.npshFill,
@@ -214,14 +261,14 @@ export function createPumpChart(ctx, component, { expanded = false } = {}) {
                 {
                     label: t('chart.operation'),
                     type: 'scatter',
-                    data: [{ x: datasets.currentFlow, y: datasets.currentHead }],
+                    data: [{ x: datasets.currentFlow, y: currentY }],
                     borderColor: PUMP_CHART_COLORS.operationBorder,
                     backgroundColor: PUMP_CHART_COLORS.operation,
                     pointRadius: 5,
                     pointHoverRadius: 6,
                     pointBorderWidth: 1.5,
                     clip: false,
-                    yAxisID: 'yHead'
+                    yAxisID: yAxisMode
                 }
             ]
         },
@@ -255,15 +302,15 @@ export function createPumpChart(ctx, component, { expanded = false } = {}) {
                         title: (ctx) => `${t('chart.flow')}: ${Number(ctx[0].parsed.x).toFixed(2)} ${datasets.flowUnit}`,
                         label: (ctx) => {
                             if (ctx.dataset.yAxisID === 'yHead') {
-                                return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.pressureUnit}`;
+                                return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)}`;
                             }
                             if (ctx.dataset.yAxisID === 'yEff') {
-                                return `${t('chart.efficiency')}: ${Number(ctx.parsed.y).toFixed(1)} %`;
+                                return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(1)}`;
                             }
                             if (ctx.dataset.yAxisID === 'yNpsh') {
-                                return `NPSHr: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.lengthUnit}`;
+                                return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)}`;
                             }
-                            return `${t('chart.currentPoint')}: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.pressureUnit}`;
+                            return `${t('chart.currentPoint')}: ${Number(ctx.parsed.y).toFixed(2)}`;
                         }
                     }
                 }
@@ -311,37 +358,49 @@ export function createPumpChart(ctx, component, { expanded = false } = {}) {
         }
     });
 
+    chart.yAxisMode = yAxisMode;
     applyPumpChartPresentation(chart, datasets, { expanded });
-    chart.update('none');
+    chart.update();
     return chart;
 }
 
 export function refreshPumpChart(chart, component, { expanded = false } = {}) {
     if (!chart) return;
 
+    const yAxisMode = chart.yAxisMode || 'yHead';
     const datasets = buildPumpCurveDatasets(component);
-    chart.data.datasets[0].label = t('chart.head');
+
+    let currentY = datasets.currentHead;
+    if (yAxisMode === 'yEff') {
+        currentY = (component.eficienciaAtual || 0) * 100;
+    } else if (yAxisMode === 'yNpsh') {
+        currentY = toDisplayValue('length', component.npshRequeridoAtualM || component.npshRequeridoM || 0);
+    }
+
+    chart.data.datasets[0].label = `${t('chart.head')} (${datasets.pressureUnit})`;
     chart.data.datasets[0].data = datasets.headPoints;
-    chart.data.datasets[1].label = t('chart.efficiency');
+    chart.data.datasets[1].label = `${t('chart.efficiency')} (%)`;
     chart.data.datasets[1].data = datasets.efficiencyPoints;
-    chart.data.datasets[2].label = 'NPSHr';
+    chart.data.datasets[2].label = `NPSHr (${datasets.lengthUnit})`;
     chart.data.datasets[2].data = datasets.npshPoints;
     chart.data.datasets[3].label = t('chart.operation');
-    chart.data.datasets[3].data = [{ x: datasets.currentFlow, y: datasets.currentHead }];
+    chart.data.datasets[3].data = [{ x: datasets.currentFlow, y: currentY }];
+    chart.data.datasets[3].yAxisID = yAxisMode;
+
     chart.options.plugins.tooltip.callbacks.title = (ctx) => `${t('chart.flow')}: ${Number(ctx[0].parsed.x).toFixed(2)} ${datasets.flowUnit}`;
     chart.options.plugins.tooltip.callbacks.label = (ctx) => {
         if (ctx.dataset.yAxisID === 'yHead') {
-            return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.pressureUnit}`;
+            return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)}`;
         }
         if (ctx.dataset.yAxisID === 'yEff') {
-            return `${t('chart.efficiency')}: ${Number(ctx.parsed.y).toFixed(1)} %`;
+            return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(1)}`;
         }
         if (ctx.dataset.yAxisID === 'yNpsh') {
-            return `NPSHr: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.lengthUnit}`;
+            return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)}`;
         }
-        return `${t('chart.currentPoint')}: ${Number(ctx.parsed.y).toFixed(2)} ${datasets.pressureUnit}`;
+        return `${t('chart.currentPoint')}: ${Number(ctx.parsed.y).toFixed(2)}`;
     };
 
     applyPumpChartPresentation(chart, datasets, { expanded });
-    chart.update('none');
+    chart.update();
 }

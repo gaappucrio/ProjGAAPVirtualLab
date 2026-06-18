@@ -3,13 +3,22 @@ import { DrenoLogico } from '../../domain/components/DrenoLogico.js';
 import { FonteLogica } from '../../domain/components/FonteLogica.js';
 import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
 import { TrocadorCalorLogico } from '../../domain/components/TrocadorCalorLogico.js';
-import { ValvulaLogica } from '../../domain/components/ValvulaLogica.js';
+import {
+    VALVE_FLOW_COEFFICIENT_UNITS,
+    ValvulaLogica
+} from '../../domain/components/ValvulaLogica.js';
 import {
     getCurrentDesignFlowCandidateLps,
     getSuggestedDiameterForConnection
 } from '../../domain/services/PipeHydraulics.js';
+import {
+    calculateConnectionResidenceTimeS,
+    calculateTankResidenceTimeS
+} from '../../domain/services/ResidenceTime.js';
 import { toDisplayValue } from '../units/DisplayUnits.js';
 import { localizeElement, translateLiteral } from '../i18n/LanguageManager.js';
+import { resolvePipePressureProfile } from '../monitoring/PipePressureProfile.js';
+import { resolveSinkPressureProfile } from '../monitoring/SinkPressureProfile.js';
 import { byId, isActive, setValue } from './PropertyDomAdapter.js';
 import { formatMeasuredValue, setFieldValue } from './PropertyValueFormatters.js';
 import { updateTankControlAvailabilityUI } from './TankSaturationAlertPresenter.js';
@@ -17,6 +26,10 @@ import { updateTankControlAvailabilityUI } from './TankSaturationAlertPresenter.
 function getPumpNpshMargin(component) {
     const npshRequeridoAtualM = component.npshRequeridoAtualM ?? component.npshRequeridoM ?? 0;
     return component.getMargemNpshAtualM?.() ?? (component.npshDisponivelM - npshRequeridoAtualM);
+}
+
+function formatResidenceTime(valueS) {
+    return Number.isFinite(valueS) ? `${valueS.toFixed(2)} s` : translateLiteral('Sem fluxo');
 }
 
 function getPumpNpshCondition(component) {
@@ -139,6 +152,8 @@ function updateConnectionValues(engine, connection) {
     if (!connection) return;
 
     const state = engine.getConnectionState(connection);
+    const source = engine.getComponentById(connection.sourceId);
+    const pressureProfile = resolvePipePressureProfile({ state, source });
     const fluid = state.fluid || engine.hydraulicContext?.getConnectionFluid?.(connection);
     setFieldValue('disp-pipe-flow', state.flowLps, 'flow', 2);
     setFieldValue('disp-pipe-target-flow', state.targetFlowLps, 'flow', 2);
@@ -149,8 +164,13 @@ function updateConnectionValues(engine, connection) {
     setValue('disp-pipe-fluid', fluid?.nome || '-');
     setValue('disp-pipe-fluid-density', fluid?.densidade ? fluid.densidade.toFixed(1) : '0.0');
     setValue('disp-pipe-fluid-viscosity', fluid?.viscosidadeDinamicaPaS ? fluid.viscosidadeDinamicaPaS.toFixed(5) : '0.00000');
-    setFieldValue('disp-pipe-deltap', state.deltaPBar, 'pressure', 3);
+    setFieldValue('disp-pipe-deltap', pressureProfile.pressureDropBar, 'pressure', 3);
     setFieldValue('disp-pipe-length', state.lengthM, 'length', 2);
+    setValue('disp-pipe-residence-time', formatResidenceTime(calculateConnectionResidenceTimeS(
+        connection,
+        { lengthM: state.lengthM },
+        state.flowLps
+    )));
     setValue('disp-pipe-response', state.responseTimeS.toFixed(2));
 
     const suggestedDiameterM = getSuggestedDiameterForConnection(connection, state);
@@ -175,17 +195,112 @@ function updateTankValues(component) {
     setFieldValue('disp-nível-tanque', component.getAlturaLiquidoM(), 'length', 2);
     setFieldValue('disp-qin-tanque', component.lastQin, 'flow', 2);
     setFieldValue('disp-qout-tanque', component.lastQout, 'flow', 2);
+    setValue('disp-tempo-residencia-tanque', formatResidenceTime(calculateTankResidenceTimeS(component).timeS));
     const fluid = component.getFluidoConteudo?.() || component.fluidoConteudo;
     setValue('disp-tank-fluid', fluid?.nome || '-');
     setValue('disp-tank-fluid-density', fluid?.densidade ? fluid.densidade.toFixed(1) : '0.0');
     updateTankControlAvailabilityUI(component);
 }
 
-function updateValveValues(engine, component) {
+function getValveSizingAlertState(diagnostico) {
+    const isDark = document.body.classList.contains('theme-dark');
+    const severity = diagnostico?.status === 'undersized' ? 'danger' : 'warning';
+
+    if (diagnostico?.status === 'undersized') {
+        return isDark
+            ? {
+                severity,
+                title: 'Válvula restritiva',
+                message: 'A válvula manual está muito aberta e ainda consome uma parcela alta da pressão disponível. Aumente o Cv ou reduza K manual para liberar a passagem sem mascarar a perda nos canos.',
+                border: '#e74c3c',
+                background: '#2d1b1b',
+                color: '#ff6b6b',
+                bodyColor: '#f7d8d4'
+            }
+            : {
+                severity,
+                title: 'Válvula restritiva',
+                message: 'A válvula manual está muito aberta e ainda consome uma parcela alta da pressão disponível. Aumente o Cv ou reduza K manual para liberar a passagem sem mascarar a perda nos canos.',
+                border: '#c0392b',
+                background: '#fdeaea',
+                color: '#922b21',
+                bodyColor: '#34495e'
+            };
+    }
+
+    return isDark
+        ? {
+            severity,
+            title: 'Válvula no limite',
+            message: 'A queda de pressão na válvula manual já é relevante para a abertura atual. O sistema ainda opera, mas vale revisar Cv, K ou o perfil se ela não deveria limitar a rede.',
+            border: '#f39c12',
+            background: '#2d2418',
+            color: '#f0b36b',
+            bodyColor: '#f6dfbd'
+        }
+        : {
+            severity,
+            title: 'Válvula no limite',
+            message: 'A queda de pressão na válvula manual já é relevante para a abertura atual. O sistema ainda opera, mas vale revisar Cv, K ou o perfil se ela não deveria limitar a rede.',
+            border: '#e67e22',
+            background: '#fff3e6',
+            color: '#a84300',
+            bodyColor: '#34495e'
+        };
+}
+
+function updateValveSizingAlert(component, blockedBySetpoint) {
+    const alertEl = byId('painel-alerta-dimensionamento-valvula');
+    if (!alertEl) return;
+
+    const diagnostico = component.getDiagnosticoDimensionamento?.();
+    if (!diagnostico?.ativo) {
+        alertEl.style.display = 'none';
+        return;
+    }
+
+    const state = getValveSizingAlertState(diagnostico);
+    const titleEl = byId('titulo-alerta-dimensionamento-valvula');
+    const textEl = byId('texto-alerta-dimensionamento-valvula');
+    const metricsEl = byId('metricas-alerta-dimensionamento-valvula');
+    const actionButton = byId('btn-ajustar-dimensionamento-valvula');
+
+    alertEl.style.display = 'block';
+    alertEl.classList.remove('gaap-alert--danger', 'gaap-alert--warning', 'gaap-alert--caution', 'gaap-alert--success', 'gaap-alert--neutral');
+    alertEl.classList.add('gaap-alert', `gaap-alert--${state.severity}`);
+    alertEl.dataset.alertSeverity = state.severity;
+    alertEl.style.borderLeftColor = state.border;
+    alertEl.style.borderColor = state.border;
+    alertEl.style.background = state.background;
+
+    if (titleEl) {
+        titleEl.textContent = state.title;
+        titleEl.style.color = state.color;
+    }
+    if (textEl) {
+        textEl.textContent = state.message;
+        textEl.style.color = state.bodyColor;
+    }
+    if (metricsEl) {
+        metricsEl.style.color = state.color;
+        metricsEl.textContent = [
+            `ΔP: ${formatMeasuredValue('pressure', diagnostico.quedaPressaoBar, 2)}`,
+            `Abertura: ${diagnostico.aberturaPercent.toFixed(1)}%`,
+            `Cv: ${diagnostico.cvAtual.toFixed(1)} -> ${diagnostico.cvSugerido.toFixed(1)}`,
+            `K: ${diagnostico.perdaLocalKAtual.toFixed(3)} -> ${diagnostico.perdaLocalKSugerida.toFixed(3)}`
+        ].join(' | ');
+    }
+    if (actionButton) actionButton.disabled = blockedBySetpoint || !diagnostico.aplicavel;
+}
+
+function updateValveValues(engine, component, { monitorController } = {}) {
     const abEl = byId('input-abertura');
     const numInput = byId('val-abertura');
     const cvInput = byId('input-cv');
+    const unidadeCoeficienteInput = byId('input-unidade-coeficiente-valvula');
+    const coeficienteLabel = byId('label-coeficiente-valvula');
     const perdaInput = byId('input-perda-k');
+    const perdaEstrangulamentoInput = byId('input-perda-estrangulamento-valvula');
     const perfilInput = byId('input-perfil-valvula');
     const caracteristicaInput = byId('input-caracteristica-valvula');
     const rangeabilidadeInput = byId('input-rangeabilidade-valvula');
@@ -195,14 +310,16 @@ function updateValveValues(engine, component) {
     const perfilAtual = component.perfilCaracteristica ?? 'custom';
     const bloqueioParametros = bloqueadaPorSetpoint || perfilAtual !== 'custom';
 
-    [abEl, numInput, perfilInput]
+    [abEl, numInput]
         .forEach((input) => {
             if (input) input.disabled = bloqueadaPorSetpoint;
         });
-    [cvInput, perdaInput, caracteristicaInput, rangeabilidadeInput, cursoInput]
+    if (perfilInput) perfilInput.disabled = false;
+    [cvInput, perdaInput, perdaEstrangulamentoInput, caracteristicaInput, rangeabilidadeInput, cursoInput]
         .forEach((input) => {
             if (input) input.disabled = bloqueioParametros;
         });
+    if (unidadeCoeficienteInput) unidadeCoeficienteInput.disabled = false;
 
     if (abEl && !isActive(numInput) && !isActive(abEl)) {
         abEl.value = Math.round(component.grauAbertura);
@@ -210,13 +327,27 @@ function updateValveValues(engine, component) {
     }
     if (perfilInput && !isActive(perfilInput)) perfilInput.value = perfilAtual;
     if (caracteristicaInput && !isActive(caracteristicaInput)) caracteristicaInput.value = component.tipoCaracteristica;
-    if (cvInput && !isActive(cvInput)) cvInput.value = component.cv.toFixed(2);
+    const unidadeCoeficiente = component.getUnidadeCoeficienteVazao?.() === VALVE_FLOW_COEFFICIENT_UNITS.KV
+        ? VALVE_FLOW_COEFFICIENT_UNITS.KV
+        : VALVE_FLOW_COEFFICIENT_UNITS.CV;
+    const unidadeLabel = unidadeCoeficiente === VALVE_FLOW_COEFFICIENT_UNITS.KV ? 'Kv' : 'Cv';
+    if (unidadeCoeficienteInput && !isActive(unidadeCoeficienteInput)) unidadeCoeficienteInput.value = unidadeCoeficiente;
+    if (cvInput && !isActive(cvInput)) {
+        cvInput.value = (component.getCoeficienteVazaoNaUnidade?.(unidadeCoeficiente) ?? component.cv).toFixed(2);
+        cvInput.max = (component.getCoeficienteVazaoMaximoNaUnidade?.(unidadeCoeficiente) ?? 800).toFixed(2);
+    }
+    if (coeficienteLabel) coeficienteLabel.textContent = `Coeficiente de vazão (${unidadeLabel})`;
     if (perdaInput && !isActive(perdaInput)) perdaInput.value = component.perdaLocalK.toFixed(3);
+    if (perdaEstrangulamentoInput && !isActive(perdaEstrangulamentoInput)) {
+        perdaEstrangulamentoInput.checked = component.considerarPerdaEstrangulamento === true;
+    }
     if (rangeabilidadeInput && !isActive(rangeabilidadeInput)) rangeabilidadeInput.value = component.rangeabilidade;
     if (cursoInput && !isActive(cursoInput)) cursoInput.value = component.tempoCursoSegundos;
     setValue('disp-abertura-efetiva-valvula', component.aberturaEfetiva.toFixed(1));
     setFieldValue('disp-vazao-valvula', component.fluxoReal, 'flow', 2);
     setFieldValue('disp-deltap-valvula', component.deltaPAtualBar, 'pressure', 2);
+    updateValveSizingAlert(component, bloqueadaPorSetpoint);
+    monitorController?.refreshValve(component);
 }
 
 function updatePumpValues(component, { monitorController } = {}) {
@@ -228,6 +359,7 @@ function updatePumpValues(component, { monitorController } = {}) {
     }
     setValue('disp-acionamento-real-bomba', component.acionamentoEfetivo.toFixed(1));
     setFieldValue('disp-vazao-bomba', component.fluxoReal, 'flow', 2);
+    setFieldValue('disp-carga-bomba', component.cargaGeradaBar, 'pressure', 2);
     setFieldValue('disp-succao-bomba', component.pressaoSucaoAtualBar, 'pressure', 2);
     setFieldValue('disp-descarga-bomba', component.pressaoDescargaAtualBar, 'pressure', 2);
     setValue('disp-cavitacao-bomba', `${(component.fatorCavitacaoAtual * 100).toFixed(0)}%`);
@@ -262,7 +394,10 @@ export function updatePropertyPanelValues({
     }
 
     if (component instanceof DrenoLogico) {
+        const pressureProfile = resolveSinkPressureProfile({ engine, sink: component });
         setFieldValue('disp-vazao-dreno', component.vazaoRecebidaLps, 'flow', 2);
+        setFieldValue('disp-pressao-final-dreno', pressureProfile.finalNetworkPressureBar, 'pressure', 2);
+        setFieldValue('disp-deltap-entrada-dreno', pressureProfile.entryPressureDropBar, 'pressure', 2);
     }
 
     if (component instanceof TanqueLogico) {
@@ -270,7 +405,7 @@ export function updatePropertyPanelValues({
     }
 
     if (component instanceof ValvulaLogica) {
-        updateValveValues(engine, component);
+        updateValveValues(engine, component, { monitorController });
     }
 
     if (component instanceof BombaLogica) {

@@ -1,4 +1,9 @@
+import { BombaLogica } from '../../domain/components/BombaLogica.js';
+import { DrenoLogico } from '../../domain/components/DrenoLogico.js';
+import { FonteLogica } from '../../domain/components/FonteLogica.js';
 import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
+import { TrocadorCalorLogico } from '../../domain/components/TrocadorCalorLogico.js';
+import { ValvulaLogica } from '../../domain/components/ValvulaLogica.js';
 import {
     byId,
     setHtml
@@ -14,17 +19,104 @@ function formatAlertSignatureNumber(value) {
     return Number.isFinite(numericValue) ? numericValue.toFixed(4) : String(value ?? '');
 }
 
-function formatPumpAdjustmentSignature(adjustments = []) {
-    return adjustments.map(adjustment => [
-        formatAlertSignatureNumber(adjustment?.vazaoNominalRecomendadaLps),
-        formatAlertSignatureNumber(adjustment?.pressaoMaximaRecomendadaBar)
-    ].join(':')).join(';');
+function getFluidSignature(fluid = {}) {
+    return [
+        fluid?.nome ?? '',
+        formatAlertSignatureNumber(fluid?.densidade),
+        formatAlertSignatureNumber(fluid?.viscosidadeDinamicaPaS),
+        formatAlertSignatureNumber(fluid?.pressaoVaporBar),
+        formatAlertSignatureNumber(fluid?.pressaoAtmosfericaBar)
+    ].join(':');
 }
 
-function formatSourceAdjustmentSignature(adjustments = []) {
-    return adjustments.map(adjustment => (
-        formatAlertSignatureNumber(adjustment?.pressaoRecomendadaBar)
-    )).join(';');
+function getStableComponentSignature(rootComponent, component) {
+    if (!component) return '';
+
+    const signature = [
+        component.constructor?.name ?? 'ComponenteFisico',
+        component.id,
+        component.tag ?? '',
+        formatAlertSignatureNumber(component.diametroConexaoM)
+    ];
+
+    if (component instanceof TanqueLogico) {
+        signature.push(
+            formatAlertSignatureNumber(component.setpoint),
+            component.setpointAtivo ? 'sp-on' : 'sp-off',
+            formatAlertSignatureNumber(component.alturaUtilMetros),
+            formatAlertSignatureNumber(component.coeficienteSaida),
+            formatAlertSignatureNumber(component.alturaBocalEntradaM),
+            formatAlertSignatureNumber(component.alturaBocalSaidaM)
+        );
+    } else if (component instanceof FonteLogica) {
+        signature.push(
+            formatAlertSignatureNumber(component.pressaoFonteBar),
+            formatAlertSignatureNumber(component.vazaoMaxima),
+            component.fluidoEntradaPresetId ?? '',
+            getFluidSignature(component.fluidoEntrada)
+        );
+    } else if (component instanceof BombaLogica) {
+        signature.push(
+            formatAlertSignatureNumber(component.grauAcionamento),
+            formatAlertSignatureNumber(component.vazaoNominal),
+            formatAlertSignatureNumber(component.pressaoMaxima),
+            formatAlertSignatureNumber(component.eficienciaHidraulica),
+            formatAlertSignatureNumber(component.npshRequeridoM),
+            formatAlertSignatureNumber(component.tempoRampaSegundos),
+            formatAlertSignatureNumber(component.fracaoMelhorEficiencia)
+        );
+    } else if (component instanceof ValvulaLogica) {
+        const controlledBySetpoint = rootComponent?.isValvulaControladaPorSetpoint?.(component) === true
+            || component.estaControladaPorSetpoint?.() === true;
+
+        signature.push(
+            controlledBySetpoint ? 'setpoint-controlled' : 'manual',
+            controlledBySetpoint ? '' : formatAlertSignatureNumber(component.grauAbertura),
+            formatAlertSignatureNumber(component.cv),
+            formatAlertSignatureNumber(component.perdaLocalK),
+            component.perfilCaracteristica ?? '',
+            component.tipoCaracteristica ?? '',
+            formatAlertSignatureNumber(component.rangeabilidade),
+            formatAlertSignatureNumber(component.tempoCursoSegundos)
+        );
+    } else if (component instanceof DrenoLogico) {
+        signature.push(
+            formatAlertSignatureNumber(component.pressaoSaidaBar),
+            formatAlertSignatureNumber(component.perdaEntradaK)
+        );
+    } else if (component instanceof TrocadorCalorLogico) {
+        signature.push(
+            formatAlertSignatureNumber(component.perdaLocalK),
+            formatAlertSignatureNumber(component.uaWPorK),
+            formatAlertSignatureNumber(component.temperaturaServicoC),
+            formatAlertSignatureNumber(component.efetividadeMaxima)
+        );
+    }
+
+    const inputIds = (component.inputs || []).map((input) => input?.id).filter(Boolean).sort().join(',');
+    const outputIds = (component.outputs || []).map((output) => output?.id).filter(Boolean).sort().join(',');
+    signature.push(`in:${inputIds}`, `out:${outputIds}`);
+
+    return signature.join(':');
+}
+
+function getStableNetworkSignature(component) {
+    const visited = new Set();
+    const queue = [component];
+    const signatures = [];
+
+    while (queue.length > 0) {
+        const current = queue.shift();
+        if (!current || visited.has(current.id)) continue;
+        visited.add(current.id);
+
+        signatures.push(getStableComponentSignature(component, current));
+        [...(current.inputs || []), ...(current.outputs || [])].forEach((next) => {
+            if (next && !visited.has(next.id)) queue.push(next);
+        });
+    }
+
+    return signatures.sort().join('|');
 }
 
 function getSaturationAlertSignature(component, alert) {
@@ -32,13 +124,9 @@ function getSaturationAlertSignature(component, alert) {
         component?.id,
         formatAlertSignatureNumber(component?.setpoint),
         alert?.usarAlturaRelativa ? 'height-on' : 'height-off',
-        formatAlertSignatureNumber(alert?.vazaoSaidaLimiteSetpointLps),
-        formatAlertSignatureNumber(alert?.pressaoBaseEntradaSetpointBar),
-        formatAlertSignatureNumber(alert?.pressaoSaidaSetpointBar),
         alert?.possuiBombasMontante ? 'pumps-on' : 'pumps-off',
         alert?.quantidadeBombasMontante ?? 0,
-        formatPumpAdjustmentSignature(alert?.ajustesBomba),
-        formatSourceAdjustmentSignature(alert?.ajustesFonte)
+        getStableNetworkSignature(component)
     ].join('|');
 }
 
@@ -63,7 +151,9 @@ function setTankSaturationAlertVisible(panel, visible) {
         window.requestAnimationFrame(() => {
             panel.style.opacity = '1';
             panel.style.transform = 'translateY(0)';
-            panel.style.maxHeight = popup ? 'calc(100vh - 120px)' : `${Math.max(panel.scrollHeight, 160)}px`;
+            panel.style.maxHeight = popup
+                ? 'calc(100vh - var(--tank-popup-top, 148px) - 16px)'
+                : `${Math.max(panel.scrollHeight, 160)}px`;
             panel.style.margin = popup ? '0' : '0 0 12px';
             if (!popup) {
                 panel.style.paddingTop = '10px';
@@ -187,7 +277,7 @@ export function updateTankSaturationAlert(component) {
 
     const alerta = component.alertaSaturacao;
     if (!alerta?.ativo) {
-        ignoredSaturationAlerts.delete(component);
+        if (!component.setpointAtivo) ignoredSaturationAlerts.delete(component);
         setTankSaturationAlertVisible(painelAlerta, false);
         if (feedbackAjuste) {
             feedbackAjuste.textContent = '';
@@ -286,7 +376,7 @@ export function refreshTankSaturationAlertForComponents(components = [], { onAdj
 
     for (const tank of tanks) {
         if (!tank.alertaSaturacao?.ativo) {
-            ignoredSaturationAlerts.delete(tank);
+            if (!tank.setpointAtivo) ignoredSaturationAlerts.delete(tank);
             continue;
         }
 
@@ -311,6 +401,7 @@ export function updateTankControlAvailabilityUI(component) {
     const grp = byId('grp-sp-main');
     const kpGroup = byId('group-ctrl-params');
     const kiGroup = byId('group-ctrl-ki');
+    const kdGroup = byId('group-ctrl-kd');
     const isDark = document.body.classList.contains('theme-dark');
 
     if (spAtivoEl) {
@@ -337,7 +428,8 @@ export function updateTankControlAvailabilityUI(component) {
             : (diagnostico.podeAtivar ? (isDark ? '#1d2a35' : '#f9fbfb') : (isDark ? '#332613' : '#fff8ee'));
     }
 
-    const mostrarParametros = component.setpointAtivo ? 'block' : 'none';
-    if (kpGroup) kpGroup.style.display = mostrarParametros;
-    if (kiGroup) kiGroup.style.display = mostrarParametros;
+    const mostrarParametrosPid = component.setpointAtivo ? 'block' : 'none';
+    if (kpGroup) kpGroup.style.display = mostrarParametrosPid;
+    if (kiGroup) kiGroup.style.display = mostrarParametrosPid;
+    if (kdGroup) kdGroup.style.display = mostrarParametrosPid;
 }

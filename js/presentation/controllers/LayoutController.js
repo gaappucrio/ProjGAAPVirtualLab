@@ -10,6 +10,8 @@ const EXPANDED_MONITOR_GAP_PX = 10;
 const COLLAPSED_MONITOR_GAP_PX = 16;
 const POPUP_WORKSPACE_INSET_PX = 24;
 const POPUP_MOBILE_INSET_PX = 12;
+const POPUP_TOOLBAR_GAP_PX = 12;
+const POPUP_FALLBACK_TOP_PX = 148;
 const MONITOR_TRANSITION_MS = 240;
 
 export function setupLayoutController({ onChartLayoutChange } = {}) {
@@ -18,6 +20,7 @@ export function setupLayoutController({ onChartLayoutChange } = {}) {
     const toggleRight = document.getElementById('toggle-right');
     const panelRight = document.getElementById('properties');
     const sandboxContainer = document.querySelector('.sandbox-container');
+    const topToolbar = document.querySelector('.top-toolbar');
 
     const getOpenPanelWidth = (panel, fallbackWidth) => {
         if (!panel || panel.classList.contains('collapsed')) return 0;
@@ -40,6 +43,15 @@ export function setupLayoutController({ onChartLayoutChange } = {}) {
         sandboxContainer?.style.setProperty('--chart-max-right', `${Math.round(monitorRight)}px`);
 
         const rootStyle = document.documentElement.style;
+        const toolbarRect = topToolbar?.getBoundingClientRect();
+        const popupTop = toolbarRect && toolbarRect.height > 0
+            ? toolbarRect.bottom + POPUP_TOOLBAR_GAP_PX
+            : POPUP_FALLBACK_TOP_PX;
+        rootStyle.setProperty('--tank-popup-top', `${Math.round(Math.min(
+            Math.max(POPUP_MOBILE_INSET_PX, popupTop),
+            Math.max(POPUP_MOBILE_INSET_PX, window.innerHeight - POPUP_MOBILE_INSET_PX)
+        ))}px`);
+
         if (!sandboxContainer || !isDesktop) {
             rootStyle.setProperty('--tank-popup-left', `${POPUP_MOBILE_INSET_PX}px`);
             rootStyle.setProperty('--tank-popup-right', `${POPUP_MOBILE_INSET_PX}px`);
@@ -248,5 +260,8 @@ export function setupLayoutController({ onChartLayoutChange } = {}) {
 
     updateFloatingLayoutMetrics();
     updateChartButtonLabels();
-    subscribeLanguageChanges(updateChartButtonLabels);
+    subscribeLanguageChanges(() => {
+        updateChartButtonLabels();
+        updateFloatingLayoutMetrics();
+    });
 }

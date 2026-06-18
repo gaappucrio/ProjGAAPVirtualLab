@@ -13,6 +13,17 @@ import {
 import { subscribeLanguageChanges, t } from '../../presentation/i18n/LanguageManager.js';
 import { getFluidVisualStyle } from '../rendering/FluidVisualStyle.js';
 
+function registerVisualCleanup(visual, cleanup) {
+    if (typeof cleanup !== 'function') return;
+    if (!Array.isArray(visual.__gaapCleanupFns)) visual.__gaapCleanupFns = [];
+    visual.__gaapCleanupFns.push(cleanup);
+}
+
+function subscribeVisual(visual, observable, listener) {
+    if (!observable || typeof observable.subscribe !== 'function') return;
+    registerVisualCleanup(visual, observable.subscribe(listener));
+}
+
 export const SOURCE_COMPONENT_VISUAL = {
     svg: (id, tag) => `
         <circle id="source-body-${id}" cx="40" cy="40" r="25" fill="#3498db" stroke="#2980b9" stroke-width="4"/>
@@ -21,7 +32,13 @@ export const SOURCE_COMPONENT_VISUAL = {
         <g>${makePort(id, 65, 40, 'out')}</g>
     `,
     setup: (visual, logica, id) => {
-        const atualizarElevacoes = createElevationUpdater({ visual, logica, id, offsetY: -20 });
+        const atualizarElevacoes = createElevationUpdater({
+            visual,
+            logica,
+            id,
+            offsetY: -20,
+            registerCleanup: (cleanup) => registerVisualCleanup(visual, cleanup)
+        });
         const atualizarCorFonte = () => {
             const estilo = getFluidVisualStyle(logica.fluidoEntrada);
             visual.querySelector(`#source-body-${id}`)?.setAttribute('fill', estilo.stroke);
@@ -29,7 +46,7 @@ export const SOURCE_COMPONENT_VISUAL = {
             visual.querySelector(`#source-arrow-${id}`)?.setAttribute('stroke', estilo.contrast);
         };
 
-        logica.subscribe((dados) => {
+        subscribeVisual(visual, logica, (dados) => {
             if (dados.tipo === COMPONENT_EVENTS.POSITION_UPDATE) atualizarElevacoes();
             if (dados.tipo === COMPONENT_EVENTS.STATE && dados.fluidUpdate) atualizarCorFonte();
             if (dados.tipo === COMPONENT_EVENTS.TAG_UPDATE) {
@@ -37,7 +54,7 @@ export const SOURCE_COMPONENT_VISUAL = {
             }
         });
 
-        ENGINE.subscribe((dados) => {
+        subscribeVisual(visual, ENGINE, (dados) => {
             if (dados.tipo === ENGINE_EVENTS.SIMULATION_CONFIG) atualizarElevacoes();
         });
 
@@ -54,16 +71,22 @@ export const SINK_COMPONENT_VISUAL = {
         <g>${makePort(id, 15, 40, 'in')}</g>
     `,
     setup: (visual, logica, id) => {
-        const atualizarElevacoes = createElevationUpdater({ visual, logica, id, offsetY: -20 });
+        const atualizarElevacoes = createElevationUpdater({
+            visual,
+            logica,
+            id,
+            offsetY: -20,
+            registerCleanup: (cleanup) => registerVisualCleanup(visual, cleanup)
+        });
 
-        logica.subscribe((dados) => {
+        subscribeVisual(visual, logica, (dados) => {
             if (dados.tipo === COMPONENT_EVENTS.POSITION_UPDATE) atualizarElevacoes();
             if (dados.tipo === COMPONENT_EVENTS.TAG_UPDATE) {
                 visual.querySelector(`#tag-${id}`).textContent = logica.tag;
             }
         });
 
-        ENGINE.subscribe((dados) => {
+        subscribeVisual(visual, ENGINE, (dados) => {
             if (dados.tipo === ENGINE_EVENTS.SIMULATION_CONFIG) atualizarElevacoes();
         });
 
@@ -79,11 +102,17 @@ export const PUMP_COMPONENT_VISUAL = {
         <g>${makePort(id, 0, 40, 'in')} ${makePort(id, 80, 40, 'out')}</g>
     `,
     setup: (visual, logica, id) => {
-        const atualizarElevacoes = createElevationUpdater({ visual, logica, id, offsetY: 0 });
+        const atualizarElevacoes = createElevationUpdater({
+            visual,
+            logica,
+            id,
+            offsetY: 0,
+            registerCleanup: (cleanup) => registerVisualCleanup(visual, cleanup)
+        });
 
         visual.addEventListener('dblclick', () => logica.toggle());
 
-        logica.subscribe((dados) => {
+        subscribeVisual(visual, logica, (dados) => {
             if (dados.tipo === COMPONENT_EVENTS.POSITION_UPDATE) atualizarElevacoes();
             if (dados.tipo === COMPONENT_EVENTS.STATE) {
                 visual.querySelector(`#led-${id}`).setAttribute('fill', dados.grau > 0 ? '#2ecc71' : '#e74c3c');
@@ -92,7 +121,7 @@ export const PUMP_COMPONENT_VISUAL = {
             }
         });
 
-        ENGINE.subscribe((dados) => {
+        subscribeVisual(visual, ENGINE, (dados) => {
             if (dados.tipo === ENGINE_EVENTS.SIMULATION_CONFIG) atualizarElevacoes();
         });
 
@@ -110,11 +139,17 @@ export const VALVE_COMPONENT_VISUAL = {
         <g>${makePort(id, 20, 40, 'in')} ${makePort(id, 60, 40, 'out')}</g>
     `,
     setup: (visual, logica, id) => {
-        const atualizarElevacoes = createElevationUpdater({ visual, logica, id, offsetY: -20 });
+        const atualizarElevacoes = createElevationUpdater({
+            visual,
+            logica,
+            id,
+            offsetY: -20,
+            registerCleanup: (cleanup) => registerVisualCleanup(visual, cleanup)
+        });
 
         visual.addEventListener('dblclick', () => logica.toggle());
 
-        logica.subscribe((dados) => {
+        subscribeVisual(visual, logica, (dados) => {
             if (dados.tipo === COMPONENT_EVENTS.POSITION_UPDATE) atualizarElevacoes();
             if (dados.tipo === COMPONENT_EVENTS.STATE) {
                 const perc = (typeof dados.grauEfetivo === 'number' ? dados.grauEfetivo : dados.grau) / 100.0;
@@ -129,7 +164,7 @@ export const VALVE_COMPONENT_VISUAL = {
             }
         });
 
-        ENGINE.subscribe((dados) => {
+        subscribeVisual(visual, ENGINE, (dados) => {
             if (dados.tipo === ENGINE_EVENTS.SIMULATION_CONFIG) atualizarElevacoes();
         });
 
@@ -154,7 +189,13 @@ export const HEAT_EXCHANGER_COMPONENT_VISUAL = {
         <g>${makePort(id, 0, 40, 'in')} ${makePort(id, 100, 40, 'out')}</g>
     `,
     setup: (visual, logica, id) => {
-        const atualizarElevacoes = createElevationUpdater({ visual, logica, id, offsetY: -10 });
+        const atualizarElevacoes = createElevationUpdater({
+            visual,
+            logica,
+            id,
+            offsetY: -10,
+            registerCleanup: (cleanup) => registerVisualCleanup(visual, cleanup)
+        });
         const atualizarEstadoTermico = () => {
             const deltaT = logica.deltaTemperaturaC || 0;
             const status = visual.querySelector(`#hx-status-${id}`);
@@ -171,7 +212,7 @@ export const HEAT_EXCHANGER_COMPONENT_VISUAL = {
             if (temp) temp.textContent = `${(logica.temperaturaSaidaC || 0).toFixed(1)} °C`;
         };
 
-        logica.subscribe((dados) => {
+        subscribeVisual(visual, logica, (dados) => {
             if (dados.tipo === COMPONENT_EVENTS.POSITION_UPDATE) atualizarElevacoes();
             if (dados.tipo === COMPONENT_EVENTS.STATE) {
                 atualizarEstadoTermico();
@@ -180,7 +221,7 @@ export const HEAT_EXCHANGER_COMPONENT_VISUAL = {
             }
         });
 
-        ENGINE.subscribe((dados) => {
+        subscribeVisual(visual, ENGINE, (dados) => {
             if (dados.tipo === ENGINE_EVENTS.SIMULATION_CONFIG) atualizarElevacoes();
             if (dados.tipo === ENGINE_EVENTS.MOTOR_STATE && !dados.rodando) atualizarEstadoTermico();
         });
@@ -218,7 +259,13 @@ export const TANK_COMPONENT_VISUAL = {
         <g>${makePort(id, 80, 0, 'in')} ${makePort(id, 80, 240, 'out')}</g>
     `,
     setup: (visual, logica, id) => {
-        const atualizarElevacoes = createElevationUpdater({ visual, logica, id, offsetY: -40 });
+        const atualizarElevacoes = createElevationUpdater({
+            visual,
+            logica,
+            id,
+            offsetY: -40,
+            registerCleanup: (cleanup) => registerVisualCleanup(visual, cleanup)
+        });
         const atualizarRotulosTanque = () => {
             visual.querySelector(`#vol-${id}`).textContent = volumeText(logica.volumeAtual);
             visual.querySelector(`#cap-max-${id}`).textContent = `${t('visual.capacity')}: ${volumeText(logica.capacidadeMaxima)}`;
@@ -250,7 +297,7 @@ export const TANK_COMPONENT_VISUAL = {
             stream.style.opacity = ENGINE.isRunning && qIn > 0.1 ? '0.7' : '0';
         };
 
-        logica.subscribe((dados) => {
+        subscribeVisual(visual, logica, (dados) => {
             if (dados.tipo === COMPONENT_EVENTS.POSITION_UPDATE) atualizarElevacoes();
             if (dados.tipo === COMPONENT_EVENTS.VOLUME_UPDATE) {
                 atualizarCorConteudo(dados.fluidoConteudo);
@@ -265,7 +312,7 @@ export const TANK_COMPONENT_VISUAL = {
             }
         });
 
-        ENGINE.subscribe((dados) => {
+        subscribeVisual(visual, ENGINE, (dados) => {
             if (dados.tipo === ENGINE_EVENTS.SIMULATION_CONFIG) atualizarElevacoes();
             if (dados.tipo === ENGINE_EVENTS.MOTOR_STATE) atualizarFluxoEntrada(dados.rodando ? logica.lastQin : 0);
         });
@@ -277,6 +324,7 @@ export const TANK_COMPONENT_VISUAL = {
             }
             atualizarRotulosTanque();
         });
+        registerVisualCleanup(visual, unsubscribeUnits);
         const unsubscribeLanguage = subscribeLanguageChanges(() => {
             if (!visual.isConnected) {
                 unsubscribeLanguage();
@@ -284,6 +332,7 @@ export const TANK_COMPONENT_VISUAL = {
             }
             atualizarRotulosTanque();
         });
+        registerVisualCleanup(visual, unsubscribeLanguage);
 
         atualizarRotulosTanque();
         atualizarCorConteudo();

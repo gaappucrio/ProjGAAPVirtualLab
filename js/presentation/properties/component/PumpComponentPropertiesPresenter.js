@@ -193,12 +193,16 @@ export const PUMP_PROPERTIES_PRESENTER = {
                 <input type="number" id="input-vazmax" ${hintAttr(TOOLTIP.pumpFlow)} value="${displayEditableUnitValue('flow', comp.vazaoNominal, 3)}" step="${displayStep('flow', 0.5)}" min="${displayBound('flow', 5)}" max="${displayBound('flow', 500)}">
             </div>
             <div class="prop-group">
-                ${makeUnitLabel('Pressão máxima', 'pressure', TOOLTIP.pumpPressure)}
+                ${makeUnitLabel('Carga máxima da curva', 'pressure', TOOLTIP.pumpPressure)}
                 <input type="number" id="input-pressao-max-bomba" ${hintAttr(TOOLTIP.pumpPressure)} value="${displayEditableUnitValue('pressure', comp.pressaoMaxima, 3)}" step="${displayStep('pressure', 0.01)}" min="${displayBound('pressure', 0.5)}" max="${displayBound('pressure', 20)}">
             </div>
             <div class="prop-group">
                 ${makeUnitLabel('Vazão atual', 'flow', TOOLTIP.pumpCurrentFlow)}
                 <input type="text" id="disp-vazao-bomba" ${hintAttr(TOOLTIP.pumpCurrentFlow)} value="${displayUnitValue('flow', comp.fluxoReal, 2)}" disabled>
+            </div>
+            <div class="prop-group">
+                ${makeUnitLabel('Aumento de pressão atual', 'pressure', TOOLTIP.pumpPressureIncrease)}
+                <input type="text" id="disp-carga-bomba" ${hintAttr(TOOLTIP.pumpPressureIncrease)} value="${displayUnitValue('pressure', comp.cargaGeradaBar, 2)}" disabled>
             </div>
             <div class="prop-group">
                 ${makeUnitLabel('Pressão de sucção', 'pressure', TOOLTIP.pumpSuctionPressure)}
@@ -216,10 +220,6 @@ export const PUMP_PROPERTIES_PRESENTER = {
                 <input type="number" id="input-eficiencia-bomba" ${hintAttr(TOOLTIP.pumpEfficiency)} value="${(comp.eficienciaHidraulica * 100).toFixed(0)}" step="1" min="20" max="100">
             </div>
             <div class="prop-group">
-                ${makeUnitLabel('NPSHr de referência', 'length', TOOLTIP.pumpNpshr)}
-                <input type="number" id="input-npsh-bomba" ${hintAttr(TOOLTIP.pumpNpshr)} value="${displayEditableUnitValue('length', comp.npshRequeridoM, 3)}" step="${displayStep('length', 0.05)}" min="${displayBound('length', 0.5)}" max="${displayBound('length', 50)}">
-            </div>
-            <div class="prop-group">
                 ${makeLabel('Tempo de rampa (s)', TOOLTIP.pumpRamp)}
                 <input type="number" id="input-rampa-bomba" ${hintAttr(TOOLTIP.pumpRamp)} value="${comp.tempoRampaSegundos}" step="0.1" min="0" max="20">
             </div>
@@ -228,11 +228,11 @@ export const PUMP_PROPERTIES_PRESENTER = {
                 <input type="text" id="disp-acionamento-real-bomba" ${hintAttr(TOOLTIP.pumpEffectiveDrive)} value="${comp.acionamentoEfetivo.toFixed(1)}" disabled>
             </div>
             <div class="prop-group">
-                ${makeUnitLabel('NPSHa atual', 'length', TOOLTIP.pumpCurrentNpsha)}
+                ${makeUnitLabel('NPSH disponível', 'length', TOOLTIP.pumpCurrentNpsha)}
                 <input type="text" id="disp-npsha-bomba" ${hintAttr(TOOLTIP.pumpCurrentNpsha)} value="${displayUnitValue('length', comp.npshDisponivelM, 2)}" disabled>
             </div>
             <div class="prop-group">
-                ${makeUnitLabel('NPSHr atual', 'length', TOOLTIP.pumpCurrentNpshr)}
+                ${makeUnitLabel('NPSH requerido', 'length', TOOLTIP.pumpCurrentNpshr)}
                 <input type="text" id="disp-npshr-atual-bomba" ${hintAttr(TOOLTIP.pumpCurrentNpshr)} value="${displayUnitValue('length', npshRequeridoAtualM, 2)}" disabled>
             </div>
             <div class="prop-group">
@@ -310,7 +310,7 @@ export const PUMP_PROPERTIES_PRESENTER = {
             validateInputWithFeedback(
                 event.target,
                 (value, name) => InputValidator.validatePressure(baseFromDisplay('pressure', value), 20, name),
-                'Pressão máxima',
+                'Carga máxima',
                 (validated) => {
                     comp.pressaoMaxima = validated;
                     comp.recalcularMetricasDerivadasCurva?.();
@@ -348,7 +348,7 @@ export const PUMP_PROPERTIES_PRESENTER = {
             );
         });
 
-        comp.subscribe((dados) => {
+        const unsubscribeComponent = comp.subscribe((dados) => {
             if (dados.tipo === COMPONENT_EVENTS.STATE && slider) {
                 sincronizarBloqueioSetpoint();
                 slider.value = dados.grau;
@@ -358,5 +358,6 @@ export const PUMP_PROPERTIES_PRESENTER = {
         });
 
         sincronizarBloqueioSetpoint();
+        return unsubscribeComponent;
     }
 };

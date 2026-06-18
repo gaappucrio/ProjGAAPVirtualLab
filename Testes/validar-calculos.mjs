@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { FLUID_PRESETS, SistemaSimulacao } from '../js/application/engine/SimulationEngine.js';
 import { BombaLogica } from '../js/domain/components/BombaLogica.js';
+import { DrenoLogico } from '../js/domain/components/DrenoLogico.js';
 import { mixFluidos } from '../js/domain/components/Fluido.js';
 import { FonteLogica } from '../js/domain/components/FonteLogica.js';
 import { TanqueLogico } from '../js/domain/components/TanqueLogico.js';
@@ -10,19 +11,44 @@ import {
     TrocadorCalorLogico,
     calcularSaidaTrocadorCalor
 } from '../js/domain/components/TrocadorCalorLogico.js';
-import { VALVE_PROFILE_DEFINITIONS, ValvulaLogica } from '../js/domain/components/ValvulaLogica.js';
-import { pressureLossFromFlow } from '../js/domain/components/BaseComponente.js';
+import {
+    VALVE_FLOW_COEFFICIENT_UNITS,
+    VALVE_PROFILE_DEFINITIONS,
+    ValvulaLogica,
+    cvToKv,
+    kvToCv
+} from '../js/domain/components/ValvulaLogica.js';
+import { pressureLossFromFlow, smoothFirstOrder } from '../js/domain/components/BaseComponente.js';
 import { ConnectionModel } from '../js/domain/models/ConnectionModel.js';
 import {
     darcyFrictionFactor,
     diameterFromFlowVelocity,
     diameterFromM3sVelocity,
     ensureConnectionProperties,
+    getConnectionResponseTimeS,
     getCurrentDesignFlowCandidateLps,
+    getPipeHydraulics,
     getSuggestedDiameterForConnection
 } from '../js/domain/services/PipeHydraulics.js';
+import {
+    calculateConnectionResidenceTimeS,
+    calculateResidenceTimeS,
+    calculateTankResidenceTimeS
+} from '../js/domain/services/ResidenceTime.js';
+import {
+    calculateLevelControl,
+    calculatePidLevelControl,
+    createLevelControllerState
+} from '../js/domain/services/LevelController.js';
 import { buildPumpCurveDatasets } from '../js/infrastructure/charts/PumpChartAdapter.js';
-import { DEFAULT_ATMOSPHERIC_PRESSURE_BAR, pressureFromHeadBar } from '../js/domain/units/HydraulicUnits.js';
+import {
+    DEFAULT_ATMOSPHERIC_PRESSURE_BAR,
+    DEFAULT_PIPE_EXTRA_LENGTH_M,
+    DEFAULT_PIPE_SCHEMATIC_LENGTH_M,
+    DEFAULT_SOURCE_MAX_FLOW_LPS,
+    DEFAULT_SOURCE_PRESSURE_BAR,
+    pressureFromHeadBar
+} from '../js/domain/units/HydraulicUnits.js';
 
 function approx(actual, expected, tolerance, label) {
     assert.ok(
@@ -37,6 +63,34 @@ function createEngine() {
     engine.fluidoOperante.densidade = 1000;
     return engine;
 }
+
+test('padroes iniciais usam fonte de 150 kPa e cano esquematico de 100 m', () => {
+    const engine = new SistemaSimulacao();
+    const fonte = new FonteLogica('F-default', 'Entrada-default', 0, 0);
+    const dreno = new DrenoLogico('D-default', 'Saida-default', 160, 0);
+    const connection = new ConnectionModel({
+        sourceId: fonte.id,
+        targetId: dreno.id
+    });
+
+    engine.add(fonte);
+    engine.add(dreno);
+    engine.addConnection(connection);
+
+    const geometry = engine.getConnectionGeometry(connection);
+
+    assert.equal(DEFAULT_PIPE_SCHEMATIC_LENGTH_M, 1);
+    assert.equal(DEFAULT_PIPE_EXTRA_LENGTH_M, 99);
+    assert.equal(connection.extraLengthM, 99);
+    assert.equal(DEFAULT_SOURCE_PRESSURE_BAR, 1.5);
+    assert.equal(fonte.pressaoFonteBar, 1.5);
+    assert.equal(fonte.pressaoFonteBar * 100, 150);
+    assert.equal(geometry.straightLengthM, 1);
+    assert.equal(geometry.lengthM, 100);
+
+    connection.extraLengthM = 0;
+    assert.equal(engine.getConnectionGeometry(connection).lengthM, 1);
+});
 
 test('dimensionamento por continuidade calcula diâmetro a partir de vazão e velocidade', () => {
     const flowM3s = 0.026995881908059335;
@@ -54,6 +108,90 @@ test('dimensionamento por continuidade calcula diâmetro a partir de vazão e ve
         1e-12,
         'Diâmetro por vazão interna em L/s e v em m/s'
     );
+});
+
+test('tempo de residencia usa volume dividido pela vazao volumetrica', () => {
+    assert.equal(calculateResidenceTimeS(120, 6), 20);
+    assert.equal(calculateResidenceTimeS(120, 0), null);
+
+    const connection = ensureConnectionProperties(new ConnectionModel({
+        sourceId: 'F-01',
+        targetId: 'D-01',
+        diameterM: 0.1
+    }));
+    const pipeResidenceS = calculateConnectionResidenceTimeS(connection, { lengthM: 10 }, 5);
+    approx(pipeResidenceS, 15.7079632679, 1e-9, 'Tempo de residencia no Cano');
+
+    const tank = new TanqueLogico('T-res', 'T-res', 0, 0);
+    tank.volumeAtual = 500;
+    tank.lastQin = 12;
+    tank.lastQout = 10;
+
+    const tankResidence = calculateTankResidenceTimeS(tank);
+    assert.equal(tankResidence.basis, 'outlet');
+    assert.equal(tankResidence.timeS, 50);
+
+    tank.lastQout = 0;
+    const fillingResidence = calculateTankResidenceTimeS(tank);
+    assert.equal(fillingResidence.basis, 'inlet');
+    approx(fillingResidence.timeS, 41.6666666667, 1e-9, 'Tempo de residencia por entrada');
+});
+
+test('controlador PID de nivel calcula saida continua com estado separado do tanque', () => {
+    const state = createLevelControllerState();
+
+    const piResult = calculatePidLevelControl({
+        setpoint: 0.5,
+        measurement: 0.51,
+        dt: 0.1,
+        kp: 4,
+        ki: 0.6,
+        kd: 0,
+        state
+    });
+
+    approx(piResult.u, -0.0406, 1e-12, 'Saida PI para erro normalizado pequeno');
+    assert.equal(piResult.inRest, false);
+    approx(state.integral, -0.001, 1e-12, 'Integral acumulada no estado externo');
+
+    const restResult = calculatePidLevelControl({
+        setpoint: 0.5,
+        measurement: 0.5005,
+        dt: 0.1,
+        kp: 4,
+        ki: 0.6,
+        kd: 0,
+        state
+    });
+
+    assert.equal(restResult.inRest, true);
+    assert.equal(restResult.u, 0);
+    assert.equal(state.integral, 0);
+
+    const pidState = createLevelControllerState();
+    const pidResult = calculatePidLevelControl({
+        setpoint: 0.5,
+        measurement: 0.45,
+        dt: 0.1,
+        kp: 4,
+        ki: 0.6,
+        kd: 0.2,
+        state: pidState
+    });
+
+    approx(pidResult.u, 0.303, 1e-12, 'Termo derivativo deve participar quando Kd for maior que zero');
+    approx(pidResult.derivative, 0.5, 1e-12, 'Derivada do erro fica no estado do controlador');
+
+    const wrapperResult = calculateLevelControl({
+        setpoint: 0.5,
+        measurement: 0.55,
+        dt: 0.1,
+        kp: 4,
+        ki: 0.6,
+        state: createLevelControllerState()
+    });
+
+    assert.ok(wrapperResult.u < 0, 'Erro negativo deve abrir atuadores de saida');
 });
 
 test('propriedades hidraulicas de conexao preservam zero fisico e reparam invalidos', () => {
@@ -114,6 +252,22 @@ test('perda de pressao preserva coeficiente zero e atrito laminar Darcy', () => 
     );
 });
 
+test('calculos hidraulicos toleram fluido e geometria ausentes sem NaN', () => {
+    const conexao = ensureConnectionProperties(new ConnectionModel({ sourceId: 'A', targetId: 'B' }));
+    const hidraulica = getPipeHydraulics(conexao, null, conexao.areaM2, 1, undefined, undefined);
+    const tempoResposta = getConnectionResponseTimeS(conexao, null, null);
+    const tanque = new TanqueLogico('T-robust', 'T-robust', 0, 0);
+
+    tanque.capacidadeMaxima = 1000;
+    tanque.volumeAtual = 500;
+
+    assert.ok(Number.isFinite(hidraulica.distributedLossCoeff), 'Coeficiente distribuido deve ficar finito sem geometria');
+    assert.ok(Number.isFinite(hidraulica.reynolds), 'Reynolds deve ficar finito sem fluido explicito');
+    assert.ok(Number.isFinite(tempoResposta), 'Tempo de resposta deve ficar finito sem fluido/geometria');
+    assert.ok(Number.isFinite(tanque.getPressaoConexaoSemPerdaBar()), 'Pressao do tanque deve ficar finita sem fluido explicito');
+    assert.equal(pressureFromHeadBar(1, undefined), 0, 'Pressao por altura invalida deve ser zerada, nao NaN');
+});
+
 test('tanque normaliza altura util e bocais para manter hidrostatica fisica', () => {
     const tanque = new TanqueLogico('T-NORM', 'Tanque-Norm', 0, 0);
     const fluido = FLUID_PRESETS.agua;
@@ -172,14 +326,16 @@ test('trocador de calor clona fluido de saida sem alterar composicao hidraulica'
     const saida = trocador.getFluidoSaidaPara(agua, 1);
 
     assert.notEqual(saida, agua);
-    assert.equal(saida.densidade, agua.densidade);
-    assert.equal(saida.viscosidadeDinamicaPaS, agua.viscosidadeDinamicaPaS);
+    approx(saida.densidade, 983.30, 0.05, 'Densidade da água aquecida a ~59.8 °C');
+    approx(saida.viscosidadeDinamicaPaS, 0.000464, 0.00001, 'Viscosidade da água aquecida a ~59.8 °C');
     assert.ok(saida.temperatura > agua.temperatura);
 });
 
 test('fonte mantem propriedades de fluido de entrada independentes do fluido operante', () => {
     const fonte = new FonteLogica('F-01', 'inlet-01', 0, 0);
 
+    approx(fonte.vazaoMaxima, DEFAULT_SOURCE_MAX_FLOW_LPS, 1e-12, 'vazao maxima padrao da fonte');
+    approx(fonte.vazaoMaxima * 3.6, 32, 1e-12, 'vazao maxima padrao da fonte em m3/h');
     assert.equal(fonte.fluidoEntrada.nome, '\u00c1gua');
     approx(fonte.fluidoEntrada.densidade, 997, 1e-12, 'densidade padrao do fluido de entrada');
     approx(fonte.fluidoEntrada.viscosidadeDinamicaPaS, 0.00089, 1e-12, 'viscosidade padrao do fluido de entrada');
@@ -319,7 +475,7 @@ test('diâmetro sugerido usa vazão de projeto estável ao aplicar repetidas vez
     };
     const secondSuggestion = getSuggestedDiameterForConnection(connection, recalculatedStateAfterApply);
 
-    approx(connection.designFlowLps, 20, 1e-12, 'Vazão de projeto preservada');
+    approx(connection.designFlowLps, 20, 1e-12, 'Vazão de referência preservada');
     approx(secondSuggestion, firstSuggestion, 1e-12, 'Diâmetro sugerido deve permanecer estável');
 
     connection.designFlowLps = getCurrentDesignFlowCandidateLps(connection, {
@@ -328,7 +484,7 @@ test('diâmetro sugerido usa vazão de projeto estável ao aplicar repetidas vez
     });
     const updatedSuggestion = getSuggestedDiameterForConnection(connection, recalculatedStateAfterApply);
 
-    approx(connection.designFlowLps, 14, 1e-12, 'Vazão de projeto pode ser atualizada explicitamente pela vazão alvo atual');
+    approx(connection.designFlowLps, 14, 1e-12, 'Vazão de referência pode ser atualizada explicitamente pela vazão alvo atual');
     approx(updatedSuggestion, diameterFromFlowVelocity(14, 2), 1e-12, 'Diâmetro sugerido deve refletir a nova vazão de projeto');
 });
 
@@ -364,6 +520,25 @@ test('tempo de curso e rampa aceitam zero e respeitam a escala configurada', () 
     bomba.tempoRampaSegundos = 0;
     bomba.atualizarDinamica(0.2);
     approx(bomba.acionamentoEfetivo, 100, 1e-9, 'Tempo de rampa zero da bomba');
+});
+
+test('dinamica transitoria nao avanca quando o passo de tempo e zero', () => {
+    approx(smoothFirstOrder(2, 10, 0, 1), 2, 1e-12, 'Suavizacao de primeira ordem deve preservar estado em dt zero');
+    approx(smoothFirstOrder(2, 10, -0.1, 1), 2, 1e-12, 'Suavizacao de primeira ordem deve ignorar dt negativo');
+});
+
+test('componentes hidraulicos nascem sem perda K manual', () => {
+    const conexao = new ConnectionModel({ sourceId: 'A', targetId: 'B' });
+    const dreno = new DrenoLogico('D-default', 'D-default', 0, 0);
+    const tanque = new TanqueLogico('T-default', 'T-default', 0, 0);
+    const trocador = new TrocadorCalorLogico('HX-default', 'HX-default', 0, 0);
+    const valvula = new ValvulaLogica('V-default', 'V-default', 0, 0);
+
+    approx(conexao.perdaLocalK, 0, 1e-12, 'Cano sem K local padrao');
+    approx(dreno.perdaEntradaK, 0, 1e-12, 'Saida sem K de entrada padrao');
+    approx(trocador.perdaLocalK, 0, 1e-12, 'Trocador sem K local padrao');
+    approx(valvula.perdaLocalK, 0, 1e-12, 'Valvula sem K manual padrao');
+    assert.equal(valvula.considerarPerdaEstrangulamento, false, 'Perda de estrangulamento fica desligada por padrao');
 });
 
 test('característica da válvula altera capacidade hidráulica na mesma abertura', () => {
@@ -404,7 +579,29 @@ test('característica da válvula altera capacidade hidráulica na mesma abertur
     );
 });
 
-test('valvula aberta com K zero nao aplica perda minima escondida', () => {
+test('valvula com abertura subvisual fecha hidraulicamente', () => {
+    const valvula = new ValvulaLogica('V-fechamento', 'V-fechamento', 0, 0);
+
+    valvula.aberturaEfetiva = 0.01;
+    valvula.grauAbertura = 0.01;
+
+    const parametros = valvula.getParametrosHidraulicos();
+
+    assert.equal(valvula.getAberturaNormalizadaAtual(), 0);
+    assert.equal(parametros.opening, 0);
+    assert.equal(parametros.effectiveCv, 0);
+    assert.equal(parametros.hydraulicAreaM2, 0);
+    assert.ok(parametros.localLossCoeff >= 1e6, 'Válvula subvisual deve se comportar como fechamento real');
+
+    valvula.aplicarControleNivel({ abertura: 0.01, intensidade: 0.0001, ownerId: 'T-01' });
+    assert.equal(valvula.grauAbertura, 0, 'Comando de set point arredondado para 0.0% deve virar fechamento real');
+
+    valvula.aberturaEfetiva = 0.01;
+    valvula.atualizarDinamica(0.1);
+    assert.equal(valvula.aberturaEfetiva, 0);
+});
+
+test('valvula aberta com K zero aplica apenas a perda física do Cv', () => {
     const valvula = new ValvulaLogica('V-zero', 'V-zero', 0, 0);
     valvula.aplicarPerfilCaracteristica('custom');
     valvula.setCoeficienteVazao(250);
@@ -414,8 +611,175 @@ test('valvula aberta com K zero nao aplica perda minima escondida', () => {
 
     const parametros = valvula.getParametrosHidraulicos();
 
-    approx(parametros.localLossCoeff, 25 / (250 * 250), 1e-12, 'Perda local deve vir apenas do Cv efetivo');
-    assert.ok(parametros.localLossCoeff < 0.001, 'Valvula com Cv alto e K zero deve ser praticamente transparente');
+    approx(parametros.localLossCoeff, 1.401885259766867, 1e-12, 'Perda local deve vir apenas do Cv efetivo');
+    assert.ok(parametros.localLossCoeff > 1, 'Cv 250 deve representar uma restrição física finita');
+
+    valvula.setCoeficienteVazao(800);
+    const parametrosCvAlto = valvula.getParametrosHidraulicos();
+    assert.ok(parametrosCvAlto.localLossCoeff < parametros.localLossCoeff, 'Cv maior deve reduzir a perda da válvula');
+});
+
+test('perda de estrangulamento da valvula e opcional e separada do Cv', () => {
+    const valvula = new ValvulaLogica('V-throttle', 'V-throttle', 0, 0);
+    valvula.aplicarPerfilCaracteristica('custom');
+    valvula.setCoeficienteVazao(280);
+    valvula.setCoeficientePerda(0);
+    valvula.setTipoCaracteristica('quick_opening');
+    valvula.aberturaEfetiva = 50;
+
+    const semEstrangulamento = valvula.getParametrosHidraulicos();
+    assert.equal(valvula.considerarPerdaEstrangulamento, false);
+    approx(semEstrangulamento.appliedThrottlingLoss, 0, 1e-12, 'Estrangulamento desligado nao soma K');
+    approx(
+        semEstrangulamento.localLossCoeff,
+        semEstrangulamento.lossFromCv,
+        1e-12,
+        'Modo padrao usa Cv efetivo sem K extra de estrangulamento'
+    );
+
+    assert.equal(valvula.setConsiderarPerdaEstrangulamento(true), true);
+    const comEstrangulamento = valvula.getParametrosHidraulicos();
+    approx(
+        comEstrangulamento.appliedThrottlingLoss,
+        comEstrangulamento.throttlingLoss,
+        1e-12,
+        'Toggle ligado aplica o K de estrangulamento calculado'
+    );
+    approx(
+        comEstrangulamento.localLossCoeff,
+        comEstrangulamento.lossFromCv + comEstrangulamento.throttlingLoss,
+        1e-12,
+        'K total soma Cv e estrangulamento quando habilitado'
+    );
+    assert.ok(
+        comEstrangulamento.localLossCoeff > semEstrangulamento.localLossCoeff,
+        'Estrangulamento habilitado aumenta a restricao'
+    );
+});
+
+test('coeficiente da valvula alterna entre Cv e Kv sem mudar a fisica', () => {
+    const valvula = new ValvulaLogica('V-unidade', 'V-unidade', 0, 0);
+    valvula.aplicarPerfilCaracteristica('custom');
+    valvula.setCoeficientePerda(0);
+    valvula.setTipoCaracteristica('linear');
+    valvula.aberturaEfetiva = 100;
+
+    assert.equal(valvula.getUnidadeCoeficienteVazao(), VALVE_FLOW_COEFFICIENT_UNITS.CV);
+    assert.equal(valvula.setCoeficienteVazao(280), true);
+    approx(valvula.cv, 280, 1e-12, 'Cv canonico inicial');
+    approx(valvula.getCoeficienteVazaoNaUnidade('kv'), cvToKv(280), 1e-12, 'Valor equivalente em Kv');
+
+    const perdaAntes = valvula.getParametrosHidraulicos().localLossCoeff;
+    assert.equal(valvula.setUnidadeCoeficienteVazao('kv'), true);
+
+    approx(valvula.cv, 280, 1e-12, 'Trocar unidade nao altera Cv canonico');
+    approx(valvula.getCoeficienteVazaoNaUnidade(), cvToKv(280), 1e-12, 'Display em Kv');
+    approx(valvula.getParametrosHidraulicos().localLossCoeff, perdaAntes, 1e-12, 'Trocar unidade nao muda perda');
+
+    assert.equal(valvula.setCoeficienteVazao(280, { unidade: 'kv' }), true);
+    approx(valvula.cv, kvToCv(280), 1e-12, 'Entrada em Kv vira Cv canonico');
+    approx(valvula.getCoeficienteVazaoNaUnidade(), 280, 1e-12, 'Display preserva valor digitado em Kv');
+
+    assert.equal(valvula.setCoeficienteVazaoCv(280), true);
+    approx(valvula.cv, 280, 1e-12, 'API explicita em Cv independe da unidade exibida');
+    approx(valvula.getCoeficienteVazaoNaUnidade(), cvToKv(280), 1e-12, 'Display volta ao equivalente em Kv');
+});
+
+test('diagnostico de dimensionamento da valvula sugere liberar passagem quando ha gargalo', () => {
+    const valvula = new ValvulaLogica('V-sizing', 'V-sizing', 0, 0);
+    valvula.aplicarPerfilCaracteristica('custom');
+    valvula.setCoeficienteVazao(18);
+    valvula.setCoeficientePerda(12);
+    valvula.setTipoCaracteristica('linear');
+    valvula.setAbertura(100);
+    valvula.aberturaEfetiva = 100;
+    valvula.fluxoReal = 18;
+    valvula.pressaoEntradaAtualBar = 1.2;
+    valvula.pressaoSaidaAtualBar = 0.2;
+    valvula.deltaPAtualBar = 1.0;
+
+    const diagnostico = valvula.getDiagnosticoDimensionamento();
+
+    assert.equal(diagnostico.status, 'undersized');
+    assert.equal(diagnostico.ativo, true);
+    assert.ok(diagnostico.cvSugerido > valvula.cv, 'Cv sugerido deve aumentar a capacidade da valvula');
+    assert.ok(diagnostico.perdaLocalKSugerida < valvula.perdaLocalK, 'K sugerido deve reduzir perda localizada');
+
+    const resultado = valvula.aplicarAjusteDimensionamento();
+    assert.equal(resultado.aplicado, true);
+    assert.equal(valvula.perfilCaracteristica, 'custom');
+    assert.ok(valvula.cv > 18, 'Ajuste deve aumentar Cv');
+    assert.ok(valvula.perdaLocalK < 12, 'Ajuste deve reduzir K');
+});
+
+test('diagnostico da valvula nao confunde perda fisica do Cv com K manual', () => {
+    const valvula = new ValvulaLogica('V-sizing-ok', 'V-sizing-ok', 0, 0);
+
+    valvula.aplicarPerfilCaracteristica('equal_percentage');
+    valvula.setCoeficientePerda(0);
+    valvula.setAbertura(100);
+    valvula.aberturaEfetiva = 100;
+    valvula.fluxoReal = 31.1 / 3.6;
+    valvula.pressaoEntradaAtualBar = 0.45;
+    valvula.pressaoSaidaAtualBar = 0.3996;
+    valvula.deltaPAtualBar = 0.0504;
+
+    const diagnostico = valvula.getDiagnosticoDimensionamento();
+
+    assert.equal(diagnostico.status, 'ok');
+    assert.equal(diagnostico.ativo, false);
+    assert.equal(diagnostico.perdaLocalKAtual, 0);
+    assert.ok(diagnostico.perdaLocalTotalK > diagnostico.perdaLocalAjustavelK);
+});
+
+test('diagnostico da valvula fica silencioso quando a abertura alta vem do set point', () => {
+    const valvula = new ValvulaLogica('V-sizing-sp', 'V-sizing-sp', 0, 0);
+
+    valvula.aplicarPerfilCaracteristica('custom');
+    valvula.setCoeficienteVazao(18);
+    valvula.setCoeficientePerda(12);
+    valvula.aplicarControleNivel({ abertura: 100, ownerId: 'T-01' });
+    valvula.aberturaEfetiva = 100;
+    valvula.fluxoReal = 18;
+    valvula.pressaoEntradaAtualBar = 1.2;
+    valvula.pressaoSaidaAtualBar = 0.2;
+    valvula.deltaPAtualBar = 1.0;
+
+    const diagnostico = valvula.getDiagnosticoDimensionamento();
+    const ajuste = valvula.aplicarAjusteDimensionamento();
+
+    assert.equal(diagnostico.status, 'controlled');
+    assert.equal(diagnostico.statusFisico, 'undersized');
+    assert.equal(diagnostico.ativo, false);
+    assert.equal(diagnostico.suprimidoPorSetpoint, true);
+    assert.equal(ajuste.aplicado, false);
+});
+
+test('ajuste de dimensionamento da valvula altera somente a valvula selecionada', () => {
+    const valvulaSelecionada = new ValvulaLogica('V-sizing-target', 'V-sizing-target', 0, 0);
+    const valvulaIsolada = new ValvulaLogica('V-sizing-other', 'V-sizing-other', 0, 0);
+
+    [valvulaSelecionada, valvulaIsolada].forEach((valvula) => {
+        valvula.aplicarPerfilCaracteristica('custom');
+        valvula.setCoeficienteVazao(18);
+        valvula.setCoeficientePerda(12);
+        valvula.setTipoCaracteristica('linear');
+        valvula.setAbertura(100);
+        valvula.aberturaEfetiva = 100;
+        valvula.fluxoReal = 18;
+        valvula.pressaoEntradaAtualBar = 1.2;
+        valvula.pressaoSaidaAtualBar = 0.2;
+        valvula.deltaPAtualBar = 1.0;
+    });
+
+    const resultado = valvulaSelecionada.aplicarAjusteDimensionamento();
+
+    assert.equal(resultado.aplicado, true);
+    assert.ok(valvulaSelecionada.cv > 18);
+    assert.ok(valvulaSelecionada.perdaLocalK < 12);
+    approx(valvulaIsolada.cv, 18, 1e-12, 'Cv de outra valvula nao deve mudar');
+    approx(valvulaIsolada.perdaLocalK, 12, 1e-12, 'K de outra valvula nao deve mudar');
+    assert.equal(valvulaIsolada.perfilCaracteristica, 'custom');
 });
 
 test('perfis da válvula aplicam propriedades e modo personalizado libera edição fina', () => {
@@ -427,6 +791,11 @@ test('perfis da válvula aplicam propriedades e modo personalizado libera ediç�
     assert.equal(valvula.tipoCaracteristica, perfilRapido.tipoCaracteristica);
     approx(valvula.cv, perfilRapido.cv, 1e-12, 'Cv do perfil de abertura rápida');
     approx(valvula.perdaLocalK, perfilRapido.perdaLocalK, 1e-12, 'K do perfil de abertura rápida');
+    assert.equal(
+        valvula.considerarPerdaEstrangulamento,
+        perfilRapido.considerarPerdaEstrangulamento,
+        'Modo de estrangulamento do perfil de abertura rapida'
+    );
     assert.equal(valvula.rangeabilidade, perfilRapido.rangeabilidade);
     assert.equal(valvula.tempoCursoSegundos, perfilRapido.tempoCursoSegundos);
 
@@ -456,12 +825,13 @@ test('perfis da válvula aplicam propriedades e modo personalizado libera ediç�
     assert.equal(valvula.tempoCursoSegundos, 2);
 });
 
-test('controle de nível escolhe perfil automaticamente e restaura perfil manual ao liberar', () => {
+test('controle de nível modula abertura sem redesenhar Cv ou K da válvula', () => {
     const valvula = new ValvulaLogica('V-04', 'V-04', 0, 0);
 
     valvula.aplicarPerfilCaracteristica('custom');
     valvula.setCoeficienteVazao(7);
     valvula.setCoeficientePerda(1.3);
+    valvula.setConsiderarPerdaEstrangulamento(true);
     valvula.setTipoCaracteristica('equal_percentage');
     valvula.setRangeabilidade(120);
     valvula.setTempoCurso(1.5);
@@ -471,61 +841,71 @@ test('controle de nível escolhe perfil automaticamente e restaura perfil manual
         intensidade: 0.2,
         ownerId: 'T-01'
     });
-    assert.equal(valvula.perfilCaracteristica, 'equal_percentage');
-    assert.equal(valvula.tempoCursoSegundos, VALVE_PROFILE_DEFINITIONS.equal_percentage.tempoCursoSegundos);
-    approx(valvula.cv, VALVE_PROFILE_DEFINITIONS.equal_percentage.cv, 1e-12, 'Cv deve ficar no perfil enquanto a abertura controla a vazão');
+    assert.equal(valvula.perfilCaracteristica, 'custom');
+    approx(valvula.cv, 7, 1e-12, 'Cv de projeto deve permanecer local e fixo durante o PA');
+    approx(valvula.perdaLocalK, 1.3, 1e-12, 'K de projeto deve permanecer local e fixo durante o PA');
+    assert.equal(valvula.considerarPerdaEstrangulamento, true, 'Modo de estrangulamento permanece local durante o PA');
+    assert.equal(valvula.tipoCaracteristica, 'equal_percentage');
+    assert.equal(valvula.rangeabilidade, 120);
+    assert.equal(valvula.tempoCursoSegundos, 1.5);
+    assert.equal(valvula.grauAbertura, 20);
 
     valvula.aplicarControleNivel({
         abertura: 50,
         intensidade: 0.5,
         ownerId: 'T-01'
     });
-    assert.equal(valvula.perfilCaracteristica, 'equal_percentage');
-    approx(valvula.cv, VALVE_PROFILE_DEFINITIONS.equal_percentage.cv, 1e-12, 'Perfil não deve trocar em ajuste moderado');
-
-    valvula.aplicarControleNivel({
-        abertura: 75,
-        intensidade: 0.75,
-        ownerId: 'T-01'
-    });
-    assert.equal(valvula.perfilCaracteristica, 'linear');
-    assert.equal(valvula.tempoCursoSegundos, VALVE_PROFILE_DEFINITIONS.linear.tempoCursoSegundos);
-    approx(valvula.cv, VALVE_PROFILE_DEFINITIONS.linear.cv, 1e-12, 'Cv deve seguir o perfil linear antes do reforço de alta demanda');
+    assert.equal(valvula.perfilCaracteristica, 'custom');
+    approx(valvula.cv, 7, 1e-12, 'Aumento de demanda deve atuar pela abertura, nao por Cv global');
+    approx(valvula.perdaLocalK, 1.3, 1e-12, 'Aumento de demanda nao deve reduzir K automaticamente');
+    assert.equal(valvula.considerarPerdaEstrangulamento, true, 'Aumento de demanda nao altera modo de estrangulamento');
+    assert.equal(valvula.grauAbertura, 50);
 
     valvula.aplicarControleNivel({
         abertura: 90,
         intensidade: 0.9,
         ownerId: 'T-01'
     });
-
-    assert.equal(valvula.perfilCaracteristica, 'quick_opening');
-    assert.equal(valvula.tipoCaracteristica, 'quick_opening');
-    assert.equal(valvula.tempoCursoSegundos, VALVE_PROFILE_DEFINITIONS.quick_opening.tempoCursoSegundos);
-    assert.ok(valvula.cv > VALVE_PROFILE_DEFINITIONS.quick_opening.cv, 'Controle de nível deve reforçar o Cv do perfil escolhido');
-    assert.ok(valvula.perdaLocalK < VALVE_PROFILE_DEFINITIONS.quick_opening.perdaLocalK, 'Controle de nível deve reduzir K para atender alta demanda');
-
-    valvula.aplicarControleNivel({
-        abertura: 50,
-        intensidade: 0.5,
-        ownerId: 'T-01'
-    });
-    assert.equal(valvula.perfilCaracteristica, 'quick_opening', 'Histerese deve evitar troca de perfil por ajuste intermediário');
-
-    valvula.aplicarControleNivel({
-        abertura: 40,
-        intensidade: 0.4,
-        ownerId: 'T-01'
-    });
-    assert.equal(valvula.perfilCaracteristica, 'linear', 'Perfil só deve descer faixa após redução maior de abertura');
+    assert.equal(valvula.perfilCaracteristica, 'custom');
+    assert.equal(valvula.tipoCaracteristica, 'equal_percentage');
+    assert.equal(valvula.tempoCursoSegundos, 1.5);
+    approx(valvula.cv, 7, 1e-12, 'Alta demanda tambem nao deve reforcar Cv automaticamente');
+    approx(valvula.perdaLocalK, 1.3, 1e-12, 'Alta demanda tambem nao deve reduzir K automaticamente');
+    assert.equal(valvula.considerarPerdaEstrangulamento, true, 'Alta demanda nao altera modo de estrangulamento');
+    assert.equal(valvula.grauAbertura, 90);
 
     valvula.liberarControleNivel('T-01');
 
     assert.equal(valvula.perfilCaracteristica, 'custom');
     approx(valvula.cv, 7, 1e-12, 'Cv restaurado após liberar controle de nível');
     approx(valvula.perdaLocalK, 1.3, 1e-12, 'K restaurado após liberar controle de nível');
+    assert.equal(valvula.considerarPerdaEstrangulamento, true, 'Modo de estrangulamento restaurado apos liberar controle de nivel');
     assert.equal(valvula.tipoCaracteristica, 'equal_percentage');
     assert.equal(valvula.rangeabilidade, 120);
     assert.equal(valvula.tempoCursoSegundos, 1.5);
+});
+
+test('perfil da valvula pode mudar durante controle de nivel e permanece apos liberar PA', () => {
+    const valvula = new ValvulaLogica('V-profile-sp', 'V-profile-sp', 0, 0);
+
+    valvula.aplicarPerfilCaracteristica('linear');
+    valvula.setAbertura(35);
+    valvula.aplicarControleNivel({ abertura: 80, ownerId: 'T-01' });
+
+    assert.equal(valvula.estaControladaPorSetpoint(), true);
+    assert.equal(valvula.grauAbertura, 80);
+    assert.equal(valvula.aplicarPerfilCaracteristica('quick_opening'), true);
+    assert.equal(valvula.perfilCaracteristica, 'quick_opening');
+    assert.equal(valvula.tipoCaracteristica, 'quick_opening');
+    approx(valvula.cv, VALVE_PROFILE_DEFINITIONS.quick_opening.cv, 1e-12, 'Perfil escolhido durante PA altera Cv de projeto');
+
+    valvula.liberarControleNivel('T-01');
+
+    assert.equal(valvula.estaControladaPorSetpoint(), false);
+    assert.equal(valvula.grauAbertura, 35, 'Liberar PA restaura a abertura manual');
+    assert.equal(valvula.perfilCaracteristica, 'quick_opening', 'Perfil escolhido pelo usuario durante PA deve persistir');
+    assert.equal(valvula.tipoCaracteristica, 'quick_opening');
+    approx(valvula.cv, VALVE_PROFILE_DEFINITIONS.quick_opening.cv, 1e-12);
 });
 
 test('controle de nível atua nas válvulas e mantem bomba operacional em 100%', () => {
@@ -569,6 +949,9 @@ test('controle de nível atua nas válvulas e mantem bomba operacional em 100%',
 
     tanque.setSetpointAtivo(false);
     assert.equal(engine.isBombaBloqueadaPorSetpoint(bomba), false);
+    assert.equal(valvula.estaControladaPorSetpoint(), false, 'A valvula deve sair do bloqueio do set point');
+    assert.equal(valvula.grauAbertura, 0, 'Ao desligar o set point, a valvula volta para a abertura manual fechada');
+    assert.equal(valvula.aberturaEfetiva, 0, 'Ao desligar o set point, a abertura efetiva manual tambem e restaurada');
     assert.equal(bomba.getAcionamentoAlvo(), 35, 'Ao desligar o set point, o alvo volta ao comando manual preservado');
     assert.equal(bomba.setAcionamento(20), true);
     assert.equal(bomba.grauAcionamento, 20, 'Ao desligar o set point, a bomba volta a aceitar comando manual');
@@ -580,6 +963,25 @@ test('fator de cavitação da bomba permanece finito com NPSHa inválido', () =>
     approx(bomba.calcularFatorCavitacao(3, 2.5), 1, 1e-12, 'NPSHa suficiente não limita a bomba');
     approx(bomba.calcularFatorCavitacao(-1, 2.5), 0, 1e-12, 'NPSHa negativo deve zerar sem NaN');
     approx(bomba.calcularFatorCavitacao(Number.NaN, 2.5), 0, 1e-12, 'NPSHa inválido deve zerar sem NaN');
+});
+
+test('carga instantanea da bomba segue a mesma curva usada pelo solver', () => {
+    const bomba = new BombaLogica('B-curve', 'B-curve', 0, 0);
+
+    bomba.vazaoNominal = 40;
+    bomba.pressaoMaxima = 4;
+    bomba.acionamentoEfetivo = 100;
+    bomba.fluxoReal = bomba.vazaoNominal;
+    bomba.npshDisponivelM = 20;
+    bomba.fatorCavitacaoAtual = 1;
+    bomba.recalcularMetricasDerivadasCurva();
+
+    approx(
+        bomba.cargaGeradaBar,
+        bomba.getCurvaPressaoBar(bomba.fluxoReal, bomba.getDriveAtual()),
+        1e-12,
+        'A bomba nao deve manter carga escondida quando a curva de pressao ja chegou a zero'
+    );
 });
 
 test('curva da bomba reflete alteração de NPSHr sem esconder a mudança pela escala', () => {
@@ -640,7 +1042,11 @@ test('diagnóstico de saturação dimensiona bomba sem ajustar fonte de entrada'
         1e-9,
         'Bomba deve ser dimensionada abaixo da capacidade de saída no set point'
     );
-    tanque._atualizarAlertaSaturacao(engine.fluidoOperante);
+    tanque._atualizarAlertaSaturacao(engine.fluidoOperante, 0.1);
+    assert.equal(tanque.alertaSaturacao, null, 'Alerta nao deve aparecer em um transiente curto de saturacao');
+    for (let i = 0; i < 14; i += 1) {
+        tanque._atualizarAlertaSaturacao(engine.fluidoOperante, 0.1);
+    }
     assert.equal(tanque.alertaSaturacao?.ativo, true, 'Alerta deve usar a capacidade de saída estimada no nível do set point');
 
     tanque.lastQin = 10;
@@ -735,4 +1141,76 @@ test('diagnóstico de saturação ajusta pressão da fonte quando não há bomba
         1e-12,
         'Pressão da fonte deve receber o ajuste recomendado'
     );
+});
+
+test('controle de nivel fecha entrada e saida dentro da banda do set point', () => {
+    const engine = createEngine();
+    engine.isRunning = true;
+
+    const fonte = new FonteLogica('F-DB', 'Entrada-DB', 0, 0);
+    const valvulaEntrada = new ValvulaLogica('VE-DB', 'Valvula-Entrada-DB', 80, 0);
+    const tanque = new TanqueLogico('T-DB', 'Tanque-DB', 160, 0);
+    const valvulaSaida = new ValvulaLogica('VS-DB', 'Valvula-Saida-DB', 240, 0);
+    const dreno = new DrenoLogico('D-DB', 'Saida-DB', 320, 0);
+
+    valvulaEntrada.setAbertura(100);
+    valvulaEntrada.aberturaEfetiva = 100;
+    valvulaSaida.setAbertura(100);
+    valvulaSaida.aberturaEfetiva = 100;
+
+    fonte.conectarSaida(valvulaEntrada);
+    valvulaEntrada.conectarSaida(tanque);
+    tanque.conectarSaida(valvulaSaida);
+    valvulaSaida.conectarSaida(dreno);
+
+    [fonte, valvulaEntrada, tanque, valvulaSaida, dreno].forEach((component) => engine.add(component));
+    const conexoes = [
+        new ConnectionModel({ sourceId: fonte.id, targetId: valvulaEntrada.id }),
+        new ConnectionModel({ sourceId: valvulaEntrada.id, targetId: tanque.id }),
+        new ConnectionModel({ sourceId: tanque.id, targetId: valvulaSaida.id }),
+        new ConnectionModel({ sourceId: valvulaSaida.id, targetId: dreno.id })
+    ];
+    conexoes.forEach((connection) => engine.addConnection(connection));
+
+    tanque.capacidadeMaxima = 1000;
+    tanque.volumeAtual = 500;
+    tanque.setpoint = 50;
+
+    const resultado = tanque.setSetpointAtivo(true);
+    assert.equal(resultado.ativado, true);
+
+    tanque._rodarControlador(0.1);
+    assert.equal(tanque._ultimoEstadoControle.emRepouso, true);
+    assert.equal(valvulaEntrada.grauAbertura, 0, 'No set point, a entrada deve receber comando fechado');
+    assert.equal(valvulaSaida.grauAbertura, 0, 'No set point, a saida deve receber comando fechado');
+    assert.equal(valvulaEntrada.aberturaEfetiva, 0, 'No set point, a entrada deve fechar hidraulicamente');
+    assert.equal(valvulaSaida.aberturaEfetiva, 0, 'No set point, a saida deve fechar hidraulicamente');
+    conexoes.forEach((connection) => {
+        connection.transientFlowLps = 10;
+        connection.lastResolvedFlowLps = 10;
+    });
+    engine.resolveHydraulicNetwork(0.1);
+    tanque.atualizarFisica(0.1, engine.fluidoOperante);
+    assert.equal(tanque.lastQin, 0, 'Fluxo residual de entrada deve zerar com valvula fechada');
+    assert.equal(tanque.lastQout, 0, 'Fluxo residual de saida deve zerar com valvula fechada');
+
+    tanque.volumeAtual = 503;
+    tanque._rodarControlador(0.1);
+    assert.equal(tanque._ultimoEstadoControle.emRepouso, true, 'Pequena variacao deve permanecer em repouso');
+    assert.equal(valvulaEntrada.grauAbertura, 0);
+    assert.equal(valvulaSaida.grauAbertura, 0);
+
+    tanque.volumeAtual = 510;
+    tanque._rodarControlador(0.1);
+    assert.equal(tanque._ultimoEstadoControle.emRepouso, false, 'Erro fora da histerese deve reativar controle');
+    assert.equal(valvulaEntrada.grauAbertura, 0);
+    assert.ok(valvulaSaida.grauAbertura > 0, 'Nivel alto deve abrir somente a valvula de saida');
+    assert.ok(valvulaSaida.grauAbertura < 100, 'Erro pequeno deve modular a saída sem saturar em 100%');
+    approx(valvulaSaida.grauAbertura, 4.06, 1e-12, 'Abertura deve seguir o PI reescalado');
+
+    tanque.volumeAtual = 550;
+    tanque._rodarControlador(0.1);
+    assert.equal(valvulaEntrada.grauAbertura, 0);
+    assert.ok(valvulaSaida.grauAbertura > valvulaSaida.aberturaEfetiva, 'Nível mais alto deve comandar maior abertura de saída');
+    assert.ok(valvulaSaida.grauAbertura > 20 && valvulaSaida.grauAbertura < 25, 'Erro moderado deve gerar abertura parcial');
 });

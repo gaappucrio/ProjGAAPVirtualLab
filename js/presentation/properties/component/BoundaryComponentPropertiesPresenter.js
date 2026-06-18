@@ -19,7 +19,9 @@ import {
     displayEditableUnitValue,
     displayStep,
     displayUnitValue,
+    getPresentationEngine,
     hintAttr,
+    makeLabel,
     makeUnitLabel,
     notifyPanelRefresh,
     renderPropertyTabs,
@@ -28,6 +30,7 @@ import {
     validateInputWithFeedback,
     valueOf
 } from '../PropertyPresenterShared.js';
+import { resolveSinkPressureProfile } from '../../monitoring/SinkPressureProfile.js';
 
 function ensureSourceFluid(comp) {
     if (!comp.fluidoEntrada && typeof comp.atualizarFluidoEntrada === 'function') {
@@ -367,25 +370,67 @@ export const SOURCE_PROPERTIES_PRESENTER = {
 };
 
 export const SINK_PROPERTIES_PRESENTER = {
-    render: (comp) => `
-        <div class="prop-group">
-            ${makeUnitLabel('Pressão de descarga', 'pressure', TOOLTIP.sinkPressure)}
-            <input type="number" id="input-pressao-dreno" ${hintAttr(TOOLTIP.sinkPressure)} value="${displayEditableUnitValue('pressure', comp.pressaoSaidaBar, 3)}" step="${displayStep('pressure', 0.01)}" min="${displayBound('pressure', 0)}" max="${displayBound('pressure', 10)}">
-        </div>
-        <div class="prop-group">
-            ${makeUnitLabel('Vazão recebida', 'flow', TOOLTIP.sinkCurrentFlow)}
-            <input type="text" id="disp-vazao-dreno" ${hintAttr(TOOLTIP.sinkCurrentFlow)} value="${displayUnitValue('flow', comp.vazaoRecebidaLps, 2)}" disabled>
-        </div>
-    `,
+    render: (comp) => {
+        const pressureProfile = resolveSinkPressureProfile({
+            engine: getPresentationEngine(),
+            sink: comp
+        });
+        const basicContent = `
+            <div class="prop-group">
+                ${makeUnitLabel('Contrapressão imposta', 'pressure', TOOLTIP.sinkPressure)}
+                <input type="number" id="input-pressao-dreno" ${hintAttr(TOOLTIP.sinkPressure)} value="${displayEditableUnitValue('pressure', comp.pressaoSaidaBar, 3)}" step="${displayStep('pressure', 0.01)}" min="${displayBound('pressure', 0)}" max="${displayBound('pressure', 10)}">
+            </div>
+            <div class="prop-group">
+                ${makeUnitLabel('Vazão recebida', 'flow', TOOLTIP.sinkCurrentFlow)}
+                <input type="text" id="disp-vazao-dreno" ${hintAttr(TOOLTIP.sinkCurrentFlow)} value="${displayUnitValue('flow', comp.vazaoRecebidaLps, 2)}" disabled>
+            </div>
+            <div class="prop-group">
+                ${makeUnitLabel('Pressão final da rede', 'pressure', TOOLTIP.sinkFinalPressure)}
+                <input type="text" id="disp-pressao-final-dreno" ${hintAttr(TOOLTIP.sinkFinalPressure)} value="${displayUnitValue('pressure', pressureProfile.finalNetworkPressureBar, 2)}" disabled>
+            </div>
+            <div class="prop-group">
+                ${makeUnitLabel('Queda na entrada da saída', 'pressure', TOOLTIP.sinkEntryPressureDrop)}
+                <input type="text" id="disp-deltap-entrada-dreno" ${hintAttr(TOOLTIP.sinkEntryPressureDrop)} value="${displayUnitValue('pressure', pressureProfile.entryPressureDropBar, 2)}" disabled>
+            </div>
+        `;
+        const advancedContent = `
+            <div class="prop-group">
+                ${makeLabel('Perda de entrada (K)', TOOLTIP.sinkEntryK)}
+                <input type="number" id="input-k-entrada-dreno" ${hintAttr(TOOLTIP.sinkEntryK)} value="${comp.perdaEntradaK}" step="0.1" min="0" max="50">
+            </div>
+        `;
+
+        return renderPropertyTabs({
+            basicContent,
+            advancedContent,
+            advancedDescription: 'A contrapressão é a fronteira imposta pela saída. A pressão final da rede é medida antes da perda de entrada configurada pelo K do dreno.'
+        });
+    },
     bind: (comp) => {
         const inputPressure = byId('input-pressao-dreno');
+        const inputEntryK = byId('input-k-entrada-dreno');
 
         bind('input-pressao-dreno', 'change', () => {
             validateInputWithFeedback(
                 inputPressure,
                 (value, name) => InputValidator.validatePressure(baseFromDisplay('pressure', value), 10, name),
-                'Pressão de saída',
-                (value) => { comp.pressaoSaidaBar = value; }
+                'Contrapressão da saída',
+                (value) => {
+                    comp.pressaoSaidaBar = value;
+                    notifyPanelRefresh();
+                }
+            );
+        });
+
+        bind('input-k-entrada-dreno', 'change', () => {
+            validateInputWithFeedback(
+                inputEntryK,
+                (value, name) => InputValidator.validateNumber(value, 0, 50, name),
+                'Perda de entrada da saída',
+                (value) => {
+                    comp.perdaEntradaK = value;
+                    notifyPanelRefresh();
+                }
             );
         });
     }

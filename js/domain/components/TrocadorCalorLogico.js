@@ -9,7 +9,7 @@ import { cloneFluido } from './Fluido.js';
 
 const TEMPERATURA_SERVICO_PADRAO_C = 80;
 const UA_PADRAO_W_K = 2500;
-const PERDA_LOCAL_PADRAO_K = 1.8;
+const PERDA_LOCAL_PADRAO_K = 0;
 const EFETIVIDADE_MAXIMA_PADRAO = 0.95;
 
 function numeroSeguro(value, fallback) {
@@ -189,7 +189,7 @@ export class TrocadorCalorLogico extends ComponenteFisico {
             this.fluxoReal,
             parametros.hydraulicAreaM2,
             fluidoEntrada?.densidade || 997,
-            1 + parametros.localLossCoeff
+            parametros.localLossCoeff
         );
         this.pressaoSaidaAtualBar = Math.max(0, this.pressaoEntradaAtualBar - this.deltaPAtualBar);
         this._notificarEstado();

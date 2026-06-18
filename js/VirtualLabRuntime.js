@@ -28,9 +28,11 @@ import { setupClipboardController } from './presentation/controllers/ClipboardCo
 import { setupComponentRotationController } from './presentation/controllers/ComponentRotationController.js';
 import { setupDeleteSelectionController } from './presentation/controllers/DeleteSelectionController.js';
 import { setupDragDrop } from './presentation/controllers/DragDropController.js';
+import { setupFlowchartController } from './presentation/controllers/FlowchartController.js';
 import { setupHelpController } from './presentation/controllers/HelpController.js';
 import { setupLayoutController } from './presentation/controllers/LayoutController.js';
 import { createMonitorController } from './presentation/controllers/MonitorController.js';
+import { setupNetworkDiagnosticsController } from './presentation/controllers/NetworkDiagnosticsController.js';
 import { setupPipeControl, updateAllPipes, updateConnectionVisualStates } from './presentation/controllers/PipeController.js';
 import { setupPropertyPanelController } from './presentation/controllers/PropertyPanelController.js';
 import { setupTankSaturationAlertController } from './presentation/controllers/TankSaturationAlertController.js';
@@ -91,6 +93,7 @@ export function setupVirtualLabRuntime({ engine } = {}) {
     setupWorkspaceSelectionController({ engine });
     const propertyPanelController = setupPropertyPanelController({ engine, monitorController });
     const tankSaturationAlertController = setupTankSaturationAlertController({ engine });
+    setupNetworkDiagnosticsController({ engine });
     setupHelpController();
     setupCameraControl();
     setupPipeControl({ engine, connectionService, undoManager });
@@ -98,6 +101,7 @@ export function setupVirtualLabRuntime({ engine } = {}) {
     setupComponentRotationController({ engine, onRotate: updateAllPipes, undoManager });
     setupClipboardController({ engine, undoManager });
     setupDeleteSelectionController({ engine, connectionService, undoManager });
+    setupFlowchartController({ engine, undoManager });
     setupToolbar({
         engine,
         undoManager,

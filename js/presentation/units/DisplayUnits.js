@@ -13,7 +13,7 @@ const UNIT_CONFIG = {
     },
     flow: {
         label: 'Vazão',
-        default: 'm3s',
+        default: 'm3h',
         units: {
             m3s: { label: 'm³/s', symbol: 'm³/s', fromBase: (v) => v / 1000, toBase: (v) => v * 1000, step: 0.001, digits: 3 },
             lps: { label: 'L/s', symbol: 'L/s', fromBase: (v) => v, toBase: (v) => v, step: 0.1, digits: 2 },

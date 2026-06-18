@@ -10,6 +10,7 @@ import {
     DEFAULT_PIPE_FRICTION,
     DEFAULT_PIPE_MINOR_LOSS,
     DEFAULT_PIPE_ROUGHNESS_MM,
+    DEFAULT_PIPE_SCHEMATIC_LENGTH_M,
     DEFAULT_DESIGN_VELOCITY_MPS,
     areaFromDiameter,
     lpsToM3s
@@ -120,12 +121,18 @@ export function darcyFrictionFactor(reynolds, relativeRoughness) {
  * Obtém propriedades hidráulicas da tubulação para uma vazão.
  */
 export function getPipeHydraulics(conn, geometry, areaM2, flowLps, density, viscosityPaS) {
-    const reynolds = reynoldsFromFlow(flowLps, conn.diameterM, areaM2, density, viscosityPaS);
+    ensureConnectionProperties(conn);
+    const safeAreaM2 = positiveNumber(areaM2, conn.areaM2);
+    const lengthM = nonNegativeNumber(
+        geometry?.lengthM,
+        DEFAULT_PIPE_SCHEMATIC_LENGTH_M + conn.extraLengthM
+    );
+    const reynolds = reynoldsFromFlow(flowLps, conn.diameterM, safeAreaM2, density, viscosityPaS);
     const relativeRoughness = conn.diameterM > 0
         ? (Math.max(0, conn.roughnessMm || 0) / 1000) / conn.diameterM
         : 0;
     const frictionFactor = darcyFrictionFactor(reynolds, relativeRoughness);
-    const velocityMps = areaM2 > 0 ? lpsToM3s(flowLps) / areaM2 : 0;
+    const velocityMps = safeAreaM2 > 0 ? lpsToM3s(flowLps) / safeAreaM2 : 0;
 
     return {
         velocityMps,
@@ -133,7 +140,7 @@ export function getPipeHydraulics(conn, geometry, areaM2, flowLps, density, visc
         relativeRoughness,
         frictionFactor,
         regime: classifyFlowRegime(reynolds),
-        distributedLossCoeff: frictionFactor * (geometry.lengthM / Math.max(conn.diameterM, 0.001))
+        distributedLossCoeff: frictionFactor * (lengthM / Math.max(conn.diameterM, 0.001))
     };
 }
 
@@ -142,10 +149,16 @@ export function getPipeHydraulics(conn, geometry, areaM2, flowLps, density, visc
  */
 export function getConnectionResponseTimeS(conn, geometry, fluidoOperante) {
     ensureConnectionProperties(conn);
-    const lineVolumeL = geometry.lengthM * conn.areaM2 * 1000;
-    const densityFactor = clamp(fluidoOperante.densidade / 997, 0.55, 1.8);
-    const viscosityFactor = clamp(fluidoOperante.viscosidadeDinamicaPaS / DEFAULT_FLUID_VISCOSITY_PA_S, 0.5, 8);
-    const baseTimeS = 0.08 + (geometry.lengthM * 0.035) + (lineVolumeL * 0.018 * densityFactor);
+    const lengthM = nonNegativeNumber(
+        geometry?.lengthM,
+        DEFAULT_PIPE_SCHEMATIC_LENGTH_M + conn.extraLengthM
+    );
+    const density = positiveNumber(fluidoOperante?.densidade, 997);
+    const viscosityPaS = positiveNumber(fluidoOperante?.viscosidadeDinamicaPaS, DEFAULT_FLUID_VISCOSITY_PA_S);
+    const lineVolumeL = lengthM * conn.areaM2 * 1000;
+    const densityFactor = clamp(density / 997, 0.55, 1.8);
+    const viscosityFactor = clamp(viscosityPaS / DEFAULT_FLUID_VISCOSITY_PA_S, 0.5, 8);
+    const baseTimeS = 0.08 + (lengthM * 0.035) + (lineVolumeL * 0.018 * densityFactor);
     return clamp(baseTimeS * Math.pow(viscosityFactor, 0.12), 0.05, 2.8);
 }
 
@@ -161,6 +174,8 @@ export function ensureConnectionProperties(conn) {
     conn.designFlowLps = nonNegativeNumber(conn.designFlowLps, 0);
     conn.transientFlowLps = nonNegativeNumber(conn.transientFlowLps, 0);
     conn.lastResolvedFlowLps = nonNegativeNumber(conn.lastResolvedFlowLps, 0);
+    conn.startupRampDurationS = nonNegativeNumber(conn.startupRampDurationS, 0);
+    conn.startupRampElapsedS = nonNegativeNumber(conn.startupRampElapsedS, 0);
 
     conn.areaM2 = areaFromDiameter(conn.diameterM);
     return conn;

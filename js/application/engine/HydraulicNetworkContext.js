@@ -118,3 +118,81 @@ export class HydraulicNetworkContext {
         );
     }
 }
+
+export class HydraulicScopedNetworkContext {
+    constructor(parentContext, { componentIds = [], connectionIds = [] } = {}) {
+        this.parentContext = parentContext;
+        this.componentIdSet = new Set(componentIds);
+        this.connectionIdSet = new Set(connectionIds);
+    }
+
+    get engine() {
+        return this.parentContext.engine;
+    }
+
+    get componentes() {
+        return this.parentContext.componentes.filter((component) =>
+            this.componentIdSet.has(component.id)
+        );
+    }
+
+    get conexoes() {
+        return this.parentContext.conexoes.filter((connection) =>
+            this.connectionIdSet.has(connection.id)
+        );
+    }
+
+    get fluidoOperante() {
+        return this.parentContext.fluidoOperante;
+    }
+
+    get usarAlturaRelativa() {
+        return this.parentContext.usarAlturaRelativa;
+    }
+
+    resetHydraulicState() {
+        this.conexoes.forEach((connection) => {
+            this.engine.connectionStateStore.delete(connection);
+        });
+        this.componentes.forEach((component) => component.resetEstadoHidraulico());
+    }
+
+    getComponentFluid(component) {
+        return this.parentContext.getComponentFluid(component);
+    }
+
+    getConnectionFluid(connection) {
+        return this.parentContext.getConnectionFluid(connection);
+    }
+
+    getComponentById(id) {
+        if (!this.componentIdSet.has(id)) return null;
+        return this.parentContext.getComponentById(id);
+    }
+
+    getOutputConnections(component) {
+        return this.parentContext.getOutputConnections(component)
+            .filter((connection) => this.connectionIdSet.has(connection.id));
+    }
+
+    getInputConnections(component) {
+        return this.parentContext.getInputConnections(component)
+            .filter((connection) => this.connectionIdSet.has(connection.id));
+    }
+
+    getConnectionState(connection) {
+        return this.parentContext.getConnectionState(connection);
+    }
+
+    getConnectionGeometry(connection) {
+        return this.parentContext.getConnectionGeometry(connection);
+    }
+
+    ensureConnectionProperties(connection) {
+        return this.parentContext.ensureConnectionProperties(connection);
+    }
+
+    getPipeHydraulics(connection, geometry, areaM2, flowLps, fluid = this.getConnectionFluid(connection)) {
+        return this.parentContext.getPipeHydraulics(connection, geometry, areaM2, flowLps, fluid);
+    }
+}

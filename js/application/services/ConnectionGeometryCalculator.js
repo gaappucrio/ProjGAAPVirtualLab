@@ -1,9 +1,11 @@
+import { DEFAULT_PIPE_SCHEMATIC_LENGTH_M } from '../../domain/units/HydraulicUnits.js';
+
 const PIXELS_PER_METER = 80;
 
 /**
- * Converts a visual port definition into the point used by the hydraulic
- * geometry service. The application layer owns this bridge because it depends
- * on workspace coordinates, endpoint offsets and the relative-height UI mode.
+ * Converte a porta visual no ponto usado pela geometria hidraulica. Esta ponte
+ * fica na aplicacao porque depende de coordenadas do workspace, offsets das
+ * portas e do modo de altura relativa da UI.
  */
 export function calculatePortPosition(
     component,
@@ -43,7 +45,7 @@ export function calculateConnectionGeometry(
 
     const straightLengthM = useRelativeHeight
         ? Math.max(0.35, Math.sqrt(dx * dx + dy * dy) / PIXELS_PER_METER)
-        : 1.0;
+        : DEFAULT_PIPE_SCHEMATIC_LENGTH_M;
 
     const extraLengthM = Math.max(0, connection.extraLengthM || 0);
 

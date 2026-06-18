@@ -5,7 +5,13 @@ import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
 import { TrocadorCalorLogico } from '../../domain/components/TrocadorCalorLogico.js';
 import { ValvulaLogica } from '../../domain/components/ValvulaLogica.js';
 import { getFluidVisualStyle } from '../../infrastructure/rendering/FluidVisualStyle.js';
+import {
+    calculateConnectionResidenceTimeS,
+    calculateTankResidenceTimeS
+} from '../../domain/services/ResidenceTime.js';
 import { isEnglishLanguage, translateFluidName, translateLiteral } from '../i18n/LanguageManager.js';
+import { resolvePipePressureProfile } from '../monitoring/PipePressureProfile.js';
+import { resolveSinkPressureProfile } from '../monitoring/SinkPressureProfile.js';
 import { formatUnitValue, getUnitPreferences, getUnitSymbol } from '../units/DisplayUnits.js';
 
 const EXPORT_METADATA_COLUMNS = [
@@ -39,6 +45,8 @@ const COMPONENT_COLUMNS = [
     'Pressão atmosférica (bar)',
     'Cor visual do fluido',
     'Pressão de descarga (bar)',
+    'Pressão final da rede (bar)',
+    'Queda na entrada da saída (bar)',
     'Perda de entrada K',
     'Vazão recebida (L/s)',
     'Bomba ligada',
@@ -49,8 +57,8 @@ const COMPONENT_COLUMNS = [
     'Eficiência hidráulica nominal',
     'Eficiência atual',
     'NPSHr referência (m)',
-    'NPSHr atual (m)',
-    'NPSHa atual (m)',
+    'NPSH requerido (m)',
+    'NPSH disponível (m)',
     'Margem NPSH (m)',
     'Fator de cavitação',
     'Tempo de rampa (s)',
@@ -61,7 +69,14 @@ const COMPONENT_COLUMNS = [
     'Abertura desejada (%)',
     'Abertura efetiva (%)',
     'Coeficiente Cv',
+    'Unidade do coeficiente da válvula',
+    'Coeficiente exibido da válvula',
+    'Coeficiente Kv',
     'Coeficiente de perda K',
+    'Perda de estrangulamento ativa',
+    'K físico do Cv efetivo',
+    'K de estrangulamento aplicado',
+    'K total efetivo da válvula',
     'Perfil da válvula',
     'Característica da válvula',
     'Rangeabilidade',
@@ -86,10 +101,10 @@ const COMPONENT_COLUMNS = [
     'Elevação do bocal de entrada (m)',
     'Elevação do bocal de saída (m)',
     'Coeficiente de descarga do tanque',
-    'Perda de entrada do tanque K',
     'Pressão no fundo do tanque (bar)',
     'Vazão de entrada do tanque (L/s)',
     'Vazão de saída do tanque (L/s)',
+    'Tempo de residência do tanque (s)',
     'Fluido no tanque',
     'Densidade do fluido no tanque (kg/m³)',
     'Temperatura do fluido no tanque (°C)',
@@ -99,11 +114,12 @@ const COMPONENT_COLUMNS = [
     'Set point (%)',
     'Ganho proporcional Kp',
     'Ganho integral Ki',
+    'Ganho derivativo Kd',
     'Alerta de saturação ativo'
 ];
 
 const CONNECTION_COLUMNS = [
-    'Nome do trecho',
+    'Nome do Cano',
     'Componente de origem',
     'Tipo de origem',
     'Componente de destino',
@@ -115,12 +131,12 @@ const CONNECTION_COLUMNS = [
     'Rugosidade absoluta (mm)',
     'Comprimento extra (m)',
     'Perda local K',
-    'Velocidade de projeto (m/s)',
-    'Vazão de projeto (L/s)',
+    'Velocidade desejada (m/s)',
+    'Vazão de referência (L/s)',
     'Vazão atual (L/s)',
     'Vazão alvo (L/s)',
     'Velocidade atual (m/s)',
-    'Delta P no trecho (bar)',
+    'Delta P no Cano (bar)',
     'Perda total (bar)',
     'Pressão na origem (bar)',
     'Pressão de chegada (bar)',
@@ -128,12 +144,13 @@ const CONNECTION_COLUMNS = [
     'Comprimento hidráulico total (m)',
     'Comprimento reto/esquemático (m)',
     'Desnível hidráulico (m)',
+    'Tempo de residência no Cano (s)',
     'Tempo de resposta (s)',
     'Reynolds',
     'Fator de atrito Darcy',
     'Rugosidade relativa',
     'Regime',
-    'Fluido no trecho',
+    'Fluido no Cano',
     'Densidade do fluido (kg/m³)',
     'Viscosidade do fluido (Pa.s)',
     'Cor visual do fluido'
@@ -170,6 +187,8 @@ const EXPORT_LABELS_EN = {
     'Pressão atmosférica': 'Atmospheric pressure',
     'Cor visual do fluido': 'Fluid visual color',
     'Pressão de descarga': 'Discharge pressure',
+    'Pressão final da rede': 'Final network pressure',
+    'Queda na entrada da saída': 'Outlet inlet pressure drop',
     'Perda de entrada K': 'Inlet loss K',
     'Vazão recebida': 'Received flow',
     'Bomba ligada': 'Pump on',
@@ -179,9 +198,9 @@ const EXPORT_LABELS_EN = {
     'Pressão máxima da bomba': 'Pump maximum pressure',
     'Eficiência hidráulica nominal': 'Nominal hydraulic efficiency',
     'Eficiência atual': 'Current efficiency',
-    'NPSHr referência': 'Reference NPSHr',
-    'NPSHr atual': 'Current NPSHr',
-    'NPSHa atual': 'Current NPSHa',
+    'NPSHr referência': '',
+    'NPSH requerido': 'Required NPSH',
+    'NPSH disponível': 'Avaiable NPSH',
     'Margem NPSH': 'NPSH margin',
     'Fator de cavitação': 'Cavitation factor',
     'Tempo de rampa': 'Ramp time',
@@ -192,7 +211,14 @@ const EXPORT_LABELS_EN = {
     'Abertura desejada': 'Target opening',
     'Abertura efetiva': 'Effective opening',
     'Coeficiente Cv': 'Cv coefficient',
+    'Unidade do coeficiente da válvula': 'Valve coefficient unit',
+    'Coeficiente exibido da válvula': 'Displayed valve coefficient',
+    'Coeficiente Kv': 'Kv coefficient',
     'Coeficiente de perda K': 'K loss coefficient',
+    'Perda de estrangulamento ativa': 'Throttling loss active',
+    'K físico do Cv efetivo': 'Physical K from effective Cv',
+    'K de estrangulamento aplicado': 'Applied throttling K',
+    'K total efetivo da válvula': 'Total effective valve K',
     'Perfil da válvula': 'Valve profile',
     'Característica da válvula': 'Valve characteristic',
     Rangeabilidade: 'Rangeability',
@@ -217,10 +243,10 @@ const EXPORT_LABELS_EN = {
     'Elevação do bocal de entrada': 'Inlet nozzle elevation',
     'Elevação do bocal de saída': 'Outlet nozzle elevation',
     'Coeficiente de descarga do tanque': 'Tank discharge coefficient',
-    'Perda de entrada do tanque K': 'Tank inlet loss K',
     'Pressão no fundo do tanque': 'Tank bottom pressure',
     'Vazão de entrada do tanque': 'Tank inlet flow',
     'Vazão de saída do tanque': 'Tank outlet flow',
+    'Tempo de residência do tanque': 'Tank residence time',
     'Fluido no tanque': 'Fluid in tank',
     'Densidade do fluido no tanque': 'Tank fluid density',
     'Temperatura do fluido no tanque': 'Tank fluid temperature',
@@ -230,8 +256,9 @@ const EXPORT_LABELS_EN = {
     'Set point': 'Set point',
     'Ganho proporcional Kp': 'Proportional gain Kp',
     'Ganho integral Ki': 'Integral gain Ki',
+    'Ganho derivativo Kd': 'Derivative gain Kd',
     'Alerta de saturação ativo': 'Saturation alert active',
-    'Nome do trecho': 'Line name',
+    'Nome do Cano': 'Line name',
     'Componente de origem': 'Source component',
     'Tipo de origem': 'Source type',
     'Componente de destino': 'Target component',
@@ -243,12 +270,12 @@ const EXPORT_LABELS_EN = {
     'Rugosidade absoluta': 'Absolute roughness',
     'Comprimento extra': 'Extra length',
     'Perda local K': 'Local loss K',
-    'Velocidade de projeto': 'Design velocity',
-    'Vazão de projeto': 'Design flow',
+    'Velocidade desejada': 'Target velocity',
+    'Vazão de referência': 'Reference flow',
     'Vazão atual': 'Current flow',
     'Vazão alvo': 'Target flow',
     'Velocidade atual': 'Current velocity',
-    'Delta P no trecho': 'Line delta P',
+    'Delta P no Cano': 'Line delta P',
     'Perda total': 'Total loss',
     'Pressão na origem': 'Source pressure',
     'Pressão de chegada': 'Arrival pressure',
@@ -256,11 +283,12 @@ const EXPORT_LABELS_EN = {
     'Comprimento hidráulico total': 'Total hydraulic length',
     'Comprimento reto/esquemático': 'Straight/schematic length',
     'Desnível hidráulico': 'Hydraulic elevation difference',
+    'Tempo de residência no Cano': 'Line residence time',
     'Tempo de resposta': 'Response time',
     'Fator de atrito Darcy': 'Darcy friction factor',
     'Rugosidade relativa': 'Relative roughness',
     Regime: 'Regime',
-    'Fluido no trecho': 'Fluid in line',
+    'Fluido no Cano': 'Fluid in line',
     'Viscosidade do fluido': 'Fluid viscosity'
 };
 
@@ -303,7 +331,7 @@ const LOCALIZED_VALUE_COLUMNS = new Set([
 const FLUID_NAME_COLUMNS = new Set([
     'Nome do fluido',
     'Fluido no tanque',
-    'Fluido no trecho'
+    'Fluido no Cano'
 ]);
 
 function numberValue(value, digits = null) {
@@ -330,7 +358,7 @@ function translateExportValue(value) {
 
 function translateGeneratedLineName(value) {
     if (!isEnglishLanguage()) return value;
-    const match = String(value ?? '').match(/^Trecho\s+(\d+)$/);
+    const match = String(value ?? '').match(/^Cano\s+(\d+)$/);
     return match ? `Line ${match[1]}` : value;
 }
 
@@ -386,7 +414,7 @@ function displayCellValue(column, value) {
     const rule = getUnitRule(column);
     if (value === '') return value;
 
-    if (column === 'Nome do trecho') return translateGeneratedLineName(value);
+    if (column === 'Nome do Cano') return translateGeneratedLineName(value);
     if (FLUID_NAME_COLUMNS.has(column)) return translateFluidName(value);
     if (LOCALIZED_VALUE_COLUMNS.has(column)) return translateExportValue(value);
 
@@ -472,7 +500,7 @@ function buildBaseComponentRow(component) {
     };
 }
 
-function buildComponentRow(component) {
+function buildComponentRow(component, engine = null) {
     const row = buildBaseComponentRow(component);
 
     if (component instanceof FonteLogica) {
@@ -484,7 +512,10 @@ function buildComponentRow(component) {
     }
 
     if (component instanceof DrenoLogico) {
+        const pressureProfile = resolveSinkPressureProfile({ engine, sink: component });
         row['Pressão de descarga (bar)'] = numberValue(component.pressaoSaidaBar, 5);
+        row['Pressão final da rede (bar)'] = numberValue(pressureProfile.finalNetworkPressureBar, 5);
+        row['Queda na entrada da saída (bar)'] = numberValue(pressureProfile.entryPressureDropBar, 5);
         row['Perda de entrada K'] = numberValue(component.perdaEntradaK, 5);
         row['Vazão recebida (L/s)'] = numberValue(component.vazaoRecebidaLps, 5);
     }
@@ -498,8 +529,8 @@ function buildComponentRow(component) {
         row['Eficiência hidráulica nominal'] = numberValue(component.eficienciaHidraulica, 5);
         row['Eficiência atual'] = numberValue(component.eficienciaAtual, 5);
         row['NPSHr referência (m)'] = numberValue(component.npshRequeridoM, 5);
-        row['NPSHr atual (m)'] = numberValue(component.npshRequeridoAtualM, 5);
-        row['NPSHa atual (m)'] = numberValue(component.npshDisponivelM, 5);
+        row['NPSH requerido (m)'] = numberValue(component.npshRequeridoAtualM, 5);
+        row['NPSH disponível (m)'] = numberValue(component.npshDisponivelM, 5);
         row['Margem NPSH (m)'] = numberValue(component.margemNpshM, 5);
         row['Fator de cavitação'] = numberValue(component.fatorCavitacaoAtual, 5);
         row['Tempo de rampa (s)'] = numberValue(component.tempoRampaSegundos, 5);
@@ -509,11 +540,19 @@ function buildComponentRow(component) {
     }
 
     if (component instanceof ValvulaLogica) {
+        const parametrosValvula = component.getParametrosHidraulicos?.();
         row['Válvula aberta'] = booleanValue(component.aberta);
         row['Abertura desejada (%)'] = numberValue(component.grauAbertura, 3);
         row['Abertura efetiva (%)'] = numberValue(component.aberturaEfetiva, 3);
         row['Coeficiente Cv'] = numberValue(component.cv, 5);
+        row['Unidade do coeficiente da válvula'] = component.getUnidadeCoeficienteVazao?.()?.toUpperCase?.() || 'CV';
+        row['Coeficiente exibido da válvula'] = numberValue(component.getCoeficienteVazaoNaUnidade?.(), 5);
+        row['Coeficiente Kv'] = numberValue(component.getCoeficienteVazaoNaUnidade?.('kv'), 5);
         row['Coeficiente de perda K'] = numberValue(component.perdaLocalK, 5);
+        row['Perda de estrangulamento ativa'] = booleanValue(component.considerarPerdaEstrangulamento === true);
+        row['K físico do Cv efetivo'] = numberValue(parametrosValvula?.lossFromCv, 5);
+        row['K de estrangulamento aplicado'] = numberValue(parametrosValvula?.appliedThrottlingLoss, 5);
+        row['K total efetivo da válvula'] = numberValue(parametrosValvula?.localLossCoeff, 5);
         row['Perfil da válvula'] = component.perfilCaracteristica || '';
         row['Característica da válvula'] = component.tipoCaracteristica || '';
         row.Rangeabilidade = numberValue(component.rangeabilidade, 5);
@@ -545,10 +584,10 @@ function buildComponentRow(component) {
         row['Elevação do bocal de entrada (m)'] = numberValue(component.alturaBocalEntradaM, 5);
         row['Elevação do bocal de saída (m)'] = numberValue(component.alturaBocalSaidaM, 5);
         row['Coeficiente de descarga do tanque'] = numberValue(component.coeficienteSaida, 5);
-        row['Perda de entrada do tanque K'] = numberValue(component.perdaEntradaK, 5);
         row['Pressão no fundo do tanque (bar)'] = numberValue(component.pressaoFundoBar, 5);
         row['Vazão de entrada do tanque (L/s)'] = numberValue(component.lastQin, 5);
         row['Vazão de saída do tanque (L/s)'] = numberValue(component.lastQout, 5);
+        row['Tempo de residência do tanque (s)'] = numberValue(calculateTankResidenceTimeS(component).timeS, 5);
         row['Fluido no tanque'] = fluid?.nome || '';
         row['Densidade do fluido no tanque (kg/m³)'] = numberValue(fluid?.densidade, 3);
         row['Temperatura do fluido no tanque (°C)'] = numberValue(fluid?.temperatura, 3);
@@ -558,6 +597,7 @@ function buildComponentRow(component) {
         row['Set point (%)'] = numberValue(component.setpoint, 3);
         row['Ganho proporcional Kp'] = numberValue(component.kp, 5);
         row['Ganho integral Ki'] = numberValue(component.ki, 5);
+        row['Ganho derivativo Kd'] = numberValue(component.kd, 5);
         row['Alerta de saturação ativo'] = booleanValue(component.alertaSaturacao?.ativo);
     }
 
@@ -570,9 +610,10 @@ function buildConnectionRow(engine, connection, index) {
     const state = engine.getConnectionState(connection);
     const geometry = engine.getConnectionGeometry(connection);
     const fluid = state?.fluid || engine.hydraulicContext?.getConnectionFluid?.(connection);
+    const pressureProfile = resolvePipePressureProfile({ state, source });
 
     return {
-        'Nome do trecho': `Trecho ${index + 1}`,
+        'Nome do Cano': `Cano ${index + 1}`,
         'Componente de origem': source?.tag || connection.sourceId || '',
         'Tipo de origem': source ? getComponentType(source) : '',
         'Componente de destino': target?.tag || connection.targetId || '',
@@ -584,25 +625,30 @@ function buildConnectionRow(engine, connection, index) {
         'Rugosidade absoluta (mm)': numberValue(connection.roughnessMm, 5),
         'Comprimento extra (m)': numberValue(connection.extraLengthM, 5),
         'Perda local K': numberValue(connection.perdaLocalK, 5),
-        'Velocidade de projeto (m/s)': numberValue(connection.designVelocityMps, 5),
-        'Vazão de projeto (L/s)': numberValue(connection.designFlowLps, 5),
+        'Velocidade desejada (m/s)': numberValue(connection.designVelocityMps, 5),
+        'Vazão de referência (L/s)': numberValue(connection.designFlowLps, 5),
         'Vazão atual (L/s)': numberValue(state?.flowLps, 5),
         'Vazão alvo (L/s)': numberValue(state?.targetFlowLps, 5),
         'Velocidade atual (m/s)': numberValue(state?.velocityMps, 5),
-        'Delta P no trecho (bar)': numberValue(state?.deltaPBar, 5),
+        'Delta P no Cano (bar)': numberValue(pressureProfile.pressureDropBar, 5),
         'Perda total (bar)': numberValue(state?.totalLossBar, 5),
-        'Pressão na origem (bar)': numberValue(state?.sourcePressureBar, 5),
-        'Pressão de chegada (bar)': numberValue(state?.outletPressureBar, 5),
+        'Pressão na origem (bar)': numberValue(pressureProfile.sourcePressureBar, 5),
+        'Pressão de chegada (bar)': numberValue(pressureProfile.endPressureBar, 5),
         'Contrapressão (bar)': numberValue(state?.backPressureBar, 5),
         'Comprimento hidráulico total (m)': numberValue(geometry?.lengthM ?? state?.lengthM, 5),
         'Comprimento reto/esquemático (m)': numberValue(geometry?.straightLengthM ?? state?.straightLengthM, 5),
         'Desnível hidráulico (m)': numberValue(geometry?.headGainM ?? state?.headGainM, 5),
+        'Tempo de residência no Cano (s)': numberValue(calculateConnectionResidenceTimeS(
+            connection,
+            { ...geometry, lengthM: state?.lengthM || geometry?.lengthM },
+            state?.flowLps
+        ), 5),
         'Tempo de resposta (s)': numberValue(state?.responseTimeS, 5),
         Reynolds: numberValue(state?.reynolds, 2),
         'Fator de atrito Darcy': numberValue(state?.frictionFactor, 6),
         'Rugosidade relativa': numberValue(state?.relativeRoughness, 8),
         Regime: state?.regime || '',
-        'Fluido no trecho': fluid?.nome || '',
+        'Fluido no Cano': fluid?.nome || '',
         'Densidade do fluido (kg/m³)': numberValue(fluid?.densidade, 3),
         'Viscosidade do fluido (Pa.s)': numberValue(fluid?.viscosidadeDinamicaPaS, 6),
         'Cor visual do fluido': fluid ? getFluidVisualStyle(fluid).stroke : ''
@@ -635,7 +681,7 @@ function renderTable(title, columns, rows) {
 export function buildExportHtml(engine) {
     const timestamp = new Date();
     const metadataRows = displayUnitRows(buildExportMetadataRows(engine, timestamp));
-    const componentRows = displayUnitRows(engine.componentes.map(buildComponentRow));
+    const componentRows = displayUnitRows(engine.componentes.map((component) => buildComponentRow(component, engine)));
     const connectionRows = displayUnitRows(engine.conexoes.map((connection, index) => buildConnectionRow(engine, connection, index)));
     const metadataColumns = displayUnitColumns(EXPORT_METADATA_COLUMNS);
     const componentColumns = displayUnitColumns(COMPONENT_COLUMNS);

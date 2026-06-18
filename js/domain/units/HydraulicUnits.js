@@ -12,16 +12,18 @@ export const PADROES_HIDRAULICOS = Object.freeze({
     diametroPadraoTuboM: 0.08,
     fatorAtritoPadrao: 0.028,
     rugosidadePadraoMm: 0.045,
-    comprimentoExtraPadraoM: 0,
-    perdaLocalPadraoK: 0.8,
-    perdaEntradaPadraoK: 0.35,
+    comprimentoRetoEsquematicoPadraoM: 1,
+    comprimentoExtraPadraoM: 99,
+    perdaLocalPadraoK: 0,
+    perdaEntradaPadraoK: 0,
     velocidadeProjetoPadraoMps: 2.0,
     viscosidadePadraoPaS: 0.00089,
     calorEspecificoPadraoJkgK: 4182,
     pressaoVaporPadraoBar: 0.0317,
     pressaoAtmosfericaPadraoBar: 1.01325,
     vazaoMaximaRedeLps: 500,
-    pressaoPadraoFonteBar: 0.5
+    vazaoPadraoFonteLps: 32 / 3.6,
+    pressaoPadraoFonteBar: 1.5
 });
 
 export const BAR_TO_PA = CONSTANTES_CONVERSAO.barParaPa;
@@ -30,6 +32,7 @@ export const EPSILON_FLOW = PADROES_HIDRAULICOS.epsilonVazaoLps;
 export const DEFAULT_PIPE_DIAMETER_M = PADROES_HIDRAULICOS.diametroPadraoTuboM;
 export const DEFAULT_PIPE_FRICTION = PADROES_HIDRAULICOS.fatorAtritoPadrao;
 export const DEFAULT_PIPE_ROUGHNESS_MM = PADROES_HIDRAULICOS.rugosidadePadraoMm;
+export const DEFAULT_PIPE_SCHEMATIC_LENGTH_M = PADROES_HIDRAULICOS.comprimentoRetoEsquematicoPadraoM;
 export const DEFAULT_PIPE_EXTRA_LENGTH_M = PADROES_HIDRAULICOS.comprimentoExtraPadraoM;
 export const DEFAULT_PIPE_MINOR_LOSS = PADROES_HIDRAULICOS.perdaLocalPadraoK;
 export const DEFAULT_ENTRY_LOSS = PADROES_HIDRAULICOS.perdaEntradaPadraoK;
@@ -39,6 +42,7 @@ export const DEFAULT_FLUID_SPECIFIC_HEAT_JKGK = PADROES_HIDRAULICOS.calorEspecif
 export const DEFAULT_FLUID_VAPOR_PRESSURE_BAR = PADROES_HIDRAULICOS.pressaoVaporPadraoBar;
 export const DEFAULT_ATMOSPHERIC_PRESSURE_BAR = PADROES_HIDRAULICOS.pressaoAtmosfericaPadraoBar;
 export const MAX_NETWORK_FLOW_LPS = PADROES_HIDRAULICOS.vazaoMaximaRedeLps;
+export const DEFAULT_SOURCE_MAX_FLOW_LPS = PADROES_HIDRAULICOS.vazaoPadraoFonteLps;
 export const DEFAULT_SOURCE_PRESSURE_BAR = PADROES_HIDRAULICOS.pressaoPadraoFonteBar;
 
 export function lpsToM3s(value) {
@@ -54,5 +58,8 @@ export function areaFromDiameter(diameterM) {
 }
 
 export function pressureFromHeadBar(headM, density) {
-    return (density * GRAVITY * headM) / BAR_TO_PA;
+    const safeHeadM = Number(headM);
+    const safeDensity = Number(density);
+    if (!Number.isFinite(safeHeadM) || !Number.isFinite(safeDensity) || safeDensity <= 0) return 0;
+    return (safeDensity * GRAVITY * safeHeadM) / BAR_TO_PA;
 }

@@ -40,6 +40,7 @@ export class SimulationTickPipeline {
             if (component instanceof TanqueLogico) component.atualizarFisica(dt, fluid);
             else component.sincronizarMetricasFisicas(fluid);
         });
+        this.engine.reconcileConnectionPressureStatesFromComponentDrops();
     }
 
     notifySetpointActuators() {

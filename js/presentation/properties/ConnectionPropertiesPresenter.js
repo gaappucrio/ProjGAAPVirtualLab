@@ -16,6 +16,7 @@ import {
     getCurrentDesignFlowCandidateLps,
     getSuggestedDiameterForConnection
 } from '../../domain/services/PipeHydraulics.js';
+import { calculateConnectionResidenceTimeS } from '../../domain/services/ResidenceTime.js';
 import {
     displayBound,
     displayEditableUnitValue,
@@ -25,6 +26,7 @@ import {
 } from './PropertyValueFormatters.js';
 import { bind, setValue } from './PropertyDomAdapter.js';
 import { bindUnitControls, renderUnitControls } from './PropertyUnitsPresenter.js';
+import { resolvePipePressureProfile } from '../monitoring/PipePressureProfile.js';
 
 function getConnectionDisplay(engine, connection) {
     const source = engine.componentes.find((component) => component.id === connection.sourceId);
@@ -51,6 +53,10 @@ function formatFluidName(fluid) {
     return fluid?.nome || '-';
 }
 
+function formatResidenceTime(valueS) {
+    return Number.isFinite(valueS) ? `${valueS.toFixed(2)} s` : translateLiteral('Sem fluxo');
+}
+
 export function renderConnectionProperties({
     propContent,
     connection,
@@ -61,55 +67,66 @@ export function renderConnectionProperties({
     const state = engine.getConnectionState(connection);
     const labels = getConnectionDisplay(engine, connection);
     const geometry = engine.getConnectionGeometry(connection);
+    const source = engine.getComponentById(connection.sourceId);
+    const pressureProfile = resolvePipePressureProfile({ state, source });
     const suggestedDiameterM = getSuggestedDiameterM(connection, state);
     const currentFluid = state.fluid || engine.hydraulicContext?.getConnectionFluid?.(connection);
+    const residenceTimeS = calculateConnectionResidenceTimeS(
+        connection,
+        { ...geometry, lengthM: state.lengthM || geometry.lengthM },
+        state.flowLps
+    );
 
     const basicContent = `
         <div class="prop-group">
-            <label title="${TOOLTIPS.conexao.trecho}">${TOOLTIPS.conexao.titulo}</label>
-            <input type="text" title="${TOOLTIPS.conexao.trecho}" value="${labels.sourceLabel} -> ${labels.targetLabel}" disabled>
+            <label title="${TOOLTIPS.conexao.Cano}">${TOOLTIPS.conexao.titulo}</label>
+            <input type="text" title="${TOOLTIPS.conexao.Cano}" value="${labels.sourceLabel} -> ${labels.targetLabel}" disabled>
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.diametro}">Diâmetro Interno (${getUnitSymbol('length')})</label>
             <input type="number" id="input-pipe-diameter" title="${TOOLTIPS.conexao.diametro}" value="${displayEditableUnitValue('length', connection.diameterM, 4)}" step="${displayStep('length', 0.005)}" min="${displayBound('length', 0.01)}" max="${displayBound('length', 0.3)}">
         </div>
         <div class="prop-group">
-            <label title="${TOOLTIPS.conexao.velocidadeProjeto}">Velocidade de Projeto (m/s)</label>
-            <input type="number" id="input-pipe-design-velocity" title="${TOOLTIPS.conexao.velocidadeProjeto}" value="${connection.designVelocityMps || DEFAULT_DESIGN_VELOCITY_MPS}" step="0.1" min="0.1" max="8">
-        </div>
-        <div class="prop-group">
-            <label title="${TOOLTIPS.conexao.vazaoProjeto}">Vazão de Dimensionamento (${getUnitSymbol('flow')})</label>
-            <input type="number" id="input-pipe-design-flow" title="${TOOLTIPS.conexao.vazaoProjeto}" value="${displayEditableUnitValue('flow', connection.designFlowLps || 0, 4)}" step="${displayStep('flow', 0.1)}" min="${displayBound('flow', 0)}" max="${displayBound('flow', MAX_NETWORK_FLOW_LPS)}">
-            <button id="btn-use-current-design-flow" type="button" title="${TOOLTIPS.conexao.usarVazaoAtualProjeto}" ${getDesignFlowCandidateM(connection, state) > 0 ? '' : 'disabled'} style="margin-top:6px; padding:6px 8px; border:1px solid #bdc3c7; border-radius:4px; background:#fff; font-size:11px; cursor:pointer;">Capturar vazão atual</button>
-        </div>
-        <div class="prop-group">
-            <label title="${TOOLTIPS.conexao.diametroSugerido}">Diâmetro Sugerido (${getUnitSymbol('length')})</label>
-            <input type="text" id="disp-pipe-suggested-diameter" title="${TOOLTIPS.conexao.diametroSugerido}" value="${displayUnitValue('length', suggestedDiameterM, 4)}" disabled>
-            <button id="btn-apply-pipe-suggested-diameter" type="button" title="${TOOLTIPS.conexao.aplicarDiametroSugerido}" ${suggestedDiameterM > 0 ? '' : 'disabled'} style="margin-top:6px; padding:6px 8px; border:1px solid #bdc3c7; border-radius:4px; background:#fff; font-size:11px; cursor:pointer;">Aplicar diâmetro sugerido</button>
-        </div>
-        <div class="prop-group">
             <label title="${TOOLTIPS.conexao.vazaoAtual}">Vazão Atual (${getUnitSymbol('flow')})</label>
             <input type="text" id="disp-pipe-flow" title="${TOOLTIPS.conexao.vazaoAtual}" value="${displayUnitValue('flow', state.flowLps, 2)}" disabled>
         </div>
         <div class="prop-group">
-            <label title="Fluido atualmente transportado neste trecho.">Fluido no Trecho</label>
-            <input type="text" id="disp-pipe-fluid" title="Fluido atualmente transportado neste trecho." value="${formatFluidName(currentFluid)}" disabled>
+            <label title="Fluido atualmente transportado neste Cano.">Fluido no Cano</label>
+            <input type="text" id="disp-pipe-fluid" title="Fluido atualmente transportado neste Cano." value="${formatFluidName(currentFluid)}" disabled>
         </div>
         <div class="prop-group">
-            <label title="${TOOLTIPS.conexao.vazaoAlvo}">Vazão Alvo (${getUnitSymbol('flow')})</label>
-            <input type="text" id="disp-pipe-target-flow" title="${TOOLTIPS.conexao.vazaoAlvo}" value="${displayUnitValue('flow', state.targetFlowLps, 2)}" disabled>
-        </div>
-        <div class="prop-group">
-            <label title="${TOOLTIPS.conexao.deltaPTrecho}">Queda de Pressão no Trecho (${getUnitSymbol('pressure')})</label>
-            <input type="text" id="disp-pipe-deltap" title="${TOOLTIPS.conexao.deltaPTrecho}" value="${displayUnitValue('pressure', state.deltaPBar, 3)}" disabled>
+            <label title="${TOOLTIPS.conexao.deltaPTrecho}">Queda de Pressão no Cano (${getUnitSymbol('pressure')})</label>
+            <input type="text" id="disp-pipe-deltap" title="${TOOLTIPS.conexao.deltaPTrecho}" value="${displayUnitValue('pressure', pressureProfile.pressureDropBar, 3)}" disabled>
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.comprimentoTotal}">Comprimento Total (${getUnitSymbol('length')})</label>
             <input type="text" id="disp-pipe-length" title="${TOOLTIPS.conexao.comprimentoTotal}" value="${displayUnitValue('length', state.lengthM || geometry.lengthM, 2)}" disabled>
         </div>
+        <div class="prop-group">
+            <label title="${TOOLTIPS.conexao.tempoResidencia}">Tempo de Residência (s)</label>
+            <input type="text" id="disp-pipe-residence-time" title="${TOOLTIPS.conexao.tempoResidencia}" value="${formatResidenceTime(residenceTimeS)}" disabled>
+        </div>
     `;
 
     const advancedContent = `
+        <div class="prop-group">
+            <label title="${TOOLTIPS.conexao.velocidadeProjeto}">Velocidade desejada (m/s)</label>
+            <input type="number" id="input-pipe-design-velocity" title="${TOOLTIPS.conexao.velocidadeProjeto}" value="${connection.designVelocityMps || DEFAULT_DESIGN_VELOCITY_MPS}" step="0.1" min="0.1" max="8">
+        </div>
+        <div class="prop-group">
+            <label title="${TOOLTIPS.conexao.vazaoProjeto}">Vazão de referência (${getUnitSymbol('flow')})</label>
+            <input type="number" id="input-pipe-design-flow" title="${TOOLTIPS.conexao.vazaoProjeto}" value="${displayEditableUnitValue('flow', connection.designFlowLps || 0, 4)}" step="${displayStep('flow', 0.1)}" min="${displayBound('flow', 0)}" max="${displayBound('flow', MAX_NETWORK_FLOW_LPS)}">
+            <button id="btn-use-current-design-flow" type="button" title="${TOOLTIPS.conexao.usarVazaoAtualProjeto}" ${getDesignFlowCandidateM(connection, state) > 0 ? '' : 'disabled'} style="margin-top:6px; padding:6px 8px; border:1px solid #bdc3c7; border-radius:4px; background:#fff; font-size:11px; cursor:pointer;">Capturar vazão atual</button>
+        </div>
+        <div class="prop-group">
+            <label title="${TOOLTIPS.conexao.diametroSugerido}">Sugestão de diâmetro (${getUnitSymbol('length')})</label>
+            <input type="text" id="disp-pipe-suggested-diameter" title="${TOOLTIPS.conexao.diametroSugerido}" value="${displayUnitValue('length', suggestedDiameterM, 4)}" disabled>
+            <button id="btn-apply-pipe-suggested-diameter" type="button" title="${TOOLTIPS.conexao.aplicarDiametroSugerido}" ${suggestedDiameterM > 0 ? '' : 'disabled'} style="margin-top:6px; padding:6px 8px; border:1px solid #bdc3c7; border-radius:4px; background:#fff; font-size:11px; cursor:pointer;">Aplicar diâmetro sugerido</button>
+        </div>
+        <div class="prop-group">
+            <label title="${TOOLTIPS.conexao.vazaoAlvo}">Vazão transitória alvo (${getUnitSymbol('flow')})</label>
+            <input type="text" id="disp-pipe-target-flow" title="${TOOLTIPS.conexao.vazaoAlvo}" value="${displayUnitValue('flow', state.targetFlowLps, 2)}" disabled>
+        </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.comprimentoExtra}">Comprimento Extra (${getUnitSymbol('length')})</label>
             <input type="number" id="input-pipe-extra-length" title="${TOOLTIPS.conexao.comprimentoExtra}" value="${displayEditableUnitValue('length', connection.extraLengthM || 0, 4)}" step="${displayStep('length', 0.1)}" min="${displayBound('length', 0)}" max="${displayBound('length', 500)}">
@@ -139,12 +156,12 @@ export function renderConnectionProperties({
             <input type="text" id="disp-pipe-regime" title="${TOOLTIPS.conexao.regime}" value="${translateLiteral(state.regime)}" disabled>
         </div>
         <div class="prop-group">
-            <label title="Densidade do fluido ou mistura que está no trecho.">Densidade do Fluido (kg/m³)</label>
-            <input type="text" id="disp-pipe-fluid-density" title="Densidade do fluido ou mistura que está no trecho." value="${(currentFluid?.densidade || 0).toFixed(1)}" disabled>
+            <label title="Densidade do fluido ou mistura que está no Cano.">Densidade do Fluido (kg/m³)</label>
+            <input type="text" id="disp-pipe-fluid-density" title="Densidade do fluido ou mistura que está no Cano." value="${(currentFluid?.densidade || 0).toFixed(1)}" disabled>
         </div>
         <div class="prop-group">
-            <label title="Viscosidade dinâmica do fluido ou mistura que está no trecho.">Viscosidade do Fluido (Pa.s)</label>
-            <input type="text" id="disp-pipe-fluid-viscosity" title="Viscosidade dinâmica do fluido ou mistura que está no trecho." value="${(currentFluid?.viscosidadeDinamicaPaS || 0).toFixed(5)}" disabled>
+            <label title="Viscosidade dinâmica do fluido ou mistura que está no Cano.">Viscosidade do Fluido (Pa.s)</label>
+            <input type="text" id="disp-pipe-fluid-viscosity" title="Viscosidade dinâmica do fluido ou mistura que está no Cano." value="${(currentFluid?.viscosidadeDinamicaPaS || 0).toFixed(5)}" disabled>
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.respostaHidraulica}">Resposta Hidráulica (s)</label>
@@ -157,7 +174,7 @@ export function renderConnectionProperties({
         ${renderPropertyTabs({
             basicContent,
             advancedContent,
-            advancedDescription: 'Os parâmetros desta aba refinam perdas distribuídas, perdas locais e a resposta transitória da linha. São úteis quando você quer aproximar melhor a hidráulica do trecho.'
+            advancedDescription: 'Os parâmetros desta aba refinam perdas distribuídas, perdas locais e a resposta transitória da linha. São úteis quando você quer aproximar melhor a hidráulica do Cano.'
         })}
     `;
     localizeElement(propContent);
@@ -224,7 +241,7 @@ export function renderConnectionProperties({
     });
 
     bind('input-pipe-design-velocity', 'change', (event) => {
-        const result = InputValidator.validateNumber(event.target.value, 0.1, 8, 'Velocidade de projeto');
+        const result = InputValidator.validateNumber(event.target.value, 0.1, 8, 'Velocidade desejada');
         if (!result.valid) {
             showInputError(event.target, result.error);
             return;
@@ -239,7 +256,7 @@ export function renderConnectionProperties({
 
     bind('input-pipe-design-flow', 'change', (event) => {
         const baseFlowLps = rawBaseValue('flow', event.target.value, NaN);
-        const result = InputValidator.validateNumber(baseFlowLps, 0, MAX_NETWORK_FLOW_LPS, 'Vazão de dimensionamento');
+        const result = InputValidator.validateNumber(baseFlowLps, 0, MAX_NETWORK_FLOW_LPS, 'Vazão de referência');
         if (!result.valid) {
             showInputError(event.target, result.error);
             return;

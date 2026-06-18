@@ -234,6 +234,35 @@ export class NodalHydraulicSolver {
         const loop = this.buildFloatingSeriesLoop(network, island);
         if (!loop) return false;
 
+        if (loop.blocked) {
+            const pressureByNodeId = this.createInitialPressures(network);
+            const branchResults = network.branches.map((branch) => this.createZeroBranchResult(
+                branch,
+                getNodePressure(pressureByNodeId, branch.fromNodeId),
+                getNodePressure(pressureByNodeId, branch.toNodeId)
+            ));
+
+            this.metrics.lastDiagnostics.push({
+                code: 'floating_closed_loop_blocked',
+                severity: 'info',
+                componentIds: loop.orderedComponents.map((component) => component.id),
+                message: 'Malha fechada bloqueada por valvula ou ramo fechado: a vazao fisica e zero.'
+            });
+            this.applySolvedConnectionStates(network, branchResults, pressureByNodeId, dt);
+            const balanceError = this.hydraulicModel.balancePassThroughMass();
+            this.applyPumpMetrics(network, branchResults, pressureByNodeId);
+            this.hydraulicModel.relaxIdleConnections(dt);
+
+            pressureByNodeId.forEach((pressureBar, nodeId) => {
+                this.nodePressureGuesses.set(nodeId, pressureBar);
+            });
+
+            this.metrics.lastIterations = 0;
+            this.metrics.lastError = balanceError;
+            this.metrics.convergedCount++;
+            return true;
+        }
+
         const highLimitLps = loop.pumpBranches.reduce((limit, branch) => {
             const pumpLimit = Math.max(0, branch.component.vazaoNominal * branch.component.getDriveAtual());
             return Math.min(limit, pumpLimit);
@@ -351,13 +380,16 @@ export class NodalHydraulicSolver {
 
         const pumpBranches = orderedInternalBranches.filter((branch) => branch.kind === 'pump' && !branch.disabled);
         if (pumpBranches.length === 0) return null;
+        const blocked = [...orderedInternalBranches, ...orderedConnectionBranches]
+            .some((branch) => branch?.disabled === true);
 
         return {
             startComponent,
             orderedComponents,
             orderedInternalBranches,
             orderedConnectionBranches,
-            pumpBranches
+            pumpBranches,
+            blocked
         };
     }
 
@@ -458,10 +490,10 @@ export class NodalHydraulicSolver {
             } else if (component instanceof DrenoLogico) {
                 inputNode.fixedPressureBar = Math.max(0, finiteNumber(component.pressaoSaidaBar, 0));
             } else if (component instanceof TanqueLogico) {
-                inputNode.fixedPressureBar = component.getBackPressureAtInletBar(fluid, this.context.usarAlturaRelativa);
-                outputNode.fixedPressureBar = component.temLiquidoDisponivelSaida?.(this.context.usarAlturaRelativa) === false
-                    ? 0
-                    : component.getPressaoDisponivelSaidaBar(fluid, this.context.usarAlturaRelativa);
+                const connectionPressureBar = component.getPressaoConexaoSemPerdaBar?.(fluid, this.context.usarAlturaRelativa)
+                    ?? component.getPressaoDisponivelSaidaBar(fluid, this.context.usarAlturaRelativa);
+                inputNode.fixedPressureBar = connectionPressureBar;
+                outputNode.fixedPressureBar = connectionPressureBar;
             }
 
             const internalBranch = this.createInternalBranch(component, inputNode.id, outputNode.id, fluid);
@@ -562,6 +594,18 @@ export class NodalHydraulicSolver {
         }
     }
 
+    isClosedValve(component) {
+        return component instanceof ValvulaLogica && component.getAberturaNormalizadaAtual() <= 0;
+    }
+
+    isInactivePump(component) {
+        return component instanceof BombaLogica && component.getDriveAtual() <= EPSILON_FLOW;
+    }
+
+    isShutoffComponent(component) {
+        return this.isClosedValve(component) || this.isInactivePump(component);
+    }
+
     createConnectionBranch(connection, source, target) {
         this.hydraulicModel.ensureConnectionProperties(connection);
 
@@ -572,8 +616,12 @@ export class NodalHydraulicSolver {
         const areaM2 = Math.min(connection.areaM2, sourceArea, targetArea);
         const sourceOutletLossCoeff = this.getSourceOutletLossCoeff(source);
         const targetEntryLossCoeff = this.getBoundaryTargetEntryLossCoeff(target);
-        const disabled = source instanceof TanqueLogico
-            && source.temLiquidoDisponivelSaida?.(this.context.usarAlturaRelativa) === false;
+        const disabled = this.isShutoffComponent(source)
+            || this.isShutoffComponent(target)
+            || (
+                source instanceof TanqueLogico
+                && source.temLiquidoDisponivelSaida?.(this.context.usarAlturaRelativa) === false
+            );
 
         return {
             id: `connection:${connection.id}`,
@@ -585,6 +633,8 @@ export class NodalHydraulicSolver {
             target,
             areaM2,
             geometry,
+            sourceOutletLossCoeff,
+            targetEntryLossCoeff,
             baseLossCoeff: Math.max(0, 1 + connection.perdaLocalK + sourceOutletLossCoeff + targetEntryLossCoeff),
             staticHeadBar: pressureFromHeadBar(geometry.headGainM, fluid.densidade),
             fluid,
@@ -653,14 +703,12 @@ export class NodalHydraulicSolver {
 
     getSourceOutletLossCoeff(source) {
         if (source instanceof FonteLogica) return DEFAULT_ENTRY_LOSS;
-        if (source instanceof TanqueLogico) {
-            return 1.0 / Math.max(0.15, source.coeficienteSaida * source.coeficienteSaida);
-        }
+        if (source instanceof TanqueLogico) return 0;
         return 0;
     }
 
     getBoundaryTargetEntryLossCoeff(target) {
-        if (target instanceof TanqueLogico || target instanceof DrenoLogico) {
+        if (target instanceof DrenoLogico) {
             return Math.max(0, target.perdaEntradaK || 0);
         }
         return 0;
@@ -956,6 +1004,25 @@ export class NodalHydraulicSolver {
             );
             const totalLossCoeff = branch.baseLossCoeff + pipeHydraulics.distributedLossCoeff;
             const totalLossBar = pressureLossFromFlow(flowLps, branch.areaM2, fluid.densidade, totalLossCoeff);
+            const pipeDistributedLossBar = pressureLossFromFlow(
+                flowLps,
+                branch.areaM2,
+                fluid.densidade,
+                pipeHydraulics.distributedLossCoeff
+            );
+            const pipeLocalLossBar = pressureLossFromFlow(
+                flowLps,
+                branch.areaM2,
+                fluid.densidade,
+                Math.max(0, connection.perdaLocalK || 0)
+            );
+            const targetEntryLossBar = pressureLossFromFlow(
+                flowLps,
+                branch.areaM2,
+                fluid.densidade,
+                Math.max(0, branch.targetEntryLossCoeff || 0)
+            );
+            const pipePressureDropBar = pipeDistributedLossBar + pipeLocalLossBar;
             const responseTimeS = this.hydraulicModel.getConnectionResponseTimeS(connection, branch.geometry, fluid);
             const fromPressureBar = getNodePressure(pressureByNodeId, branch.fromNodeId, result.fromPressureBar);
             const toPressureBar = getNodePressure(pressureByNodeId, branch.toNodeId, result.toPressureBar);
@@ -972,8 +1039,13 @@ export class NodalHydraulicSolver {
             state.backPressureBar = toPressureBar;
             state.velocityMps = pipeHydraulics.velocityMps;
             state.deltaPBar = Math.max(0, fromPressureBar + branch.staticHeadBar - toPressureBar);
+            state.pipeInletPressureBar = fromPressureBar;
+            state.pipePressureDropBar = pipePressureDropBar;
+            state.pipeOutletPressureBar = Math.max(0, fromPressureBar + branch.staticHeadBar - pipePressureDropBar);
+            state.pipeDistributedLossBar = pipeDistributedLossBar;
+            state.pipeLocalLossBar = pipeLocalLossBar;
             state.totalLossBar = totalLossBar;
-            state.targetLossBar = 0;
+            state.targetLossBar = targetEntryLossBar;
             state.lengthM = branch.geometry.lengthM;
             state.straightLengthM = branch.geometry.straightLengthM;
             state.headGainM = branch.geometry.headGainM;

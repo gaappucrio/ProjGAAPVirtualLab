@@ -19,6 +19,7 @@ import {
     validateInputWithFeedback
 } from '../PropertyPresenterShared.js';
 import { translateLiteral } from '../../i18n/LanguageManager.js';
+import { calculateTankResidenceTimeS } from '../../../domain/services/ResidenceTime.js';
 
 function getTankControlVisualState(active, available) {
     if (active) return 'active';
@@ -32,6 +33,10 @@ function syncTankControlVisualState(groupEl, state) {
     groupEl.classList.toggle('is-active', state === 'active');
     groupEl.classList.toggle('is-ready', state === 'ready');
     groupEl.classList.toggle('is-blocked', state === 'blocked');
+}
+
+function formatResidenceTime(valueS) {
+    return Number.isFinite(valueS) ? `${valueS.toFixed(2)} s` : translateLiteral('Sem fluxo');
 }
 
 export const TANK_PROPERTIES_PRESENTER = {
@@ -61,6 +66,8 @@ export const TANK_PROPERTIES_PRESENTER = {
             : (isDark ? '#ff6b6b' : '#c0392b');
         const estadoVisualControle = getTankControlVisualState(comp.setpointAtivo, controleNivelDisponivel);
         const fluidoConteudo = comp.getFluidoConteudo?.() || comp.fluidoConteudo;
+        const residence = calculateTankResidenceTimeS(comp);
+        const mostrarSintoniaPid = comp.setpointAtivo;
 
         const basicContent = `
             <div class="prop-group">
@@ -92,6 +99,10 @@ export const TANK_PROPERTIES_PRESENTER = {
                 <input type="text" id="disp-qout-tanque" ${hintAttr(TOOLTIP.tankOutletFlow)} value="${displayUnitValue('flow', comp.lastQout, 2)}" disabled>
             </div>
             <div class="prop-group">
+                ${makeLabel('Tempo de residência (s)', TOOLTIP.tankResidenceTime)}
+                <input type="text" id="disp-tempo-residencia-tanque" ${hintAttr(TOOLTIP.tankResidenceTime)} value="${formatResidenceTime(residence.timeS)}" disabled>
+            </div>
+            <div class="prop-group">
                 <label title="Fluido ou mistura atualmente armazenado no tanque.">Fluido no Tanque</label>
                 <input type="text" id="disp-tank-fluid" title="Fluido ou mistura atualmente armazenado no tanque." value="${fluidoConteudo?.nome || '-'}" disabled>
             </div>
@@ -101,7 +112,7 @@ export const TANK_PROPERTIES_PRESENTER = {
             </div>
             <div class="prop-group tank-control-panel is-${estadoVisualControle}" id="grp-sp-main" data-control-state="${estadoVisualControle}" style="border-color:${corBordaControle}; background:${fundoControle};">
                 <label class="tank-control-title" ${hintAttr(TOOLTIP.tankPiController)} style="color:#c0392b; font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">
-                    Controlador de nível (PI)
+                    Controlador de nível (PID)
                 </label>
                 <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
                     <input type="checkbox" id="input-sp-ativo" ${hintAttr(TOOLTIP.tankSpActive)} ${comp.setpointAtivo ? 'checked' : ''} ${bloqueioControleAttr} style="width:16px; height:16px; cursor:pointer;">
@@ -130,24 +141,24 @@ export const TANK_PROPERTIES_PRESENTER = {
                 ${makeLabel('Coeficiente de descarga (Cd)', TOOLTIP.tankCd)}
                 <input type="number" id="input-cd-tanque" ${hintAttr(TOOLTIP.tankCd)} value="${comp.coeficienteSaida}" step="0.01" min="0.1" max="1">
             </div>
-            <div class="prop-group">
-                ${makeLabel('Perda na entrada (K)', TOOLTIP.tankEntryK)}
-                <input type="number" id="input-k-entrada-tanque" ${hintAttr(TOOLTIP.tankEntryK)} value="${comp.perdaEntradaK}" step="0.1" min="0" max="50">
-            </div>
-            <div class="prop-group" id="group-ctrl-params" style="display:${comp.setpointAtivo ? 'block' : 'none'};">
+            <div class="prop-group" id="group-ctrl-params" style="display:${mostrarSintoniaPid ? 'block' : 'none'};">
                 ${makeLabel('Ganho proporcional (Kp)', TOOLTIP.tankKp)}
-                <input type="number" id="input-kp" ${hintAttr(TOOLTIP.tankKp)} value="${comp.kp}" step="5" min="1" max="500">
+                <input type="number" id="input-kp" ${hintAttr(TOOLTIP.tankKp)} value="${comp.kp}" step="0.1" min="0" max="20">
             </div>
-            <div class="prop-group" id="group-ctrl-ki" style="display:${comp.setpointAtivo ? 'block' : 'none'};">
+            <div class="prop-group" id="group-ctrl-ki" style="display:${mostrarSintoniaPid ? 'block' : 'none'};">
                 ${makeLabel('Ganho integral (Ki)', TOOLTIP.tankKi)}
-                <input type="number" id="input-ki" ${hintAttr(TOOLTIP.tankKi)} value="${comp.ki}" step="1" min="0" max="100">
+                <input type="number" id="input-ki" ${hintAttr(TOOLTIP.tankKi)} value="${comp.ki}" step="0.1" min="0" max="10">
+            </div>
+            <div class="prop-group" id="group-ctrl-kd" style="display:${mostrarSintoniaPid ? 'block' : 'none'};">
+                ${makeLabel('Ganho derivativo (Kd)', TOOLTIP.tankKd)}
+                <input type="number" id="input-kd" ${hintAttr(TOOLTIP.tankKd)} value="${comp.kd}" step="0.1" min="0" max="20">
             </div>
         `;
 
         return renderPropertyTabs({
             basicContent,
             advancedContent,
-            advancedDescription: 'Aqui ficam os parâmetros de bocais, perdas e sintonia do controlador PI. Eles refinam a dinâmica do tanque e costumam ser ajustados só em estudos mais detalhados.'
+            advancedDescription: 'Aqui ficam os parâmetros de bocais e sintonia do controlador PID. Eles refinam a dinâmica do tanque e costumam ser ajustados só em estudos mais detalhados.'
         });
     },
     bind: (comp) => {
@@ -160,7 +171,7 @@ export const TANK_PROPERTIES_PRESENTER = {
             const grp = byId('grp-sp-main');
             const statusEl = byId('tank-sp-status-text');
             const spAtivoEl = byId('input-sp-ativo');
-            const mostrarParametros = comp.setpointAtivo ? 'block' : 'none';
+            const mostrarParametrosPid = comp.setpointAtivo ? 'block' : 'none';
             const isDark = document.body.classList.contains('theme-dark');
 
             if (spAtivoEl) {
@@ -194,8 +205,10 @@ export const TANK_PROPERTIES_PRESENTER = {
 
             const kpGroup = byId('group-ctrl-params');
             const kiGroup = byId('group-ctrl-ki');
-            if (kpGroup) kpGroup.style.display = mostrarParametros;
-            if (kiGroup) kiGroup.style.display = mostrarParametros;
+            const kdGroup = byId('group-ctrl-kd');
+            if (kpGroup) kpGroup.style.display = mostrarParametrosPid;
+            if (kiGroup) kiGroup.style.display = mostrarParametrosPid;
+            if (kdGroup) kdGroup.style.display = mostrarParametrosPid;
         };
 
         const emitirVolumeAtualizado = () => {
@@ -209,6 +222,8 @@ export const TANK_PROPERTIES_PRESENTER = {
 
             setValue('disp-pressao-tanque', displayUnitValue('pressure', comp.pressaoFundoBar, 2));
             setValue('disp-nível-tanque', displayUnitValue('length', comp.getAlturaLiquidoM(), 2));
+            const residence = calculateTankResidenceTimeS(comp);
+            setValue('disp-tempo-residencia-tanque', formatResidenceTime(residence.timeS));
             const fluidoAtual = comp.getFluidoConteudo?.() || comp.fluidoConteudo;
             setValue('disp-tank-fluid', fluidoAtual?.nome || '-');
             setValue('disp-tank-fluid-density', fluidoAtual?.densidade ? fluidoAtual.densidade.toFixed(1) : '0.0');
@@ -301,15 +316,6 @@ export const TANK_PROPERTIES_PRESENTER = {
             );
         });
 
-        bind('input-k-entrada-tanque', 'change', (event) => {
-            validateInputWithFeedback(
-                event.target,
-                (value, name) => InputValidator.validateNumber(value, 0, 50, name),
-                'Perda na entrada',
-                (validated) => { comp.perdaEntradaK = validated; }
-            );
-        });
-
         bind('input-sp-ativo', 'change', (event) => {
             comp.setSetpointAtivo(event.target.checked);
             atualizarEstadoControleNivel();
@@ -344,7 +350,7 @@ export const TANK_PROPERTIES_PRESENTER = {
         bind('input-kp', 'change', (event) => {
             validateInputWithFeedback(
                 event.target,
-                (value, name) => InputValidator.validateNumber(value, 1, 500, name),
+                (value, name) => InputValidator.validateNumber(value, 0, 20, name),
                 'Ganho proporcional',
                 (validated) => {
                     comp.kp = validated;
@@ -355,7 +361,7 @@ export const TANK_PROPERTIES_PRESENTER = {
         bind('input-ki', 'change', (event) => {
             validateInputWithFeedback(
                 event.target,
-                (value, name) => InputValidator.validateNumber(value, 0, 100, name),
+                (value, name) => InputValidator.validateNumber(value, 0, 10, name),
                 'Ganho integral',
                 (validated) => {
                     comp.ki = validated;
@@ -363,13 +369,25 @@ export const TANK_PROPERTIES_PRESENTER = {
                 }
             );
         });
+        bind('input-kd', 'change', (event) => {
+            validateInputWithFeedback(
+                event.target,
+                (value, name) => InputValidator.validateNumber(value, 0, 20, name),
+                'Ganho derivativo',
+                (validated) => {
+                    comp.kd = validated;
+                    comp.resetControlador();
+                }
+            );
+        });
 
-        comp.subscribe((dados) => {
+        const unsubscribeComponent = comp.subscribe((dados) => {
             if (dados.tipo === COMPONENT_EVENTS.SETPOINT_UPDATE) {
                 atualizarEstadoControleNivel();
             }
         });
 
         atualizarEstadoControleNivel();
+        return unsubscribeComponent;
     }
 };

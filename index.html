@@ -22,10 +22,26 @@
         <button id="btn-export-data" class="toolbar-toggle export-data-button" type="button" title="Exporta dados dos componentes e conexões atuais." style="display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid #dfe6e9; border-radius:999px; background:#f8fbfc; color:#2c3e50; font-size:13px; font-weight:700; cursor:pointer; user-select:none;">
             <span>Exportar dados</span>
         </button>
+        <button id="btn-export-flowchart" class="toolbar-toggle export-flowchart-button" type="button" title="Exporta o fluxograma completo." style="display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid #dfe6e9; border-radius:999px; background:#f8fbfc; color:#2c3e50; font-size:13px; font-weight:700; cursor:pointer; user-select:none;">
+            <span>Exportar planta</span>
+        </button>
+        <button id="btn-import-flowchart" class="toolbar-toggle import-flowchart-button" type="button" title="Importa um fluxograma completo." style="display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid #dfe6e9; border-radius:999px; background:#f8fbfc; color:#2c3e50; font-size:13px; font-weight:700; cursor:pointer; user-select:none;">
+            <span>Importar planta</span>
+        </button>
+        <input type="file" id="input-import-flowchart" accept=".json,.gaap-flow.json,application/json" hidden>
         <label class="toolbar-toggle" for="toggle-language" title="Alterna os textos do laboratório entre português e inglês." style="display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid #dfe6e9; border-radius:999px; background:#f8fbfc; color:#2c3e50; font-size:13px; font-weight:700; cursor:pointer; user-select:none;">
             <input type="checkbox" id="toggle-language">
             <span>Inglês</span>
         </label>
+    </div>
+
+    
+
+    <div class="gaap-header">
+        <div class="gaap-title-row">
+            <h2>Sandbox Modular GAAP - Fronteiras de Controle</h2>
+            <button id="btn-help" class="help-trigger" type="button" title="Abrir tutorial do simulador" aria-label="Abrir tutorial do simulador">?</button>
+        </div>
     </div>
 
     <div id="tank-saturation-popup" class="tank-saturation-popup" aria-live="polite">
@@ -43,14 +59,7 @@
             </div>
         </div>
     </div>
-
-    <div class="gaap-header">
-        <div class="gaap-title-row">
-            <h2>Sandbox Modular GAAP - Fronteiras de Controle</h2>
-            <button id="btn-help" class="help-trigger" type="button" title="Abrir tutorial do simulador" aria-label="Abrir tutorial do simulador">?</button>
-        </div>
-    </div>
-
+    
     <div id="help-modal" class="help-modal" aria-hidden="true">
         <div class="help-backdrop" data-help-close></div>
         <section class="help-dialog" role="dialog" aria-modal="true" aria-labelledby="help-title">
@@ -65,7 +74,7 @@
                 </div>
                 <div class="help-command">
                     <b>Conectar componentes</b>
-                    <span>Clique em uma porta de saida e depois em uma porta de entrada para criar o trecho.</span>
+                    <span>Clique em uma porta de saida e depois em uma porta de entrada para criar o Cano.</span>
                 </div>
                 <div class="help-command">
                     <b>Navegar no canvas</b>
@@ -73,7 +82,7 @@
                 </div>
                 <div class="help-command">
                     <b>Editar propriedades</b>
-                    <span>Clique em um componente ou trecho para abrir as propriedades no painel lateral.</span>
+                    <span>Clique em um componente ou Cano para abrir as propriedades no painel lateral.</span>
                 </div>
                 <div class="help-command">
                     <b>Selecionar varios</b>
@@ -149,6 +158,8 @@
                 </div>
             </div>
 
+            <div id="network-diagnostics-banner" class="network-diagnostics-banner" data-severity="info" hidden></div>
+
             <div id="workspace-canvas">
                 <svg id="pipe-layer">
                     <defs>
@@ -187,7 +198,7 @@
                                 <h3 style="margin: 0; color: #2c3e50; font-size: 16px;">Monitoramento Detalhado</h3>
                                 <span id="chart-max-badge" class="chart-max-badge">1 grafico</span>
                             </div>
-                            <p id="chart-max-status" class="chart-max-status">Clique em outro tanque ou bomba para comparar os dois ultimos graficos.</p>
+                            <p id="chart-max-status" class="chart-max-status">Clique em outro tanque, bomba, válvula ou Cano para comparar os dois ultimos graficos.</p>
                         </div>
                         <button id="btn-close-max-chart" class="gaap-btn danger" title="Fecha o monitoramento detalhado e retorna ao gráfico compacto da barra de propriedades." style="padding: 5px 15px; font-size: 12px; margin: 0;">&#10006; Fechar Gráfico</button>
                     </div>
@@ -220,7 +231,7 @@
                                 <div class="chart-compare-canvas-wrap" id="chart-compare-wrap-2">
                                     <canvas id="gaap-compare-chart-2"></canvas>
                                 </div>
-                                <div class="chart-compare-empty" id="chart-compare-empty-2" hidden>Clique em outro tanque ou bomba para comparar.</div>
+                                <div class="chart-compare-empty" id="chart-compare-empty-2" hidden>Clique em outro tanque, bomba, válvula ou Cano para comparar.</div>
                             </div>
                         </div>
                     </div>

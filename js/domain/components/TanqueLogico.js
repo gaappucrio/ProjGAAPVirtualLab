@@ -5,6 +5,11 @@ import { FonteLogica } from './FonteLogica.js';
 import { ValvulaLogica } from './ValvulaLogica.js';
 import { cloneFluido, createFluidoFromProperties, mixFluidos } from './Fluido.js';
 import { EPSILON_FLOW, pressureFromHeadBar } from '../units/HydraulicUnits.js';
+import {
+    calculateLevelControl,
+    createLevelControllerState,
+    resetLevelControllerState
+} from '../services/LevelController.js';
 
 const TOLERANCIA_ERRO_SATURACAO = -0.02;
 const FATOR_EXCESSO_ENTRADA = 1.02;
@@ -16,6 +21,9 @@ const FATOR_DRENAGEM_TRANSITORIA_SETPOINT = 1.01;
 const PRESSAO_MINIMA_DIMENSIONAMENTO_BOMBA_BAR = 0.5;
 const PRESSAO_MAXIMA_DIMENSIONAMENTO_BOMBA_BAR = 20;
 const PRESSAO_MAXIMA_AJUSTE_FONTE_BAR = 20;
+const BANDA_MORTA_SETPOINT_NORMALIZADA = 0.0025;
+const BANDA_REATIVACAO_SETPOINT_NORMALIZADA = 0.0075;
+const TEMPO_MINIMO_ALERTA_SATURACAO_S = 1.5;
 
 export class TanqueLogico extends ComponenteFisico {
     constructor(id, tag, x, y) {
@@ -26,7 +34,6 @@ export class TanqueLogico extends ComponenteFisico {
         this.lastQout = 0;
         this.alturaUtilMetros = 2.4;
         this.coeficienteSaida = 0.82;
-        this.perdaEntradaK = 1.0;
         this.alturaBocalEntradaM = 2.2;
         this.alturaBocalSaidaM = 0.1;
         this.volumeInicial = 0;
@@ -34,14 +41,21 @@ export class TanqueLogico extends ComponenteFisico {
         this.fluidoConteudo = createFluidoFromProperties();
         this.setpointAtivo = false;
         this.setpoint = 50;
-        this.kp = 250;
-        this.ki = 25;
+        this.kp = 4;
+        this.ki = 0.6;
+        this.kd = 0;
         this.alertaSaturacao = null;
-        this._ctrlIntegral = 0;
-        this._lastErro = 0;
-        this._ultimoEstadoControle = { u: 0, erro: 0 };
+        this._levelControllerState = createLevelControllerState();
+        this._ultimoEstadoControle = {
+            u: 0,
+            erro: 0,
+            emRepouso: false,
+            integral: 0,
+            derivativo: 0
+        };
         this._valvulasControleNivel = new Set();
         this._bombasMantidasControleNivel = new Map();
+        this._tempoCandidatoSaturacao = 0;
     }
 
     getNivelNormalizado() {
@@ -83,8 +97,17 @@ export class TanqueLogico extends ComponenteFisico {
         this.alturaBocalSaidaM = clamp(Number.isFinite(alturaSaida) ? alturaSaida : 0, 0, alturaUtil);
     }
 
+    _resolverFluidoHidrostatico(fluido = null) {
+        if (fluido) return fluido;
+        const context = this.getSimulationContext();
+        return context.queries.getComponentFluid?.(this)
+            || context.fluidoOperante
+            || this.getFluidoConteudo();
+    }
+
     getPressaoHidrostaticaParaNivelBar(fluido, nivelNormalizado) {
-        return pressureFromHeadBar(this.getAlturaLiquidoParaNivelM(nivelNormalizado), fluido.densidade);
+        const fluidoAtual = this._resolverFluidoHidrostatico(fluido);
+        return pressureFromHeadBar(this.getAlturaLiquidoParaNivelM(nivelNormalizado), fluidoAtual?.densidade);
     }
 
     getPressaoHidrostaticaBar(fluido) {
@@ -92,12 +115,13 @@ export class TanqueLogico extends ComponenteFisico {
     }
 
     getPressaoDisponivelSaidaParaNivelBar(fluido, nivelNormalizado, considerarAlturaBocal = true) {
+        const fluidoAtual = this._resolverFluidoHidrostatico(fluido);
         this.normalizarAlturasBocais();
         const alturaLiquidoM = this.getAlturaLiquidoParaNivelM(nivelNormalizado);
         const headDisponivelM = considerarAlturaBocal
             ? Math.max(0, alturaLiquidoM - this.alturaBocalSaidaM)
             : Math.max(0, alturaLiquidoM);
-        return pressureFromHeadBar(headDisponivelM, fluido.densidade);
+        return pressureFromHeadBar(headDisponivelM, fluidoAtual?.densidade);
     }
 
     getPressaoDisponivelSaidaBar(fluido, considerarAlturaBocal = true) {
@@ -109,12 +133,13 @@ export class TanqueLogico extends ComponenteFisico {
     }
 
     getBackPressureAtInletParaNivelBar(fluido, nivelNormalizado, considerarAlturaBocal = true) {
+        const fluidoAtual = this._resolverFluidoHidrostatico(fluido);
         this.normalizarAlturasBocais();
         if (!considerarAlturaBocal) return 0;
 
         const alturaLiquidoM = this.getAlturaLiquidoParaNivelM(nivelNormalizado);
         const alturaSubmersaM = Math.max(0, alturaLiquidoM - this.alturaBocalEntradaM);
-        return pressureFromHeadBar(alturaSubmersaM, fluido.densidade);
+        return pressureFromHeadBar(alturaSubmersaM, fluidoAtual?.densidade);
     }
 
     getBackPressureAtInletBar(fluido, considerarAlturaBocal = true) {
@@ -123,6 +148,22 @@ export class TanqueLogico extends ComponenteFisico {
             this.getNivelNormalizado(),
             considerarAlturaBocal
         );
+    }
+
+    temEntradaPressurizada() {
+        return (this.estadoHidraulico?.entradaVazaoLps ?? 0) > EPSILON_FLOW;
+    }
+
+    getPressaoConexaoSemPerdaBar(fluido, considerarAlturaBocal = true) {
+        if (this.temEntradaPressurizada()) {
+            return Math.max(0, this.getPressaoEntradaBar());
+        }
+
+        if (!this.temLiquidoDisponivelSaida(considerarAlturaBocal)) {
+            return 0;
+        }
+
+        return this.getPressaoDisponivelSaidaBar(fluido, considerarAlturaBocal);
     }
 
     getFluidoConteudo() {
@@ -457,9 +498,10 @@ export class TanqueLogico extends ComponenteFisico {
         };
     }
 
-    _atualizarAlertaSaturacao(fluido) {
+    _atualizarAlertaSaturacao(fluido, dt = TEMPO_MINIMO_ALERTA_SATURACAO_S) {
         if (!this.setpointAtivo) {
             this.alertaSaturacao = null;
+            this._tempoCandidatoSaturacao = 0;
             return;
         }
 
@@ -472,10 +514,18 @@ export class TanqueLogico extends ComponenteFisico {
             > (resumo.vazaoSaidaLimiteSetpointLps * FATOR_EXCESSO_ENTRADA);
         const drenandoEmDirecaoAoSetpoint = erro < TOLERANCIA_ERRO_SATURACAO
             && resumo.vazaoSaidaAtualLps > (resumo.vazaoEntradaAtualLps * FATOR_DRENAGEM_TRANSITORIA_SETPOINT);
-        const saturado = u <= U_SAIDA_TOTALMENTE_ABERTA
+        const candidatoSaturacao = u <= U_SAIDA_TOTALMENTE_ABERTA
             && erro < TOLERANCIA_ERRO_SATURACAO
             && entradaExcedeCapacidadeNoSetpoint
             && !drenandoEmDirecaoAoSetpoint;
+        const safeDt = Number.isFinite(dt) && dt > 0
+            ? dt
+            : TEMPO_MINIMO_ALERTA_SATURACAO_S;
+
+        this._tempoCandidatoSaturacao = candidatoSaturacao
+            ? this._tempoCandidatoSaturacao + safeDt
+            : 0;
+        const saturado = this._tempoCandidatoSaturacao >= TEMPO_MINIMO_ALERTA_SATURACAO_S;
 
         this.alertaSaturacao = saturado
             ? {
@@ -617,35 +667,54 @@ export class TanqueLogico extends ComponenteFisico {
         this.garantirConsistenciaControleNivel();
         if (!this.setpointAtivo) return;
 
-        const erro = (this.setpoint / 100) - this.getNivelNormalizado();
-        if (this._lastErro !== undefined && (this._lastErro * erro < 0)) this._ctrlIntegral = 0;
-        this._lastErro = erro;
-        this._ctrlIntegral += erro * dt;
-
-        const clampInt = this.ki > 0 ? 1 / this.ki : 1;
-        this._ctrlIntegral = Math.max(-clampInt, Math.min(clampInt, this._ctrlIntegral));
-
-        const u = Math.max(-1, Math.min(1, this.kp * erro + this.ki * this._ctrlIntegral));
-        const grauEntrada = Math.max(0, u * 100);
-        const grauSaida = Math.max(0, -u * 100);
-        const intensidadeEntrada = grauEntrada / 100;
-        const intensidadeSaida = grauSaida / 100;
         const atuadores = this.getAtuadoresControleNivel();
         const valvulasControle = [...atuadores.valvulasEntrada, ...atuadores.valvulasSaida];
+        const usarRepousoPorBanda = atuadores.valvulasEntrada.length > 0
+            && atuadores.valvulasSaida.length > 0;
+        const controle = calculateLevelControl({
+            setpoint: this.getSetpointNormalizado(),
+            measurement: this.getNivelNormalizado(),
+            dt,
+            kp: this.kp,
+            ki: this.ki,
+            kd: this.kd,
+            state: this._levelControllerState,
+            config: {
+                deadband: usarRepousoPorBanda ? BANDA_MORTA_SETPOINT_NORMALIZADA : 0,
+                reactivationBand: usarRepousoPorBanda ? BANDA_REATIVACAO_SETPOINT_NORMALIZADA : 0,
+                outputMin: -1,
+                outputMax: 1
+            }
+        });
 
-        this._ultimoEstadoControle = { u, erro };
+        const { u, error: erro, inRest: emRepouso } = controle;
+        const grauEntrada = emRepouso ? 0 : Math.max(0, u * 100);
+        const grauSaida = emRepouso ? 0 : Math.max(0, -u * 100);
+        const intensidadeEntrada = grauEntrada / 100;
+        const intensidadeSaida = grauSaida / 100;
+
+        this._ultimoEstadoControle = {
+            u,
+            erro,
+            emRepouso,
+            integral: controle.integral,
+            derivativo: controle.derivative,
+            saturado: controle.saturated
+        };
         this._sincronizarValvulasControleNivel(valvulasControle);
         this._sincronizarBombasMantidasControleNivel(atuadores.bombas);
 
         atuadores.valvulasEntrada.forEach((valvula) => valvula.aplicarControleNivel({
             abertura: grauEntrada,
             intensidade: intensidadeEntrada,
-            ownerId: this.id
+            ownerId: this.id,
+            fechamentoImediato: emRepouso
         }));
         atuadores.valvulasSaida.forEach((valvula) => valvula.aplicarControleNivel({
             abertura: grauSaida,
             intensidade: intensidadeSaida,
-            ownerId: this.id
+            ownerId: this.id,
+            fechamentoImediato: emRepouso
         }));
 
         this.notify(ComponentEventPayloads.controlUpdate({
@@ -655,15 +724,22 @@ export class TanqueLogico extends ComponenteFisico {
             grauSaida,
             intensidadeEntrada,
             intensidadeSaida,
+            emRepouso,
             bombasFixas100: atuadores.bombas.length
         }));
     }
 
     resetControlador() {
-        this._ctrlIntegral = 0;
-        this._lastErro = 0;
-        this._ultimoEstadoControle = { u: 0, erro: 0 };
+        resetLevelControllerState(this._levelControllerState);
+        this._ultimoEstadoControle = {
+            u: 0,
+            erro: 0,
+            emRepouso: false,
+            integral: 0,
+            derivativo: 0
+        };
         this.alertaSaturacao = null;
+        this._tempoCandidatoSaturacao = 0;
     }
 
     _notificarVolume() {
@@ -693,7 +769,7 @@ export class TanqueLogico extends ComponenteFisico {
         const fluidoAtual = this.getFluidoConteudo();
         this.pressaoFundoBar = this.getPressaoHidrostaticaBar(fluidoAtual);
         this.sincronizarMetricasFisicas(fluidoAtual);
-        this._atualizarAlertaSaturacao(fluidoAtual);
+        this._atualizarAlertaSaturacao(fluidoAtual, dt);
 
         this._notificarVolume();
     }
@@ -711,6 +787,10 @@ export class TanqueLogico extends ComponenteFisico {
         const context = this.getSimulationContext();
         const fluidoAtual = fluido || context.queries.getComponentFluid?.(this) || context.fluidoOperante;
         this.pressaoFundoBar = this.getPressaoHidrostaticaBar(fluidoAtual);
+
+        if (this.temEntradaPressurizada()) {
+            this.pressaoSaidaAtualBar = this.getPressaoConexaoSemPerdaBar(fluidoAtual, context.usarAlturaRelativa);
+        }
     }
 
     getFluxoSaida() {
