@@ -25,6 +25,14 @@ export function createMonitorSlotHistory({ maxEntries = 2, onRemove = () => {} }
         return { id: entry.id, kind: entry.kind };
     }
 
+
+    function packEntries() {
+        const nonNulls = entries.filter(Boolean);
+        for (let i = 0; i < entries.length; i++) {
+            entries[i] = i < nonNulls.length ? nonNulls[i] : null;
+        }
+    }
+
     function findEntryMatchIndex(entry) {
         return entries.findIndex((candidate) => {
             if (!candidate) return false;
@@ -115,6 +123,8 @@ export function createMonitorSlotHistory({ maxEntries = 2, onRemove = () => {} }
         entries[target] = mergedEntry;
         entries[source] = null;
 
+        packEntries();
+
         return { changed: true, entries: snapshot() };
     }
 
@@ -129,7 +139,11 @@ export function createMonitorSlotHistory({ maxEntries = 2, onRemove = () => {} }
             changed = true;
         }
 
+         if (changed) {
+            packEntries();
+        }
         return { changed, entries: snapshot() };
+        
     }
 
     function removeAt(index) {
@@ -144,6 +158,7 @@ export function createMonitorSlotHistory({ maxEntries = 2, onRemove = () => {} }
         }
 
         entries[numericIndex] = null;
+        packEntries();
         onRemove(removedEntry);
 
         return { changed: true, entries: snapshot() };
