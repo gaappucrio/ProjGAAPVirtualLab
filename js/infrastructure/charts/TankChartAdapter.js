@@ -32,7 +32,7 @@ function hexToRgba(hexColor, alpha = 0.2) {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-export function resolveTankChartColors(component) {
+function resolveTankChartColors(component) {
     const fluid = component?.getFluidoConteudo?.() || component?.fluidoConteudo || null;
     const lineColor = getFluidVisualStyle(fluid).stroke || DEFAULT_TANK_CHART_LINE_COLOR;
 

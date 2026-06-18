@@ -21,7 +21,7 @@ export function calculateConnectionResidenceTimeS(connection, geometry = {}, flo
     return calculateResidenceTimeS(volumeL, flowLps);
 }
 
-export function getTankResidenceFlowBasis(tank) {
+function getTankResidenceFlowBasis(tank) {
     const outflowLps = Math.abs(Number(tank?.lastQout));
     if (Number.isFinite(outflowLps) && outflowLps > EPSILON_FLOW) {
         return { flowLps: outflowLps, basis: 'outlet' };

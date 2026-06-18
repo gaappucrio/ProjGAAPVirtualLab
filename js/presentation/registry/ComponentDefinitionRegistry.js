@@ -6,7 +6,7 @@ import {
 } from './specs/PumpValveComponentSpecs.js';
 import { TANK_COMPONENT_SPEC } from './specs/TankComponentSpec.js';
 
-export const REGISTRO_COMPONENTES = {
+const REGISTRO_COMPONENTES = {
     source: SOURCE_COMPONENT_SPEC,
     sink: SINK_COMPONENT_SPEC,
     pump: PUMP_COMPONENT_SPEC,
@@ -17,15 +17,4 @@ export const REGISTRO_COMPONENTES = {
 
 export function getComponentDefinition(type) {
     return REGISTRO_COMPONENTES[type] || null;
-}
-
-export function hasComponentDefinition(type) {
-    return Boolean(getComponentDefinition(type));
-}
-
-export function listComponentDefinitions() {
-    return Object.entries(REGISTRO_COMPONENTES).map(([type, definition]) => ({
-        type,
-        definition
-    }));
 }

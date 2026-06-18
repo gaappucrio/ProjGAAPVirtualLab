@@ -183,31 +183,6 @@ export class InputValidator {
 }
 
 /**
- * Decorator para validar inputs de eventos.
- */
-export function validateInput(validator, fieldName = 'Campo') {
-    return function(target, propertyKey, descriptor) {
-        const originalMethod = descriptor.value;
-        descriptor.value = function(event) {
-            const value = event.target.value;
-            const result = validator(value, fieldName);
-
-            if (!result.valid) {
-                event.target.style.borderColor = '#e74c3c';
-                event.target.title = result.error;
-                console.warn(`Validação falhou para ${fieldName}: ${result.error}`);
-                return undefined;
-            }
-
-            event.target.style.borderColor = '';
-            event.target.title = '';
-            return originalMethod.call(this, result.value);
-        };
-        return descriptor;
-    };
-}
-
-/**
  * Mostra erro visual em campo de entrada.
  */
 export function showInputError(inputElement, error) {

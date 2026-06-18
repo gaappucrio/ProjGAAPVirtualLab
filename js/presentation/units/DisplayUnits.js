@@ -63,10 +63,6 @@ function getUnitEntry(category) {
     return config?.units?.[unitId] || null;
 }
 
-export function getUnitConfig() {
-    return UNIT_CONFIG;
-}
-
 export function getUnitPreferences() {
     return { ...unitPreferences };
 }

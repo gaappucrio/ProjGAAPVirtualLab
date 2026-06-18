@@ -48,7 +48,7 @@ function getPipeLayer() {
     return document.getElementById('pipe-layer');
 }
 
-export function getPortCoords(portEl) {
+function getPortCoords(portEl) {
     const rect = portEl.getBoundingClientRect();
     const canvasRect = document.getElementById('workspace-canvas').getBoundingClientRect();
     return {
@@ -207,7 +207,7 @@ function syncConnectionLayout(connection) {
     );
 }
 
-export function getConnectionFlow(connection) {
+function getConnectionFlow(connection) {
     const flow = getEngine().resolveConnectionDisplayFlow(connection);
     if (flow === null || flow === undefined) return flow;
     if (flow <= EPSILON_FLOW) return 0;
@@ -244,10 +244,6 @@ export function updateAllPipes() {
     });
 
     updateConnectionVisualStates();
-}
-
-export function drawCurve(x1, y1, x2, y2) {
-    return drawConnectionCurve(x1, y1, x2, y2);
 }
 
 function setupConnectionEventAdapter() {

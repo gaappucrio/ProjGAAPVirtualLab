@@ -355,7 +355,7 @@ const TEXTS = {
             statusEmpty: 'Clique em um tanque, bomba, válvula ou Cano para exibir um gráfico aqui.',
             statusSlotsFull: ({ item }) => `Slots ocupados. Use o x para liberar um slot antes de monitorar ${item}.`,
             effectiveCv: 'Cv efetivo',
-            effectiveFlowCoefficient: ({ unit }) => `Coef. de vazão efetivo (${unit})`,
+            effectiveFlowCoefficient: ({ unit }) => `Coeficiente de vazão efetivo (${unit})`,
             estimatedPressureDrop: 'Delta P estimado',
             equivalentK: 'K equivalente (-)',
             opening: 'Abertura',
@@ -470,7 +470,7 @@ const TEXTS = {
             statusEmpty: 'Click a tank, pump, valve, or pipe segment to display a chart here.',
             statusSlotsFull: ({ item }) => `Slots are occupied. Use x to free a slot before monitoring ${item}.`,
             effectiveCv: 'Effective Cv',
-            effectiveFlowCoefficient: ({ unit }) => `Effective Flow Coeff. (${unit})`,
+            effectiveFlowCoefficient: ({ unit }) => `Effective Flow Coefficient (${unit})`,
             estimatedPressureDrop: 'Estimated Delta P',
             equivalentK: 'Equivalent K (-)',
             opening: 'Opening',
@@ -1125,4 +1125,4 @@ export function getFluidNameVariants(name) {
     return FLUID_NAME_VARIANTS[name] ?? [name, translateFluidName(name)];
 }
 
-export { TEXTS };
+;

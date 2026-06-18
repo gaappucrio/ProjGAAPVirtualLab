@@ -139,4 +139,4 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
     }
 };
 
-export { thermalPowerText };
+;

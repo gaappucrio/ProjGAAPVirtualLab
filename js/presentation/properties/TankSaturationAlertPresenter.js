@@ -176,7 +176,7 @@ function setTankSaturationAlertVisible(panel, visible) {
     panel.style.display = 'none';
 }
 
-export function hideTankSaturationAlert() {
+function hideTankSaturationAlert() {
     const panel = byId('painel-alerta-saturacao');
     const feedback = byId('texto-acao-alerta-saturacao');
     setTankSaturationAlertVisible(panel, false);
@@ -221,7 +221,7 @@ function syncTankControlVisualState(groupEl, state) {
     groupEl.classList.toggle('is-blocked', state === 'blocked');
 }
 
-export function updateTankSaturationAlert(component) {
+function updateTankSaturationAlert(component) {
     const painelAlerta = byId('painel-alerta-saturacao');
     const textoAlerta = byId('texto-alerta-saturacao');
     const btnAjuste = byId('btn-aplicar-alerta-saturacao');
@@ -332,7 +332,7 @@ export function updateTankSaturationAlert(component) {
     return true;
 }
 
-export function bindTankSaturationAlertActions(component, { onAdjustmentApplied } = {}) {
+function bindTankSaturationAlertActions(component, { onAdjustmentApplied } = {}) {
     if (!(component instanceof TanqueLogico)) return false;
 
     const btnAjuste = byId('btn-aplicar-alerta-saturacao');

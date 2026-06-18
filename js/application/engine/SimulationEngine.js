@@ -4,12 +4,7 @@
 // ==================================
 
 import {
-    clamp,
-    ComponenteFisico,
-    flowFromBernoulli,
-    Observable,
-    pressureLossFromFlow,
-    smoothFirstOrder
+    Observable
 } from '../../domain/components/BaseComponente.js';
 import { createFluidoFromProperties } from '../../domain/components/Fluido.js';
 import { HydraulicBranchModel } from '../../domain/services/HydraulicBranchModel.js';
@@ -20,10 +15,7 @@ import { ensureConnectionProperties as ensurePipeConnectionProperties } from '..
 import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
 import { createSimulationContext } from '../../domain/context/SimulationContext.js';
 import {
-    DEFAULT_PIPE_FRICTION,
-    EPSILON_FLOW,
-    MAX_NETWORK_FLOW_LPS,
-    pressureFromHeadBar
+    DEFAULT_PIPE_FRICTION
 } from '../../domain/units/HydraulicUnits.js';
 import { FLUID_PRESETS } from '../config/FluidPresets.js';
 import { EngineEventPayloads } from '../events/EventPayloads.js';
@@ -37,18 +29,6 @@ import { TopologyGraph } from '../stores/TopologyGraph.js';
 
 const LIVE_CONNECTION_STARTUP_RAMP_SECONDS = 1.2;
 
-export {
-    clamp,
-    ComponenteFisico,
-    flowFromBernoulli,
-    Observable,
-    pressureLossFromFlow,
-    smoothFirstOrder,
-    EPSILON_FLOW,
-    MAX_NETWORK_FLOW_LPS,
-    pressureFromHeadBar
-};
-
 let portStateUpdater = null;
 let connectionVisualUpdater = null;
 let componentVisualPositionResolver = (component) => ({
@@ -57,8 +37,6 @@ let componentVisualPositionResolver = (component) => ({
 });
 let unregisterComponentVisualHandler = null;
 let clearComponentVisualRegistryHandler = null;
-
-// Rastreamento de estabilidade numerica do solver
 
 export { FLUID_PRESETS };
 
@@ -522,5 +500,3 @@ export class SistemaSimulacao extends Observable {
 }
 
 export const ENGINE = new SistemaSimulacao();
-
-

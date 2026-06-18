@@ -188,7 +188,7 @@ function normalizeComposition(composition) {
     return Object.fromEntries(entries.map(([name, fraction]) => [name, fraction / total]));
 }
 
-export class Fluido {
+class Fluido {
     constructor(
         nome = DEFAULT_FLUID_NAME,
         densidade = DEFAULT_FLUID_DENSITY,

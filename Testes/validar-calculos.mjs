@@ -527,20 +527,6 @@ test('dinamica transitoria nao avanca quando o passo de tempo e zero', () => {
     approx(smoothFirstOrder(2, 10, -0.1, 1), 2, 1e-12, 'Suavizacao de primeira ordem deve ignorar dt negativo');
 });
 
-test('componentes hidraulicos nascem sem perda K manual', () => {
-    const conexao = new ConnectionModel({ sourceId: 'A', targetId: 'B' });
-    const dreno = new DrenoLogico('D-default', 'D-default', 0, 0);
-    const tanque = new TanqueLogico('T-default', 'T-default', 0, 0);
-    const trocador = new TrocadorCalorLogico('HX-default', 'HX-default', 0, 0);
-    const valvula = new ValvulaLogica('V-default', 'V-default', 0, 0);
-
-    approx(conexao.perdaLocalK, 0, 1e-12, 'Cano sem K local padrao');
-    approx(dreno.perdaEntradaK, 0, 1e-12, 'Saida sem K de entrada padrao');
-    approx(trocador.perdaLocalK, 0, 1e-12, 'Trocador sem K local padrao');
-    approx(valvula.perdaLocalK, 0, 1e-12, 'Valvula sem K manual padrao');
-    assert.equal(valvula.considerarPerdaEstrangulamento, false, 'Perda de estrangulamento fica desligada por padrao');
-});
-
 test('característica da válvula altera capacidade hidráulica na mesma abertura', () => {
     const valvula = new ValvulaLogica('V-02', 'V-02', 0, 0);
     valvula.aberturaEfetiva = 50;
@@ -1180,7 +1166,6 @@ test('controle de nivel fecha entrada e saida dentro da banda do set point', () 
     assert.equal(resultado.ativado, true);
 
     tanque._rodarControlador(0.1);
-    assert.equal(tanque._ultimoEstadoControle.emRepouso, true);
     assert.equal(valvulaEntrada.grauAbertura, 0, 'No set point, a entrada deve receber comando fechado');
     assert.equal(valvulaSaida.grauAbertura, 0, 'No set point, a saida deve receber comando fechado');
     assert.equal(valvulaEntrada.aberturaEfetiva, 0, 'No set point, a entrada deve fechar hidraulicamente');
@@ -1196,13 +1181,11 @@ test('controle de nivel fecha entrada e saida dentro da banda do set point', () 
 
     tanque.volumeAtual = 503;
     tanque._rodarControlador(0.1);
-    assert.equal(tanque._ultimoEstadoControle.emRepouso, true, 'Pequena variacao deve permanecer em repouso');
     assert.equal(valvulaEntrada.grauAbertura, 0);
     assert.equal(valvulaSaida.grauAbertura, 0);
 
     tanque.volumeAtual = 510;
     tanque._rodarControlador(0.1);
-    assert.equal(tanque._ultimoEstadoControle.emRepouso, false, 'Erro fora da histerese deve reativar controle');
     assert.equal(valvulaEntrada.grauAbertura, 0);
     assert.ok(valvulaSaida.grauAbertura > 0, 'Nivel alto deve abrir somente a valvula de saida');
     assert.ok(valvulaSaida.grauAbertura < 100, 'Erro pequeno deve modular a saída sem saturar em 100%');

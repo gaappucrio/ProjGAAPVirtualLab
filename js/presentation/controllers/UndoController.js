@@ -28,7 +28,7 @@ function trimStack(stack, maxSize) {
     while (stack.length > maxSize) stack.shift();
 }
 
-export function createUndoRedoHistory({
+function createUndoRedoHistory({
     captureSnapshot,
     restoreSnapshot,
     signatureFactory = snapshotSignature,

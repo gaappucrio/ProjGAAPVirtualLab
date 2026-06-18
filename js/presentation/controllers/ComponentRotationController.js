@@ -25,7 +25,7 @@ function findComponentElement(target) {
     return target.closest('#workspace-canvas .placed-component');
 }
 
-export function rotateComponentsByWheelSteps(components, wheelSteps) {
+function rotateComponentsByWheelSteps(components, wheelSteps) {
     const deltaDeg = wheelSteps * ROTATION_STEP_DEG;
 
     return [...new Set((components || []).filter(Boolean))].map((component) => {

@@ -115,7 +115,7 @@ function getScaleProfile({ expanded = false } = {}) {
     };
 }
 
-export function buildValveCurveDatasets(component) {
+function buildValveCurveDatasets(component) {
     const pressureUnit = getUnitSymbol('pressure');
     const flowUnit = getUnitSymbol('flow');
     const fluid = getValveFluid(component);
@@ -205,7 +205,7 @@ export function buildValveCurveDatasets(component) {
     };
 }
 
-export function applyValveChartPresentation(chart, datasets, { expanded = false } = {}) {
+function applyValveChartPresentation(chart, datasets, { expanded = false } = {}) {
     if (!chart) return;
 
     const yAxisMode = chart.yAxisMode || 'yPressure';

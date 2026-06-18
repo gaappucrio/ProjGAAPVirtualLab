@@ -131,7 +131,3 @@ export function setupPropertyPanelController({ engine, monitorController } = {})
         renderCurrentProperties
     };
 }
-
-export function updatePipesVisualUI() {
-    getEngine().updatePipesVisual();
-}

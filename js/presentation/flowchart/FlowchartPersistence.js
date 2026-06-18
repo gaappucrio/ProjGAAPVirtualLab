@@ -3,7 +3,7 @@ import { getLanguage } from '../i18n/LanguageManager.js';
 import { createWorkspaceSnapshot, restoreWorkspaceSnapshot } from '../controllers/UndoController.js';
 
 export const FLOWCHART_DOCUMENT_TYPE = 'gaap-virtual-lab-flowchart';
-export const FLOWCHART_DOCUMENT_VERSION = 1;
+const FLOWCHART_DOCUMENT_VERSION = 1;
 
 function cloneJsonValue(value) {
     return JSON.parse(JSON.stringify(value));
@@ -112,7 +112,7 @@ export function restoreFlowchartDocument(engine, payload, { undoManager } = {}) 
     };
 }
 
-export function getFlowchartFileName(document = {}) {
+function getFlowchartFileName(document = {}) {
     const baseName = safeFileNamePart(document.name || 'fluxograma-gaap');
     return `${baseName}.gaap-flow.json`;
 }

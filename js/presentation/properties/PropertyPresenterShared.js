@@ -24,38 +24,15 @@ import {
     toDisplayValue
 } from '../units/DisplayUnits.js';
 
-export {
-    getPresentationEngine,
-    ComponentEventPayloads,
-    EngineEventPayloads,
-    COMPONENT_EVENTS,
-    ENGINE_EVENTS,
-    InputValidator,
-    clearInputError,
-    showInputError,
-    renderPropertyTabs,
-    subscribeUnitPreferences,
-    getUnitSymbol,
-    TOOLTIPS,
-    bind,
-    byId,
-    isActive,
-    setDisabled,
-    setDisplay,
-    setHtml,
-    setText,
-    setValue,
-    setValueWhenBlurred,
-    valueOf
-};
+export { getPresentationEngine, ComponentEventPayloads, EngineEventPayloads, COMPONENT_EVENTS, ENGINE_EVENTS, InputValidator, clearInputError, showInputError, renderPropertyTabs, subscribeUnitPreferences, getUnitSymbol, TOOLTIPS, bind, byId, isActive, setHtml, setValue, valueOf };
 
 export const TOOLTIP = TOOLTIPS.componentes;
 
 const escapeAttr = (value) => String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/&/g, '&')
+    .replace(/"/g, '"')
+    .replace(/</g, '<')
+    .replace(/>/g, '>');
 
 export const hintAttr = (text) => `title="${escapeAttr(text)}"`;
 export const makeLabel = (text, hint) => `<label ${hintAttr(hint)}>${text}</label>`;

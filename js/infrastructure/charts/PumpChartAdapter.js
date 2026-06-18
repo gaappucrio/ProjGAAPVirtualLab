@@ -97,7 +97,7 @@ function getScaleProfile({ expanded = false } = {}) {
     };
 }
 
-export function applyPumpChartPresentation(chart, datasets, { expanded = false } = {}) {
+function applyPumpChartPresentation(chart, datasets, { expanded = false } = {}) {
     if (!chart) return;
 
     const yAxisMode = chart.yAxisMode || 'yHead';

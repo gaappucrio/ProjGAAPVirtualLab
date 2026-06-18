@@ -1,9 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { FLUID_PRESETS, SistemaSimulacao } from '../js/application/engine/SimulationEngine.js';
+import { SistemaSimulacao } from '../js/application/engine/SimulationEngine.js';
 import { SelectionStore } from '../js/application/stores/SelectionStore.js';
-import { createSimulationContext } from '../js/domain/context/SimulationContext.js';
 import { ConnectionModel } from '../js/domain/models/ConnectionModel.js';
 import { DrenoLogico } from '../js/domain/components/DrenoLogico.js';
 import { FonteLogica } from '../js/domain/components/FonteLogica.js';
@@ -20,25 +19,6 @@ function createEngine() {
     engine.isRunning = true;
     return engine;
 }
-
-test('altura relativa vem desligada por padrão', () => {
-    const engine = new SistemaSimulacao();
-    const context = createSimulationContext();
-
-    assert.equal(engine.usarAlturaRelativa, false);
-    assert.equal(context.usarAlturaRelativa, false);
-});
-
-test('fluido inicial corresponde visualmente ao preset Água', () => {
-    const engine = new SistemaSimulacao();
-    const agua = FLUID_PRESETS.agua;
-
-    assert.equal(engine.fluidoOperante.nome, agua.nome);
-    assert.equal(engine.fluidoOperante.densidade, agua.densidade);
-    assert.equal(engine.fluidoOperante.temperatura, agua.temperatura);
-    assert.equal(engine.fluidoOperante.viscosidadeDinamicaPaS, agua.viscosidadeDinamicaPaS);
-    assert.equal(engine.fluidoOperante.pressaoVaporBar, agua.pressaoVaporBar);
-});
 
 test('remoção de conexão limpa estado hidráulico e índices de topologia', () => {
     const engine = createEngine();

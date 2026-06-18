@@ -91,7 +91,7 @@ function getPipeLengthM(connection, state = {}, geometry = {}) {
     return rawLengthM > 0 ? rawLengthM : DEFAULT_PIPE_SCHEMATIC_LENGTH_M;
 }
 
-export function buildPipePressureProfile(connection, state = {}, geometry = {}, options = {}) {
+function buildPipePressureProfile(connection, state = {}, geometry = {}, options = {}) {
     const lengthM = getPipeLengthM(connection, state, geometry);
     const { sourcePressureBar, endPressureBar } = getPressureProfileEndpointBar(state, {
         sourcePressureBar: options.sourcePressureBar,
@@ -132,7 +132,7 @@ export function buildPipePressureProfile(connection, state = {}, geometry = {}, 
     };
 }
 
-export function buildCompositePipePressureProfile(sections = []) {
+function buildCompositePipePressureProfile(sections = []) {
     const pressureUnit = getUnitSymbol('pressure');
     const lengthUnit = getUnitSymbol('length');
     const pressurePoints = [];

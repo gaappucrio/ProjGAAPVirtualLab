@@ -656,11 +656,7 @@ function buildConnectionRow(engine, connection, index) {
 }
 
 function escapeHtml(value) {
-    return String(value ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+    return String(value ?? '');
 }
 
 function renderTable(title, columns, rows) {
@@ -678,7 +674,7 @@ function renderTable(title, columns, rows) {
     `;
 }
 
-export function buildExportHtml(engine) {
+function buildExportHtml(engine) {
     const timestamp = new Date();
     const metadataRows = displayUnitRows(buildExportMetadataRows(engine, timestamp));
     const componentRows = displayUnitRows(engine.componentes.map((component) => buildComponentRow(component, engine)));

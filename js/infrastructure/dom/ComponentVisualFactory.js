@@ -16,7 +16,7 @@ let nextVisualSequence = 1;
 garantindo que não haja duplicatas. Ela verifica as tags existentes dos componentes no ENGINE,
 filtra aquelas que começam com o mesmo prefixo (indicando o mesmo tipo de componente),
 extrai os números sequenciais, e retorna a próxima tag disponível no formato "Prefixo-XX". */
-export function obterProximaTag(prefixo) {
+function obterProximaTag(prefixo) {
     const numeros = ENGINE.componentes.map(c => c.tag).filter(t => t.startsWith(prefixo + '-')).map(t => parseInt(t.split('-')[1]));
     let i = 1; while (numeros.includes(i)) i++;
     return `${prefixo}-${String(i).padStart(2, '0')}`;
@@ -110,4 +110,3 @@ export class FabricaDeEquipamentos {
         return visual;
     }
 }
-

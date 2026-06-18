@@ -31,13 +31,6 @@ export function displayStep(category, baseStep, digits = 6) {
     return Math.max(Number(toDisplayValue(category, baseStep).toFixed(digits)), Number.EPSILON);
 }
 
-export function inputBaseValue(category, id, fallback) {
-    const displayValue = parseStrictNumber(valueOf(id));
-    if (!Number.isFinite(displayValue)) return fallback;
-    const value = toBaseValue(category, displayValue);
-    return Number.isFinite(value) ? value : fallback;
-}
-
 export function rawBaseValue(category, rawValue, fallback = NaN) {
     const displayValue = parseStrictNumber(rawValue);
     if (!Number.isFinite(displayValue)) return fallback;

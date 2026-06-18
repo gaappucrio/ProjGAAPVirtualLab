@@ -317,7 +317,6 @@ export function createMonitorController({ engine }) {
         chartedValveId = null;
         chartedConnectionId = null;
         refreshCompactPumpExportButton(null);
-        refreshCompactChartAxisSelector();
     }
 
     function createTankMonitorChartInstance(ctx, component, { resetSeries = false } = {}) {
@@ -341,7 +340,6 @@ export function createMonitorController({ engine }) {
         chartedValveId = null;
         chartedConnectionId = null;
         refreshCompactPumpExportButton(null);
-        refreshCompactChartAxisSelector();
     }
 
     function syncTankMonitorChart(chart, component, { update = true } = {}) {
@@ -459,7 +457,6 @@ export function createMonitorController({ engine }) {
         chartedValveId = null;
         chartedConnectionId = null;
         refreshCompactPumpExportButton(component);
-        refreshCompactChartAxisSelector();
     }
 
     function refreshPumpMonitorChartInstance(chart, component) {
@@ -480,7 +477,6 @@ export function createMonitorController({ engine }) {
         chartedTankId = null;
         chartedConnectionId = null;
         refreshCompactPumpExportButton(null);
-        refreshCompactChartAxisSelector();
     }
 
     function refreshValveMonitorChartInstance(chart, component) {
@@ -501,7 +497,6 @@ export function createMonitorController({ engine }) {
         chartedValveId = null;
         chartedTankId = null;
         refreshCompactPumpExportButton(null);
-        refreshCompactChartAxisSelector();
     }
 
     function refreshPipeMonitorChartInstance(chart, connection) {
@@ -680,12 +675,6 @@ export function createMonitorController({ engine }) {
         return selector;
     }
 
-    function refreshCompactChartAxisSelector() {
-        const id = 'chart-compact-axis-select';
-        const selector = document.getElementById(id);
-        if (selector) selector.remove();
-    }
-
     function ensureExpandedChartAxisSelector(elements, index, entry) {
         if (!elements?.header) return null;
 
@@ -719,8 +708,6 @@ export function createMonitorController({ engine }) {
 
     function refreshPresentation() {
         if (!compactChart) return;
-
-        refreshCompactChartAxisSelector();
 
         if (monitorChartMode === 'pump') {
             const bomba = engine.componentes.find((component) => component.id === chartedPumpId);
@@ -791,10 +778,6 @@ export function createMonitorController({ engine }) {
         renderExpandedMonitorCharts();
     }
 
-    function isPipeLikeEntry(entry) {
-        return isPipeMonitorEntry(entry);
-    }
-
     function getMonitorHistoryEntryAt(index) {
         return monitorChartHistory.getEntries()[index] || null;
     }
@@ -804,8 +787,8 @@ export function createMonitorController({ engine }) {
         const targetEntry = getMonitorHistoryEntryAt(targetIndex);
         if (!sourceEntry || !targetEntry || sourceIndex === targetIndex) return false;
 
-        const shouldMergePipeProfiles = isPipeLikeEntry(sourceEntry)
-            && isPipeLikeEntry(targetEntry)
+        const shouldMergePipeProfiles = isPipeMonitorEntry(sourceEntry)
+            && isPipeMonitorEntry(targetEntry)
             && canMergePipeMonitorEntries(sourceEntry, targetEntry, engine.conexoes);
         const result = shouldMergePipeProfiles
             ? monitorChartHistory.mergePipesAt(sourceIndex, targetIndex)

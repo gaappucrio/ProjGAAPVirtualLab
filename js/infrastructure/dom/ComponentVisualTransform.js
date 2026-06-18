@@ -1,6 +1,6 @@
 import { getComponentVisual } from './ComponentVisualRegistry.js';
 
-export function normalizeRotationDegrees(value) {
+function normalizeRotationDegrees(value) {
     const numericValue = Number(value);
     if (!Number.isFinite(numericValue)) return 0;
     return ((numericValue % 360) + 360) % 360;

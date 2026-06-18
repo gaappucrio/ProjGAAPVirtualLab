@@ -84,7 +84,7 @@ function buildPumpJsonFilename(pump) {
     return `gaap-dwsim-pump-${buildSafeFilenamePart(pump?.tag || pump?.id)}-${stamp}.json`;
 }
 
-export function buildPumpDwsimJsonData(engine, pump) {
+function buildPumpDwsimJsonData(engine, pump) {
     if (!(pump instanceof BombaLogica)) return null;
 
     const fluid = resolvePumpFluid(engine, pump);

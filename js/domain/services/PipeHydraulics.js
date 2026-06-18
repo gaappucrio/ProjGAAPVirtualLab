@@ -57,7 +57,7 @@ export function getCurrentDesignFlowCandidateLps(conn, state = {}) {
     );
 }
 
-export function ensureConnectionDesignFlowLps(conn, state = {}) {
+function ensureConnectionDesignFlowLps(conn, state = {}) {
     if (!conn) return 0;
 
     const currentCandidateLps = getCurrentDesignFlowCandidateLps(conn, state);
@@ -76,7 +76,7 @@ export function getSuggestedDiameterForConnection(conn, state = {}) {
 /**
  * Classifica o regime de escoamento pelo número de Reynolds.
  */
-export function classifyFlowRegime(reynolds) {
+function classifyFlowRegime(reynolds) {
     if (reynolds <= 0) return 'sem fluxo';
     if (reynolds < 2300) return 'laminar';
     if (reynolds < 4000) return 'transição';
@@ -86,7 +86,7 @@ export function classifyFlowRegime(reynolds) {
 /**
  * Calcula o número de Reynolds para um escoamento.
  */
-export function reynoldsFromFlow(flowLps, diameterM, areaM2, density, viscosityPaS) {
+function reynoldsFromFlow(flowLps, diameterM, areaM2, density, viscosityPaS) {
     if (flowLps <= 0 || diameterM <= 0 || areaM2 <= 0) return 0;
     const safeDensity = positiveNumber(density, 0);
     if (safeDensity <= 0) return 0;

@@ -24,7 +24,7 @@ function subscribeVisual(visual, observable, listener) {
     registerVisualCleanup(visual, observable.subscribe(listener));
 }
 
-export const SOURCE_COMPONENT_VISUAL = {
+const SOURCE_COMPONENT_VISUAL = {
     svg: (id, tag) => `
         <circle id="source-body-${id}" cx="40" cy="40" r="25" fill="#3498db" stroke="#2980b9" stroke-width="4"/>
         <path id="source-arrow-${id}" d="M 25 40 L 40 40 M 35 35 L 40 40 L 35 45" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
@@ -63,7 +63,7 @@ export const SOURCE_COMPONENT_VISUAL = {
     }
 };
 
-export const SINK_COMPONENT_VISUAL = {
+const SINK_COMPONENT_VISUAL = {
     svg: (id, tag) => `
         <circle cx="40" cy="40" r="25" fill="#95a5a6" stroke="#7f8c8d" stroke-width="4"/>
         <path d="M 35 30 L 45 30 M 40 30 L 40 45 M 35 40 L 40 45 L 45 40" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
@@ -94,7 +94,7 @@ export const SINK_COMPONENT_VISUAL = {
     }
 };
 
-export const PUMP_COMPONENT_VISUAL = {
+const PUMP_COMPONENT_VISUAL = {
     svg: (id, tag) => `
         <circle cx="40" cy="40" r="34" fill="#fff" stroke="#2c3e50" stroke-width="6"/>
         <circle id="led-${id}" cx="40" cy="40" r="10" fill="#e74c3c"/>
@@ -129,7 +129,7 @@ export const PUMP_COMPONENT_VISUAL = {
     }
 };
 
-export const VALVE_COMPONENT_VISUAL = {
+const VALVE_COMPONENT_VISUAL = {
     svg: (id, tag) => `
         <rect x="10" y="34" width="60" height="12" fill="#95a5a6" stroke="#2c3e50" stroke-width="2"/>
         <path id="corpo-${id}" d="M 20 20 L 20 60 L 60 20 L 60 60 Z" fill="#e74c3c" stroke="#2c3e50" stroke-width="3" stroke-linejoin="round"/>
@@ -172,7 +172,7 @@ export const VALVE_COMPONENT_VISUAL = {
     }
 };
 
-export const HEAT_EXCHANGER_COMPONENT_VISUAL = {
+const HEAT_EXCHANGER_COMPONENT_VISUAL = {
     svg: (id, tag) => `
         <defs>
             <linearGradient id="hx-grad-${id}" x1="0" y1="0" x2="1" y2="0">
@@ -231,7 +231,7 @@ export const HEAT_EXCHANGER_COMPONENT_VISUAL = {
     }
 };
 
-export const TANK_COMPONENT_VISUAL = {
+const TANK_COMPONENT_VISUAL = {
     svg: (id, tag) => `
         <defs>
             <linearGradient id="grad-${id}" x1="0" y1="0" x2="0" y2="1">
@@ -340,7 +340,7 @@ export const TANK_COMPONENT_VISUAL = {
     }
 };
 
-export const COMPONENT_VISUAL_SPECS = {
+const COMPONENT_VISUAL_SPECS = {
     source: SOURCE_COMPONENT_VISUAL,
     sink: SINK_COMPONENT_VISUAL,
     pump: PUMP_COMPONENT_VISUAL,

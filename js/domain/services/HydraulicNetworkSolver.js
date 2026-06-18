@@ -7,7 +7,6 @@ import { EPSILON_FLOW } from '../units/HydraulicUnits.js';
 
 const MAX_QUEUE_STEPS = 512;
 const MAX_COMPONENT_VISITS = 8;
-const DEBUG_PHYSICS = false;
 
 export class HydraulicNetworkSolver {
     constructor(hydraulicContext, hydraulicModel) {
@@ -53,7 +52,6 @@ export class HydraulicNetworkSolver {
         });
 
         let steps = 0;
-        if (DEBUG_PHYSICS) console.log(`[Solver] Iniciando com ${network.componentes.length} componentes, máx ${MAX_QUEUE_STEPS} iterações`);
 
         while (steps < MAX_QUEUE_STEPS) {
             if (queueIndex >= queue.length) {
@@ -116,10 +114,8 @@ export class HydraulicNetworkSolver {
         this.metrics.lastIterations = steps;
         if (steps === MAX_QUEUE_STEPS) {
             this.metrics.maxIterationsHit++;
-            if (DEBUG_PHYSICS) console.warn(`[Solver] Limite de iterações atingido (${MAX_QUEUE_STEPS}). Queue final: ${queue.length - queueIndex} componentes pendentes.`);
         } else {
             this.metrics.convergedCount++;
-            if (DEBUG_PHYSICS) console.log(`[Solver] Convergiu em ${steps} iterações com sucesso.`);
         }
 
         hydraulicModel.relaxIdleConnections(dt);

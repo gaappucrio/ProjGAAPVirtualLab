@@ -15,7 +15,7 @@ export const camera = {
 let spacePressed = false;
 
 
-export function updateCameraTransform() {
+function updateCameraTransform() {
     const workspaceContainer = document.getElementById('workspace');
     const workspaceCanvas = document.getElementById('workspace-canvas');
 
@@ -79,13 +79,4 @@ export function setupCameraControl() {
         camera.isPanning = false;
         workspaceContainer.style.cursor = 'default';
     });
-}
-
-
-export function getCameraState() {
-    return {
-        scale: camera.scale,
-        x: camera.x,
-        y: camera.y
-    };
 }

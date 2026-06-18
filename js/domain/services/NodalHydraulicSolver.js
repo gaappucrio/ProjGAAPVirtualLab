@@ -22,7 +22,6 @@ const JACOBIAN_STEP_BAR = 0.0001;
 const MAX_PRESSURE_BAR = 100;
 const MIN_PRESSURE_BAR = -0.98;
 const MAX_BISECTION_STEPS = 34;
-const DEBUG_NODAL_SOLVER = false;
 
 function inputNodeId(component) {
     return `${component.id}:in`;
@@ -153,7 +152,6 @@ export class NodalHydraulicSolver {
                 break;
             }
 
-            let accepted = false;
             let bestPressureByNodeId = pressureByNodeId;
             let bestBranchResults = branchResults;
             let bestResidual = residual;
@@ -178,12 +176,9 @@ export class NodalHydraulicSolver {
                     bestBranchResults = candidateBranchResults;
                     bestResidual = candidateResidual;
                     bestResidualNorm = candidateResidualNorm;
-                    accepted = true;
                     if (candidateResidualNorm < residualNorm) break;
                 }
             }
-
-            if (!accepted) break;
 
             pressureByNodeId.clear();
             bestPressureByNodeId.forEach((value, key) => pressureByNodeId.set(key, value));
@@ -216,14 +211,6 @@ export class NodalHydraulicSolver {
             });
         }
 
-        if (DEBUG_NODAL_SOLVER) {
-            console.log('[NodalSolver]', {
-                iterations,
-                residualNorm,
-                balanceError,
-                diagnostics: this.metrics.lastDiagnostics
-            });
-        }
     }
 
     tryResolveFloatingSeriesLoops(network, analysis, dt) {

@@ -1,13 +1,13 @@
 // Constantes e conversoes usadas pelo dominio hidraulico.
 
-export const CONSTANTES_CONVERSAO = Object.freeze({
+const CONSTANTES_CONVERSAO = Object.freeze({
     barParaPa: 100000,
     gravidade: 9.81,
     lpsParaM3s: 0.001,
     m3sParaLps: 1000
 });
 
-export const PADROES_HIDRAULICOS = Object.freeze({
+const PADROES_HIDRAULICOS = Object.freeze({
     epsilonVazaoLps: 0.0001,
     diametroPadraoTuboM: 0.08,
     fatorAtritoPadrao: 0.028,

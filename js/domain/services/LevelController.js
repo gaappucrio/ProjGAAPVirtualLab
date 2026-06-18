@@ -1,8 +1,6 @@
-function clamp(value, min, max) {
-    return Math.max(min, Math.min(max, value));
-}
+import { clamp } from '../components/BaseComponente.js';
 
-export const DEFAULT_LEVEL_CONTROLLER_CONFIG = Object.freeze({
+const DEFAULT_LEVEL_CONTROLLER_CONFIG = Object.freeze({
     deadband: 0.0025,
     reactivationBand: 0.0075,
     outputMin: -1,

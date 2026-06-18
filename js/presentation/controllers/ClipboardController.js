@@ -123,7 +123,7 @@ function getCloneablePropertyKeys(type) {
     ];
 }
 
-export function buildClonedComponentTag(originalTag) {
+function buildClonedComponentTag(originalTag) {
     const suffix = isEnglishLanguage() ? 'copy' : 'copia';
     return `${String(originalTag || '').trim()} - ${suffix}`.trim();
 }
@@ -162,7 +162,7 @@ function createConnectionClipboardSnapshot(connection) {
     };
 }
 
-export function createComponentGroupClipboardSnapshot(components, connections = []) {
+function createComponentGroupClipboardSnapshot(components, connections = []) {
     const selectedComponents = [...new Set((components || []).filter(Boolean))];
     if (selectedComponents.length === 0) return null;
     if (selectedComponents.length === 1) return createComponentClipboardSnapshot(selectedComponents[0]);

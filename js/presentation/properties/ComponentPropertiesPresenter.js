@@ -20,7 +20,7 @@ export function disposeComponentPropertyBindings() {
     activeComponentPropertyCleanup = null;
 }
 
-export function getComponentTypeKey(component) {
+function getComponentTypeKey(component) {
     if (component instanceof DrenoLogico) return 'sink';
     if (component instanceof BombaLogica) return 'pump';
     if (component instanceof ValvulaLogica) return 'valve';
