@@ -160,6 +160,8 @@ function renderPumpSuctionAlert(comp, condition, marginM) {
             <p id="metricas-alerta-succao-bomba" class="gaap-alert__metrics" style="margin:8px 0 0; font-size:11px; color:${state.color};">
                 NPSHa: ${npsha} | NPSHr: ${npshr} | Folga: ${margin}
             </p>
+            <button id="btn-ajustar-npshr-bomba" class="gaap-alert__action" style="display:none;">Ajustar NPSHr nominal</button>
+            <div id="texto-acao-alerta-npsh" class="gaap-alert__feedback" hidden></div>
         </div>
     `;
 }
@@ -224,6 +226,10 @@ export const PUMP_PROPERTIES_PRESENTER = {
                 <input type="number" id="input-rampa-bomba" ${hintAttr(TOOLTIP.pumpRamp)} value="${comp.tempoRampaSegundos}" step="0.1" min="0" max="20">
             </div>
             <div class="prop-group">
+                ${makeUnitLabel('NPSH requerido', 'length', TOOLTIP.pumpNpshr)}
+                <input type="number" id="input-npsh-bomba" ${hintAttr(TOOLTIP.pumpNpshr)} value="${displayEditableUnitValue('length', comp.npshRequeridoM, 2)}" step="${displayStep('length', 0.1)}" min="${displayBound('length', 0.1)}" max="${displayBound('length', 20)}">
+            </div>
+            <div class="prop-group">
                 ${makeLabel('Acionamento efetivo (%)', TOOLTIP.pumpEffectiveDrive)}
                 <input type="text" id="disp-acionamento-real-bomba" ${hintAttr(TOOLTIP.pumpEffectiveDrive)} value="${comp.acionamentoEfetivo.toFixed(1)}" disabled>
             </div>
@@ -231,10 +237,7 @@ export const PUMP_PROPERTIES_PRESENTER = {
                 ${makeUnitLabel('NPSH disponível', 'length', TOOLTIP.pumpCurrentNpsha)}
                 <input type="text" id="disp-npsha-bomba" ${hintAttr(TOOLTIP.pumpCurrentNpsha)} value="${displayUnitValue('length', comp.npshDisponivelM, 2)}" disabled>
             </div>
-            <div class="prop-group">
-                ${makeUnitLabel('NPSH requerido', 'length', TOOLTIP.pumpCurrentNpshr)}
-                <input type="text" id="disp-npshr-atual-bomba" ${hintAttr(TOOLTIP.pumpCurrentNpshr)} value="${displayUnitValue('length', npshRequeridoAtualM, 2)}" disabled>
-            </div>
+
             <div class="prop-group">
                 ${makeUnitLabel('Folga contra cavitação', 'length', TOOLTIP.pumpNpshMargin)}
                 <input type="text" id="disp-margem-npsh-bomba" ${hintAttr(TOOLTIP.pumpNpshMargin)} value="${displayUnitValue('length', margemNpshM, 2)}" disabled>
@@ -346,6 +349,28 @@ export const PUMP_PROPERTIES_PRESENTER = {
                 'Tempo de rampa',
                 (validated) => { comp.tempoRampaSegundos = validated; }
             );
+        });
+        bind('btn-ajustar-npshr-bomba', 'click', () => {
+            const margin = comp.getMargemNpshAtualM?.() ?? (comp.npshDisponivelM - (comp.npshRequeridoAtualM ?? comp.npshRequeridoM));
+            if (margin < 0 && comp.npshRequeridoAtualM > 0) {
+                const isDark = document.body.classList.contains('theme-dark');
+                const safeDynamic = Math.max(0.05, comp.npshDisponivelM * 0.9);
+                const ratio = comp.npshRequeridoM / comp.npshRequeridoAtualM;
+                const newNominal = safeDynamic * ratio;
+                comp.npshRequeridoM = Math.max(0.05, newNominal);
+                comp.recalcularMetricasDerivadasCurva?.();
+                
+                const feedbackAjuste = byId('texto-acao-alerta-npsh');
+                if (feedbackAjuste) {
+                    feedbackAjuste.textContent = `Ajustado para ${comp.npshRequeridoM.toFixed(2)} m.`;
+                    feedbackAjuste.style.color = isDark ? '#27ae60' : '#1e8449';
+                    feedbackAjuste.hidden = false;
+                }
+                const npshInput = byId('input-npsh-bomba');
+                if (npshInput) {
+                    npshInput.value = comp.npshRequeridoM.toFixed(2);
+                }
+            }
         });
 
         const unsubscribeComponent = comp.subscribe((dados) => {

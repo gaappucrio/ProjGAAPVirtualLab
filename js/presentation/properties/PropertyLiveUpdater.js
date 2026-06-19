@@ -146,6 +146,23 @@ function updatePumpSuctionAlert(component) {
         metricsEl.style.color = state.color;
         metricsEl.textContent = `NPSHa: ${formatMeasuredValue('length', component.npshDisponivelM, 2)} | NPSHr: ${formatMeasuredValue('length', component.npshRequeridoAtualM ?? component.npshRequeridoM, 2)} | Folga: ${formatMeasuredValue('length', margin, 2)}`;
     }
+    
+    const btnAjuste = byId('btn-ajustar-npshr-bomba');
+    const feedbackAjuste = byId('texto-acao-alerta-npsh');
+    if (btnAjuste) {
+        if (margin < 0 && component.npshDisponivelM > 0) {
+            btnAjuste.style.display = 'inline-flex';
+            const isDark = document.body.classList.contains('theme-dark');
+            btnAjuste.style.borderColor = isDark ? '#e74c3c' : '#c0392b';
+            btnAjuste.style.backgroundColor = isDark ? '#2d1b1b' : '#fff';
+            btnAjuste.style.color = isDark ? '#ff6b6b' : '#c0392b';
+        } else {
+            btnAjuste.style.display = 'none';
+        }
+    }
+    if (feedbackAjuste && margin >= 0) {
+        feedbackAjuste.hidden = true;
+    }
 }
 
 function updateConnectionValues(engine, connection) {
@@ -364,7 +381,6 @@ function updatePumpValues(component, { monitorController } = {}) {
     setFieldValue('disp-descarga-bomba', component.pressaoDescargaAtualBar, 'pressure', 2);
     setValue('disp-cavitacao-bomba', `${(component.fatorCavitacaoAtual * 100).toFixed(0)}%`);
     setFieldValue('disp-npsha-bomba', component.npshDisponivelM, 'length', 2);
-    setFieldValue('disp-npshr-atual-bomba', component.npshRequeridoAtualM ?? component.npshRequeridoM, 'length', 2);
     setFieldValue('disp-margem-npsh-bomba', getPumpNpshMargin(component), 'length', 2);
     updatePumpSuctionAlert(component);
     setValue('disp-eficiencia-bomba', `${(component.eficienciaAtual * 100).toFixed(0)}%`);
