@@ -28,6 +28,7 @@ import { setupClipboardController } from './presentation/controllers/ClipboardCo
 import { setupComponentRotationController } from './presentation/controllers/ComponentRotationController.js';
 import { setupDeleteSelectionController } from './presentation/controllers/DeleteSelectionController.js';
 import { setupDragDrop } from './presentation/controllers/DragDropController.js';
+import { setupDwsimImportController } from './presentation/controllers/DwsimImportController.js';
 import { setupFlowchartController } from './presentation/controllers/FlowchartController.js';
 import { setupHelpController } from './presentation/controllers/HelpController.js';
 import { setupLayoutController } from './presentation/controllers/LayoutController.js';
@@ -102,6 +103,7 @@ export function setupVirtualLabRuntime({ engine } = {}) {
     setupClipboardController({ engine, undoManager });
     setupDeleteSelectionController({ engine, connectionService, undoManager });
     setupFlowchartController({ engine, undoManager });
+    setupDwsimImportController({ engine, undoManager });
     setupToolbar({
         engine,
         undoManager,
