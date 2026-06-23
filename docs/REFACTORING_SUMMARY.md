@@ -68,7 +68,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 
 - Abertura desejada e abertura efetiva com tempo de curso.
 - Perfis prontos:
-  - Controle fino.
+  - Igual porcentagem.
   - Resposta linear.
   - Abertura rápida.
   - Personalizado.
@@ -621,7 +621,7 @@ Propriedades principais:
 
 Perfis:
 
-- Controle fino: equal percentage, curso mais lento.
+- Igual porcentagem: equal percentage, curso mais lento.
 - Resposta linear: comportamento intermediário.
 - Abertura rápida: maior passagem no início e curso mais rápido.
 - Personalizado: edição individual.

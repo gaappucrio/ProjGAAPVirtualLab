@@ -104,7 +104,7 @@ const TOOLTIP_TEXTS = {
             valveThrottlingLoss: 'Inclui uma penalidade hidráulica extra associada ao estrangulamento por abertura parcial. Desligado por padrão para comparar no estilo Cv/Kv puro do DWSIM/IEC.',
             valveProfile: 'Perfil pronto que ajusta Cv, K, característica, rangeabilidade e tempo de curso como um conjunto coerente.',
             valveProfiles: {
-                equal_percentage: 'Controle fino: usa característica de igual porcentagem e curso mais lento, bom para modulação estável e ajustes delicados perto de baixa abertura.',
+                equal_percentage: 'Igual Porcentagem: usa característica de igual porcentagem e curso mais lento, bom para modulação estável e ajustes delicados perto de baixa abertura.',
                 linear: 'Resposta linear: usa crescimento proporcional e tempo de curso intermediário, oferecendo comportamento previsível no meio do curso.',
                 quick_opening: 'Abertura rápida: privilegia grande passagem logo no início e curso mais rápido, útil quando a válvula precisa aliviar ou alimentar rapidamente.',
                 custom: 'Personalizado: libera os parâmetros individuais para você definir manualmente unidade, Cv/Kv, K, estrangulamento, característica, rangeabilidade e tempo de curso.'
@@ -113,7 +113,7 @@ const TOOLTIP_TEXTS = {
             valveCharacteristics: {
                 equal_percentage: 'Igual porcentagem: cada incremento de abertura aumenta a capacidade em uma proporção parecida. Dá controle fino em baixas aberturas e resposta forte perto de 100%.',
                 linear: 'Linear: a capacidade cresce quase proporcionalmente à abertura. É simples de entender e útil quando se deseja resposta uniforme ao longo do curso.',
-                quick_opening: 'Abertura rápida: libera grande parte da capacidade logo no início do curso. É indicada para comportamento mais liga/desliga do que controle fino.'
+                quick_opening: 'Abertura rápida: libera grande parte da capacidade logo no início do curso. É indicada para comportamento mais liga/desliga do que igual porcentagem.'
             },
             valveRangeability: 'Razão entre a maior e a menor capacidade controlável da válvula.',
             valveStroke: 'Tempo necessário para a válvula percorrer o curso até a nova posição.',
@@ -711,7 +711,7 @@ const LEGACY_PT_TO_EN = {
     'Efetividade atual': 'Current effectiveness',
     'O trocador usa um modelo de efetividade NTU com meio de serviço em temperatura constante: quanto maior UA e menor m_dot*cp, mais a saída se aproxima da temperatura de serviço.': 'The exchanger uses an NTU effectiveness model with a constant-temperature service medium: higher UA and lower m_dot*cp move the outlet closer to the service temperature.',
     'Perfil da válvula': 'Valve profile',
-    'Controle fino': 'Fine control',
+    'Igual porcentagem': 'Equal percentage',
     'Resposta linear': 'Linear response',
     'Abertura rápida': 'Quick opening',
     'Para alterar unidade, Cv/Kv, K, estrangulamento, curva, rangeabilidade ou tempo de curso individualmente, selecione o perfil Personalizado.': 'To change unit, Cv/Kv, K, throttling, curve, rangeability, or stroke time individually, select the Custom profile.',

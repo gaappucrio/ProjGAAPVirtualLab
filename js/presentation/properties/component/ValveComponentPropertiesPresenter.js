@@ -170,7 +170,7 @@ export const VALVE_PROPERTIES_PRESENTER = {
             <div class="prop-group">
                 ${makeLabel('Perfil da válvula', TOOLTIP.valveProfile)}
                 <select id="input-perfil-valvula" ${hintAttr(selectedProfileHint)}>
-                    <option value="equal_percentage" title="${profileHints.equal_percentage}" ${perfilAtual === 'equal_percentage' ? 'selected' : ''}>Controle fino</option>
+                    <option value="equal_percentage" title="${profileHints.equal_percentage}" ${perfilAtual === 'equal_percentage' ? 'selected' : ''}>Igual porcentagem</option>
                     <option value="linear" title="${profileHints.linear}" ${perfilAtual === 'linear' ? 'selected' : ''}>Resposta linear</option>
                     <option value="quick_opening" title="${profileHints.quick_opening}" ${perfilAtual === 'quick_opening' ? 'selected' : ''}>Abertura rápida</option>
                     <option value="custom" title="${profileHints.custom}" ${perfilAtual === 'custom' ? 'selected' : ''}>Personalizado</option>
