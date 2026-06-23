@@ -5,7 +5,7 @@ Este documento detalha o arcabouço matemático e as leis físicas que regem a s
 ## 1. Fundamentos da Mecânica dos Fluidos em Tubulações
 
 A modelagem de perda de carga distribuída nas conexões e tubos baseia-se na **Equação de Darcy-Weisbach**:
-$$ \Delta P = f \cdot \frac{L}{D} \cdot \frac{\rho \cdot v^2}{2} $$
+$$\Delta P = f \cdot \frac{L}{D} \cdot \frac{\rho \cdot v^2}{2}$$
 Onde:
 - $\Delta P$: Perda de pressão (Pa, convertida para bar no simulador)
 - $f$: Fator de atrito de Darcy
@@ -16,7 +16,7 @@ Onde:
 
 ### Cálculo do Fator de Atrito ($f$)
 O fator de atrito depende intrinsecamente do Regime de Escoamento, classificado pelo **Número de Reynolds ($Re$)**:
-$$ Re = \frac{v \cdot D}{\nu} = \frac{\rho \cdot v \cdot D}{\mu} $$
+$$Re = \frac{v \cdot D}{\nu} = \frac{\rho \cdot v \cdot D}{\mu}$$
 Onde:
 - $\nu$: Viscosidade cinemática do fluido (m²/s)
 - $\mu$: Viscosidade dinâmica absoluta (Pa·s)
@@ -24,7 +24,7 @@ Onde:
 O simulador avalia o regime em três faixas (`PipeHydraulics.js`):
 1. **Regime Laminar ($Re \le 2000$):**
    Aplica-se a solução exata da equação de Hagen-Poiseuille:
-   $$ f = \frac{64}{Re} $$
+   $$f = \frac{64}{Re}$$
 2. **Regime Transiente ($2000 < Re < 4000$):**
    Utiliza-se uma interpolação cúbica para suavizar a transição numérica entre o regime laminar e turbulento, garantindo estabilidade no solucionador nodal.
 3. **Regime Turbulento ($Re \ge 4000$):**
