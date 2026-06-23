@@ -5,7 +5,9 @@ Este documento detalha o arcabouço matemático e as leis físicas que regem a s
 ## 1. Fundamentos da Mecânica dos Fluidos em Tubulações
 
 A modelagem de perda de carga distribuída nas conexões e tubos baseia-se na **Equação de Darcy-Weisbach**:
+
 $$\Delta P = f \cdot \frac{L}{D} \cdot \frac{\rho \cdot v^2}{2}$$
+
 Onde:
 - $\Delta P$: Perda de pressão (Pa, convertida para bar no simulador)
 - $f$: Fator de atrito de Darcy
