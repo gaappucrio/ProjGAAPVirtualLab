@@ -160,7 +160,7 @@ function renderPumpSuctionAlert(comp, condition, marginM) {
             <p id="metricas-alerta-succao-bomba" class="gaap-alert__metrics" style="margin:8px 0 0; font-size:11px; color:${state.color};">
                 NPSHa: ${npsha} | NPSHr: ${npshr} | Folga: ${margin}
             </p>
-            <button id="btn-ajustar-npshr-bomba" class="gaap-alert__action" style="display:none;">Ajustar NPSHr nominal</button>
+            <button id="btn-ajustar-npshr-bomba" class="gaap-alert__action" style="display:none; margin-top:10px; padding:7px 10px; border:1px solid #c0392b; border-radius:4px; background:#fff; color:#c0392b; font-size:12px; font-weight:600; cursor:pointer;">Ajustar NPSHr nominal</button>
             <div id="texto-acao-alerta-npsh" class="gaap-alert__feedback" hidden></div>
         </div>
     `;

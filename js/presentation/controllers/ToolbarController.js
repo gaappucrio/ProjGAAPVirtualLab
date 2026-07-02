@@ -73,20 +73,53 @@ export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange, on
 
     function updateRelativeHeightUI(enabled) {
         if (relativeHeightText) relativeHeightText.textContent = t('toolbar.relativeHeight');
-        if (relativeHeightNote) relativeHeightNote.dataset.state = enabled ? 'enabled' : 'disabled';
+        if (!relativeHeightNote) return;
+
+        const isSameState = relativeHeightNote.dataset.state === (enabled ? 'enabled' : 'disabled');
+        if (isSameState) return;
+
+        // Force inline-block and nowrap for width calculations
+        relativeHeightNote.style.boxSizing = 'border-box';
+        relativeHeightNote.style.display = 'inline-block';
+        relativeHeightNote.style.whiteSpace = 'nowrap';
+        relativeHeightNote.style.overflow = 'hidden';
+
+        // Get old width
+        const oldWidth = relativeHeightNote.getBoundingClientRect().width;
+        
+        relativeHeightNote.dataset.state = enabled ? 'enabled' : 'disabled';
 
         if (enabled) {
             relativeHeightNote.textContent = t('toolbar.heightEnabled');
             relativeHeightNote.style.color = '#5f6f7f';
             relativeHeightNote.style.background = '#f4f7f8';
             relativeHeightNote.style.borderColor = '#ecf0f1';
-            return;
+        } else {
+            relativeHeightNote.textContent = t('toolbar.heightDisabled');
+            relativeHeightNote.style.color = '#a84300';
+            relativeHeightNote.style.background = '#fff4e8';
+            relativeHeightNote.style.borderColor = '#f3c89f';
         }
 
-        relativeHeightNote.textContent = t('toolbar.heightDisabled');
-        relativeHeightNote.style.color = '#a84300';
-        relativeHeightNote.style.background = '#fff4e8';
-        relativeHeightNote.style.borderColor = '#f3c89f';
+        if (oldWidth > 0) {
+            // Measure new width
+            relativeHeightNote.style.width = 'auto';
+            const newWidth = relativeHeightNote.getBoundingClientRect().width;
+            
+            // Set back to old width to start transition
+            relativeHeightNote.style.width = oldWidth + 'px';
+            relativeHeightNote.offsetHeight; // Force reflow
+            
+            // Add width to the existing transition properties
+            relativeHeightNote.style.transition = 'width 0.35s ease, background-color 0.35s ease, border-color 0.35s ease, color 0.35s ease';
+            relativeHeightNote.style.width = newWidth + 'px';
+            
+            // Clean up explicit width after transition completes
+            setTimeout(() => {
+                relativeHeightNote.style.width = 'auto';
+                relativeHeightNote.style.transition = '';
+            }, 350);
+        }
     }
 
     function updateLanguageUI() {

@@ -2224,6 +2224,17 @@
       /* Fundo cinza para o botão de limpar área quando o mouse está sobre ele, criando um efeito de destaque que melhora a experiência do usuário e proporciona uma interação mais intuitiva com o botão de limpar área */
   }
 
+  #btn-ajustar-npshr-bomba {
+      transition: 0.5s;
+      outline: none !important;
+  }
+
+  #btn-ajustar-npshr-bomba:hover {
+      background-color: #c0392b !important;
+      color: #fff !important;
+      outline: none !important;
+  }
+
   /* COMPONENTES NA TELA */
   .placed-component
 
@@ -2637,3 +2648,125 @@ body.theme-dark .chart-axis-select:hover {
     height: 28px;
     flex: 0 0 auto;
 }
+
+  /* CUSTOM SELECT COMPONENTS */
+  .custom-select-wrapper {
+      position: relative;
+      width: 100%;
+      user-select: none;
+      font-family: inherit;
+      font-size: 13px;
+  }
+
+  .custom-select-trigger {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #bdc3c7;
+      border-radius: 4px;
+      background: #fff;
+      cursor: pointer;
+      box-sizing: border-box;
+      transition: background-color 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
+  }
+
+  .custom-select-trigger:hover {
+      background-color: #f8fbfc;
+  }
+
+  .custom-select-arrow {
+      font-size: 10px;
+      color: #7f8c8d;
+      transition: transform 0.35s ease;
+  }
+
+  .custom-select-wrapper.open .custom-select-arrow {
+      transform: rotate(180deg);
+  }
+
+  .custom-select-wrapper.open .custom-select-trigger {
+      border-color: #2c3e50;
+  }
+
+  .custom-select-options {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(44, 62, 80, 0.15);
+      border: 1px solid #ecf0f1;
+      overflow: hidden;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      z-index: 2000;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-8px) scale(0.98);
+      transform-origin: top center;
+      transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s ease;
+  }
+
+  .custom-select-wrapper.open .custom-select-options {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0) scale(1);
+  }
+
+  .custom-select-option {
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: background-color 0.2s ease, color 0.2s ease;
+      color: #2c3e50;
+      font-weight: 500;
+  }
+
+  .custom-select-option:hover {
+      background-color: #eaf1f8;
+      color: #0056b3;
+  }
+
+  .custom-select-option.selected {
+      background-color: #f1f5f8;
+      font-weight: 700;
+      color: #2c3e50;
+  }
+
+  /* Dark mode */
+  body.theme-dark .custom-select-trigger {
+      background: #2b303a;
+      border-color: #4a5462;
+      color: #dcdde1;
+  }
+
+  body.theme-dark .custom-select-trigger:hover {
+      background: #353b48;
+  }
+
+  body.theme-dark .custom-select-wrapper.open .custom-select-trigger {
+      border-color: #6c7a89;
+  }
+
+  body.theme-dark .custom-select-options {
+      background: #2b303a;
+      border-color: #4a5462;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+  }
+
+  body.theme-dark .custom-select-option {
+      color: #dcdde1;
+  }
+
+  body.theme-dark .custom-select-option:hover {
+      background-color: #3d4554;
+      color: #fff;
+  }
+
+  body.theme-dark .custom-select-option.selected {
+      background-color: #4a5462;
+      color: #fff;
+  }
