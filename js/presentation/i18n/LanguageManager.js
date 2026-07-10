@@ -545,8 +545,8 @@ const TEXTS = {
 };
 
 const LEGACY_PT_TO_EN = {
-    'Sandbox GAAP - Fronteiras e Fluxo Visual': 'GAAP Sandbox - Boundaries and Visual Flow',
-    'Sandbox Modular GAAP - Fronteiras de Controle': 'GAAP Modular Sandbox - Control Boundaries',
+    'GAAP VirtualLab - Fronteiras e Fluxo Visual': 'GAAP VirtualLab - Boundaries and Visual Flow',
+    'Sandbox Modular GAAP': 'GAAP Modular Sandbox',
     'Abrir tutorial do simulador': 'Open simulator tutorial',
     'Fechar tutorial': 'Close tutorial',
     'Tutorial do Simulador': 'Simulator Tutorial',
