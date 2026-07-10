@@ -554,17 +554,12 @@
   }
 
   .language-window-control {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      z-index: 1000;
       display: flex;
       align-items: center;
-      justify-content: flex-end;
+      justify-content: center;
       gap: 8px;
       flex-wrap: wrap;
-      max-width: calc(100vw - 120px);
-      pointer-events: none;
+      margin-top: 15px;
   }
 
   .language-window-control .toolbar-toggle {
