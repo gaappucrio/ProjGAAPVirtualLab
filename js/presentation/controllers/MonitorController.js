@@ -687,17 +687,6 @@ export function createMonitorController({ engine }) {
                 wrapper.classList.remove('open');
                 onSelect(val);
             });
-            
-            if (!window.__globalCustomSelectListenerAdded) {
-                document.addEventListener('click', (e) => {
-                    if (!e.target.closest('.custom-select-wrapper')) {
-                        document.querySelectorAll('.custom-select-wrapper.open').forEach(w => {
-                            w.classList.remove('open');
-                        });
-                    }
-                });
-                window.__globalCustomSelectListenerAdded = true;
-            }
         } else {
             const optionsContainer = wrapper.querySelector('.custom-select-options');
             const currentOptions = Array.from(optionsContainer.querySelectorAll('.custom-select-option')).map(o => o.dataset.value);

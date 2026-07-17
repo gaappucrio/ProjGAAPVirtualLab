@@ -84,15 +84,4 @@ export function bindUnitsPanel({ setUnitPreference, onChange }) {
             });
         });
     });
-
-    if (!window.__globalCustomSelectListenerAdded) {
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.custom-select-wrapper')) {
-                document.querySelectorAll('.custom-select-wrapper.open').forEach(w => {
-                    w.classList.remove('open');
-                });
-            }
-        });
-        window.__globalCustomSelectListenerAdded = true;
-    }
 }
