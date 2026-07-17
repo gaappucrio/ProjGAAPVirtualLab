@@ -618,61 +618,123 @@ export function createMonitorController({ engine }) {
     function ensureChartAxisSelector(container, id, kind, chart, onSelect, component) {
         if (!container) return null;
 
-        let selector = document.getElementById(id);
+        let wrapper = document.getElementById(id + '-wrapper');
+        let hiddenInput = document.getElementById(id);
+
         if (kind !== 'pump' && kind !== 'valve') {
-            if (selector) selector.style.display = 'none';
+            if (wrapper) wrapper.style.display = 'none';
             return null;
         }
 
-        if (!selector) {
-            selector = document.createElement('select');
-            selector.id = id;
-            selector.className = 'chart-axis-select';
+        const expectedOptions = getAxisOptions(kind, component);
+        const activeMode = chart?.yAxisMode || (kind === 'pump' ? 'yHead' : 'yPressure');
+        const selectedOption = expectedOptions.find(opt => activeMode === opt.value) || expectedOptions[0];
+
+        if (!wrapper) {
+            wrapper = document.createElement('div');
+            wrapper.id = id + '-wrapper';
+            wrapper.className = 'custom-select-wrapper chart-axis-select';
+            // Custom styling adjustments for the chart header specifically
+            wrapper.style.width = 'auto';
+            wrapper.style.minWidth = '140px';
+            wrapper.style.fontSize = '11px';
+            
+            const optionsHTML = expectedOptions
+                .map((option) => `<li class="custom-select-option ${activeMode === option.value ? 'selected' : ''}" data-value="${option.value}" style="font-size: 11px; padding: 6px 10px;">${option.label}</li>`)
+                .join('');
+
+            wrapper.innerHTML = `
+                <input type="hidden" id="${id}" value="${selectedOption.value}">
+                <div class="custom-select-trigger" id="${id}-trigger" title="Selecione o eixo Y" style="padding: 4px 8px;">
+                    <span id="${id}-label">${selectedOption.label}</span>
+                    <span class="custom-select-arrow" style="margin-left:6px;">▼</span>
+                </div>
+                <ul class="custom-select-options" id="${id}-options">
+                    ${optionsHTML}
+                </ul>
+            `;
             
             const refElement = container.querySelector('.chart-compare-dismiss') || container.querySelector('.chart-pump-export-button');
             if (refElement) {
-                container.insertBefore(selector, refElement);
+                container.insertBefore(wrapper, refElement);
             } else {
-                container.appendChild(selector);
+                container.appendChild(wrapper);
             }
-        }
 
-        if (selector.parentElement !== container) {
-            const refElement = container.querySelector('.chart-compare-dismiss') || container.querySelector('.chart-pump-export-button');
-            if (refElement) {
-                container.insertBefore(selector, refElement);
-            } else {
-                container.appendChild(selector);
+            hiddenInput = wrapper.querySelector(`#${id}`);
+            const trigger = wrapper.querySelector(`#${id}-trigger`);
+            const label = wrapper.querySelector(`#${id}-label`);
+
+            trigger.addEventListener('click', (e) => {
+                e.stopPropagation();
+                document.querySelectorAll('.custom-select-wrapper.open').forEach(w => {
+                    if (w !== wrapper) w.classList.remove('open');
+                });
+                wrapper.classList.toggle('open');
+            });
+
+            wrapper.addEventListener('click', (e) => {
+                const opt = e.target.closest('.custom-select-option');
+                if (!opt) return;
+                e.stopPropagation();
+                const val = opt.dataset.value;
+                hiddenInput.value = val;
+                
+                label.textContent = opt.textContent;
+                wrapper.querySelectorAll('.custom-select-option').forEach(o => o.classList.remove('selected'));
+                opt.classList.add('selected');
+
+                wrapper.classList.remove('open');
+                onSelect(val);
+            });
+            
+            if (!window.__globalCustomSelectListenerAdded) {
+                document.addEventListener('click', (e) => {
+                    if (!e.target.closest('.custom-select-wrapper')) {
+                        document.querySelectorAll('.custom-select-wrapper.open').forEach(w => {
+                            w.classList.remove('open');
+                        });
+                    }
+                });
+                window.__globalCustomSelectListenerAdded = true;
             }
-        }
+        } else {
+            const optionsContainer = wrapper.querySelector('.custom-select-options');
+            const currentOptions = Array.from(optionsContainer.querySelectorAll('.custom-select-option')).map(o => o.dataset.value);
+            const optionsMatch = expectedOptions.length === currentOptions.length &&
+                expectedOptions.every((opt, idx) => opt.value === currentOptions[idx]);
 
-        selector.style.display = '';
+            if (!optionsMatch) {
+                optionsContainer.innerHTML = expectedOptions
+                    .map((option) => `<li class="custom-select-option ${activeMode === option.value ? 'selected' : ''}" data-value="${option.value}" style="font-size: 11px; padding: 6px 10px;">${option.label}</li>`)
+                    .join('');
+            }
 
-        const expectedOptions = getAxisOptions(kind, component);
-        const currentOptions = Array.from(selector.options).map(o => o.value);
-        const optionsMatch = expectedOptions.length === currentOptions.length &&
-            expectedOptions.every((opt, idx) => opt.value === currentOptions[idx]);
-
-        if (!optionsMatch) {
-            selector.innerHTML = '';
-            expectedOptions.forEach(opt => {
-                const optionElement = document.createElement('option');
-                optionElement.value = opt.value;
-                optionElement.textContent = opt.label;
-                selector.appendChild(optionElement);
+            hiddenInput = wrapper.querySelector(`#${id}`);
+            hiddenInput.value = activeMode;
+            const label = wrapper.querySelector(`#${id}-label`);
+            label.textContent = selectedOption.label;
+            
+            optionsContainer.querySelectorAll('.custom-select-option').forEach(o => {
+                if (o.dataset.value === activeMode) {
+                    o.classList.add('selected');
+                } else {
+                    o.classList.remove('selected');
+                }
             });
         }
 
-        const activeMode = chart?.yAxisMode || (kind === 'pump' ? 'yHead' : 'yPressure');
-        selector.value = activeMode;
+        if (wrapper.parentElement !== container) {
+            const refElement = container.querySelector('.chart-compare-dismiss') || container.querySelector('.chart-pump-export-button');
+            if (refElement) {
+                container.insertBefore(wrapper, refElement);
+            } else {
+                container.appendChild(wrapper);
+            }
+        }
 
-        // Use direct property binding to completely replace old listeners and avoid stale closures
-        selector.onchange = (event) => {
-            const newMode = event.target.value;
-            onSelect(newMode);
-        };
-
-        return selector;
+        wrapper.style.display = '';
+        return wrapper;
     }
 
     function ensureExpandedChartAxisSelector(elements, index, entry) {

@@ -1096,6 +1096,31 @@ export function localizeElement(root) {
         const translated = translateLiteral(element.value);
         if (translated !== element.value) element.value = translated;
     });
+
+    // Auto-associar labels com seus respectivos controles para acessibilidade
+    if (typeof textRoot.querySelectorAll === 'function') {
+        textRoot.querySelectorAll('label').forEach((label) => {
+            if (label.hasAttribute('for') || label.getAttribute('for')) return;
+            if (label.querySelector('input, select, textarea')) return;
+
+            const parent = label.parentElement;
+            if (!parent) return;
+
+            let control = parent.querySelector('input:not([type="hidden"]), select, textarea');
+            if (!control) {
+                control = parent.querySelector('input, select, textarea');
+            }
+
+            if (control) {
+                let id = control.getAttribute('id');
+                if (!id) {
+                    id = 'auto-id-' + Math.random().toString(36).substr(2, 9);
+                    control.setAttribute('id', id);
+                }
+                label.setAttribute('for', id);
+            }
+        });
+    }
 }
 
 export function applyLanguageToDocument(root = globalThis.document) {
