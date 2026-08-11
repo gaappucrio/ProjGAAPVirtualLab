@@ -1,5 +1,6 @@
 import { EngineEventPayloads } from '../../application/events/EventPayloads.js';
 import { getPresentationEngine } from '../context/PresentationEngineContext.js';
+import { escapeHtml } from './PropertyPresenterShared.js';
 import { clearInputError, InputValidator, showInputError } from '../validation/InputValidator.js';
 import { bindPropertyTabs, renderPropertyTabs } from './PropertyTabs.js';
 import { TOOLTIPS } from './PropertyTooltips.js';
@@ -80,7 +81,7 @@ export function renderConnectionProperties({
     const basicContent = `
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.Cano}">${TOOLTIPS.conexao.titulo}</label>
-            <input type="text" title="${TOOLTIPS.conexao.Cano}" value="${labels.sourceLabel} -> ${labels.targetLabel}" disabled>
+            <input type="text" title="${TOOLTIPS.conexao.Cano}" value="${escapeHtml(labels.sourceLabel)} -> ${escapeHtml(labels.targetLabel)}" disabled>
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.diametro}">Diâmetro Interno (${getUnitSymbol('length')})</label>

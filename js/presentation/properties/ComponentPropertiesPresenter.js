@@ -11,6 +11,8 @@ import { getComponentPropertyPresenter } from './component/ComponentPropertyPres
 import { bind } from './PropertyDomAdapter.js';
 import { bindUnitControls, renderUnitControls } from './PropertyUnitsPresenter.js';
 
+import { escapeHtml } from './PropertyPresenterShared.js';
+
 let activeComponentPropertyCleanup = null;
 
 export function disposeComponentPropertyBindings() {
@@ -42,7 +44,7 @@ export function renderComponentProperties({
         ${renderUnitControls()}
         <div class="prop-group">
             <label title="${TOOLTIPS.painel.tagComponente}">Tag (Nome)</label>
-            <input type="text" id="input-tag" title="${TOOLTIPS.painel.tagComponente}" value="${component.tag}">
+            <input type="text" id="input-tag" title="${TOOLTIPS.painel.tagComponente}" value="${escapeHtml(component.tag)}">
         </div>
         ${propertiesPresenter.render(component)}
     `;
