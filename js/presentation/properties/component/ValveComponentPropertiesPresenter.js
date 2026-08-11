@@ -136,6 +136,18 @@ export const VALVE_PROPERTIES_PRESENTER = {
             : (VALVE_PROFILE_DEFINITIONS[comp.tipoCaracteristica] ? comp.tipoCaracteristica : 'custom');
         const perfilPersonalizado = perfilAtual === 'custom';
         const bloqueioParametrosAttr = controladaPorSetpoint || !perfilPersonalizado ? 'disabled' : '';
+        function getProfileLabel(profile) {
+            if (profile === 'equal_percentage') return 'Igual porcentagem';
+            if (profile === 'linear') return 'Resposta linear';
+            if (profile === 'quick_opening') return 'Abertura rápida';
+            return 'Personalizado';
+        }
+        function getCharacteristicLabel(characteristic) {
+            if (characteristic === 'equal_percentage') return 'Igual porcentagem';
+            if (characteristic === 'linear') return 'Linear';
+            if (characteristic === 'quick_opening') return 'Abertura rápida';
+            return 'Linear';
+        }
         const selectedProfileHint = profileHints[perfilAtual] ?? TOOLTIP.valveProfile;
         const selectedCharacteristicHint = characteristicHints[comp.tipoCaracteristica] ?? TOOLTIP.valveCharacteristic;
         const unidadeCoeficiente = getValveCoefficientUnit(comp);
@@ -169,22 +181,36 @@ export const VALVE_PROPERTIES_PRESENTER = {
         const advancedContent = `
             <div class="prop-group">
                 ${makeLabel('Perfil da válvula', TOOLTIP.valveProfile)}
-                <select id="input-perfil-valvula" ${hintAttr(selectedProfileHint)}>
-                    <option value="equal_percentage" title="${profileHints.equal_percentage}" ${perfilAtual === 'equal_percentage' ? 'selected' : ''}>Igual porcentagem</option>
-                    <option value="linear" title="${profileHints.linear}" ${perfilAtual === 'linear' ? 'selected' : ''}>Resposta linear</option>
-                    <option value="quick_opening" title="${profileHints.quick_opening}" ${perfilAtual === 'quick_opening' ? 'selected' : ''}>Abertura rápida</option>
-                    <option value="custom" title="${profileHints.custom}" ${perfilAtual === 'custom' ? 'selected' : ''}>Personalizado</option>
-                </select>
+                <div class="custom-select-wrapper" id="input-perfil-valvula-wrapper">
+                    <input type="hidden" id="input-perfil-valvula" value="${perfilAtual}">
+                    <div class="custom-select-trigger" id="input-perfil-valvula-trigger" ${hintAttr(selectedProfileHint)}>
+                        <span id="input-perfil-valvula-label">${getProfileLabel(perfilAtual)}</span>
+                        <span class="custom-select-arrow">▼</span>
+                    </div>
+                    <ul class="custom-select-options" id="input-perfil-valvula-options">
+                        <li class="custom-select-option ${perfilAtual === 'equal_percentage' ? 'selected' : ''}" data-value="equal_percentage" title="${profileHints.equal_percentage}">Igual porcentagem</li>
+                        <li class="custom-select-option ${perfilAtual === 'linear' ? 'selected' : ''}" data-value="linear" title="${profileHints.linear}">Resposta linear</li>
+                        <li class="custom-select-option ${perfilAtual === 'quick_opening' ? 'selected' : ''}" data-value="quick_opening" title="${profileHints.quick_opening}">Abertura rápida</li>
+                        <li class="custom-select-option ${perfilAtual === 'custom' ? 'selected' : ''}" data-value="custom" title="${profileHints.custom}">Personalizado</li>
+                    </ul>
+                </div>
                 <p id="texto-perfil-valvula" title="${selectedProfileHint}" style="margin:6px 0 0; font-size:11px; line-height:1.45; color:#5f6f7f;">${selectedProfileHint}</p>
                 ${!controladaPorSetpoint && !perfilPersonalizado ? '<p style="margin:6px 0 0; font-size:11px; line-height:1.45; color:#7f8c8d;">Para alterar unidade, Cv/Kv, K, estrangulamento, curva, rangeabilidade ou tempo de curso individualmente, selecione o perfil Personalizado.</p>' : ''}
                 ${controladaPorSetpoint ? '<p style="margin:6px 0 0; font-size:11px; line-height:1.45; color:#c0392b;">Com o ponto de ajuste ativo, trocar o perfil altera a geometria/curva usada pelo controle. Cv/Kv, K, estrangulamento, curva, rangeabilidade e tempo de curso continuam bloqueados para evitar ajustes finos acidentais durante a malha fechada.</p>' : ''}
             </div>
             <div class="prop-group">
                 ${makeLabel('Unidade do coeficiente de vazão', TOOLTIP.valveFlowCoefficientUnit)}
-                <select id="input-unidade-coeficiente-valvula" ${hintAttr(TOOLTIP.valveFlowCoefficientUnit)}>
-                    <option value="cv" ${unidadeCoeficiente === VALVE_FLOW_COEFFICIENT_UNITS.CV ? 'selected' : ''}>Cv</option>
-                    <option value="kv" ${unidadeCoeficiente === VALVE_FLOW_COEFFICIENT_UNITS.KV ? 'selected' : ''}>Kv</option>
-                </select>
+                <div class="custom-select-wrapper" id="input-unidade-coeficiente-valvula-wrapper">
+                    <input type="hidden" id="input-unidade-coeficiente-valvula" value="${unidadeCoeficiente}">
+                    <div class="custom-select-trigger" id="input-unidade-coeficiente-valvula-trigger" ${hintAttr(TOOLTIP.valveFlowCoefficientUnit)}>
+                        <span id="input-unidade-coeficiente-valvula-label">${unidadeCoeficiente.toUpperCase()}</span>
+                        <span class="custom-select-arrow">▼</span>
+                    </div>
+                    <ul class="custom-select-options" id="input-unidade-coeficiente-valvula-options">
+                        <li class="custom-select-option ${unidadeCoeficiente === VALVE_FLOW_COEFFICIENT_UNITS.CV ? 'selected' : ''}" data-value="cv">Cv</li>
+                        <li class="custom-select-option ${unidadeCoeficiente === VALVE_FLOW_COEFFICIENT_UNITS.KV ? 'selected' : ''}" data-value="kv">Kv</li>
+                    </ul>
+                </div>
             </div>
             <div class="prop-group">
                 <label id="label-coeficiente-valvula" ${hintAttr(TOOLTIP.valveCv)}>${getValveCoefficientLabel(unidadeCoeficiente)}</label>
@@ -195,18 +221,25 @@ export const VALVE_PROPERTIES_PRESENTER = {
                 <input type="number" id="input-perda-k" ${hintAttr(TOOLTIP.valveK)} value="${comp.perdaLocalK.toFixed(3)}" step="0.01" min="0.0" max="100" ${bloqueioParametrosAttr}>
             </div>
             <div class="prop-group">
-                <label ${hintAttr(TOOLTIP.valveThrottlingLoss)} style="display:flex; align-items:center; gap:8px;">
+                <label ${hintAttr(TOOLTIP.valveThrottlingLoss)} class="checkbox-label">
                     <input type="checkbox" id="input-perda-estrangulamento-valvula" ${hintAttr(TOOLTIP.valveThrottlingLoss)} ${considerarPerdaEstrangulamento ? 'checked' : ''} ${bloqueioParametrosAttr}>
                     <span>Considerar perda de estrangulamento</span>
                 </label>
             </div>
             <div class="prop-group">
                 ${makeLabel('Característica da válvula', TOOLTIP.valveCharacteristic)}
-                <select id="input-caracteristica-valvula" ${hintAttr(selectedCharacteristicHint)} ${bloqueioParametrosAttr}>
-                    <option value="equal_percentage" title="${characteristicHints.equal_percentage}" ${comp.tipoCaracteristica === 'equal_percentage' ? 'selected' : ''}>Igual porcentagem</option>
-                    <option value="linear" title="${characteristicHints.linear}" ${comp.tipoCaracteristica === 'linear' ? 'selected' : ''}>Linear</option>
-                    <option value="quick_opening" title="${characteristicHints.quick_opening}" ${comp.tipoCaracteristica === 'quick_opening' ? 'selected' : ''}>Abertura rápida</option>
-                </select>
+                <div class="custom-select-wrapper ${bloqueioParametrosAttr ? 'disabled' : ''}" id="input-caracteristica-valvula-wrapper">
+                    <input type="hidden" id="input-caracteristica-valvula" value="${comp.tipoCaracteristica}">
+                    <div class="custom-select-trigger" id="input-caracteristica-valvula-trigger" ${hintAttr(selectedCharacteristicHint)}>
+                        <span id="input-caracteristica-valvula-label">${getCharacteristicLabel(comp.tipoCaracteristica)}</span>
+                        <span class="custom-select-arrow">▼</span>
+                    </div>
+                    <ul class="custom-select-options" id="input-caracteristica-valvula-options">
+                        <li class="custom-select-option ${comp.tipoCaracteristica === 'equal_percentage' ? 'selected' : ''}" data-value="equal_percentage" title="${characteristicHints.equal_percentage}">Igual porcentagem</li>
+                        <li class="custom-select-option ${comp.tipoCaracteristica === 'linear' ? 'selected' : ''}" data-value="linear" title="${characteristicHints.linear}">Linear</li>
+                        <li class="custom-select-option ${comp.tipoCaracteristica === 'quick_opening' ? 'selected' : ''}" data-value="quick_opening" title="${characteristicHints.quick_opening}">Abertura rápida</li>
+                    </ul>
+                </div>
                 <p id="texto-caracteristica-valvula" title="${selectedCharacteristicHint}" style="margin:6px 0 0; font-size:11px; line-height:1.45; color:#5f6f7f;">${selectedCharacteristicHint}</p>
             </div>
             <div class="prop-group">
@@ -261,6 +294,39 @@ export const VALVE_PROPERTIES_PRESENTER = {
                 textoCaracteristica.title = dica;
             }
         };
+        const bindCustomSelect = (id) => {
+            const hiddenInput = byId(id);
+            const trigger = byId(`${id}-trigger`);
+            const wrapper = byId(`${id}-wrapper`);
+            const label = byId(`${id}-label`);
+            const options = document.querySelectorAll(`#${id}-options .custom-select-option`);
+
+            if (!hiddenInput || !trigger || !wrapper) return;
+
+            trigger.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (wrapper.classList.contains('disabled')) return;
+                document.querySelectorAll('.custom-select-wrapper.open').forEach(w => {
+                    if (w !== wrapper) w.classList.remove('open');
+                });
+                wrapper.classList.toggle('open');
+            });
+
+            options.forEach(opt => {
+                opt.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (wrapper.classList.contains('disabled')) return;
+                    const val = opt.dataset.value;
+                    hiddenInput.value = val;
+                    if (label) label.textContent = opt.textContent.trim();
+                    options.forEach(o => o.classList.remove('selected'));
+                    opt.classList.add('selected');
+                    wrapper.classList.remove('open');
+                    hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+            });
+        };
+
         const sincronizarBloqueioSetpoint = () => {
             const bloqueada = valvulaBloqueadaPorSetpoint();
             const bloqueioParametros = bloqueada || !perfilEhPersonalizado();
@@ -268,6 +334,15 @@ export const VALVE_PROPERTIES_PRESENTER = {
                 if (input) input.disabled = bloqueada;
             });
             if (perfilInput) perfilInput.disabled = false;
+            const perfilWrapper = byId('input-perfil-valvula-wrapper');
+            if (perfilWrapper) perfilWrapper.classList.toggle('disabled', false);
+
+            const caracteristicaWrapper = byId('input-caracteristica-valvula-wrapper');
+            if (caracteristicaWrapper) caracteristicaWrapper.classList.toggle('disabled', bloqueioParametros);
+
+            const unidadeWrapper = byId('input-unidade-coeficiente-valvula-wrapper');
+            if (unidadeWrapper) unidadeWrapper.classList.toggle('disabled', false);
+
             [cvInput, perdaInput, perdaEstrangulamentoInput, caracteristicaInput, rangeabilidadeInput, cursoInput].forEach((input) => {
                 if (input) input.disabled = bloqueioParametros;
             });
@@ -306,6 +381,10 @@ export const VALVE_PROPERTIES_PRESENTER = {
             comp.setAbertura(clamped);
             refreshValvePanel();
         };
+
+        bindCustomSelect('input-perfil-valvula');
+        bindCustomSelect('input-unidade-coeficiente-valvula');
+        bindCustomSelect('input-caracteristica-valvula');
 
         bind('input-abertura', 'input', (event) => updateFromSlider(event.target.value));
         bind('val-abertura', 'change', (event) => updateFromInput(event.target.value));

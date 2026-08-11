@@ -618,61 +618,82 @@ export function createMonitorController({ engine }) {
     function ensureChartAxisSelector(container, id, kind, chart, onSelect, component) {
         if (!container) return null;
 
-        let selector = document.getElementById(id);
+        let wrapper = document.getElementById(id);
         if (kind !== 'pump' && kind !== 'valve') {
-            if (selector) selector.style.display = 'none';
+            if (wrapper) wrapper.style.display = 'none';
             return null;
         }
 
-        if (!selector) {
-            selector = document.createElement('select');
-            selector.id = id;
-            selector.className = 'chart-axis-select';
-            
-            const refElement = container.querySelector('.chart-compare-dismiss') || container.querySelector('.chart-pump-export-button');
-            if (refElement) {
-                container.insertBefore(selector, refElement);
-            } else {
-                container.appendChild(selector);
-            }
-        }
-
-        if (selector.parentElement !== container) {
-            const refElement = container.querySelector('.chart-compare-dismiss') || container.querySelector('.chart-pump-export-button');
-            if (refElement) {
-                container.insertBefore(selector, refElement);
-            } else {
-                container.appendChild(selector);
-            }
-        }
-
-        selector.style.display = '';
-
         const expectedOptions = getAxisOptions(kind, component);
-        const currentOptions = Array.from(selector.options).map(o => o.value);
-        const optionsMatch = expectedOptions.length === currentOptions.length &&
-            expectedOptions.every((opt, idx) => opt.value === currentOptions[idx]);
-
-        if (!optionsMatch) {
-            selector.innerHTML = '';
-            expectedOptions.forEach(opt => {
-                const optionElement = document.createElement('option');
-                optionElement.value = opt.value;
-                optionElement.textContent = opt.label;
-                selector.appendChild(optionElement);
-            });
+        if (!expectedOptions.length) {
+            if (wrapper) wrapper.style.display = 'none';
+            return null;
         }
 
         const activeMode = chart?.yAxisMode || (kind === 'pump' ? 'yHead' : 'yPressure');
-        selector.value = activeMode;
+        const selectedOption = expectedOptions.find(opt => opt.value === activeMode) || expectedOptions[0];
 
-        // Use direct property binding to completely replace old listeners and avoid stale closures
-        selector.onchange = (event) => {
-            const newMode = event.target.value;
-            onSelect(newMode);
-        };
+        if (!wrapper) {
+            wrapper = document.createElement('div');
+            wrapper.id = id;
+            wrapper.className = 'custom-select-wrapper chart-axis-custom-select';
 
-        return selector;
+            const refElement = container.querySelector('.chart-compare-dismiss') || container.querySelector('.chart-pump-export-button');
+            if (refElement) {
+                container.insertBefore(wrapper, refElement);
+            } else {
+                container.appendChild(wrapper);
+            }
+        }
+
+        if (wrapper.parentElement !== container) {
+            const refElement = container.querySelector('.chart-compare-dismiss') || container.querySelector('.chart-pump-export-button');
+            if (refElement) {
+                container.insertBefore(wrapper, refElement);
+            } else {
+                container.appendChild(wrapper);
+            }
+        }
+
+        wrapper.style.display = '';
+
+        const optionsHTML = expectedOptions
+            .map(opt => `<li class="custom-select-option ${opt.value === activeMode ? 'selected' : ''}" data-value="${opt.value}">${opt.label}</li>`)
+            .join('');
+
+        wrapper.innerHTML = `
+            <div class="custom-select-trigger" id="${id}-trigger" title="${t('chart.selectYAxis')}">
+                <span id="${id}-label">${selectedOption.label}</span>
+                <span class="custom-select-arrow">▼</span>
+            </div>
+            <ul class="custom-select-options" id="${id}-options">
+                ${optionsHTML}
+            </ul>
+        `;
+
+        const trigger = wrapper.querySelector('.custom-select-trigger');
+        const options = wrapper.querySelectorAll('.custom-select-option');
+
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.querySelectorAll('.custom-select-wrapper.open').forEach(w => {
+                if (w !== wrapper) w.classList.remove('open');
+            });
+            wrapper.classList.toggle('open');
+        });
+
+        options.forEach(opt => {
+            opt.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const newMode = opt.dataset.value;
+                wrapper.classList.remove('open');
+                if (newMode !== activeMode) {
+                    onSelect(newMode);
+                }
+            });
+        });
+
+        return wrapper;
     }
 
     function ensureExpandedChartAxisSelector(elements, index, entry) {
