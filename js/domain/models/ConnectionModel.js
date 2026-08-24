@@ -19,6 +19,7 @@ function normalizeEndpoint(endpoint, fallbackType) {
     const normalized = endpoint || {};
     return {
         portType: normalized.portType || fallbackType,
+        portId: normalized.portId || normalized.dataset?.portId || normalized.portType || fallbackType,
         offsetX: Number(normalized.offsetX) || 0,
         offsetY: Number(normalized.offsetY) || 0,
         floorOffsetY: Number(normalized.floorOffsetY) || 0,

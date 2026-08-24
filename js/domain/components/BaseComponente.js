@@ -144,26 +144,28 @@ export class ComponenteFisico extends Observable {
         return Math.max(0, this.estadoHidraulico.entradaVazaoLps - this.estadoHidraulico.entradaConsumidaLps);
     }
 
-    registrarEntrada(flowLps, pressureBar, fluido = null) {
+    registrarEntrada(flowLps, pressureBar, fluido = null, portId = null) {
         if (flowLps <= EPSILON_FLOW) return;
         this.estadoHidraulico.entradaVazaoLps += flowLps;
         this.estadoHidraulico.entradaPressaoPonderadaBar += pressureBar * flowLps;
         if (fluido) {
             this.estadoHidraulico.entradaFluidoContribuicoes.push({
                 flowLps,
-                fluido
+                fluido,
+                portId
             });
         }
     }
 
-    registrarSaida(flowLps, pressureBar, fluido = null) {
+    registrarSaida(flowLps, pressureBar, fluido = null, portId = null) {
         if (flowLps <= EPSILON_FLOW) return;
         this.estadoHidraulico.saidaVazaoLps += flowLps;
         this.estadoHidraulico.saidaPressaoPonderadaBar += pressureBar * flowLps;
         if (fluido) {
             this.estadoHidraulico.saidaFluidoContribuicoes.push({
                 flowLps,
-                fluido
+                fluido,
+                portId
             });
         }
     }
@@ -175,6 +177,22 @@ export class ComponenteFisico extends Observable {
 
     getFluidoEntradaMisturado(fallback = null) {
         return mixFluidos(this.estadoHidraulico.entradaFluidoContribuicoes, fallback);
+    }
+
+    getFluidoEntradaMisturadoPorPorta(portId, fallback = null) {
+        if (!portId) return this.getFluidoEntradaMisturado(fallback);
+        const isMatch = (c) => c.portId === portId || c.portId === null || (portId === 'in1' && c.portId === 'in');
+        const contribuicoes = this.estadoHidraulico.entradaFluidoContribuicoes.filter(isMatch);
+        if (contribuicoes.length === 0) return fallback;
+        return mixFluidos(contribuicoes, fallback);
+    }
+
+    getVazaoEntradaPorPorta(portId) {
+        if (!portId) return this.estadoHidraulico.entradaVazaoLps;
+        const isMatch = (c) => c.portId === portId || c.portId === null || (portId === 'in1' && c.portId === 'in');
+        return this.estadoHidraulico.entradaFluidoContribuicoes
+            .filter(isMatch)
+            .reduce((acc, c) => acc + c.flowLps, 0);
     }
 
     getFluidoSaidaMisturado(fallback = null) {

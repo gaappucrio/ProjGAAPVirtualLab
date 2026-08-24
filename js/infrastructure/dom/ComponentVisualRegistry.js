@@ -28,10 +28,12 @@ export function createConnectionEndpointDefinition(component, portEl) {
     const offsetX = parseStyleNumber(svgEl?.style.left) + parseFloat(portEl?.getAttribute('cx') || '0');
     const offsetY = parseStyleNumber(svgEl?.style.top) + parseFloat(portEl?.getAttribute('cy') || '0');
     const portType = portEl?.dataset?.type === 'in' ? 'in' : 'out';
+    const portId = portEl?.dataset?.portId || portType;
     const isTankLike = component && typeof component.alturaUtilMetros === 'number';
 
     return {
         portType,
+        portId,
         offsetX,
         offsetY,
         floorOffsetY: isTankLike ? parseStyleNumber(svgEl?.style.top) + 240 : 0,
@@ -46,11 +48,13 @@ export function registerComponentVisual(component, visualEl) {
     const entry = {
         componentId,
         visualEl,
-        ports: {
-            in: visualEl.querySelector('.port-node[data-type="in"]'),
-            out: visualEl.querySelector('.port-node[data-type="out"]')
-        }
+        ports: {}
     };
+
+    visualEl.querySelectorAll('.port-node').forEach(port => {
+        const portId = port.dataset.portId || port.dataset.type;
+        if (portId) entry.ports[portId] = port;
+    });
 
     visualsByComponentId.set(componentId, entry);
     return entry;
@@ -62,10 +66,16 @@ export function getComponentVisual(componentOrId) {
     return visualsByComponentId.get(componentId) || null;
 }
 
-export function getComponentPortElement(componentOrId, portType) {
+export function getComponentPortElement(componentOrId, portTypeOrId) {
     const visual = getComponentVisual(componentOrId);
-    if (!visual) return null;
-    return visual.ports?.[portType] || null;
+    if (!visual || !visual.visualEl) return null;
+    if (portTypeOrId) {
+        return visual.ports?.[portTypeOrId]
+            || visual.visualEl.querySelector(`.port-node[data-port-id="${portTypeOrId}"]`)
+            || visual.visualEl.querySelector(`.port-node[data-type="${portTypeOrId}"]`)
+            || null;
+    }
+    return visual.ports?.out || visual.ports?.in || visual.visualEl.querySelector('.port-node') || null;
 }
 
 export function getRegisteredComponentVisualPosition(componentOrId) {

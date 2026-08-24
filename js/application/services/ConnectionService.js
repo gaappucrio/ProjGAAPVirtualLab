@@ -29,7 +29,9 @@ function normalizeConnectionInput(sourceComponentOrPayload, sourceEndpoint, targ
 }
 
 function hasExpectedPortType(endpoint, expectedPortType) {
-    return endpoint && endpoint.portType === expectedPortType;
+    if (!endpoint) return false;
+    const type = endpoint.portType || endpoint.dataset?.type;
+    return type === expectedPortType;
 }
 
 export class ConnectionService {

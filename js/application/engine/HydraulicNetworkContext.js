@@ -21,10 +21,10 @@ export class HydraulicNetworkContext {
         return this.engine.fluidoOperante;
     }
 
-    getComponentFluid(component) {
+    getComponentFluid(component, portId = null) {
         if (component?.fluidoEntrada) return component.fluidoEntrada;
         if (typeof component?.getFluidoSaidaAtual === 'function') {
-            return component.getFluidoSaidaAtual(this.fluidoOperante);
+            return component.getFluidoSaidaAtual(this.fluidoOperante, null, portId);
         }
         if (typeof component?.getFluidoEntradaMisturado === 'function' && component.estadoHidraulico?.entradaFluidoContribuicoes?.length > 0) {
             return component.getFluidoEntradaMisturado(this.fluidoOperante);
@@ -70,7 +70,7 @@ export class HydraulicNetworkContext {
     getConnectionFluid(connection) {
         const state = connection ? this.getConnectionState(connection) : null;
         if (state?.fluid) return state.fluid;
-        return this.getComponentFluid(this.getComponentById(connection?.sourceId));
+        return this.getComponentFluid(this.getComponentById(connection?.sourceId), connection?.sourceEndpoint?.portId);
     }
 
     get usarAlturaRelativa() {

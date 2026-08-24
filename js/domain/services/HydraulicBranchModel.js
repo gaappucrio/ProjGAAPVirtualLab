@@ -238,8 +238,8 @@ export class HydraulicBranchModel {
             if (!source || !target) return;
 
             const fluid = state.fluid || this.context.getConnectionFluid(conn);
-            source.registrarSaida(state.flowLps, finiteNumber(state.sourcePressureBar, finiteNumber(state.pressureBar, 0)), fluid);
-            target.registrarEntrada(state.flowLps, finiteNumber(state.outletPressureBar, finiteNumber(state.pressureBar, 0)), fluid);
+            source.registrarSaida(state.flowLps, finiteNumber(state.sourcePressureBar, finiteNumber(state.pressureBar, 0)), fluid, conn.sourceEndpoint?.portId);
+            target.registrarEntrada(state.flowLps, finiteNumber(state.outletPressureBar, finiteNumber(state.pressureBar, 0)), fluid, conn.targetEndpoint?.portId);
         });
 
         this.context.componentes.forEach((component) => {
@@ -962,8 +962,8 @@ export class HydraulicBranchModel {
         const pipeOutletPressureBar = inletPressureBar;
         const totalLossBar = lossBreakdown.totalLossBar;
 
-        comp.registrarSaida(actualFlowLps, pipeInletPressureBar, fluid);
-        target.registrarEntrada(actualFlowLps, arrivalPressureBar, fluid);
+        comp.registrarSaida(actualFlowLps, pipeInletPressureBar, fluid, conn.sourceEndpoint?.portId);
+        target.registrarEntrada(actualFlowLps, arrivalPressureBar, fluid, conn.targetEndpoint?.portId);
 
         const flowBefore = state.flowLps;
         state.flowLps += actualFlowLps;

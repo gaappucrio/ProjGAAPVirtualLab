@@ -17,23 +17,21 @@ export {
     subscribeUnitPreferences
 };
 
-export const makePort = (id, cx, cy, inOut) => {
+export const makePort = (id, cx, cy, inOut, portId = null) => {
     const isInput = inOut === 'in';
     const textX = isInput ? cx - 10 : cx + 10;
     const anchor = isInput ? 'end' : 'start';
+    const pid = portId || inOut;
 
     return `
-        <circle class="port-node unconnected" data-type="${inOut}" data-comp-id="${id}" cx="${cx}" cy="${cy}" r="5" fill="#fff" stroke="${colorPort}" stroke-width="2"/>
-        <text id="elev-${inOut}-${id}" x="${textX}" y="${cy + 3}" font-size="10" font-family="monospace" fill="#e67e22" font-weight="bold" text-anchor="${anchor}" opacity="0" data-cy="${cy}" pointer-events="none"></text>
+        <circle class="port-node unconnected" data-type="${inOut}" data-port-id="${pid}" data-comp-id="${id}" cx="${cx}" cy="${cy}" r="5" fill="#fff" stroke="${colorPort}" stroke-width="2"/>
+        <text id="elev-${pid}-${id}" x="${textX}" y="${cy + 3}" font-size="10" font-family="monospace" fill="#e67e22" font-weight="bold" text-anchor="${anchor}" opacity="0" data-cy="${cy}" pointer-events="none"></text>
     `;
 };
 
 export function createElevationUpdater({ visual, logica, id, offsetY, registerCleanup = null }) {
     const update = () => {
-        ['in', 'out'].forEach((tipo) => {
-            const el = visual.querySelector(`#elev-${tipo}-${id}`);
-            if (!el) return;
-
+        visual.querySelectorAll('[id^="elev-"]').forEach((el) => {
             if (ENGINE.usarAlturaRelativa) {
                 const cy = parseFloat(el.getAttribute('data-cy'));
                 const logicalY = logica.y + offsetY + cy;

@@ -179,14 +179,32 @@ const HEAT_EXCHANGER_COMPONENT_VISUAL = {
                 <stop id="hx-grad-start-${id}" offset="0%" stop-color="#5dade2"/>
                 <stop id="hx-grad-end-${id}" offset="100%" stop-color="#f39c12"/>
             </linearGradient>
+            <linearGradient id="hx-grad-serv-${id}" x1="0" y1="0" x2="1" y2="0">
+                <stop id="hx-grad-serv-start-${id}" offset="0%" stop-color="#f39c12"/>
+                <stop id="hx-grad-serv-end-${id}" offset="100%" stop-color="#5dade2"/>
+            </linearGradient>
         </defs>
-        <rect x="10" y="18" width="80" height="44" rx="8" fill="#fff" stroke="#2c3e50" stroke-width="5"/>
-        <path id="hx-shell-${id}" d="M 14 40 C 26 20, 42 20, 54 40 S 78 60, 88 40" fill="none" stroke="url(#hx-grad-${id})" stroke-width="8" stroke-linecap="round"/>
-        <path d="M 18 30 H 82 M 18 50 H 82" fill="none" stroke="#7f8c8d" stroke-width="3" stroke-linecap="round" opacity="0.7"/>
-        <circle id="hx-status-${id}" cx="50" cy="40" r="8" fill="#95a5a6" stroke="#2c3e50" stroke-width="2"/>
-        <text id="hx-temp-${id}" x="50" y="78" font-size="11" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#2c3e50">25.0 °C</text>
-        <text id="tag-${id}" x="50" y="96" font-size="12" ${labelStyle}>${tag}</text>
-        <g>${makePort(id, 0, 40, 'in')} ${makePort(id, 100, 40, 'out')}</g>
+        <rect x="15" y="10" width="70" height="60" rx="8" fill="#fff" stroke="#2c3e50" stroke-width="5"/>
+        
+        <!-- Stream 1 (Process) -->
+        <path id="hx-shell-${id}" d="M 15 25 Q 50 15, 85 25" fill="none" stroke="url(#hx-grad-${id})" stroke-width="6" stroke-linecap="round"/>
+        
+        <!-- Stream 2 (Service) -->
+        <path id="hx-tube-${id}" d="M 15 55 Q 50 65, 85 55" fill="none" stroke="url(#hx-grad-serv-${id})" stroke-width="6" stroke-linecap="round"/>
+        
+        <!-- Center connection/heat transfer lines -->
+        <path d="M 30 32 L 30 48 M 50 35 L 50 45 M 70 32 L 70 48" fill="none" stroke="#7f8c8d" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+        
+        <circle id="hx-status-${id}" cx="50" cy="40" r="5" fill="#95a5a6" stroke="#2c3e50" stroke-width="1.5"/>
+        <text id="hx-temp-${id}" x="50" y="85" font-size="11" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#2c3e50">25.0 °C</text>
+        <text id="tag-${id}" x="50" y="100" font-size="12" ${labelStyle}>${tag}</text>
+        
+        <g>
+            ${makePort(id, 0, 25, 'in', 'in1')} 
+            ${makePort(id, 100, 25, 'out', 'out1')}
+            ${makePort(id, 0, 55, 'in', 'in2')}
+            ${makePort(id, 100, 55, 'out', 'out2')}
+        </g>
     `,
     setup: (visual, logica, id) => {
         const atualizarElevacoes = createElevationUpdater({
@@ -197,19 +215,36 @@ const HEAT_EXCHANGER_COMPONENT_VISUAL = {
             registerCleanup: (cleanup) => registerVisualCleanup(visual, cleanup)
         });
         const atualizarEstadoTermico = () => {
-            const deltaT = logica.deltaTemperaturaC || 0;
+            const deltaT1 = logica.deltaTemperaturaC || 0;
+            const deltaT2 = logica.deltaTemperatura2C || 0;
             const status = visual.querySelector(`#hx-status-${id}`);
             const temp = visual.querySelector(`#hx-temp-${id}`);
-            const start = visual.querySelector(`#hx-grad-start-${id}`);
-            const end = visual.querySelector(`#hx-grad-end-${id}`);
-            const aquecendo = deltaT > 0.05;
-            const resfriando = deltaT < -0.05;
-            const corStatus = aquecendo ? '#e67e22' : (resfriando ? '#3498db' : '#95a5a6');
+            
+            const start1 = visual.querySelector(`#hx-grad-start-${id}`);
+            const end1 = visual.querySelector(`#hx-grad-end-${id}`);
+            const start2 = visual.querySelector(`#hx-grad-serv-start-${id}`);
+            const end2 = visual.querySelector(`#hx-grad-serv-end-${id}`);
+            
+            const aquecendo1 = deltaT1 > 0.05;
+            const resfriando1 = deltaT1 < -0.05;
+            const corStatus = aquecendo1 ? '#e67e22' : (resfriando1 ? '#3498db' : '#95a5a6');
 
             status?.setAttribute('fill', corStatus);
-            start?.setAttribute('stop-color', resfriando ? '#f39c12' : '#5dade2');
-            end?.setAttribute('stop-color', aquecendo ? '#f39c12' : '#3498db');
-            if (temp) temp.textContent = `${(logica.temperaturaSaidaC || 0).toFixed(1)} °C`;
+            start1?.setAttribute('stop-color', resfriando1 ? '#f39c12' : '#5dade2');
+            end1?.setAttribute('stop-color', aquecendo1 ? '#f39c12' : '#3498db');
+            
+            const aquecendo2 = deltaT2 > 0.05;
+            const resfriando2 = deltaT2 < -0.05;
+            start2?.setAttribute('stop-color', resfriando2 ? '#f39c12' : '#5dade2');
+            end2?.setAttribute('stop-color', aquecendo2 ? '#f39c12' : '#3498db');
+
+            if (temp) {
+                const text1 = (logica.temperaturaSaidaC || 0).toFixed(1);
+                const text2 = (logica.temperaturaSaida2C !== undefined && logica.temperaturaSaida2C !== null) 
+                    ? ` / ${(logica.temperaturaSaida2C).toFixed(1)}` 
+                    : '';
+                temp.textContent = `${text1}${text2} °C`;
+            }
         };
 
         subscribeVisual(visual, logica, (dados) => {
