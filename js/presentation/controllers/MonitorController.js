@@ -644,6 +644,19 @@ export function createMonitorController({ engine }) {
             } else {
                 container.appendChild(wrapper);
             }
+
+            hiddenInput = wrapper.querySelector(`#${id}`);
+            hiddenInput.value = activeMode;
+            const label = wrapper.querySelector(`#${id}-label`);
+            label.textContent = selectedOption.label;
+            
+            optionsContainer.querySelectorAll('.custom-select-option').forEach(o => {
+                if (o.dataset.value === activeMode) {
+                    o.classList.add('selected');
+                } else {
+                    o.classList.remove('selected');
+                }
+            });
         }
 
         if (wrapper.parentElement !== container) {
