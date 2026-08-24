@@ -618,96 +618,31 @@ export function createMonitorController({ engine }) {
     function ensureChartAxisSelector(container, id, kind, chart, onSelect, component) {
         if (!container) return null;
 
-        let wrapper = document.getElementById(id + '-wrapper');
-        let hiddenInput = document.getElementById(id);
-
+        let wrapper = document.getElementById(id);
         if (kind !== 'pump' && kind !== 'valve') {
             if (wrapper) wrapper.style.display = 'none';
             return null;
         }
 
         const expectedOptions = getAxisOptions(kind, component);
+        if (!expectedOptions.length) {
+            if (wrapper) wrapper.style.display = 'none';
+            return null;
+        }
+
         const activeMode = chart?.yAxisMode || (kind === 'pump' ? 'yHead' : 'yPressure');
-        const selectedOption = expectedOptions.find(opt => activeMode === opt.value) || expectedOptions[0];
+        const selectedOption = expectedOptions.find(opt => opt.value === activeMode) || expectedOptions[0];
 
         if (!wrapper) {
             wrapper = document.createElement('div');
-            wrapper.id = id + '-wrapper';
-            wrapper.className = 'custom-select-wrapper chart-axis-select';
-            // Custom styling adjustments for the chart header specifically
-            wrapper.style.width = 'auto';
-            wrapper.style.minWidth = '140px';
-            wrapper.style.fontSize = '11px';
-            
-            const optionsHTML = expectedOptions
-                .map((option) => `<li class="custom-select-option ${activeMode === option.value ? 'selected' : ''}" data-value="${option.value}" style="font-size: 11px; padding: 6px 10px;">${option.label}</li>`)
-                .join('');
+            wrapper.id = id;
+            wrapper.className = 'custom-select-wrapper chart-axis-custom-select';
 
-            wrapper.innerHTML = `
-                <input type="hidden" id="${id}" value="${selectedOption.value}">
-                <div class="custom-select-trigger" id="${id}-trigger" title="Selecione o eixo Y" style="padding: 4px 8px;">
-                    <span id="${id}-label">${selectedOption.label}</span>
-                    <span class="custom-select-arrow" style="margin-left:6px;">▼</span>
-                </div>
-                <ul class="custom-select-options" id="${id}-options">
-                    ${optionsHTML}
-                </ul>
-            `;
-            
             const refElement = container.querySelector('.chart-compare-dismiss') || container.querySelector('.chart-pump-export-button');
             if (refElement) {
                 container.insertBefore(wrapper, refElement);
             } else {
                 container.appendChild(wrapper);
-            }
-
-            hiddenInput = wrapper.querySelector(`#${id}`);
-            const trigger = wrapper.querySelector(`#${id}-trigger`);
-            const label = wrapper.querySelector(`#${id}-label`);
-
-            trigger.addEventListener('click', (e) => {
-                e.stopPropagation();
-                document.querySelectorAll('.custom-select-wrapper.open').forEach(w => {
-                    if (w !== wrapper) w.classList.remove('open');
-                });
-                wrapper.classList.toggle('open');
-            });
-
-            wrapper.addEventListener('click', (e) => {
-                const opt = e.target.closest('.custom-select-option');
-                if (!opt) return;
-                e.stopPropagation();
-                const val = opt.dataset.value;
-                hiddenInput.value = val;
-                
-                label.textContent = opt.textContent;
-                wrapper.querySelectorAll('.custom-select-option').forEach(o => o.classList.remove('selected'));
-                opt.classList.add('selected');
-
-                wrapper.classList.remove('open');
-                onSelect(val);
-            });
-            
-            if (!window.__globalCustomSelectListenerAdded) {
-                document.addEventListener('click', (e) => {
-                    if (!e.target.closest('.custom-select-wrapper')) {
-                        document.querySelectorAll('.custom-select-wrapper.open').forEach(w => {
-                            w.classList.remove('open');
-                        });
-                    }
-                });
-                window.__globalCustomSelectListenerAdded = true;
-            }
-        } else {
-            const optionsContainer = wrapper.querySelector('.custom-select-options');
-            const currentOptions = Array.from(optionsContainer.querySelectorAll('.custom-select-option')).map(o => o.dataset.value);
-            const optionsMatch = expectedOptions.length === currentOptions.length &&
-                expectedOptions.every((opt, idx) => opt.value === currentOptions[idx]);
-
-            if (!optionsMatch) {
-                optionsContainer.innerHTML = expectedOptions
-                    .map((option) => `<li class="custom-select-option ${activeMode === option.value ? 'selected' : ''}" data-value="${option.value}" style="font-size: 11px; padding: 6px 10px;">${option.label}</li>`)
-                    .join('');
             }
 
             hiddenInput = wrapper.querySelector(`#${id}`);
@@ -734,6 +669,43 @@ export function createMonitorController({ engine }) {
         }
 
         wrapper.style.display = '';
+
+        const optionsHTML = expectedOptions
+            .map(opt => `<li class="custom-select-option ${opt.value === activeMode ? 'selected' : ''}" data-value="${opt.value}">${opt.label}</li>`)
+            .join('');
+
+        wrapper.innerHTML = `
+            <div class="custom-select-trigger" id="${id}-trigger" title="${t('chart.selectYAxis')}">
+                <span id="${id}-label">${selectedOption.label}</span>
+                <span class="custom-select-arrow">▼</span>
+            </div>
+            <ul class="custom-select-options" id="${id}-options">
+                ${optionsHTML}
+            </ul>
+        `;
+
+        const trigger = wrapper.querySelector('.custom-select-trigger');
+        const options = wrapper.querySelectorAll('.custom-select-option');
+
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.querySelectorAll('.custom-select-wrapper.open').forEach(w => {
+                if (w !== wrapper) w.classList.remove('open');
+            });
+            wrapper.classList.toggle('open');
+        });
+
+        options.forEach(opt => {
+            opt.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const newMode = opt.dataset.value;
+                wrapper.classList.remove('open');
+                if (newMode !== activeMode) {
+                    onSelect(newMode);
+                }
+            });
+        });
+
         return wrapper;
     }
 

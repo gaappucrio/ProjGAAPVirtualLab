@@ -28,11 +28,14 @@ export { getPresentationEngine, ComponentEventPayloads, EngineEventPayloads, COM
 
 export const TOOLTIP = TOOLTIPS.componentes;
 
-const escapeAttr = (value) => String(value)
-    .replace(/&/g, '&')
-    .replace(/"/g, '"')
-    .replace(/</g, '<')
-    .replace(/>/g, '>');
+export const escapeHtml = (value) => String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+const escapeAttr = (value) => escapeHtml(value);
 
 export const hintAttr = (text) => `title="${escapeAttr(text)}"`;
 export const makeLabel = (text, hint) => `<label ${hintAttr(hint)}>${text}</label>`;

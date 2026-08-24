@@ -61,6 +61,15 @@ export class FabricaDeEquipamentos {
     (por exemplo, seleção, duplo clique para alternar estado, etc.).
     O método também define os atributos de dados necessários para a lógica do componente
     e retorna o elemento visual completo para ser adicionado ao workspace ou à paleta. */
+    static escapeHtml(value) {
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
     static criar(tipo, x, y, isPalette = false, options = {}) {
         const spec = getComponentDefinition(tipo);
         const visualSpec = getComponentVisualSpec(tipo);
@@ -80,7 +89,7 @@ export class FabricaDeEquipamentos {
 
         visual.innerHTML = `
                     <svg viewBox="0 0 ${spec.w + 40} ${spec.h + 80}" width="${spec.w + 40}" height="${spec.h + 80}" style="left:${spec.offX}px; top:${spec.offY}px; position:absolute;">
-                        ${visualSpec.svg(id, tag)}
+                        ${visualSpec.svg(id, this.escapeHtml(tag))}
                     </svg>`;
 
         if (!isPalette) {
