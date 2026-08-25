@@ -14,8 +14,8 @@ export function updatePortStates() {
     allPorts.forEach(port => port.classList.add('unconnected'));
 
     ENGINE.conexoes.forEach((conn) => {
-        const sourcePort = getComponentPortElement(conn.sourceId, conn.sourceEndpoint?.portType || 'out');
-        const targetPort = getComponentPortElement(conn.targetId, conn.targetEndpoint?.portType || 'in');
+        const sourcePort = getComponentPortElement(conn.sourceId, conn.sourceEndpoint?.portId || conn.sourceEndpoint?.portType || 'out');
+        const targetPort = getComponentPortElement(conn.targetId, conn.targetEndpoint?.portId || conn.targetEndpoint?.portType || 'in');
         if (sourcePort) sourcePort.classList.remove('unconnected');
         if (targetPort) targetPort.classList.remove('unconnected');
     });

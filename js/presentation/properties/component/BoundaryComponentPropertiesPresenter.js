@@ -392,6 +392,14 @@ export const SINK_PROPERTIES_PRESENTER = {
                 ${makeUnitLabel('Queda na entrada da saída', 'pressure', TOOLTIP.sinkEntryPressureDrop)}
                 <input type="text" id="disp-deltap-entrada-dreno" ${hintAttr(TOOLTIP.sinkEntryPressureDrop)} value="${displayUnitValue('pressure', pressureProfile.entryPressureDropBar, 2)}" disabled>
             </div>
+            <div class="prop-group">
+                <label title="Fluido atualmente recebido nesta saída.">Fluido Recebido</label>
+                <input type="text" id="disp-dreno-fluid" title="Fluido atualmente recebido nesta saída." value="${comp.getFluidoEntradaMisturado?.()?.nome || '-'}" disabled>
+            </div>
+            <div class="prop-group">
+                ${makeUnitLabel('Temperatura do Fluido', 'temperature', 'Temperatura do fluido recebido nesta saída.')}
+                <input type="text" id="disp-dreno-fluid-temp" title="Temperatura do fluido recebido nesta saída." value="${displayUnitValue('temperature', comp.getFluidoEntradaMisturado?.()?.temperatura ?? 25, 2)}" disabled>
+            </div>
         `;
         const advancedContent = `
             <div class="prop-group">

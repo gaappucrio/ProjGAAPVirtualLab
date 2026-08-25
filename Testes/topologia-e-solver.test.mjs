@@ -1499,3 +1499,144 @@ test('solver conserva massa em rede com 30 componentes e múltiplas saídas', ()
         'A vazão da fonte deve bater com a soma das múltiplas saídas'
     );
 });
+
+test('rastreamento de temperatura do fluido propaga ao longo da rede completa', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-CHAIN', 'Fonte-01', 0, 0);
+    const bomba = new BombaLogica('P-CHAIN', 'Bomba-01', 100, 0);
+    const valvula = new ValvulaLogica('V-CHAIN', 'Valvula-01', 200, 0);
+    const trocador = new TrocadorCalorLogico('HX-CHAIN', 'TC-01', 300, 0);
+    const tanque = new TanqueLogico('T-CHAIN', 'Tanque-01', 400, 0);
+    const dreno = new DrenoLogico('D-CHAIN', 'Dreno-01', 500, 0);
+
+    fonte.pressaoFonteBar = 2.5;
+    fonte.vazaoMaxima = 50;
+    fonte.atualizarFluidoEntrada({
+        ...FLUID_PRESETS.agua,
+        temperatura: 25
+    }, { presetId: 'agua' });
+
+    bomba.grauAcionamento = 100;
+    bomba.acionamentoEfetivo = 100;
+    bomba.vazaoNominal = 50;
+    bomba.pressaoMaxima = 4;
+
+    valvula.aberta = true;
+    valvula.grauAbertura = 100;
+    valvula.aberturaEfetiva = 100;
+
+    trocador.temperaturaServicoC = 90;
+    trocador.uaWPorK = 10000;
+
+    tanque.capacidadeMaxima = 10000;
+    tanque.volumeAtual = 1000;
+    tanque.fluidoConteudo = { ...FLUID_PRESETS.agua, temperatura: 25 };
+
+    dreno.pressaoSaidaBar = 0;
+
+    fonte.conectarSaida(bomba);
+    bomba.conectarSaida(valvula);
+    valvula.conectarSaida(trocador);
+    trocador.conectarSaida(tanque);
+    tanque.conectarSaida(dreno);
+
+    const c1 = new ConnectionModel({ sourceId: fonte.id, targetId: bomba.id });
+    const c2 = new ConnectionModel({ sourceId: bomba.id, targetId: valvula.id });
+    const c3 = new ConnectionModel({ sourceId: valvula.id, targetId: trocador.id, targetEndpoint: { portId: 'in1', portType: 'in' } });
+    const c4 = new ConnectionModel({ sourceId: trocador.id, targetId: tanque.id, sourceEndpoint: { portId: 'out1', portType: 'out' } });
+    const c5 = new ConnectionModel({ sourceId: tanque.id, targetId: dreno.id });
+
+    [fonte, bomba, valvula, trocador, tanque, dreno].forEach((c) => engine.add(c));
+    [c1, c2, c3, c4, c5].forEach((c) => engine.addConnection(c));
+
+    runAutomaticPhysicsSteps(engine, 50, 0.1);
+
+    const s1 = engine.getConnectionState(c1);
+    const s2 = engine.getConnectionState(c2);
+    const s3 = engine.getConnectionState(c3);
+    const s4 = engine.getConnectionState(c4);
+    const s5 = engine.getConnectionState(c5);
+
+    assert.ok(s1.flowLps > 0, 'Cano 1 deve escoar');
+    assert.equal(s1.fluid.temperatura, 25, 'Temperatura antes do trocador deve ser da fonte (25°C)');
+    assert.equal(s2.fluid.temperatura, 25, 'Temperatura na bomba deve ser 25°C');
+    assert.equal(s3.fluid.temperatura, 25, 'Temperatura na válvula deve ser 25°C');
+    assert.ok(s4.fluid.temperatura > 50, `Fluido apos trocador deve estar aquecido: ${s4.fluid.temperatura}°C`);
+    assert.ok(tanque.fluidoConteudo.temperatura > 25, `Fluido no tanque deve ter se aquecido com a mistura: ${tanque.fluidoConteudo.temperatura}°C`);
+    assert.ok(s5.fluid.temperatura > 25, `Fluido saindo do tanque deve refletir a mistura aquecida: ${s5.fluid.temperatura}°C`);
+});
+
+test('trocador de calor opera com duas correntes hidraulicamente independentes e troca termica acoplada', () => {
+    const engine = createEngine();
+    
+    // Tanque 1 com fluido quente (80°C) ligado na Corrente 2 (in2 -> out2) para Dreno 1
+    const t1 = new TanqueLogico('T1', 'T-01', 0, 0);
+    t1.capacidadeMaxima = 1000;
+    t1.volumeAtual = 1000;
+    t1.alturaUtilMetros = 2.4;
+    t1.fluidoConteudo = { ...FLUID_PRESETS.agua, temperatura: 80 };
+
+    // Tanque 2 com fluido frio (20°C) ligado na Corrente 1 (in1 -> out1) para Tanque 3 (cheio)
+    const t2 = new TanqueLogico('T2', 'T-02', 100, 0);
+    t2.capacidadeMaxima = 1000;
+    t2.volumeAtual = 1000;
+    t2.alturaUtilMetros = 2.4;
+    t2.fluidoConteudo = { ...FLUID_PRESETS.agua, temperatura: 20 };
+
+    // Tanque 3 (cheio, sem saída)
+    const t3 = new TanqueLogico('T3', 'T-03', 300, 0);
+    t3.capacidadeMaxima = 1000;
+    t3.volumeAtual = 1000; // Cheio: capacidade livre = 0
+    t3.alturaUtilMetros = 2.4;
+
+    const tc = new TrocadorCalorLogico('TC1', 'TC-01', 200, 0);
+    tc.uaWPorK = 5000;
+
+    const d1 = new DrenoLogico('D1', 'D-01', 400, 0);
+    d1.pressaoSaidaBar = 0;
+
+    // Conexões:
+    // Corrente 1: T2 -> TC(in1), TC(out1) -> T3
+    const cStream1In = new ConnectionModel({ sourceId: t2.id, targetId: tc.id, targetEndpoint: { portId: 'in1', portType: 'in' } });
+    const cStream1Out = new ConnectionModel({ sourceId: tc.id, targetId: t3.id, sourceEndpoint: { portId: 'out1', portType: 'out' } });
+
+    // Corrente 2: T1 -> TC(in2), TC(out2) -> D1
+    const cStream2In = new ConnectionModel({ sourceId: t1.id, targetId: tc.id, targetEndpoint: { portId: 'in2', portType: 'in' } });
+    const cStream2Out = new ConnectionModel({ sourceId: tc.id, targetId: d1.id, sourceEndpoint: { portId: 'out2', portType: 'out' } });
+
+    [t1, t2, t3, tc, d1].forEach(c => engine.add(c));
+    [cStream1In, cStream1Out, cStream2In, cStream2Out].forEach(c => engine.addConnection(c));
+
+    // Passo 1: Como T3 está cheio, Corrente 1 deve ter vazão 0 e T2 não deve esvaziar.
+    // Já a Corrente 2 está conectada a D1 (livre), logo deve escoar e T1 deve esvaziar!
+    runAutomaticPhysicsSteps(engine, 40, 0.1);
+
+    const sStream1In = engine.getConnectionState(cStream1In);
+    const sStream1Out = engine.getConnectionState(cStream1Out);
+    const sStream2In = engine.getConnectionState(cStream2In);
+    const sStream2Out = engine.getConnectionState(cStream2Out);
+
+    assert.equal(sStream1In.flowLps, 0, 'Corrente 1 de entrada deve ter vazao 0 pois T3 esta cheio');
+    assert.equal(sStream1Out.flowLps, 0, 'Corrente 1 de saida deve ter vazao 0 pois T3 esta cheio');
+    assert.ok(sStream2In.flowLps > 0, 'Corrente 2 de entrada deve escoar livremente para o dreno');
+    assert.ok(sStream2Out.flowLps > 0, 'Corrente 2 de saida deve escoar livremente para o dreno');
+    assert.ok(t1.volumeAtual < 1000, `Tanque 1 deve estar esvaziando: ${t1.volumeAtual} L`);
+    assert.equal(t2.volumeAtual, 1000, `Tanque 2 deve permanecer cheio (1000 L) enquanto T3 estiver bloqueado: ${t2.volumeAtual} L`);
+
+    // Passo 2: Agora damos espaço no Tanque 3 (ex: esvaziamos T3 para 200 L)
+    t3.volumeAtual = 200;
+    runAutomaticPhysicsSteps(engine, 40, 0.1);
+
+    const sStream1InApos = engine.getConnectionState(cStream1In);
+    const sStream2InApos = engine.getConnectionState(cStream2In);
+
+    assert.ok(sStream1InApos.flowLps > 0, 'Corrente 1 deve comecar a escoar apos liberar espaco no Tanque 3');
+    assert.ok(t2.volumeAtual < 1000, `Tanque 2 agora deve estar esvaziando: ${t2.volumeAtual} L`);
+
+    // Validação da troca térmica entre as duas correntes
+    tc.sincronizarMetricasFisicas();
+    assert.ok(tc.temperaturaSaidaC > 20, `Corrente 1 fria deve ter saido aquecida: ${tc.temperaturaSaidaC}°C`);
+    assert.ok(tc.temperaturaSaida2C < 80, `Corrente 2 quente deve ter saido resfriada: ${tc.temperaturaSaida2C}°C`);
+    assert.ok(tc.cargaTermicaW > 0, `Carga termica trocada deve ser positiva: ${tc.cargaTermicaW} W`);
+});
+

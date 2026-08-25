@@ -1,6 +1,6 @@
 import { EngineEventPayloads } from '../../application/events/EventPayloads.js';
 import { getPresentationEngine } from '../context/PresentationEngineContext.js';
-import { escapeHtml } from './PropertyPresenterShared.js';
+import { escapeHtml, makeUnitLabel } from './PropertyPresenterShared.js';
 import { clearInputError, InputValidator, showInputError } from '../validation/InputValidator.js';
 import { bindPropertyTabs, renderPropertyTabs } from './PropertyTabs.js';
 import { TOOLTIPS } from './PropertyTooltips.js';
@@ -94,6 +94,10 @@ export function renderConnectionProperties({
         <div class="prop-group">
             <label title="Fluido atualmente transportado neste Cano.">Fluido no Cano</label>
             <input type="text" id="disp-pipe-fluid" title="Fluido atualmente transportado neste Cano." value="${formatFluidName(currentFluid)}" disabled>
+        </div>
+        <div class="prop-group">
+            ${makeUnitLabel('Temperatura do Fluido', 'temperature', 'Temperatura atual do fluido que escoa neste Cano.')}
+            <input type="text" id="disp-pipe-fluid-temp" title="Temperatura atual do fluido que escoa neste Cano." value="${displayUnitValue('temperature', currentFluid?.temperatura ?? 25, 2)}" disabled>
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.deltaPTrecho}">Queda de Pressão no Cano (${getUnitSymbol('pressure')})</label>

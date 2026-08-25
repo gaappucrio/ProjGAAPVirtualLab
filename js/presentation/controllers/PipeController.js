@@ -131,8 +131,8 @@ function bindConnectionVisual(connection) {
 function getConnectionRenderPoints(connection) {
     const source = getEngine().getComponentById(connection.sourceId);
     const target = getEngine().getComponentById(connection.targetId);
-    const sourcePort = getComponentPortElement(connection.sourceId, connection.sourceEndpoint?.portType || 'out');
-    const targetPort = getComponentPortElement(connection.targetId, connection.targetEndpoint?.portType || 'in');
+    const sourcePort = getComponentPortElement(connection.sourceId, connection.sourceEndpoint?.portId || connection.sourceEndpoint?.portType || 'out');
+    const targetPort = getComponentPortElement(connection.targetId, connection.targetEndpoint?.portId || connection.targetEndpoint?.portType || 'in');
 
     if (!sourcePort || !targetPort) return null;
 
@@ -304,7 +304,7 @@ export function setupPipeControl({ engine: injectedEngine, connectionService: in
 
         transientConnection.begin({
             sourceComponentId: sourceComponent.id,
-            sourcePortType: 'out',
+            sourcePortType: target.dataset.portId || target.dataset.type || 'out',
             sourceEndpoint,
             sourcePoint
         });
@@ -351,7 +351,7 @@ export function setupPipeControl({ engine: injectedEngine, connectionService: in
 
         const sourceComponent = getEngine().getComponentById(draft.sourceComponentId);
         const targetComponent = getEngine().getComponentById(dropTarget.dataset.compId);
-        const sourcePort = getComponentPortElement(draft.sourceComponentId, draft.sourcePortType || 'out');
+        const sourcePort = getComponentPortElement(draft.sourceComponentId, draft.sourceEndpoint?.portId || draft.sourcePortType || 'out');
 
         if (!sourceComponent || !targetComponent || !sourcePort || sourceComponent === targetComponent) {
             cancelTransientConnection();

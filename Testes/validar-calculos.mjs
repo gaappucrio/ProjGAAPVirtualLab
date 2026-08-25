@@ -41,6 +41,7 @@ import {
     createLevelControllerState
 } from '../js/domain/services/LevelController.js';
 import { buildPumpCurveDatasets } from '../js/infrastructure/charts/PumpChartAdapter.js';
+import { buildExportHtml } from '../js/presentation/export/SimulationDataExporter.js';
 import {
     DEFAULT_ATMOSPHERIC_PRESSURE_BAR,
     DEFAULT_PIPE_EXTRA_LENGTH_M,
@@ -1196,4 +1197,49 @@ test('controle de nivel fecha entrada e saida dentro da banda do set point', () 
     assert.equal(valvulaEntrada.grauAbertura, 0);
     assert.ok(valvulaSaida.grauAbertura > valvulaSaida.aberturaEfetiva, 'Nível mais alto deve comandar maior abertura de saída');
     assert.ok(valvulaSaida.grauAbertura > 20 && valvulaSaida.grauAbertura < 25, 'Erro moderado deve gerar abertura parcial');
+});
+
+test('exportacao de dados inclui temperatura do fluido nas conexoes', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-EXP', 'Fonte-01', 0, 0);
+    const dreno = new DrenoLogico('D-EXP', 'Dreno-01', 100, 0);
+    fonte.atualizarFluidoEntrada({
+        ...FLUID_PRESETS.agua,
+        temperatura: 37.5
+    }, { presetId: 'agua' });
+
+    fonte.conectarSaida(dreno);
+    const conn = new ConnectionModel({ sourceId: fonte.id, targetId: dreno.id });
+    engine.add(fonte);
+    engine.add(dreno);
+    engine.addConnection(conn);
+
+    engine.resolveHydraulicNetwork(0.1);
+
+    const html = buildExportHtml(engine);
+    assert.ok(html.includes('Temperatura do fluido (°C)'), 'Cabeçalho da coluna de temperatura deve existir');
+    assert.ok(html.includes('37.5'), 'Valor da temperatura do fluido deve ser exportado');
+});
+
+test('exportacao de dados inclui colunas de ambas as correntes do trocador de calor', () => {
+    const engine = createEngine();
+    const trocador = new TrocadorCalorLogico('HX-EXP', 'TC-01', 0, 0);
+    trocador.temperaturaEntradaC = 25.5;
+    trocador.temperaturaSaidaC = 38.2;
+    trocador.temperaturaEntrada2C = 80.0;
+    trocador.temperaturaSaida2C = 67.3;
+    trocador.vazao1Lps = 12.5;
+    trocador.vazao2Lps = 8.4;
+    trocador.fluxoReal = 20.9;
+    trocador.cargaTermicaW = 4500;
+
+    engine.add(trocador);
+
+    const html = buildExportHtml(engine);
+    assert.ok(html.includes('Temperatura de entrada 2 do trocador'), 'Coluna de temperatura entrada 2 deve existir');
+    assert.ok(html.includes('Temperatura de saída 2 do trocador'), 'Coluna de temperatura saída 2 deve existir');
+    assert.ok(html.includes('Vazão na Corrente 1'), 'Coluna de vazão na corrente 1 deve existir');
+    assert.ok(html.includes('Vazão na Corrente 2'), 'Coluna de vazão na corrente 2 deve existir');
+    assert.ok(html.includes('38.2'), 'Temperatura de saída 1 deve ser exportada');
+    assert.ok(html.includes('67.3'), 'Temperatura de saída 2 deve ser exportada');
 });

@@ -179,6 +179,7 @@ function updateConnectionValues(engine, connection) {
     setValue('disp-pipe-friction', state.frictionFactor.toFixed(4));
     setValue('disp-pipe-regime', translateLiteral(state.regime));
     setValue('disp-pipe-fluid', fluid?.nome || '-');
+    setFieldValue('disp-pipe-fluid-temp', fluid?.temperatura ?? 25, 'temperature', 2);
     setValue('disp-pipe-fluid-density', fluid?.densidade ? fluid.densidade.toFixed(1) : '0.0');
     setValue('disp-pipe-fluid-viscosity', fluid?.viscosidadeDinamicaPaS ? fluid.viscosidadeDinamicaPaS.toFixed(5) : '0.00000');
     setFieldValue('disp-pipe-deltap', pressureProfile.pressureDropBar, 'pressure', 3);
@@ -215,6 +216,7 @@ function updateTankValues(component) {
     setValue('disp-tempo-residencia-tanque', formatResidenceTime(calculateTankResidenceTimeS(component).timeS));
     const fluid = component.getFluidoConteudo?.() || component.fluidoConteudo;
     setValue('disp-tank-fluid', fluid?.nome || '-');
+    setFieldValue('disp-tank-fluid-temp', fluid?.temperatura ?? 25, 'temperature', 2);
     setValue('disp-tank-fluid-density', fluid?.densidade ? fluid.densidade.toFixed(1) : '0.0');
     updateTankControlAvailabilityUI(component);
 }
@@ -388,13 +390,22 @@ function updatePumpValues(component, { monitorController } = {}) {
 }
 
 function updateHeatExchangerValues(component) {
+    setValue('disp-hx-duty', `${(component.cargaTermicaW / 1000).toFixed(2)} kW`);
+    setValue('disp-hx-effectiveness', `${(component.efetividadeAtual * 100).toFixed(1)}%`);
+
+    // Corrente 1
+    setFieldValue('disp-hx-flow', component.vazao1Lps ?? component.fluxoReal, 'flow', 2);
     setFieldValue('disp-hx-temp-in', component.temperaturaEntradaC, 'temperature', 2);
     setFieldValue('disp-hx-temp-out', component.temperaturaSaidaC, 'temperature', 2);
-    setValue('disp-hx-delta-t', component.deltaTemperaturaC.toFixed(2));
-    setValue('disp-hx-duty', `${(component.cargaTermicaW / 1000).toFixed(2)} kW`);
-    setFieldValue('disp-hx-flow', component.fluxoReal, 'flow', 2);
-    setValue('disp-hx-effectiveness', `${(component.efetividadeAtual * 100).toFixed(1)}%`);
+    setValue('disp-hx-delta-t', (component.deltaTemperaturaC || 0).toFixed(2));
     setFieldValue('disp-hx-deltap', component.deltaPAtualBar, 'pressure', 2);
+
+    // Corrente 2
+    setFieldValue('disp-hx-flow-2', component.vazao2Lps ?? 0, 'flow', 2);
+    setFieldValue('disp-hx-temp-in-2', component.temperaturaEntrada2C ?? component.temperaturaServicoC, 'temperature', 2);
+    setFieldValue('disp-hx-temp-out-2', component.temperaturaSaida2C ?? component.temperaturaServicoC, 'temperature', 2);
+    setValue('disp-hx-delta-t-2', (component.deltaTemperatura2C || 0).toFixed(2));
+    setFieldValue('disp-hx-deltap-2', component.deltaP2AtualBar ?? 0, 'pressure', 2);
 }
 
 export function updatePropertyPanelValues({
@@ -411,9 +422,12 @@ export function updatePropertyPanelValues({
 
     if (component instanceof DrenoLogico) {
         const pressureProfile = resolveSinkPressureProfile({ engine, sink: component });
+        const drenoFluid = component.getFluidoEntradaMisturado?.(engine.fluidoOperante);
         setFieldValue('disp-vazao-dreno', component.vazaoRecebidaLps, 'flow', 2);
         setFieldValue('disp-pressao-final-dreno', pressureProfile.finalNetworkPressureBar, 'pressure', 2);
         setFieldValue('disp-deltap-entrada-dreno', pressureProfile.entryPressureDropBar, 'pressure', 2);
+        setValue('disp-dreno-fluid', drenoFluid?.nome || '-');
+        setFieldValue('disp-dreno-fluid-temp', drenoFluid?.temperatura ?? 25, 'temperature', 2);
     }
 
     if (component instanceof TanqueLogico) {

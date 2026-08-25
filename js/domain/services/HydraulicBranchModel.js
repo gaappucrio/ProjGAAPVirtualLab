@@ -479,6 +479,42 @@ export class HydraulicBranchModel {
 
                 const inputConnections = this.context.getInputConnections(component);
                 const outputConnections = this.context.getOutputConnections(component);
+
+                if (component instanceof TrocadorCalorLogico) {
+                    const isStream2 = (portId) => portId === 'in2' || portId === 'out2' || portId === '2';
+                    
+                    // Balanceamento Corrente 1
+                    const in1 = inputConnections.filter(c => !isStream2(c.targetEndpoint?.portId));
+                    const out1 = outputConnections.filter(c => !isStream2(c.sourceEndpoint?.portId));
+                    const in1Flow = in1.reduce((sum, c) => sum + this.context.getConnectionState(c).flowLps, 0);
+                    const out1Flow = out1.reduce((sum, c) => sum + this.context.getConnectionState(c).flowLps, 0);
+                    if (in1Flow > out1Flow + EPSILON_FLOW) {
+                        const ratio = out1Flow > EPSILON_FLOW ? out1Flow / in1Flow : 0;
+                        in1.forEach(c => this.scaleConnectionState(c, ratio));
+                        adjusted = true;
+                    } else if (out1Flow > in1Flow + EPSILON_FLOW) {
+                        const ratio = in1Flow > EPSILON_FLOW ? in1Flow / out1Flow : 0;
+                        out1.forEach(c => this.scaleConnectionState(c, ratio));
+                        adjusted = true;
+                    }
+
+                    // Balanceamento Corrente 2
+                    const in2 = inputConnections.filter(c => isStream2(c.targetEndpoint?.portId));
+                    const out2 = outputConnections.filter(c => isStream2(c.sourceEndpoint?.portId));
+                    const in2Flow = in2.reduce((sum, c) => sum + this.context.getConnectionState(c).flowLps, 0);
+                    const out2Flow = out2.reduce((sum, c) => sum + this.context.getConnectionState(c).flowLps, 0);
+                    if (in2Flow > out2Flow + EPSILON_FLOW) {
+                        const ratio = out2Flow > EPSILON_FLOW ? out2Flow / in2Flow : 0;
+                        in2.forEach(c => this.scaleConnectionState(c, ratio));
+                        adjusted = true;
+                    } else if (out2Flow > in2Flow + EPSILON_FLOW) {
+                        const ratio = in2Flow > EPSILON_FLOW ? in2Flow / out2Flow : 0;
+                        out2.forEach(c => this.scaleConnectionState(c, ratio));
+                        adjusted = true;
+                    }
+                    return;
+                }
+
                 const inputFlowLps = inputConnections.reduce((sum, conn) => sum + this.context.getConnectionState(conn).flowLps, 0);
                 const outputFlowLps = outputConnections.reduce((sum, conn) => sum + this.context.getConnectionState(conn).flowLps, 0);
                 const imbalanceLps = Math.max(0, inputFlowLps - outputFlowLps);
@@ -536,7 +572,11 @@ export class HydraulicBranchModel {
         if (comp instanceof ValvulaLogica) {
             return comp.getAberturaNormalizadaAtual() > 0 && comp.getFluxoPendenteLps() > EPSILON_FLOW;
         }
-        if (comp instanceof TrocadorCalorLogico) return comp.getFluxoPendenteLps() > EPSILON_FLOW;
+        if (comp instanceof TrocadorCalorLogico) {
+            return (comp.getFluxoPendentePorStream?.(1) || 0) > EPSILON_FLOW
+                || (comp.getFluxoPendentePorStream?.(2) || 0) > EPSILON_FLOW
+                || comp.getFluxoPendenteLps() > EPSILON_FLOW;
+        }
         return false;
     }
 
@@ -654,16 +694,21 @@ export class HydraulicBranchModel {
         }
 
         if (comp instanceof TrocadorCalorLogico) {
+            const streamId = options.streamId || 1;
             const parametros = comp.getParametrosHidraulicos();
-            const availableFlow = estimating ? MAX_NETWORK_FLOW_LPS : comp.getFluxoPendenteLps();
+            const availableFlow = estimating
+                ? limitedFlow(MAX_NETWORK_FLOW_LPS)
+                : (comp.getFluxoPendentePorStream?.(streamId) ?? comp.getFluxoPendenteLps());
             if (availableFlow <= EPSILON_FLOW) return null;
 
-            const fluidInlet = inletFluid || comp.getFluidoEntradaMisturado?.(this.context.fluidoOperante) || this.context.fluidoOperante;
-            const outletFluid = comp.getFluidoSaidaPara(fluidInlet, availableFlow);
+            const fluidInlet = inletFluid
+                || comp.getFluidoEntradaMisturadoPorPorta(streamId === 2 ? 'in2' : 'in1', this.context.fluidoOperante)
+                || this.context.fluidoOperante;
+            const outletFluid = comp.getFluidoSaidaPara(fluidInlet, availableFlow, streamId);
 
             return {
                 availableFlowLps: availableFlow,
-                pressureBar: inletPressureBar ?? comp.getPressaoEntradaBar(),
+                pressureBar: inletPressureBar ?? (streamId === 2 ? comp.getPressaoEntradaPortaBar('in2') : comp.getPressaoEntradaBar()),
                 hydraulicAreaM2: Math.min(areaM2, parametros.hydraulicAreaM2),
                 connectionBaseLossCoeff: 0,
                 localLossCoeff: parametros.localLossCoeff,
@@ -674,7 +719,7 @@ export class HydraulicBranchModel {
         return null;
     }
 
-    estimateComponentPotential(comp, inletPressureBar, dt, visited = new Set(), flowLimitLps = null, inletFluid = null) {
+    estimateComponentPotential(comp, inletPressureBar, dt, visited = new Set(), flowLimitLps = null, inletFluid = null, targetPortId = null) {
         if (!comp || visited.has(comp.id)) return 0;
 
         if (comp instanceof DrenoLogico) return MAX_NETWORK_FLOW_LPS;
@@ -683,6 +728,35 @@ export class HydraulicBranchModel {
             const inflowAccepted = comp.estadoHidraulico.entradaVazaoLps * dt;
             const freeVolume = Math.max(0, comp.capacidadeMaxima - comp.volumeAtual - inflowAccepted);
             return dt > 0 ? freeVolume / dt : MAX_NETWORK_FLOW_LPS;
+        }
+
+        if (comp instanceof TrocadorCalorLogico) {
+            const streamId = (targetPortId === 'in2' || targetPortId === 'out2' || targetPortId === '2') ? 2 : 1;
+            const isStream2 = (portId) => portId === 'in2' || portId === 'out2' || portId === '2';
+            const outputs = this.context.getOutputConnections(comp).filter(conn => {
+                return isStream2(conn.sourceEndpoint?.portId) === (streamId === 2);
+            });
+            if (outputs.length === 0) return 0;
+
+            const supply = this.buildSupplyState(comp, dt, {
+                inletPressureBar,
+                estimating: true,
+                flowLimitLps,
+                inletFluid,
+                streamId
+            });
+            if (!supply || supply.availableFlowLps <= EPSILON_FLOW) return 0;
+
+            const nextVisited = new Set(visited);
+            nextVisited.add(comp.id);
+
+            const totalPotential = outputs.reduce((sum, conn) => {
+                const estimate = this.estimateBranch(comp, conn, supply, dt, nextVisited);
+                return sum + estimate.capacityLps;
+            }, 0);
+
+            const alreadyAccepted = comp.getVazaoEntradaPorPorta(streamId === 2 ? 'in2' : 'in1');
+            return Math.max(0, Math.min(supply.availableFlowLps, totalPotential) - alreadyAccepted);
         }
 
         const outputs = this.context.getOutputConnections(comp);
@@ -847,7 +921,8 @@ export class HydraulicBranchModel {
                     dt,
                     new Set(visited),
                     capacityLps,
-                    fluid
+                    fluid,
+                    conn.targetEndpoint?.portId
                 );
 
                 if (Number.isFinite(downstreamLimit) && downstreamLimit + EPSILON_FLOW >= capacityLps) {
@@ -870,7 +945,8 @@ export class HydraulicBranchModel {
                 dt,
                 new Set(visited),
                 capacityLps,
-                fluid
+                fluid,
+                conn.targetEndpoint?.portId
             );
 
             if (Number.isFinite(downstreamLimit)) {

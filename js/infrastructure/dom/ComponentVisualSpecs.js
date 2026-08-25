@@ -186,11 +186,17 @@ const HEAT_EXCHANGER_COMPONENT_VISUAL = {
         </defs>
         <rect x="15" y="10" width="70" height="60" rx="8" fill="#fff" stroke="#2c3e50" stroke-width="5"/>
         
+        <!-- Bocais / Nozzles -->
+        <line x1="0" y1="25" x2="15" y2="25" stroke="#2c3e50" stroke-width="6" stroke-linecap="round"/>
+        <line x1="85" y1="25" x2="100" y2="25" stroke="#2c3e50" stroke-width="6" stroke-linecap="round"/>
+        <line x1="0" y1="55" x2="15" y2="55" stroke="#2c3e50" stroke-width="6" stroke-linecap="round"/>
+        <line x1="85" y1="55" x2="100" y2="55" stroke="#2c3e50" stroke-width="6" stroke-linecap="round"/>
+
         <!-- Stream 1 (Process) -->
-        <path id="hx-shell-${id}" d="M 15 25 Q 50 15, 85 25" fill="none" stroke="url(#hx-grad-${id})" stroke-width="6" stroke-linecap="round"/>
+        <path id="hx-shell-${id}" d="M 0 25 L 15 25 Q 50 15, 85 25 L 100 25" fill="none" stroke="url(#hx-grad-${id})" stroke-width="6" stroke-linecap="round"/>
         
         <!-- Stream 2 (Service) -->
-        <path id="hx-tube-${id}" d="M 15 55 Q 50 65, 85 55" fill="none" stroke="url(#hx-grad-serv-${id})" stroke-width="6" stroke-linecap="round"/>
+        <path id="hx-tube-${id}" d="M 0 55 L 15 55 Q 50 65, 85 55 L 100 55" fill="none" stroke="url(#hx-grad-serv-${id})" stroke-width="6" stroke-linecap="round"/>
         
         <!-- Center connection/heat transfer lines -->
         <path d="M 30 32 L 30 48 M 50 35 L 50 45 M 70 32 L 70 48" fill="none" stroke="#7f8c8d" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
@@ -239,11 +245,23 @@ const HEAT_EXCHANGER_COMPONENT_VISUAL = {
             end2?.setAttribute('stop-color', aquecendo2 ? '#f39c12' : '#3498db');
 
             if (temp) {
-                const text1 = (logica.temperaturaSaidaC || 0).toFixed(1);
-                const text2 = (logica.temperaturaSaida2C !== undefined && logica.temperaturaSaida2C !== null) 
-                    ? ` / ${(logica.temperaturaSaida2C).toFixed(1)}` 
-                    : '';
-                temp.textContent = `${text1}${text2} °C`;
+                const hasS1 = (logica.vazao1Lps ?? logica.fluxoReal) > 0.001;
+                const hasS2 = (logica.vazao2Lps || 0) > 0.001;
+                const t1In = (logica.temperaturaEntradaC ?? 25).toFixed(1);
+                const t1Out = (logica.temperaturaSaidaC ?? 25).toFixed(1);
+                const t2In = (logica.temperaturaEntrada2C ?? logica.temperaturaServicoC ?? 80).toFixed(1);
+                const t2Out = (logica.temperaturaSaida2C ?? logica.temperaturaServicoC ?? 80).toFixed(1);
+
+                if (hasS1 && hasS2) {
+                    temp.textContent = `S1: ${t1In}→${t1Out}°C | S2: ${t2In}→${t2Out}°C`;
+                    temp.setAttribute('font-size', '8.5');
+                } else if (hasS2 && !hasS1) {
+                    temp.textContent = `S2: ${t2In} → ${t2Out} °C`;
+                    temp.setAttribute('font-size', '10');
+                } else {
+                    temp.textContent = `${t1In} → ${t1Out} °C`;
+                    temp.setAttribute('font-size', '10');
+                }
             }
         };
 

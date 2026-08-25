@@ -65,6 +65,70 @@ export class HydraulicNetworkSolver {
             const comp = queue[queueIndex++];
             if (!hydraulicModel.hasPendingEmission(comp, dt)) continue;
 
+            if (comp instanceof TrocadorCalorLogico) {
+                const isStream2 = (portId) => portId === 'in2' || portId === 'out2' || portId === '2';
+                const allOutputs = network.getOutputConnections(comp);
+
+                // Corrente 1 (in1 -> out1)
+                const pending1 = comp.getFluxoPendentePorStream?.(1) ?? comp.getFluxoPendenteLps();
+                const stream1Outputs = allOutputs.filter(conn => !isStream2(conn.sourceEndpoint?.portId));
+                if (pending1 > EPSILON_FLOW && stream1Outputs.length > 0) {
+                    const supply1 = hydraulicModel.buildSupplyState(comp, dt, { streamId: 1, flowLimitLps: pending1 });
+                    if (supply1 && supply1.availableFlowLps > EPSILON_FLOW) {
+                        const visited = new Set([comp.id]);
+                        const estimates1 = stream1Outputs
+                            .map((conn) => ({ conn, estimate: hydraulicModel.estimateBranch(comp, conn, supply1, dt, visited) }))
+                            .filter((item) => item.estimate.capacityLps > EPSILON_FLOW);
+                        if (estimates1.length > 0) {
+                            const totalCap1 = estimates1.reduce((sum, item) => sum + item.estimate.capacityLps, 0);
+                            const totalFlow1 = Math.min(supply1.availableFlowLps, totalCap1);
+                            estimates1.forEach((item) => {
+                                const share = totalCap1 > EPSILON_FLOW ? item.estimate.capacityLps / totalCap1 : 0;
+                                const branchFlow = totalFlow1 * share;
+                                if (branchFlow <= EPSILON_FLOW) return;
+                                const delivered = hydraulicModel.applyBranchFlow(comp, item.conn, supply1, item.estimate, branchFlow, dt);
+                                const target = network.getComponentById(item.conn.targetId);
+                                if (delivered > EPSILON_FLOW && (
+                                    target instanceof BombaLogica || target instanceof ValvulaLogica || target instanceof TrocadorCalorLogico
+                                )) {
+                                    enqueue(target);
+                                }
+                            });
+                        }
+                    }
+                }
+
+                // Corrente 2 (in2 -> out2)
+                const pending2 = comp.getFluxoPendentePorStream?.(2) ?? 0;
+                const stream2Outputs = allOutputs.filter(conn => isStream2(conn.sourceEndpoint?.portId));
+                if (pending2 > EPSILON_FLOW && stream2Outputs.length > 0) {
+                    const supply2 = hydraulicModel.buildSupplyState(comp, dt, { streamId: 2, flowLimitLps: pending2 });
+                    if (supply2 && supply2.availableFlowLps > EPSILON_FLOW) {
+                        const visited = new Set([comp.id]);
+                        const estimates2 = stream2Outputs
+                            .map((conn) => ({ conn, estimate: hydraulicModel.estimateBranch(comp, conn, supply2, dt, visited) }))
+                            .filter((item) => item.estimate.capacityLps > EPSILON_FLOW);
+                        if (estimates2.length > 0) {
+                            const totalCap2 = estimates2.reduce((sum, item) => sum + item.estimate.capacityLps, 0);
+                            const totalFlow2 = Math.min(supply2.availableFlowLps, totalCap2);
+                            estimates2.forEach((item) => {
+                                const share = totalCap2 > EPSILON_FLOW ? item.estimate.capacityLps / totalCap2 : 0;
+                                const branchFlow = totalFlow2 * share;
+                                if (branchFlow <= EPSILON_FLOW) return;
+                                const delivered = hydraulicModel.applyBranchFlow(comp, item.conn, supply2, item.estimate, branchFlow, dt);
+                                const target = network.getComponentById(item.conn.targetId);
+                                if (delivered > EPSILON_FLOW && (
+                                    target instanceof BombaLogica || target instanceof ValvulaLogica || target instanceof TrocadorCalorLogico
+                                )) {
+                                    enqueue(target);
+                                }
+                            });
+                        }
+                    }
+                }
+                continue;
+            }
+
             const outputs = network.getOutputConnections(comp);
             if (outputs.length === 0) continue;
 

@@ -89,10 +89,16 @@ const COMPONENT_COLUMNS = [
     'Efetividade atual do trocador',
     'Temperatura de entrada do trocador (°C)',
     'Temperatura de saída do trocador (°C)',
+    'Temperatura de entrada 2 do trocador (°C)',
+    'Temperatura de saída 2 do trocador (°C)',
     'Delta T do trocador (°C)',
+    'Delta T 2 do trocador (°C)',
     'Carga térmica do trocador (W)',
     'Vazão no trocador (L/s)',
+    'Vazão na Corrente 1 (L/s)',
+    'Vazão na Corrente 2 (L/s)',
     'Queda de pressão no trocador (bar)',
+    'Queda de pressão na Corrente 2 (bar)',
     'Capacidade máxima do tanque (L)',
     'Volume atual do tanque (L)',
     'Nível do tanque (%)',
@@ -152,6 +158,7 @@ const CONNECTION_COLUMNS = [
     'Regime',
     'Fluido no Cano',
     'Densidade do fluido (kg/m³)',
+    'Temperatura do fluido (°C)',
     'Viscosidade do fluido (Pa.s)',
     'Cor visual do fluido'
 ];
@@ -231,10 +238,16 @@ const EXPORT_LABELS_EN = {
     'Efetividade atual do trocador': 'Heat exchanger current effectiveness',
     'Temperatura de entrada do trocador': 'Heat exchanger inlet temperature',
     'Temperatura de saída do trocador': 'Heat exchanger outlet temperature',
+    'Temperatura de entrada 2 do trocador': 'Heat exchanger stream 2 inlet temperature',
+    'Temperatura de saída 2 do trocador': 'Heat exchanger stream 2 outlet temperature',
     'Delta T do trocador': 'Heat exchanger delta T',
+    'Delta T 2 do trocador': 'Heat exchanger stream 2 delta T',
     'Carga térmica do trocador': 'Heat exchanger thermal duty',
-    'Vazão no trocador': 'Heat exchanger flow',
+    'Vazão no trocador': 'Heat exchanger total flow',
+    'Vazão na Corrente 1': 'Heat exchanger stream 1 flow',
+    'Vazão na Corrente 2': 'Heat exchanger stream 2 flow',
     'Queda de pressão no trocador': 'Heat exchanger pressure drop',
+    'Queda de pressão na Corrente 2': 'Heat exchanger stream 2 pressure drop',
     'Capacidade máxima do tanque': 'Tank maximum capacity',
     'Volume atual do tanque': 'Tank current volume',
     'Nível do tanque': 'Tank level',
@@ -568,10 +581,16 @@ function buildComponentRow(component, engine = null) {
         row['Efetividade atual do trocador'] = numberValue(component.efetividadeAtual, 5);
         row['Temperatura de entrada do trocador (°C)'] = numberValue(component.temperaturaEntradaC, 3);
         row['Temperatura de saída do trocador (°C)'] = numberValue(component.temperaturaSaidaC, 3);
+        row['Temperatura de entrada 2 do trocador (°C)'] = numberValue(component.temperaturaEntrada2C ?? component.temperaturaServicoC, 3);
+        row['Temperatura de saída 2 do trocador (°C)'] = numberValue(component.temperaturaSaida2C ?? component.temperaturaServicoC, 3);
         row['Delta T do trocador (°C)'] = numberValue(component.deltaTemperaturaC, 3);
+        row['Delta T 2 do trocador (°C)'] = numberValue(component.deltaTemperatura2C, 3);
         row['Carga térmica do trocador (W)'] = numberValue(component.cargaTermicaW, 3);
         row['Vazão no trocador (L/s)'] = numberValue(component.fluxoReal, 5);
+        row['Vazão na Corrente 1 (L/s)'] = numberValue(component.vazao1Lps ?? component.fluxoReal, 5);
+        row['Vazão na Corrente 2 (L/s)'] = numberValue(component.vazao2Lps ?? 0, 5);
         row['Queda de pressão no trocador (bar)'] = numberValue(component.deltaPAtualBar, 5);
+        row['Queda de pressão na Corrente 2 (bar)'] = numberValue(component.deltaP2AtualBar ?? 0, 5);
     }
 
     if (component instanceof TanqueLogico) {
@@ -650,6 +669,7 @@ function buildConnectionRow(engine, connection, index) {
         Regime: state?.regime || '',
         'Fluido no Cano': fluid?.nome || '',
         'Densidade do fluido (kg/m³)': numberValue(fluid?.densidade, 3),
+        'Temperatura do fluido (°C)': numberValue(fluid?.temperatura, 3),
         'Viscosidade do fluido (Pa.s)': numberValue(fluid?.viscosidadeDinamicaPaS, 6),
         'Cor visual do fluido': fluid ? getFluidVisualStyle(fluid).stroke : ''
     };
@@ -679,7 +699,7 @@ function renderTable(title, columns, rows) {
     `;
 }
 
-function buildExportHtml(engine) {
+export function buildExportHtml(engine) {
     const timestamp = new Date();
     const metadataRows = displayUnitRows(buildExportMetadataRows(engine, timestamp));
     const componentRows = displayUnitRows(engine.componentes.map((component) => buildComponentRow(component, engine)));

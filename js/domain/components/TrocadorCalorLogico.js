@@ -154,7 +154,20 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         return { t1Out, t2Out, duty, ef: efetividade, dt1: t1Out - t1, dt2: t2Out - t2 };
     }
 
-    getFluidoSaidaPara(fluidoEntrada, vazaoLps = this.fluxoReal) {
+    getFluxoPendentePorStream(streamId = 1) {
+        if (streamId === 2) {
+            return Math.max(0, this.getVazaoEntradaPorPorta('in2') - this.getVazaoSaidaPorPorta('out2'));
+        }
+        return Math.max(0, this.getVazaoEntradaPorPorta('in1') - this.getVazaoSaidaPorPorta('out1'));
+    }
+
+    getFluidoSaidaPara(fluidoEntrada, vazaoLps = this.fluxoReal, streamId = 1) {
+        if (streamId === 2) {
+            const resultado = this.calcularTrocaTermicaGlobal(null, 0, fluidoEntrada, vazaoLps);
+            return cloneFluido(fluidoEntrada, {
+                temperatura: resultado.t2Out
+            });
+        }
         const resultado = this.calcularTrocaTermicaGlobal(fluidoEntrada, vazaoLps, null, 0);
         return cloneFluido(fluidoEntrada, {
             temperatura: resultado.t1Out
@@ -169,10 +182,12 @@ export class TrocadorCalorLogico extends ComponenteFisico {
 
         const resultado = this.calcularTrocaTermicaGlobal(f1, v1, f2, v2);
 
-        if (portId === 'out2' || portId === 'in2') {
-            return f2 ? cloneFluido(f2, { temperatura: resultado.t2Out }) : null;
+        if (portId === 'out2' || portId === 'in2' || portId === '2') {
+            const baseFluid = f2 || fallback || this.getSimulationContext()?.fluidoOperante;
+            return baseFluid ? cloneFluido(baseFluid, { temperatura: resultado.t2Out }) : null;
         }
-        return f1 ? cloneFluido(f1, { temperatura: resultado.t1Out }) : cloneFluido(fallback, { temperatura: resultado.t1Out });
+        const baseFluid = f1 || fallback || this.getSimulationContext()?.fluidoOperante;
+        return baseFluid ? cloneFluido(baseFluid, { temperatura: resultado.t1Out }) : null;
     }
 
     setTemperaturaServico(valor) {
@@ -203,50 +218,68 @@ export class TrocadorCalorLogico extends ComponenteFisico {
     _notificarEstado(force = false) {
         const estado = [
             this.fluxoReal.toFixed(4),
+            (this.vazao1Lps || 0).toFixed(4),
+            (this.vazao2Lps || 0).toFixed(4),
             this.temperaturaEntradaC.toFixed(2),
             this.temperaturaSaidaC.toFixed(2),
+            (this.temperaturaEntrada2C || 0).toFixed(2),
+            (this.temperaturaSaida2C || 0).toFixed(2),
             this.cargaTermicaW.toFixed(1),
             this.efetividadeAtual.toFixed(4),
-            this.deltaPAtualBar.toFixed(5)
+            this.deltaPAtualBar.toFixed(5),
+            (this.deltaP2AtualBar || 0).toFixed(5)
         ].join('|');
 
         if (!force && estado === this._ultimoEstadoNotificado) return;
         this._ultimoEstadoNotificado = estado;
         this.notify(ComponentEventPayloads.state({
             fluxoReal: this.fluxoReal,
+            vazao1Lps: this.vazao1Lps,
+            vazao2Lps: this.vazao2Lps,
             temperaturaEntradaC: this.temperaturaEntradaC,
             temperaturaSaidaC: this.temperaturaSaidaC,
+            temperaturaEntrada2C: this.temperaturaEntrada2C,
+            temperaturaSaida2C: this.temperaturaSaida2C,
             deltaTemperaturaC: this.deltaTemperaturaC,
+            deltaTemperatura2C: this.deltaTemperatura2C,
             cargaTermicaW: this.cargaTermicaW,
             efetividadeAtual: this.efetividadeAtual,
-            deltaPAtualBar: this.deltaPAtualBar
+            deltaPAtualBar: this.deltaPAtualBar,
+            deltaP2AtualBar: this.deltaP2AtualBar
         }));
     }
 
     sincronizarMetricasFisicas(fluidoFallback = null) {
         super.sincronizarMetricasFisicas();
-        this.fluxoReal = this.getVazaoEntradaPorPorta('in1'); // primary flow for UI
+        this.vazao1Lps = this.getVazaoEntradaPorPorta('in1');
+        this.vazao2Lps = this.getVazaoEntradaPorPorta('in2');
+        this.fluxoReal = this.vazao1Lps + this.vazao2Lps;
         
         const f1 = this.getFluidoEntradaMisturadoPorPorta('in1', fluidoFallback);
         const f2 = this.getFluidoEntradaMisturadoPorPorta('in2');
-        const v1 = this.getVazaoEntradaPorPorta('in1');
-        const v2 = this.getVazaoEntradaPorPorta('in2');
         
-        const resultado = this.calcularTrocaTermicaGlobal(f1, v1, f2, v2);
+        const resultado = this.calcularTrocaTermicaGlobal(f1, this.vazao1Lps, f2, this.vazao2Lps);
         const parametros = this.getParametrosHidraulicos();
 
-        this.temperaturaEntradaC = f1?.temperatura || 25;
+        this.temperaturaEntradaC = f1?.temperatura ?? 25;
         this.temperaturaSaidaC = resultado.t1Out;
+        this.temperaturaEntrada2C = (f2 && this.vazao2Lps > EPSILON_FLOW) ? f2.temperatura : (f2?.temperatura ?? this.temperaturaServicoC);
         this.temperaturaSaida2C = resultado.t2Out;
         this.deltaTemperaturaC = resultado.dt1;
         this.deltaTemperatura2C = resultado.dt2;
         this.cargaTermicaW = resultado.duty;
         this.efetividadeAtual = resultado.ef;
-        this.vazaoMassaKgS = lpsToM3s(v1) * (f1?.densidade || 997);
+        this.vazaoMassaKgS = lpsToM3s(this.vazao1Lps) * (f1?.densidade || 997);
         this.deltaPAtualBar = pressureLossFromFlow(
-            this.fluxoReal,
+            this.vazao1Lps,
             parametros.hydraulicAreaM2,
             f1?.densidade || 997,
+            parametros.localLossCoeff
+        );
+        this.deltaP2AtualBar = pressureLossFromFlow(
+            this.vazao2Lps,
+            parametros.hydraulicAreaM2,
+            f2?.densidade || 997,
             parametros.localLossCoeff
         );
         this.pressaoSaidaAtualBar = Math.max(0, this.pressaoEntradaAtualBar - this.deltaPAtualBar);
@@ -255,11 +288,15 @@ export class TrocadorCalorLogico extends ComponenteFisico {
 
     onSimulationStop() {
         this.fluxoReal = 0;
+        this.vazao1Lps = 0;
+        this.vazao2Lps = 0;
         this.deltaTemperaturaC = 0;
+        this.deltaTemperatura2C = 0;
         this.cargaTermicaW = 0;
         this.efetividadeAtual = 0;
         this.vazaoMassaKgS = 0;
         this.deltaPAtualBar = 0;
+        this.deltaP2AtualBar = 0;
         this._notificarEstado(true);
     }
 }

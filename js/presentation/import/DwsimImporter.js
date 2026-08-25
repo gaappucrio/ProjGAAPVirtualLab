@@ -583,8 +583,12 @@ function defaultEndpointFor(componentType, portType) {
             out: { offsetX: 80, offsetY: 200, floorOffsetY: 200, dynamicHeight: 'tank_outlet' }
         },
         heat_exchanger: {
-            in: { offsetX: -10, offsetY: 30, floorOffsetY: 0, dynamicHeight: null },
-            out: { offsetX: 90, offsetY: 30, floorOffsetY: 0, dynamicHeight: null }
+            in: { offsetX: -10, offsetY: 15, floorOffsetY: 0, dynamicHeight: null },
+            out: { offsetX: 90, offsetY: 15, floorOffsetY: 0, dynamicHeight: null },
+            in1: { offsetX: -10, offsetY: 15, floorOffsetY: 0, dynamicHeight: null },
+            out1: { offsetX: 90, offsetY: 15, floorOffsetY: 0, dynamicHeight: null },
+            in2: { offsetX: -10, offsetY: 45, floorOffsetY: 0, dynamicHeight: null },
+            out2: { offsetX: 90, offsetY: 45, floorOffsetY: 0, dynamicHeight: null }
         }
     };
 
