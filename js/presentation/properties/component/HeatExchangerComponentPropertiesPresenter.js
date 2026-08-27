@@ -1,4 +1,5 @@
 import {
+    COMPONENT_EVENTS,
     InputValidator,
     TOOLTIP,
     baseFromDisplay,
@@ -13,7 +14,16 @@ import {
     setValue,
     validateInputWithFeedback
 } from '../PropertyPresenterShared.js';
-import { bind } from '../PropertyDomAdapter.js';
+import { bind, byId } from '../PropertyDomAdapter.js';
+import { translateLiteral } from '../../i18n/LanguageManager.js';
+
+function resolvePresentationEngine() {
+    try {
+        return getPresentationEngine();
+    } catch {
+        return null;
+    }
+}
 
 function thermalPowerText(valueW) {
     const value = Number(valueW);
@@ -22,19 +32,53 @@ function thermalPowerText(valueW) {
 }
 
 function refreshNetworkAfterThermalChange() {
-    const engine = getPresentationEngine();
+    const engine = resolvePresentationEngine();
+    if (!engine) return;
     engine.clearConnectionDynamics?.();
     if (!engine.isRunning) engine.resetHydraulicState?.();
     engine.updatePipesVisual?.();
 }
 
+function getThemeAwareHeatExchangerAlertColors(isDark) {
+    return isDark
+        ? { severity: 'warning', border: '#f39c12', background: '#2d2418', color: '#f0b36b', bodyColor: '#f6dfbd' }
+        : { severity: 'warning', border: '#e67e22', background: '#fff3e6', color: '#a84300', bodyColor: '#34495e' };
+}
+
+function renderHeatExchangerDualStreamAlert(duasCorrentesConectadas) {
+    const isDark = typeof document !== 'undefined' && document.body?.classList?.contains('theme-dark');
+    const colors = getThemeAwareHeatExchangerAlertColors(isDark);
+    const display = duasCorrentesConectadas ? 'block' : 'none';
+
+    return `
+        <div id="painel-alerta-duas-correntes-hx" class="prop-group gaap-alert gaap-alert--warning" data-alert-severity="warning" style="display:${display}; border-left:4px solid ${colors.border}; border-color:${colors.border}; background:${colors.background}; padding:10px 12px; margin-bottom:12px;">
+            <h4 id="titulo-alerta-duas-correntes-hx" class="gaap-alert__title" style="margin:0 0 6px; color:${colors.color}; font-size:13px;">${translateLiteral('Duas Correntes Conectadas')}</h4>
+            <p id="texto-alerta-duas-correntes-hx" class="gaap-alert__body" style="margin:0; font-size:11px; line-height:1.45; color:${colors.bodyColor};">${translateLiteral('O trocador opera com troca térmica acoplada entre as Correntes 1 e 2. A temperatura de serviço fixa está desabilitada pois a temperatura da Corrente 2 governa o processo.')}</p>
+        </div>
+    `;
+}
+
 export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
     render: (comp) => {
+        const engine = resolvePresentationEngine();
+        const diagnostico = comp.getDiagnosticoOperacao?.(engine) ?? {
+            duasCorrentesConectadas: comp.temDuasCorrentesConectadas?.(engine) === true || engine?.isTrocadorComDuasCorrentes?.(comp) === true
+        };
+        const duasCorrentesConectadas = diagnostico.duasCorrentesConectadas === true;
+        const bloqueioServicoAttr = duasCorrentesConectadas ? 'disabled' : '';
+        const isDark = typeof document !== 'undefined' && document.body?.classList?.contains('theme-dark');
+        const inlineAvisoCor = isDark ? '#ffd08a' : '#c0392b';
+        const serviceTempTooltip = duasCorrentesConectadas
+            ? (TOOLTIP.heatExchangerServiceTemperatureDisabled || TOOLTIP.heatExchangerServiceTemperature)
+            : TOOLTIP.heatExchangerServiceTemperature;
+
         const basicContent = `
-            <div style="font-weight: bold; margin-bottom: 8px; color: #2c3e50; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">Troca Térmica Global</div>
-            <div class="prop-group">
-                ${makeUnitLabel('Temperatura de serviço', 'temperature', TOOLTIP.heatExchangerServiceTemperature)}
-                <input type="number" id="input-hx-service-temp" ${hintAttr(TOOLTIP.heatExchangerServiceTemperature)} value="${displayEditableUnitValue('temperature', comp.temperaturaServicoC, 2)}" step="${displayStep('temperature', 1)}" min="${displayEditableUnitValue('temperature', -20, 2)}" max="${displayEditableUnitValue('temperature', 250, 2)}">
+            ${renderHeatExchangerDualStreamAlert(duasCorrentesConectadas)}
+            <div style="font-weight: bold; margin-bottom: 8px; color: ${isDark ? '#d8e4ec' : '#2c3e50'}; border-bottom: 1px solid ${isDark ? '#2d3748' : '#e2e8f0'}; padding-bottom: 4px;">Troca Térmica Global</div>
+            <div class="prop-group" id="grp-hx-service-temp">
+                ${makeUnitLabel('Temperatura de serviço', 'temperature', serviceTempTooltip)}
+                <input type="number" id="input-hx-service-temp" ${hintAttr(serviceTempTooltip)} value="${displayEditableUnitValue('temperature', comp.temperaturaServicoC, 2)}" step="${displayStep('temperature', 1)}" min="${displayEditableUnitValue('temperature', -20, 2)}" max="${displayEditableUnitValue('temperature', 250, 2)}" ${bloqueioServicoAttr}>
+                <p id="texto-aviso-temp-servico-hx" style="margin:6px 0 0; font-size:11px; line-height:1.45; color:${inlineAvisoCor}; display:${duasCorrentesConectadas ? 'block' : 'none'};">${translateLiteral('Desabilitada: a Corrente 2 está conectada e governa a temperatura de troca.')}</p>
             </div>
             <div class="prop-group">
                 ${makeLabel('Coeficiente global UA (W/K)', TOOLTIP.heatExchangerUA)}
@@ -49,7 +93,7 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
                 <input type="text" id="disp-hx-effectiveness" ${hintAttr(TOOLTIP.heatExchangerEffectiveness)} value="${(comp.efetividadeAtual * 100).toFixed(1)}%" disabled>
             </div>
 
-            <div style="font-weight: bold; margin: 12px 0 8px 0; color: #2980b9; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">Corrente 1 (Processo - in1 / out1)</div>
+            <div style="font-weight: bold; margin: 12px 0 8px 0; color: ${isDark ? '#5dade2' : '#2980b9'}; border-bottom: 1px solid ${isDark ? '#2d3748' : '#e2e8f0'}; padding-bottom: 4px;">Corrente 1 (Processo - in1 / out1)</div>
             <div class="prop-group">
                 ${makeUnitLabel('Vazão Corrente 1', 'flow', TOOLTIP.heatExchangerFlow)}
                 <input type="text" id="disp-hx-flow" ${hintAttr(TOOLTIP.heatExchangerFlow)} value="${displayUnitValue('flow', comp.vazao1Lps ?? comp.fluxoReal, 2)}" disabled>
@@ -71,7 +115,7 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
                 <input type="text" id="disp-hx-deltap" ${hintAttr(TOOLTIP.heatExchangerPressureDrop)} value="${displayUnitValue('pressure', comp.deltaPAtualBar, 2)}" disabled>
             </div>
 
-            <div style="font-weight: bold; margin: 12px 0 8px 0; color: #d35400; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">Corrente 2 (Serviço - in2 / out2)</div>
+            <div style="font-weight: bold; margin: 12px 0 8px 0; color: ${isDark ? '#f39c12' : '#d35400'}; border-bottom: 1px solid ${isDark ? '#2d3748' : '#e2e8f0'}; padding-bottom: 4px;">Corrente 2 (Serviço - in2 / out2)</div>
             <div class="prop-group">
                 ${makeUnitLabel('Vazão Corrente 2', 'flow', TOOLTIP.heatExchangerFlow2 || TOOLTIP.heatExchangerFlow)}
                 <input type="text" id="disp-hx-flow-2" ${hintAttr(TOOLTIP.heatExchangerFlow2 || TOOLTIP.heatExchangerFlow)} value="${displayUnitValue('flow', comp.vazao2Lps ?? 0, 2)}" disabled>
@@ -112,13 +156,43 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
         });
     },
     bind: (comp) => {
+        const engine = resolvePresentationEngine();
+        const inputTempServico = byId('input-hx-service-temp');
+        const painelAlerta = byId('painel-alerta-duas-correntes-hx');
+        const textoAviso = byId('texto-aviso-temp-servico-hx');
+
+        const sincronizarBloqueioDuasCorrentes = () => {
+            const duasCorrentes = comp.temDuasCorrentesConectadas?.(engine) === true
+                || engine?.isTrocadorComDuasCorrentes?.(comp) === true;
+            if (inputTempServico) {
+                inputTempServico.disabled = duasCorrentes;
+                const tooltip = duasCorrentes
+                    ? (TOOLTIP.heatExchangerServiceTemperatureDisabled || TOOLTIP.heatExchangerServiceTemperature)
+                    : TOOLTIP.heatExchangerServiceTemperature;
+                inputTempServico.title = tooltip;
+            }
+            if (painelAlerta) {
+                painelAlerta.style.display = duasCorrentes ? 'block' : 'none';
+            }
+            if (textoAviso) {
+                textoAviso.style.display = duasCorrentes ? 'block' : 'none';
+            }
+        };
+
         bind('input-hx-service-temp', 'change', (event) => {
+            const duasCorrentes = comp.temDuasCorrentesConectadas?.(engine) === true
+                || engine?.isTrocadorComDuasCorrentes?.(comp) === true;
+            if (duasCorrentes) {
+                sincronizarBloqueioDuasCorrentes();
+                setValue('input-hx-service-temp', displayEditableUnitValue('temperature', comp.temperaturaServicoC, 2));
+                return;
+            }
             validateInputWithFeedback(
                 event.target,
                 (value, name) => InputValidator.validateNumber(baseFromDisplay('temperature', value), -20, 250, name),
                 'Temperatura de serviço',
                 (validated) => {
-                    comp.setTemperaturaServico(validated);
+                    comp.setTemperaturaServico(validated, { engine });
                     refreshNetworkAfterThermalChange();
                     setValue('input-hx-service-temp', displayEditableUnitValue('temperature', comp.temperaturaServicoC, 2));
                 }
@@ -161,6 +235,15 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
                 }
             );
         });
+
+        const unsubscribeComponent = comp.subscribe((dados) => {
+            if (dados.tipo === COMPONENT_EVENTS.STATE) {
+                sincronizarBloqueioDuasCorrentes();
+            }
+        });
+
+        sincronizarBloqueioDuasCorrentes();
+        return unsubscribeComponent;
     }
 };
 

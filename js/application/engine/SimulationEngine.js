@@ -158,6 +158,7 @@ export class SistemaSimulacao extends Observable {
             queries: {
                 isBombaBloqueadaPorSetpoint: (bomba) => this.isBombaBloqueadaPorSetpoint(bomba),
                 isValvulaBloqueadaPorSetpoint: (valvula) => this.isValvulaBloqueadaPorSetpoint(valvula),
+                isTrocadorComDuasCorrentes: (trocador) => this.isTrocadorComDuasCorrentes(trocador),
                 getComponentFluid: (component) => this.hydraulicContext.getComponentFluid(component)
             },
             ...overrides
@@ -398,6 +399,20 @@ export class SistemaSimulacao extends Observable {
             typeof comp.isValvulaControladaPorSetpoint === 'function' &&
             comp.isValvulaControladaPorSetpoint(valvula)
         );
+    }
+
+    isTrocadorComDuasCorrentes(trocador) {
+        if (!trocador) return false;
+        const isStream2 = (portId) => portId === 'in2' || portId === 'out2' || portId === '2';
+        const inConns = this.getInputConnections(trocador);
+        const outConns = this.getOutputConnections(trocador);
+
+        const hasStream1 = inConns.some(c => !isStream2(c.targetEndpoint?.portId)) ||
+                           outConns.some(c => !isStream2(c.sourceEndpoint?.portId));
+        const hasStream2 = inConns.some(c => isStream2(c.targetEndpoint?.portId)) ||
+                           outConns.some(c => isStream2(c.sourceEndpoint?.portId));
+
+        return hasStream1 && hasStream2;
     }
 
     ensureConnectionProperties(conn) {

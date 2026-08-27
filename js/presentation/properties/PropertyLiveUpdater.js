@@ -389,7 +389,23 @@ function updatePumpValues(component, { monitorController } = {}) {
     monitorController?.refreshPump(component);
 }
 
-function updateHeatExchangerValues(component) {
+function updateHeatExchangerValues(component, engine = null) {
+    const inputTempServico = byId('input-hx-service-temp');
+    const painelAlerta = byId('painel-alerta-duas-correntes-hx');
+    const textoAviso = byId('texto-aviso-temp-servico-hx');
+    const duasCorrentes = component.temDuasCorrentesConectadas?.(engine) === true
+        || engine?.isTrocadorComDuasCorrentes?.(component) === true;
+
+    if (inputTempServico && !isActive(inputTempServico)) {
+        inputTempServico.disabled = duasCorrentes;
+    }
+    if (painelAlerta) {
+        painelAlerta.style.display = duasCorrentes ? 'block' : 'none';
+    }
+    if (textoAviso) {
+        textoAviso.style.display = duasCorrentes ? 'block' : 'none';
+    }
+
     setValue('disp-hx-duty', `${(component.cargaTermicaW / 1000).toFixed(2)} kW`);
     setValue('disp-hx-effectiveness', `${(component.efetividadeAtual * 100).toFixed(1)}%`);
 
@@ -443,7 +459,7 @@ export function updatePropertyPanelValues({
     }
 
     if (component instanceof TrocadorCalorLogico) {
-        updateHeatExchangerValues(component);
+        updateHeatExchangerValues(component, engine);
     }
 
     if (typeof document !== 'undefined') {

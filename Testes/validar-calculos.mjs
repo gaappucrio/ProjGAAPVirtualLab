@@ -11,6 +11,8 @@ import {
     TrocadorCalorLogico,
     calcularSaidaTrocadorCalor
 } from '../js/domain/components/TrocadorCalorLogico.js';
+import { HEAT_EXCHANGER_PROPERTIES_PRESENTER } from '../js/presentation/properties/component/HeatExchangerComponentPropertiesPresenter.js';
+import { setPresentationEngine } from '../js/presentation/context/PresentationEngineContext.js';
 import {
     VALVE_FLOW_COEFFICIENT_UNITS,
     VALVE_PROFILE_DEFINITIONS,
@@ -1242,4 +1244,72 @@ test('exportacao de dados inclui colunas de ambas as correntes do trocador de ca
     assert.ok(html.includes('Vazão na Corrente 2'), 'Coluna de vazão na corrente 2 deve existir');
     assert.ok(html.includes('38.2'), 'Temperatura de saída 1 deve ser exportada');
     assert.ok(html.includes('67.3'), 'Temperatura de saída 2 deve ser exportada');
+});
+
+test('trocador de calor com duas correntes conectadas desabilita temperatura de servico e exibe aviso', () => {
+    const engine = createEngine();
+    setPresentationEngine(engine);
+
+    const f1 = new FonteLogica('F1', 'F-01', 0, 0);
+    const d1 = new DrenoLogico('D1', 'D-01', 400, 0);
+    const f2 = new FonteLogica('F2', 'F-02', 0, 100);
+    const d2 = new DrenoLogico('D2', 'D-02', 400, 100);
+    const trocador = new TrocadorCalorLogico('HX-TEST', 'TC-01', 200, 50);
+
+    [f1, d1, f2, d2, trocador].forEach(c => engine.add(c));
+
+    // Passo 1: Apenas Corrente 1 conectada
+    const c1In = new ConnectionModel({ sourceId: f1.id, targetId: trocador.id, targetEndpoint: { portId: 'in1', portType: 'in' } });
+    const c1Out = new ConnectionModel({ sourceId: trocador.id, targetId: d1.id, sourceEndpoint: { portId: 'out1', portType: 'out' } });
+    engine.addConnection(c1In);
+    engine.addConnection(c1Out);
+
+    assert.equal(engine.isTrocadorComDuasCorrentes(trocador), false, 'Apenas 1 corrente conectada');
+    assert.equal(trocador.temDuasCorrentesConectadas(), false, 'Componente deve indicar corrente única');
+
+    // Temperatura de serviço deve ser editável
+    trocador.setTemperaturaServico(65);
+    assert.equal(trocador.temperaturaServicoC, 65, 'Temperatura de serviço deve atualizar com 1 corrente');
+
+    // Render com 1 corrente: não deve ter disabled no input, alerta deve estar oculto
+    const htmlSingle = HEAT_EXCHANGER_PROPERTIES_PRESENTER.render(trocador);
+    assert.ok(!htmlSingle.includes('id="input-hx-service-temp" title="Temperatura do meio térmico externo que troca calor com a corrente principal." value="65.00" step="1" min="-20.00" max="250.00" disabled>'), 'Input não deve ter disabled com 1 corrente');
+    assert.ok(htmlSingle.includes('id="painel-alerta-duas-correntes-hx" class="prop-group gaap-alert gaap-alert--warning" data-alert-severity="warning" style="display:none;'), 'Alerta de duas correntes deve estar com display:none');
+    assert.ok(htmlSingle.includes('id="texto-aviso-temp-servico-hx" style="margin:6px 0 0; font-size:11px; line-height:1.45; color:#c0392b; display:none;">'), 'Texto de aviso inline deve estar com display:none');
+
+    // Passo 2: Conectar Corrente 2
+    const c2In = new ConnectionModel({ sourceId: f2.id, targetId: trocador.id, targetEndpoint: { portId: 'in2', portType: 'in' } });
+    const c2Out = new ConnectionModel({ sourceId: trocador.id, targetId: d2.id, sourceEndpoint: { portId: 'out2', portType: 'out' } });
+    engine.addConnection(c2In);
+    engine.addConnection(c2Out);
+
+    assert.equal(engine.isTrocadorComDuasCorrentes(trocador), true, 'Ambas as correntes estão conectadas');
+    assert.equal(trocador.temDuasCorrentesConectadas(), true, 'Componente deve indicar duas correntes conectadas');
+
+    // Tentativa de alterar temperatura de serviço deve ser ignorada
+    trocador.setTemperaturaServico(40);
+    assert.equal(trocador.temperaturaServicoC, 65, 'Temperatura de serviço NÃO deve ser alterada com duas correntes conectadas');
+
+    // Alteração forçada deve continuar funcionando
+    trocador.setTemperaturaServico(40, { force: true });
+    assert.equal(trocador.temperaturaServicoC, 40, 'Alteração forçada deve atualizar');
+
+    // Render com 2 correntes: input deve ter disabled e alerta visível
+    const htmlDual = HEAT_EXCHANGER_PROPERTIES_PRESENTER.render(trocador);
+    assert.ok(htmlDual.includes('id="input-hx-service-temp"'), 'Input de temperatura de serviço deve existir');
+    assert.ok(htmlDual.includes('disabled>'), 'Input deve estar desabilitado');
+    assert.ok(htmlDual.includes('id="painel-alerta-duas-correntes-hx" class="prop-group gaap-alert gaap-alert--warning" data-alert-severity="warning" style="display:block;'), 'Painel de alerta deve ter display:block');
+    assert.ok(htmlDual.includes('Duas Correntes Conectadas'), 'Título do alerta deve existir no painel');
+    assert.ok(htmlDual.includes('temperatura da Corrente 2 governa o processo'), 'Texto do alerta deve explicar o motivo do bloqueio');
+    assert.ok(htmlDual.includes('id="texto-aviso-temp-servico-hx" style="margin:6px 0 0; font-size:11px; line-height:1.45; color:#c0392b; display:block;">'), 'Texto inline deve ter display:block');
+
+    // Passo 3: Desconectar Corrente 2
+    engine.removeConnection(c2In);
+    engine.removeConnection(c2Out);
+
+    assert.equal(engine.isTrocadorComDuasCorrentes(trocador), false, 'Corrente 2 removida');
+    assert.equal(trocador.temDuasCorrentesConectadas(), false, 'Componente volta para corrente única');
+
+    trocador.setTemperaturaServico(75);
+    assert.equal(trocador.temperaturaServicoC, 75, 'Temperatura de serviço volta a ser editável');
 });

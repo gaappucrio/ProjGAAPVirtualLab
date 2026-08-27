@@ -5,6 +5,7 @@ import { TanqueLogico } from '../components/TanqueLogico.js';
 import { TrocadorCalorLogico } from '../components/TrocadorCalorLogico.js';
 import { ValvulaLogica } from '../components/ValvulaLogica.js';
 import { clamp, pressureLossFromFlow, smoothFirstOrder } from '../components/BaseComponente.js';
+import { cloneFluido } from '../components/Fluido.js';
 import {
     BAR_TO_PA,
     DEFAULT_ENTRY_LOSS,
@@ -454,6 +455,15 @@ export class HydraulicBranchModel {
                 state.outletPressureBar = arrivalPressureBar;
                 state.deltaPBar = Math.max(0, sourceOutletPressureBar + staticHeadBar - pipeOutletPressureBar);
                 state.totalLossBar = pipePressureDropBar + targetLossBar;
+
+                if (source instanceof TrocadorCalorLogico) {
+                    const portId = conn.sourceEndpoint?.portId;
+                    const isStream2 = portId === 'out2' || portId === 'in2' || portId === '2';
+                    const targetTemp = isStream2 ? source.temperaturaSaida2C : source.temperaturaSaidaC;
+                    if (Number.isFinite(targetTemp) && state.fluid) {
+                        state.fluid = cloneFluido(state.fluid, { temperatura: targetTemp });
+                    }
+                }
             });
         };
 

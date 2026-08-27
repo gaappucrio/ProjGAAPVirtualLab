@@ -202,8 +202,8 @@ const HEAT_EXCHANGER_COMPONENT_VISUAL = {
         <path d="M 30 32 L 30 48 M 50 35 L 50 45 M 70 32 L 70 48" fill="none" stroke="#7f8c8d" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
         
         <circle id="hx-status-${id}" cx="50" cy="40" r="5" fill="#95a5a6" stroke="#2c3e50" stroke-width="1.5"/>
-        <text id="hx-temp-${id}" x="50" y="85" font-size="11" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#2c3e50">25.0 °C</text>
-        <text id="tag-${id}" x="50" y="100" font-size="12" ${labelStyle}>${tag}</text>
+        <text id="hx-temp-${id}" class="hx-temp-label component-temp-label" x="50" y="85" font-size="11" font-family="Segoe UI, Arial" font-weight="bold" text-anchor="middle" fill="#2c3e50" paint-order="stroke" stroke="#fff" stroke-width="3">25.0 °C</text>
+        <text id="tag-${id}" class="component-tag-label" x="50" y="100" font-size="12" ${labelStyle}>${tag}</text>
         
         <g>
             ${makePort(id, 0, 25, 'in', 'in1')} 
@@ -247,12 +247,13 @@ const HEAT_EXCHANGER_COMPONENT_VISUAL = {
             if (temp) {
                 const hasS1 = (logica.vazao1Lps ?? logica.fluxoReal) > 0.001;
                 const hasS2 = (logica.vazao2Lps || 0) > 0.001;
+                const isDual = (hasS1 && hasS2) || logica.temDuasCorrentesConectadas?.() === true;
                 const t1In = (logica.temperaturaEntradaC ?? 25).toFixed(1);
                 const t1Out = (logica.temperaturaSaidaC ?? 25).toFixed(1);
                 const t2In = (logica.temperaturaEntrada2C ?? logica.temperaturaServicoC ?? 80).toFixed(1);
                 const t2Out = (logica.temperaturaSaida2C ?? logica.temperaturaServicoC ?? 80).toFixed(1);
 
-                if (hasS1 && hasS2) {
+                if (isDual) {
                     temp.textContent = `S1: ${t1In}→${t1Out}°C | S2: ${t2In}→${t2Out}°C`;
                     temp.setAttribute('font-size', '8.5');
                 } else if (hasS2 && !hasS1) {

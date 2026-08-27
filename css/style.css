@@ -219,9 +219,14 @@
           linear-gradient(to bottom, var(--gaap-grid) 1px, transparent 1px) !important;
   }
 
-  body.theme-dark .pipe-flow-label {
-      fill: #d9e7ef;
-      stroke: #0f1720;
+  body.theme-dark .pipe-flow-label,
+  body.theme-dark .hx-temp-label,
+  body.theme-dark .component-temp-label,
+  body.theme-dark .component-tag-label,
+  body.theme-dark [id^="hx-temp-"],
+  body.theme-dark [id^="tag-"] {
+      fill: #d9e7ef !important;
+      stroke: #0f1720 !important;
   }
 
   body.theme-dark .placed-component.selected svg {
@@ -2425,7 +2430,10 @@
       /* Define o cursor do mouse para indicar que o Cano é clicável */
   }
 
-  .pipe-flow-label
+  .pipe-flow-label,
+  .hx-temp-label,
+  .component-temp-label,
+  [id^="hx-temp-"]
 
   /* ESTILO PARA RÓTULOS DE FLUXO NOS CANOS  */
       {

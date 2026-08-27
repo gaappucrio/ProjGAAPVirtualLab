@@ -1638,5 +1638,19 @@ test('trocador de calor opera com duas correntes hidraulicamente independentes e
     assert.ok(tc.temperaturaSaidaC > 20, `Corrente 1 fria deve ter saido aquecida: ${tc.temperaturaSaidaC}°C`);
     assert.ok(tc.temperaturaSaida2C < 80, `Corrente 2 quente deve ter saido resfriada: ${tc.temperaturaSaida2C}°C`);
     assert.ok(tc.cargaTermicaW > 0, `Carga termica trocada deve ser positiva: ${tc.cargaTermicaW} W`);
+
+    // Validação da consistência da temperatura nos canos a jusante
+    const sStream1OutApos = engine.getConnectionState(cStream1Out);
+    const sStream2OutApos = engine.getConnectionState(cStream2Out);
+    assert.ok(sStream1OutApos.fluid.temperatura > 20, `Cano de saída da Corrente 1 deve receber temperatura aquecida: ${sStream1OutApos.fluid?.temperatura}°C`);
+    assert.ok(sStream2OutApos.fluid.temperatura < 80, `Cano de saída da Corrente 2 deve receber temperatura resfriada: ${sStream2OutApos.fluid?.temperatura}°C`);
+    assert.ok(
+        Math.abs(sStream1OutApos.fluid.temperatura - tc.temperaturaSaidaC) < 1e-4,
+        `Temperatura do cano 1 (${sStream1OutApos.fluid.temperatura}°C) deve ser exatamente igual a saida 1 do trocador (${tc.temperaturaSaidaC}°C)`
+    );
+    assert.ok(
+        Math.abs(sStream2OutApos.fluid.temperatura - tc.temperaturaSaida2C) < 1e-4,
+        `Temperatura do cano 2 (${sStream2OutApos.fluid.temperatura}°C) deve ser exatamente igual a saida 2 do trocador (${tc.temperaturaSaida2C}°C)`
+    );
 });
 

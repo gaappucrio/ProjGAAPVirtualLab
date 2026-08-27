@@ -79,13 +79,19 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         this.perdaLocalK = PERDA_LOCAL_PADRAO_K;
         this.efetividadeMaxima = EFETIVIDADE_MAXIMA_PADRAO;
         this.fluxoReal = 0;
+        this.vazao1Lps = 0;
+        this.vazao2Lps = 0;
         this.temperaturaEntradaC = 25;
         this.temperaturaSaidaC = 25;
+        this.temperaturaEntrada2C = this.temperaturaServicoC;
+        this.temperaturaSaida2C = this.temperaturaServicoC;
         this.deltaTemperaturaC = 0;
+        this.deltaTemperatura2C = 0;
         this.cargaTermicaW = 0;
         this.efetividadeAtual = 0;
         this.vazaoMassaKgS = 0;
         this.deltaPAtualBar = 0;
+        this.deltaP2AtualBar = 0;
         this._ultimoEstadoNotificado = '';
     }
 
@@ -95,6 +101,7 @@ export class TrocadorCalorLogico extends ComponenteFisico {
             localLossCoeff: Math.max(0, numeroSeguro(this.perdaLocalK, PERDA_LOCAL_PADRAO_K))
         };
     }
+
     calcularTrocaTermicaGlobal(fluido1, vazao1, fluido2, vazao2) {
         const t1 = numeroSeguro(fluido1?.temperatura, 25);
         const t2 = (fluido2 && vazao2 > EPSILON_FLOW) ? numeroSeguro(fluido2.temperatura, 25) : this.temperaturaServicoC;
@@ -163,12 +170,20 @@ export class TrocadorCalorLogico extends ComponenteFisico {
 
     getFluidoSaidaPara(fluidoEntrada, vazaoLps = this.fluxoReal, streamId = 1) {
         if (streamId === 2) {
-            const resultado = this.calcularTrocaTermicaGlobal(null, 0, fluidoEntrada, vazaoLps);
+            const f1 = this.getFluidoEntradaMisturadoPorPorta('in1')
+                || (Number.isFinite(this.temperaturaEntradaC) ? cloneFluido(fluidoEntrada, { temperatura: this.temperaturaEntradaC }) : null);
+            const v1 = Math.max(this.getVazaoEntradaPorPorta('in1') || 0, this.vazao1Lps || 0);
+            const v2 = Math.max(vazaoLps || 0, this.getVazaoEntradaPorPorta('in2') || 0, this.vazao2Lps || 0);
+            const resultado = this.calcularTrocaTermicaGlobal(f1, v1, fluidoEntrada, v2);
             return cloneFluido(fluidoEntrada, {
                 temperatura: resultado.t2Out
             });
         }
-        const resultado = this.calcularTrocaTermicaGlobal(fluidoEntrada, vazaoLps, null, 0);
+        const f2 = this.getFluidoEntradaMisturadoPorPorta('in2')
+            || (Number.isFinite(this.temperaturaEntrada2C) ? cloneFluido(fluidoEntrada, { temperatura: this.temperaturaEntrada2C }) : null);
+        const v1 = Math.max(vazaoLps || 0, this.getVazaoEntradaPorPorta('in1') || 0, this.vazao1Lps || 0);
+        const v2 = Math.max(this.getVazaoEntradaPorPorta('in2') || 0, this.vazao2Lps || 0);
+        const resultado = this.calcularTrocaTermicaGlobal(fluidoEntrada, v1, f2, v2);
         return cloneFluido(fluidoEntrada, {
             temperatura: resultado.t1Out
         });
@@ -177,8 +192,8 @@ export class TrocadorCalorLogico extends ComponenteFisico {
     getFluidoSaidaAtual(fallback = null, vazaoLps = null, portId = null) {
         const f1 = this.getFluidoEntradaMisturadoPorPorta('in1', fallback);
         const f2 = this.getFluidoEntradaMisturadoPorPorta('in2');
-        const v1 = this.getVazaoEntradaPorPorta('in1');
-        const v2 = this.getVazaoEntradaPorPorta('in2');
+        const v1 = Math.max(this.getVazaoEntradaPorPorta('in1') || 0, this.vazao1Lps || 0);
+        const v2 = Math.max(this.getVazaoEntradaPorPorta('in2') || 0, this.vazao2Lps || 0);
 
         const resultado = this.calcularTrocaTermicaGlobal(f1, v1, f2, v2);
 
@@ -190,10 +205,53 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         return baseFluid ? cloneFluido(baseFluid, { temperatura: resultado.t1Out }) : null;
     }
 
-    setTemperaturaServico(valor) {
+    temDuasCorrentesConectadas(engine = null) {
+        if (this._duasCorrentesConectadasOverride !== undefined) {
+            return Boolean(this._duasCorrentesConectadasOverride);
+        }
+        if (engine && typeof engine.isTrocadorComDuasCorrentes === 'function') {
+            return engine.isTrocadorComDuasCorrentes(this);
+        }
+        const context = this.getSimulationContext();
+        if (typeof context?.queries?.isTrocadorComDuasCorrentes === 'function') {
+            const resultado = context.queries.isTrocadorComDuasCorrentes(this);
+            if (typeof resultado === 'boolean') return resultado;
+        }
+        if (this.vazao2Lps > EPSILON_FLOW && (this.vazao1Lps > EPSILON_FLOW || this.fluxoReal > EPSILON_FLOW)) {
+            return true;
+        }
+        if (this.getVazaoEntradaPorPorta('in2') > EPSILON_FLOW) {
+            return true;
+        }
+        return false;
+    }
+
+    setDuasCorrentesConectadasOverride(valor) {
+        this._duasCorrentesConectadasOverride = valor === null || valor === undefined ? undefined : Boolean(valor);
+        this._notificarEstado(true);
+    }
+
+    getDiagnosticoOperacao(engine = null) {
+        const duasCorrentes = this.temDuasCorrentesConectadas(engine);
+        return {
+            duasCorrentesConectadas: duasCorrentes,
+            temperaturaServicoEditavel: !duasCorrentes,
+            titulo: 'Duas Correntes Conectadas',
+            mensagem: duasCorrentes
+                ? 'O trocador opera com troca térmica acoplada entre as Correntes 1 e 2. A temperatura de serviço fixa está desabilitada pois a temperatura da Corrente 2 governa o processo.'
+                : 'Operação com utilidade: a troca térmica utiliza a temperatura de serviço configurada.'
+        };
+    }
+
+    setTemperaturaServico(valor, options = {}) {
+        if (this.temDuasCorrentesConectadas(options.engine) && options.force !== true) {
+            this._notificarEstado(true);
+            return this.temperaturaServicoC;
+        }
         const numero = Number(valor);
         this.temperaturaServicoC = clamp(Number.isFinite(numero) ? numero : this.temperaturaServicoC, -20, 250);
         this._notificarEstado(true);
+        return this.temperaturaServicoC;
     }
 
     setUA(valor) {
@@ -216,6 +274,7 @@ export class TrocadorCalorLogico extends ComponenteFisico {
     }
 
     _notificarEstado(force = false) {
+        const duasCorrentes = this.temDuasCorrentesConectadas();
         const estado = [
             this.fluxoReal.toFixed(4),
             (this.vazao1Lps || 0).toFixed(4),
@@ -227,7 +286,8 @@ export class TrocadorCalorLogico extends ComponenteFisico {
             this.cargaTermicaW.toFixed(1),
             this.efetividadeAtual.toFixed(4),
             this.deltaPAtualBar.toFixed(5),
-            (this.deltaP2AtualBar || 0).toFixed(5)
+            (this.deltaP2AtualBar || 0).toFixed(5),
+            duasCorrentes ? 'dual' : 'single'
         ].join('|');
 
         if (!force && estado === this._ultimoEstadoNotificado) return;
@@ -245,7 +305,8 @@ export class TrocadorCalorLogico extends ComponenteFisico {
             cargaTermicaW: this.cargaTermicaW,
             efetividadeAtual: this.efetividadeAtual,
             deltaPAtualBar: this.deltaPAtualBar,
-            deltaP2AtualBar: this.deltaP2AtualBar
+            deltaP2AtualBar: this.deltaP2AtualBar,
+            duasCorrentesConectadas: duasCorrentes
         }));
     }
 

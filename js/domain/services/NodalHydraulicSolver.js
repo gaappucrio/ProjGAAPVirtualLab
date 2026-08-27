@@ -1053,8 +1053,11 @@ export class NodalHydraulicSolver {
         if (source instanceof FonteLogica) return source.fluidoEntrada || fallback;
         if (source instanceof TanqueLogico) return source.getFluidoSaidaAtual?.(fallback) || fallback;
         if (source instanceof TrocadorCalorLogico) {
-            const inletFluid = source.getFluidoEntradaMisturado?.(fallback) || fallback;
-            return source.getFluidoSaidaPara(inletFluid, flowLps);
+            const portId = branch.connection?.sourceEndpoint?.portId;
+            const isStream2 = portId === 'out2' || portId === 'in2' || portId === '2';
+            const streamId = isStream2 ? 2 : 1;
+            const inletFluid = source.getFluidoEntradaMisturadoPorPorta(isStream2 ? 'in2' : 'in1', fallback) || fallback;
+            return source.getFluidoSaidaPara(inletFluid, flowLps, streamId);
         }
         if (typeof source?.getFluidoEntradaMisturado === 'function') {
             return source.getFluidoEntradaMisturado(fallback) || fallback;
