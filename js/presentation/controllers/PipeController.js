@@ -182,10 +182,15 @@ function getPortOutwardDirection(component, endpoint, fallbackPortType) {
         return rotateVector(fallback, component?.rotacaoVisualGraus || 0);
     }
 
-    const baseDirection = normalizeVector({
-        x: Number(endpoint.offsetX) - (width / 2),
-        y: Number(endpoint.offsetY) - (height / 2)
-    }, fallback);
+    const dx = Number(endpoint.offsetX) - (width / 2);
+    const dy = Number(endpoint.offsetY) - (height / 2);
+
+    let baseDirection;
+    if (Math.abs(dx) >= Math.abs(dy)) {
+        baseDirection = { x: dx < 0 ? -1 : 1, y: 0 };
+    } else {
+        baseDirection = { x: 0, y: dy < 0 ? -1 : 1 };
+    }
 
     return rotateVector(baseDirection, component?.rotacaoVisualGraus || 0);
 }

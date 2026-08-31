@@ -184,32 +184,26 @@ const HEAT_EXCHANGER_COMPONENT_VISUAL = {
                 <stop id="hx-grad-serv-end-${id}" offset="100%" stop-color="#5dade2"/>
             </linearGradient>
         </defs>
-        <rect x="15" y="10" width="70" height="60" rx="8" fill="#fff" stroke="#2c3e50" stroke-width="5"/>
-        
-        <!-- Bocais / Nozzles -->
-        <line x1="0" y1="25" x2="15" y2="25" stroke="#2c3e50" stroke-width="6" stroke-linecap="round"/>
-        <line x1="85" y1="25" x2="100" y2="25" stroke="#2c3e50" stroke-width="6" stroke-linecap="round"/>
-        <line x1="0" y1="55" x2="15" y2="55" stroke="#2c3e50" stroke-width="6" stroke-linecap="round"/>
-        <line x1="85" y1="55" x2="100" y2="55" stroke="#2c3e50" stroke-width="6" stroke-linecap="round"/>
+        <rect x="30" y="20" width="180" height="100" rx="16" fill="#fff" stroke="#2c3e50" stroke-width="6"/>
 
         <!-- Stream 1 (Process) -->
-        <path id="hx-shell-${id}" d="M 0 25 L 15 25 Q 50 15, 85 25 L 100 25" fill="none" stroke="url(#hx-grad-${id})" stroke-width="6" stroke-linecap="round"/>
+        <path id="hx-shell-${id}" d="M 30 44 Q 120 28, 210 44" fill="none" stroke="url(#hx-grad-${id})" stroke-width="12" stroke-linecap="round"/>
         
         <!-- Stream 2 (Service) -->
-        <path id="hx-tube-${id}" d="M 0 55 L 15 55 Q 50 65, 85 55 L 100 55" fill="none" stroke="url(#hx-grad-serv-${id})" stroke-width="6" stroke-linecap="round"/>
+        <path id="hx-tube-${id}" d="M 30 96 Q 120 112, 210 96" fill="none" stroke="url(#hx-grad-serv-${id})" stroke-width="12" stroke-linecap="round"/>
         
         <!-- Center connection/heat transfer lines -->
-        <path d="M 30 32 L 30 48 M 50 35 L 50 45 M 70 32 L 70 48" fill="none" stroke="#7f8c8d" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+        <path d="M 70 56 L 70 84 M 120 60 L 120 80 M 170 56 L 170 84" fill="none" stroke="#7f8c8d" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
         
-        <circle id="hx-status-${id}" cx="50" cy="40" r="5" fill="#95a5a6" stroke="#2c3e50" stroke-width="1.5"/>
-        <text id="hx-temp-${id}" class="hx-temp-label component-temp-label" x="50" y="85" font-size="11" font-family="Segoe UI, Arial" font-weight="bold" text-anchor="middle" fill="#2c3e50" paint-order="stroke" stroke="#fff" stroke-width="3">25.0 °C</text>
-        <text id="tag-${id}" class="component-tag-label" x="50" y="100" font-size="12" ${labelStyle}>${tag}</text>
+        <circle id="hx-status-${id}" cx="120" cy="70" r="10" fill="#95a5a6" stroke="#2c3e50" stroke-width="3"/>
+        <text id="hx-temp-${id}" class="hx-temp-label component-temp-label" x="120" y="152" font-size="13" font-family="Segoe UI, Arial" font-weight="bold" text-anchor="middle" fill="#2c3e50" paint-order="stroke" stroke="#fff" stroke-width="3">25.0 °C</text>
+        <text id="tag-${id}" class="component-tag-label" x="120" y="174" font-size="14" ${labelStyle}>${tag}</text>
         
         <g>
-            ${makePort(id, 0, 25, 'in', 'in1')} 
-            ${makePort(id, 100, 25, 'out', 'out1')}
-            ${makePort(id, 0, 55, 'in', 'in2')}
-            ${makePort(id, 100, 55, 'out', 'out2')}
+            ${makePort(id, 30, 44, 'in', 'in1')} 
+            ${makePort(id, 210, 44, 'out', 'out1')}
+            ${makePort(id, 30, 96, 'in', 'in2')}
+            ${makePort(id, 210, 96, 'out', 'out2')}
         </g>
     `,
     setup: (visual, logica, id) => {
@@ -217,7 +211,7 @@ const HEAT_EXCHANGER_COMPONENT_VISUAL = {
             visual,
             logica,
             id,
-            offsetY: -10,
+            offsetY: -20,
             registerCleanup: (cleanup) => registerVisualCleanup(visual, cleanup)
         });
         const atualizarEstadoTermico = () => {

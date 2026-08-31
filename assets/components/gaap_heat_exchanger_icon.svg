@@ -1,8 +1,31 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90" role="img" aria-label="Trocador de calor">
-  <rect x="12" y="24" width="96" height="42" rx="8" fill="#ffffff" stroke="#2c3e50" stroke-width="6"/>
-  <path d="M18 45 C30 24 48 24 60 45 S90 66 102 45" fill="none" stroke="#e67e22" stroke-width="8" stroke-linecap="round"/>
-  <path d="M22 34 H98 M22 56 H98" fill="none" stroke="#7f8c8d" stroke-width="4" stroke-linecap="round" opacity="0.75"/>
-  <circle cx="60" cy="45" r="9" fill="#3498db" stroke="#2c3e50" stroke-width="3"/>
-  <circle cx="12" cy="45" r="5" fill="#ffffff" stroke="#2c3e50" stroke-width="3"/>
-  <circle cx="108" cy="45" r="5" fill="#ffffff" stroke="#2c3e50" stroke-width="3"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="15 8 210 124" role="img" aria-label="Trocador de calor">
+  <defs>
+    <linearGradient id="hx-icon-grad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#5dade2"/>
+      <stop offset="100%" stop-color="#f39c12"/>
+    </linearGradient>
+    <linearGradient id="hx-icon-grad-serv" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#f39c12"/>
+      <stop offset="100%" stop-color="#5dade2"/>
+    </linearGradient>
+  </defs>
+  <rect x="30" y="20" width="180" height="100" rx="16" fill="#ffffff" stroke="#2c3e50" stroke-width="6"/>
+
+  <!-- Stream 1 (Process) -->
+  <path d="M 30 44 Q 120 28, 210 44" fill="none" stroke="url(#hx-icon-grad)" stroke-width="12" stroke-linecap="round"/>
+  
+  <!-- Stream 2 (Service) -->
+  <path d="M 30 96 Q 120 112, 210 96" fill="none" stroke="url(#hx-icon-grad-serv)" stroke-width="12" stroke-linecap="round"/>
+  
+  <!-- Linhas centrais de troca térmica -->
+  <path d="M 70 56 L 70 84 M 120 60 L 120 80 M 170 56 L 170 84" fill="none" stroke="#7f8c8d" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
+  
+  <!-- Indicador central de status -->
+  <circle cx="120" cy="70" r="10" fill="#95a5a6" stroke="#2c3e50" stroke-width="3"/>
+  
+  <!-- Portas de conexão nas extremidades do perímetro -->
+  <circle cx="30" cy="44" r="8" fill="#ffffff" stroke="#e67e22" stroke-width="4"/>
+  <circle cx="210" cy="44" r="8" fill="#ffffff" stroke="#e67e22" stroke-width="4"/>
+  <circle cx="30" cy="96" r="8" fill="#ffffff" stroke="#e67e22" stroke-width="4"/>
+  <circle cx="210" cy="96" r="8" fill="#ffffff" stroke="#e67e22" stroke-width="4"/>
 </svg>
