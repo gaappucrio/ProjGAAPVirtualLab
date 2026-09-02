@@ -1178,7 +1178,9 @@ export function translateDefaultComponentTag(tag) {
         inlet: 'source',
         saida: 'sink',
         sink: 'sink',
-        outlet: 'sink'
+        outlet: 'sink',
+        tc: 'heat_exchanger',
+        hx: 'heat_exchanger'
     };
     const type = typeByPrefix[normalizeTagPrefix(match[1])];
     if (type) return `${getComponentTagPrefix(type)}-${match[2]}`;

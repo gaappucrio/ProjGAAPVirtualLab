@@ -14,6 +14,7 @@ import {
     FLOWCHART_DOCUMENT_TYPE,
     parseFlowchartDocument
 } from '../js/presentation/flowchart/FlowchartPersistence.js';
+import { setLanguage, translateDefaultComponentTag } from '../js/presentation/i18n/LanguageManager.js';
 
 function createEngine() {
     const engine = new SistemaSimulacao();
@@ -281,5 +282,25 @@ test('trocador de calor opera em contracorrente no motor com troca térmica supe
         `Efetividade contracorrente (${trocador.efetividadeAtual.toFixed(4)}) deve ser maior que paralelo (${resParalelo.ef.toFixed(4)})`
     );
 });
+
+test('alternância de idioma traduz tag padrão do trocador de calor entre TC e HX', () => {
+    setLanguage('pt');
+    assert.equal(translateDefaultComponentTag('TC-01'), 'TC-01');
+    assert.equal(translateDefaultComponentTag('HX-01'), 'TC-01');
+
+    setLanguage('en');
+    assert.equal(translateDefaultComponentTag('TC-01'), 'HX-01');
+    assert.equal(translateDefaultComponentTag('TC-02'), 'HX-02');
+    assert.equal(translateDefaultComponentTag('HX-01'), 'HX-01');
+
+    // Tags personalizadas não devem ser alteradas
+    assert.equal(translateDefaultComponentTag('TC-Personalizado'), 'TC-Personalizado');
+    assert.equal(translateDefaultComponentTag('MeuTrocador'), 'MeuTrocador');
+
+    // Retorna para o idioma padrão
+    setLanguage('pt');
+    assert.equal(translateDefaultComponentTag('HX-01'), 'TC-01');
+});
+
 
 
