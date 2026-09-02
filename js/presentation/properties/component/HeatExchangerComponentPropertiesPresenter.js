@@ -92,6 +92,10 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
                 ${makeLabel('Efetividade atual', TOOLTIP.heatExchangerEffectiveness)}
                 <input type="text" id="disp-hx-effectiveness" ${hintAttr(TOOLTIP.heatExchangerEffectiveness)} value="${(comp.efetividadeAtual * 100).toFixed(1)}%" disabled>
             </div>
+            <div class="prop-group">
+                ${makeLabel('Arranjo térmico')}
+                <input type="text" id="disp-hx-flow-mode" value="${comp.getModoEscoamento?.(engine) === 'paralelo' ? 'Corrente Paralela (Co-corrente)' : 'Contracorrente'}" disabled>
+            </div>
 
             <div style="font-weight: bold; margin: 12px 0 8px 0; color: ${isDark ? '#5dade2' : '#2980b9'}; border-bottom: 1px solid ${isDark ? '#2d3748' : '#e2e8f0'}; padding-bottom: 4px;">Corrente 1 (Processo - in1 / out1)</div>
             <div class="prop-group">

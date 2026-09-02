@@ -27,7 +27,8 @@ export function createConnectionEndpointDefinition(component, portEl) {
     const svgEl = portEl?.ownerSVGElement;
     const offsetX = parseStyleNumber(svgEl?.style.left) + parseFloat(portEl?.getAttribute('cx') || '0');
     const offsetY = parseStyleNumber(svgEl?.style.top) + parseFloat(portEl?.getAttribute('cy') || '0');
-    const portType = portEl?.dataset?.type === 'in' ? 'in' : 'out';
+    const rawType = portEl?.dataset?.type;
+    const portType = rawType === 'in' ? 'in' : (rawType === 'inout' ? 'inout' : 'out');
     const portId = portEl?.dataset?.portId || portType;
     const isTankLike = component && typeof component.alturaUtilMetros === 'number';
 

@@ -23,8 +23,8 @@ export const VALVE_COMPONENT_SPEC = {
 export const HEAT_EXCHANGER_COMPONENT_SPEC = {
     Classe: TrocadorCalorLogico,
     prefixoTag: 'TC',
-    w: 240,
+    w: 200,
     h: 140,
-    offX: -20,
+    offX: 0,
     offY: -20
 };

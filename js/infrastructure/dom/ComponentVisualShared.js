@@ -19,8 +19,9 @@ export {
 
 export const makePort = (id, cx, cy, inOut, portId = null) => {
     const isInput = inOut === 'in';
-    const textX = isInput ? cx - 10 : cx + 10;
-    const anchor = isInput ? 'end' : 'start';
+    const isInOut = inOut === 'inout';
+    const textX = (isInput || (isInOut && cx < 100)) ? cx - 10 : cx + 10;
+    const anchor = (isInput || (isInOut && cx < 100)) ? 'end' : 'start';
     const pid = portId || inOut;
 
     return `

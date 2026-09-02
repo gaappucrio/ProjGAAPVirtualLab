@@ -159,6 +159,8 @@ export class SistemaSimulacao extends Observable {
                 isBombaBloqueadaPorSetpoint: (bomba) => this.isBombaBloqueadaPorSetpoint(bomba),
                 isValvulaBloqueadaPorSetpoint: (valvula) => this.isValvulaBloqueadaPorSetpoint(valvula),
                 isTrocadorComDuasCorrentes: (trocador) => this.isTrocadorComDuasCorrentes(trocador),
+                getInputConnections: (comp) => this.getInputConnections(comp),
+                getOutputConnections: (comp) => this.getOutputConnections(comp),
                 getComponentFluid: (component) => this.hydraulicContext.getComponentFluid(component)
             },
             ...overrides

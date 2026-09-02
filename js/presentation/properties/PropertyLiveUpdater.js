@@ -408,6 +408,7 @@ function updateHeatExchangerValues(component, engine = null) {
 
     setValue('disp-hx-duty', `${(component.cargaTermicaW / 1000).toFixed(2)} kW`);
     setValue('disp-hx-effectiveness', `${(component.efetividadeAtual * 100).toFixed(1)}%`);
+    setValue('disp-hx-flow-mode', component.getModoEscoamento?.(engine) === 'paralelo' ? 'Corrente Paralela (Co-corrente)' : 'Contracorrente');
 
     // Corrente 1
     setFieldValue('disp-hx-flow', component.vazao1Lps ?? component.fluxoReal, 'flow', 2);

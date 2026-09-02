@@ -184,26 +184,26 @@ const HEAT_EXCHANGER_COMPONENT_VISUAL = {
                 <stop id="hx-grad-serv-end-${id}" offset="100%" stop-color="#5dade2"/>
             </linearGradient>
         </defs>
-        <rect x="30" y="20" width="180" height="100" rx="16" fill="#fff" stroke="#2c3e50" stroke-width="6"/>
+        <rect x="0" y="20" width="200" height="100" rx="16" fill="#fff" stroke="#2c3e50" stroke-width="6"/>
 
         <!-- Stream 1 (Process) -->
-        <path id="hx-shell-${id}" d="M 30 44 Q 120 28, 210 44" fill="none" stroke="url(#hx-grad-${id})" stroke-width="12" stroke-linecap="round"/>
+        <path id="hx-shell-${id}" d="M 0 44 Q 100 28, 200 44" fill="none" stroke="url(#hx-grad-${id})" stroke-width="12" stroke-linecap="round"/>
         
         <!-- Stream 2 (Service) -->
-        <path id="hx-tube-${id}" d="M 30 96 Q 120 112, 210 96" fill="none" stroke="url(#hx-grad-serv-${id})" stroke-width="12" stroke-linecap="round"/>
+        <path id="hx-tube-${id}" d="M 0 96 Q 100 112, 200 96" fill="none" stroke="url(#hx-grad-serv-${id})" stroke-width="12" stroke-linecap="round"/>
         
         <!-- Center connection/heat transfer lines -->
-        <path d="M 70 56 L 70 84 M 120 60 L 120 80 M 170 56 L 170 84" fill="none" stroke="#7f8c8d" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
+        <path d="M 60 56 L 60 84 M 100 60 L 100 80 M 140 56 L 140 84" fill="none" stroke="#7f8c8d" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
         
-        <circle id="hx-status-${id}" cx="120" cy="70" r="10" fill="#95a5a6" stroke="#2c3e50" stroke-width="3"/>
-        <text id="hx-temp-${id}" class="hx-temp-label component-temp-label" x="120" y="152" font-size="13" font-family="Segoe UI, Arial" font-weight="bold" text-anchor="middle" fill="#2c3e50" paint-order="stroke" stroke="#fff" stroke-width="3">25.0 °C</text>
-        <text id="tag-${id}" class="component-tag-label" x="120" y="174" font-size="14" ${labelStyle}>${tag}</text>
+        <circle id="hx-status-${id}" cx="100" cy="70" r="10" fill="#95a5a6" stroke="#2c3e50" stroke-width="3"/>
+        <text id="hx-temp-${id}" class="hx-temp-label component-temp-label" x="100" y="152" font-size="13" font-family="Segoe UI, Arial" font-weight="bold" text-anchor="middle" fill="#2c3e50" paint-order="stroke" stroke="#fff" stroke-width="3">25.0 °C</text>
+        <text id="tag-${id}" class="component-tag-label" x="100" y="174" font-size="14" ${labelStyle}>${tag}</text>
         
         <g>
-            ${makePort(id, 30, 44, 'in', 'in1')} 
-            ${makePort(id, 210, 44, 'out', 'out1')}
-            ${makePort(id, 30, 96, 'in', 'in2')}
-            ${makePort(id, 210, 96, 'out', 'out2')}
+            ${makePort(id, 0, 44, 'in', 'in1')} 
+            ${makePort(id, 200, 44, 'out', 'out1')}
+            ${makePort(id, 0, 96, 'inout', 'in2')}
+            ${makePort(id, 200, 96, 'inout', 'out2')}
         </g>
     `,
     setup: (visual, logica, id) => {
@@ -217,6 +217,7 @@ const HEAT_EXCHANGER_COMPONENT_VISUAL = {
         const atualizarEstadoTermico = () => {
             const deltaT1 = logica.deltaTemperaturaC || 0;
             const deltaT2 = logica.deltaTemperatura2C || 0;
+
             const status = visual.querySelector(`#hx-status-${id}`);
             const temp = visual.querySelector(`#hx-temp-${id}`);
             
@@ -242,19 +243,23 @@ const HEAT_EXCHANGER_COMPONENT_VISUAL = {
                 const hasS1 = (logica.vazao1Lps ?? logica.fluxoReal) > 0.001;
                 const hasS2 = (logica.vazao2Lps || 0) > 0.001;
                 const isDual = (hasS1 && hasS2) || logica.temDuasCorrentesConectadas?.() === true;
-                const t1In = (logica.temperaturaEntradaC ?? 25).toFixed(1);
-                const t1Out = (logica.temperaturaSaidaC ?? 25).toFixed(1);
-                const t2In = (logica.temperaturaEntrada2C ?? logica.temperaturaServicoC ?? 80).toFixed(1);
-                const t2Out = (logica.temperaturaSaida2C ?? logica.temperaturaServicoC ?? 80).toFixed(1);
+                const t1InStr = (logica.temperaturaEntradaC ?? 25).toFixed(1);
+                const t1OutStr = (logica.temperaturaSaidaC ?? 25).toFixed(1);
+                const t2InStr = (logica.temperaturaEntrada2C ?? logica.temperaturaServicoC ?? 80).toFixed(1);
+                const t2OutStr = (logica.temperaturaSaida2C ?? logica.temperaturaServicoC ?? 80).toFixed(1);
+
+                const modo = logica.getModoEscoamento?.(ENGINE) || 'contracorrente';
+                const isContra = modo === 'contracorrente';
 
                 if (isDual) {
-                    temp.textContent = `S1: ${t1In}→${t1Out}°C | S2: ${t2In}→${t2Out}°C`;
-                    temp.setAttribute('font-size', '8.5');
+                    const tagModo = isContra ? 'Contra' : 'Paralelo';
+                    temp.textContent = `S1: ${t1InStr}→${t1OutStr}° | S2: ${t2InStr}→${t2OutStr}° (${tagModo})`;
+                    temp.setAttribute('font-size', '8');
                 } else if (hasS2 && !hasS1) {
-                    temp.textContent = `S2: ${t2In} → ${t2Out} °C`;
+                    temp.textContent = `S2: ${t2InStr} → ${t2OutStr} °C`;
                     temp.setAttribute('font-size', '10');
                 } else {
-                    temp.textContent = `${t1In} → ${t1Out} °C`;
+                    temp.textContent = `${t1InStr} → ${t1OutStr} °C`;
                     temp.setAttribute('font-size', '10');
                 }
             }

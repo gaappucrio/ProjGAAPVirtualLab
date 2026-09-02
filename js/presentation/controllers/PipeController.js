@@ -299,13 +299,15 @@ export function setupPipeControl({ engine: injectedEngine, connectionService: in
     workspaceContainer.addEventListener('mousedown', (event) => {
         const target = event.target;
         if (!(target instanceof Element)) return;
-        if (!target.classList.contains('port-node') || target.dataset.type !== 'out') return;
+        if (!target.classList.contains('port-node')) return;
+        const isOutPort = target.dataset.type === 'out' || target.dataset.type === 'inout';
+        if (!isOutPort) return;
 
         const sourceComponent = getEngine().getComponentById(target.dataset.compId);
         if (!sourceComponent) return;
 
         const sourcePoint = getPortCoords(target);
-        const sourceEndpoint = createConnectionEndpointDefinition(sourceComponent, target);
+        const sourceEndpoint = createConnectionEndpointDefinition(sourceComponent, target, 'out');
 
         transientConnection.begin({
             sourceComponentId: sourceComponent.id,
@@ -347,7 +349,8 @@ export function setupPipeControl({ engine: injectedEngine, connectionService: in
         if (!draft.active) return;
 
         const dropTarget = event.target instanceof Element ? event.target : null;
-        const isInputPort = dropTarget?.classList.contains('port-node') && dropTarget.dataset.type === 'in';
+        const isInputPort = dropTarget?.classList.contains('port-node') &&
+            (dropTarget.dataset.type === 'in' || dropTarget.dataset.type === 'inout');
 
         if (!isInputPort) {
             cancelTransientConnection();

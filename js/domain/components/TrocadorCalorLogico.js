@@ -102,13 +102,80 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         };
     }
 
-    calcularTrocaTermicaGlobal(fluido1, vazao1, fluido2, vazao2) {
+    getModoEscoamento(engine = null) {
+        const context = this.getSimulationContext();
+        let inputConnections = [];
+        let outputConnections = [];
+
+        if (engine && typeof engine.getInputConnections === 'function') {
+            inputConnections = engine.getInputConnections(this) || [];
+            outputConnections = engine.getOutputConnections?.(this) || [];
+        } else if (typeof context?.queries?.getInputConnections === 'function') {
+            inputConnections = context.queries.getInputConnections(this) || [];
+            outputConnections = context.queries.getOutputConnections?.(this) || [];
+        }
+
+        // 1. Conexões de entrada na Corrente 2
+        const in2Right = inputConnections.some((c) => {
+            const portId = c.targetEndpoint?.portId || '';
+            const isStream2 = portId === 'out2' || portId === 'in2' || portId === '2' || portId.includes('2');
+            return isStream2 && portId === 'out2';
+        });
+
+        if (in2Right) {
+            return 'contracorrente';
+        }
+
+        const in2Left = inputConnections.some((c) => {
+            const portId = c.targetEndpoint?.portId || '';
+            const isStream2 = portId === 'out2' || portId === 'in2' || portId === '2' || portId.includes('2');
+            return isStream2 && portId === 'in2';
+        });
+
+        if (in2Left) {
+            return 'paralelo';
+        }
+
+        // 2. Conexões de saída na Corrente 2
+        const out2Left = outputConnections.some((c) => {
+            const portId = c.sourceEndpoint?.portId || '';
+            const isStream2 = portId === 'out2' || portId === 'in2' || portId === '2' || portId.includes('2');
+            return isStream2 && portId === 'in2';
+        });
+
+        if (out2Left) {
+            return 'contracorrente';
+        }
+
+        const out2Right = outputConnections.some((c) => {
+            const portId = c.sourceEndpoint?.portId || '';
+            const isStream2 = portId === 'out2' || portId === 'in2' || portId === '2' || portId.includes('2');
+            return isStream2 && portId === 'out2';
+        });
+
+        if (out2Right) {
+            return 'paralelo';
+        }
+
+        // 3. Contribuições ativas de fluxo
+        const inContribs = this.estadoHidraulico?.entradaFluidoContribuicoes || [];
+        if (inContribs.some((c) => c.portId === 'out2')) return 'contracorrente';
+        if (inContribs.some((c) => c.portId === 'in2')) return 'paralelo';
+
+        const outContribs = this.estadoHidraulico?.saidaFluidoContribuicoes || [];
+        if (outContribs.some((c) => c.portId === 'in2')) return 'contracorrente';
+        if (outContribs.some((c) => c.portId === 'out2')) return 'paralelo';
+
+        return 'contracorrente';
+    }
+
+    calcularTrocaTermicaGlobal(fluido1, vazao1, fluido2, vazao2, modo = this.getModoEscoamento()) {
         const t1 = numeroSeguro(fluido1?.temperatura, 25);
         const t2 = (fluido2 && vazao2 > EPSILON_FLOW) ? numeroSeguro(fluido2.temperatura, 25) : this.temperaturaServicoC;
         const ua = this.uaWPorK;
 
         if (vazao1 <= EPSILON_FLOW || ua <= 0) {
-            return { t1Out: t1, t2Out: t2, duty: 0, ef: 0, dt1: 0, dt2: 0 };
+            return { t1Out: t1, t2Out: t2, duty: 0, ef: 0, dt1: 0, dt2: 0, modo };
         }
 
         const cp1 = numeroSeguro(fluido1?.calorEspecificoJkgK, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK);
@@ -135,20 +202,24 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         let efetividade = 0;
 
         if (cr === 0) {
-            // Infinite capacity for stream 2 (constant temp)
+            // Infinite capacity for stream 2 (constant utility temp)
             efetividade = 1 - Math.exp(-ntu);
-        } else if (Math.abs(cr - 1) < 0.001) {
-            // Counter-flow limit when Cr = 1
-            efetividade = ntu / (1 + ntu);
+        } else if (modo === 'paralelo' || modo === 'cocorrente') {
+            // Co-corrente (Corrente Paralela)
+            efetividade = (1 - Math.exp(-ntu * (1 + cr))) / (1 + cr);
         } else {
-            // Counter-flow general formula
-            const expTerm = Math.exp(-ntu * (1 - cr));
-            efetividade = (1 - expTerm) / (1 - cr * expTerm);
+            // Contracorrente
+            if (Math.abs(cr - 1) < 0.001) {
+                efetividade = ntu / (1 + ntu);
+            } else {
+                const expTerm = Math.exp(-ntu * (1 - cr));
+                efetividade = (1 - expTerm) / (1 - cr * expTerm);
+            }
         }
 
         efetividade = clamp(efetividade, 0, this.efetividadeMaxima);
 
-        const maxHeat = cmin * (t1 > t2 ? (t1 - t2) : (t2 - t1));
+        const maxHeat = cmin * Math.abs(t1 - t2);
         const duty = maxHeat * efetividade;
 
         const t1Out = t1 + (t1 > t2 ? -duty / c1 : duty / c1);
@@ -158,7 +229,7 @@ export class TrocadorCalorLogico extends ComponenteFisico {
             t2Out = t2 + (t1 > t2 ? duty / c2 : -duty / c2);
         }
 
-        return { t1Out, t2Out, duty, ef: efetividade, dt1: t1Out - t1, dt2: t2Out - t2 };
+        return { t1Out, t2Out, duty, ef: efetividade, dt1: t1Out - t1, dt2: t2Out - t2, modo };
     }
 
     getFluxoPendentePorStream(streamId = 1) {
