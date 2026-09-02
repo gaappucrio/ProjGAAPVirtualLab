@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { SistemaSimulacao } from '../js/application/engine/SimulationEngine.js';
+import { SistemaSimulacao, FLUID_PRESETS } from '../js/application/engine/SimulationEngine.js';
 import { SelectionStore } from '../js/application/stores/SelectionStore.js';
 import { ConnectionModel } from '../js/domain/models/ConnectionModel.js';
 import { DrenoLogico } from '../js/domain/components/DrenoLogico.js';
 import { FonteLogica } from '../js/domain/components/FonteLogica.js';
 import { TanqueLogico } from '../js/domain/components/TanqueLogico.js';
+import { TrocadorCalorLogico } from '../js/domain/components/TrocadorCalorLogico.js';
 import { ValvulaLogica } from '../js/domain/components/ValvulaLogica.js';
 import {
     createFlowchartDocument,
@@ -178,3 +179,107 @@ test('exportação de fluxograma completo preserva componentes, conexões e aná
     assert.equal(document.analysis.hasDirectedCycle, false);
     assert.equal(parsed.workspace.components[1].snapshot.properties.volumeAtual, 350);
 });
+
+test('trocador de calor com duas correntes no motor preserva independência hidráulica e acoplamento térmico', () => {
+    const engine = createEngine();
+    const fonte1 = new FonteLogica('F-01', 'Fonte-Fria', 0, 0);
+    fonte1.pressaoFonteBar = 2.0;
+    fonte1.atualizarFluidoEntrada({ ...FLUID_PRESETS.agua, temperatura: 15 }, { presetId: 'custom' });
+
+    const dreno1 = new DrenoLogico('D-01', 'Dreno-Frio', 300, 0);
+    dreno1.pressaoSaidaBar = 0.5;
+
+    const fonte2 = new FonteLogica('F-02', 'Fonte-Quente', 0, 100);
+    fonte2.pressaoFonteBar = 2.0;
+    fonte2.atualizarFluidoEntrada({ ...FLUID_PRESETS.agua, temperatura: 85 }, { presetId: 'custom' });
+
+    const dreno2 = new DrenoLogico('D-02', 'Dreno-Quente', 300, 100);
+    dreno2.pressaoSaidaBar = 0.5;
+
+    const trocador = new TrocadorCalorLogico('TC-01', 'TC-01', 150, 50);
+    trocador.uaWPorK = 3000;
+
+    const c1In = new ConnectionModel({ id: 'C1-IN', sourceId: fonte1.id, targetId: trocador.id, targetEndpoint: { portId: 'in1', portType: 'in' } });
+    const c1Out = new ConnectionModel({ id: 'C1-OUT', sourceId: trocador.id, targetId: dreno1.id, sourceEndpoint: { portId: 'out1', portType: 'out' } });
+    const c2In = new ConnectionModel({ id: 'C2-IN', sourceId: fonte2.id, targetId: trocador.id, targetEndpoint: { portId: 'in2', portType: 'in' } });
+    const c2Out = new ConnectionModel({ id: 'C2-OUT', sourceId: trocador.id, targetId: dreno2.id, sourceEndpoint: { portId: 'out2', portType: 'out' } });
+
+    [fonte1, dreno1, fonte2, dreno2, trocador].forEach((comp) => engine.add(comp));
+    [c1In, c1Out, c2In, c2Out].forEach((conn) => engine.addConnection(conn));
+
+    assert.equal(engine.isTrocadorComDuasCorrentes(trocador), true);
+    assert.equal(trocador.getDiagnosticoOperacao(engine).temperaturaServicoEditavel, false);
+
+    for (let i = 0; i < 30; i += 1) {
+        engine.componentes.forEach((c) => c.atualizarDinamica(0.1, engine.hydraulicContext.getComponentFluid(c) || engine.fluidoOperante));
+        engine.resolveHydraulicNetwork(0.1);
+        engine.componentes.forEach((c) => c.sincronizarMetricasFisicas(engine.hydraulicContext.getComponentFluid(c) || engine.fluidoOperante));
+    }
+
+    assert.ok(trocador.vazao1Lps > 0, 'Corrente 1 deve ter vazao positiva');
+    assert.ok(trocador.vazao2Lps > 0, 'Corrente 2 deve ter vazao positiva');
+    assert.ok(trocador.temperaturaSaidaC > 15, 'Corrente 1 deve aquecer acima de 15°C');
+    assert.ok(trocador.temperaturaSaida2C < 85, 'Corrente 2 deve resfriar abaixo de 85°C');
+    assert.ok(trocador.cargaTermicaW > 0, 'Carga termica trocada deve ser maior que zero');
+
+    // Ao desconectar a corrente 2, o trocador volta para modo utilidade com temperatura de servico editavel
+    engine.removeConnection(c2In);
+    engine.removeConnection(c2Out);
+    assert.equal(engine.isTrocadorComDuasCorrentes(trocador), false);
+    assert.equal(trocador.getDiagnosticoOperacao(engine).temperaturaServicoEditavel, true);
+});
+
+test('trocador de calor opera em contracorrente no motor com troca térmica superior ao modo paralelo', () => {
+    const engine = createEngine();
+
+    const fonteFria = new FonteLogica('F-FRIA', 'Fonte-Fria', 0, 0);
+    fonteFria.pressaoFonteBar = 2.0;
+    fonteFria.atualizarFluidoEntrada({ ...FLUID_PRESETS.agua, temperatura: 20 }, { presetId: 'custom' });
+
+    const drenoFrio = new DrenoLogico('D-FRIO', 'Dreno-Frio', 300, 0);
+    drenoFrio.pressaoSaidaBar = 0.5;
+
+    const fonteQuente = new FonteLogica('F-QUENTE', 'Fonte-Quente', 0, 100);
+    fonteQuente.pressaoFonteBar = 2.0;
+    fonteQuente.atualizarFluidoEntrada({ ...FLUID_PRESETS.agua, temperatura: 80 }, { presetId: 'custom' });
+
+    const drenoQuente = new DrenoLogico('D-QUENTE', 'Dreno-Quente', 300, 100);
+    drenoQuente.pressaoSaidaBar = 0.5;
+
+    const trocador = new TrocadorCalorLogico('TC-CC', 'TC-Contracorrente', 150, 50);
+    trocador.uaWPorK = 10000;
+
+    const c1In = new ConnectionModel({ id: 'C1-IN', sourceId: fonteFria.id, targetId: trocador.id, targetEndpoint: { portId: 'in1', portType: 'in' } });
+    const c1Out = new ConnectionModel({ id: 'C1-OUT', sourceId: trocador.id, targetId: drenoFrio.id, sourceEndpoint: { portId: 'out1', portType: 'out' } });
+    const c2In = new ConnectionModel({ id: 'C2-IN', sourceId: fonteQuente.id, targetId: trocador.id, targetEndpoint: { portId: 'out2', portType: 'in' } });
+    const c2Out = new ConnectionModel({ id: 'C2-OUT', sourceId: trocador.id, targetId: drenoQuente.id, sourceEndpoint: { portId: 'in2', portType: 'out' } });
+
+    [fonteFria, drenoFrio, fonteQuente, drenoQuente, trocador].forEach((comp) => engine.add(comp));
+    [c1In, c1Out, c2In, c2Out].forEach((conn) => engine.addConnection(conn));
+
+    assert.equal(engine.isTrocadorComDuasCorrentes(trocador), true);
+    assert.equal(trocador.getModoEscoamento(engine), 'contracorrente', 'Topologia deve configurar modo contracorrente');
+
+    for (let i = 0; i < 30; i += 1) {
+        engine.componentes.forEach((c) => c.atualizarDinamica(0.1, engine.hydraulicContext.getComponentFluid(c) || engine.fluidoOperante));
+        engine.resolveHydraulicNetwork(0.1);
+        engine.componentes.forEach((c) => c.sincronizarMetricasFisicas(engine.hydraulicContext.getComponentFluid(c) || engine.fluidoOperante));
+    }
+
+    assert.ok(trocador.vazao1Lps > 0, 'Corrente 1 deve escoar em contracorrente');
+    assert.ok(trocador.vazao2Lps > 0, 'Corrente 2 deve escoar em contracorrente');
+    assert.ok(trocador.temperaturaSaidaC > 20, 'Corrente 1 deve aquecer');
+    assert.ok(trocador.temperaturaSaida2C < 80, 'Corrente 2 deve resfriar');
+    assert.ok(trocador.efetividadeAtual > 0, 'Efetividade em contracorrente deve ser positiva');
+
+    // Valida que para as mesmas vazões e fluidos, a efetividade em contracorrente é superior à do modo paralelo
+    const f1 = engine.hydraulicContext.getComponentFluid(fonteFria);
+    const f2 = engine.hydraulicContext.getComponentFluid(fonteQuente);
+    const resParalelo = trocador.calcularTrocaTermicaGlobal(f1, trocador.vazao1Lps, f2, trocador.vazao2Lps, 'paralelo');
+    assert.ok(
+        trocador.efetividadeAtual > resParalelo.ef,
+        `Efetividade contracorrente (${trocador.efetividadeAtual.toFixed(4)}) deve ser maior que paralelo (${resParalelo.ef.toFixed(4)})`
+    );
+});
+
+

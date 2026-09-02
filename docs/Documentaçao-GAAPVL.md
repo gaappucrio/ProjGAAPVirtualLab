@@ -15,7 +15,7 @@ A aplicação é organizada em camadas separadas para garantir coesão, baixo ac
 Responsabilidade: conter a regra física, modelos de componentes e serviços hidráulicos puramente lógicos.
 
 Principais módulos:
-- `domain/components/` — classes lógicas de componentes, como bomba, tanque, válvula, fonte e dreno.
+- `domain/components/` — classes lógicas de componentes, como bomba, tanque, válvula, trocador de calor, fonte e dreno.
 - `domain/models/ConnectionModel.js` — definição de conexão lógica entre componentes.
 - `domain/services/` — solver hidráulico, cálculo de perdas, análise de rede, hidráulica de tubulação, tempo de residência e controle de nível PID.
 - `domain/context/SimulationContext.js` — contexto de simulação com parâmetros físicos e unidades.
@@ -101,6 +101,7 @@ Este módulo instancia o engine, conecta serviços de visual, cria controladores
 - Tanques e tubulações devem exibir tempo de residência atual quando houver vazão suficiente.
 - Fontes devem definir fluido, pressão de alimentação e vazão máxima; a pressão dirige a vazão resolvida e a vazão máxima limita a capacidade entregue quando a fonte satura. A vazão máxima padrão da entrada é `32 m³/h`.
 - Drenos devem manter contrapressão de saída, exibir a pressão final da rede antes da perda de entrada e explicitar a queda causada pelo `K` de entrada.
+- Trocadores de calor devem suportar operação com utilidade térmica (temperatura de serviço fixa) ou com duas correntes hidraulicamente independentes conectadas em portas dedicadas (Corrente 1: in1/out1; Corrente 2: in2/out2). Quando duas correntes estão conectadas, a edição da temperatura de serviço é desabilitada, o modo de escoamento (contracorrente ou paralelo) é inferido pela topologia das portas e a troca térmica é calculada pelo método $\varepsilon$-NTU com conservação de energia sensível.
 
 ### 3.4 Exportação e persistência
 
@@ -894,7 +895,7 @@ A seguir, a lista completa de módulos e símbolos exportados.
 - `js/domain/components/BaseComponente.js`: ComponenteFisico, Observable, clamp, flowFromBernoulli, pressureLossFromFlow, rampToTarget, smoothFirstOrder
 - `js/domain/components/BombaLogica.js`: BombaLogica
 - `js/domain/components/DrenoLogico.js`: DrenoLogico
-- `js/domain/components/Fluido.js`: Fluido, cloneFluido, createFluidoFromProperties, mixFluidos, updateFluidoProperties
+- `js/domain/components/Fluido.js`: cloneFluido, createFluidoFromProperties, mixFluidos, updateFluidoProperties
 - `js/domain/components/FonteLogica.js`: FonteLogica
 - `js/domain/components/TanqueLogico.js`: TanqueLogico
 - `js/domain/components/TrocadorCalorLogico.js`: TrocadorCalorLogico, calcularSaidaTrocadorCalor

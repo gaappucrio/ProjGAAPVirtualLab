@@ -156,22 +156,46 @@ As propriedades fundamentais do fluido (Densidade $\rho$, Viscosidade $\mu$ e Pr
 $$\rho(T) = \rho_{ref} \cdot f_{anomalia}(T)$$
 
 ### 5.2 Trocadores de Calor (Método $\epsilon$-NTU)
-Os trocadores de calor do laboratório não operam apenas como perdas de carga singulares, mas integram o **Método Efetividade-NTU ($\epsilon$-NTU)** para calcular a taxa real de transferência térmica:
+Os trocadores de calor do laboratório integram o **Método Efetividade-NTU ($\epsilon$-NTU)** para calcular a taxa real de transferência térmica, suportando operação com utilidade térmica ($T_{\text{serviço}}$ constante) ou com duas correntes de processo hidraulicamente independentes conectadas em portas dedicadas (Corrente 1: `in1`/`out1`; Corrente 2: `in2`/`out2`).
 
-1. **Taxa de Capacidade Térmica ($C_{min}$):** $C_{min} = \dot{m} \cdot c_p$
-2. **Número de Unidades de Transferência (NTU):** $NTU = \frac{UA}{C_{min}}$
-3. **Efetividade ($\epsilon$):** $\epsilon = 1 - e^{-NTU}$
+1. **Taxas de Capacidade Térmica:**
+   $$C_1 = \dot{m}_1 \cdot c_{p,1}, \qquad C_2 = \dot{m}_2 \cdot c_{p,2}$$
+   $$C_{\min} = \min(C_1, C_2), \qquad C_{\max} = \max(C_1, C_2), \qquad C_r = \frac{C_{\min}}{C_{\max}}$$
+   *(No modo utilidade térmica de 1 corrente, $C_2 \to \infty$, logo $C_{\min} = C_1$ e $C_r = 0$).*
 
-A temperatura de saída do fluido principal é então rigorosamente determinada pela equação calorimétrica atrelada ao fluido de serviço:
+2. **Número de Unidades de Transferência (NTU):**
+   $$NTU = \frac{UA}{C_{\min}}$$
 
-$$T_{out} = T_{in} + \epsilon \cdot (T_{serviço} - T_{in})$$
+3. **Efetividade Térmica ($\epsilon$) por Modo de Escoamento:**
+   - **Contracorrente** (detectado pela topologia quando a Corrente 2 entra por `out2` e sai por `in2`):
+     $$\epsilon_{\text{contra}} = \begin{cases} \dfrac{1 - e^{-NTU (1 - C_r)}}{1 - C_r e^{-NTU (1 - C_r)}}, & C_r < 1 \\[6pt] \dfrac{NTU}{1 + NTU}, & C_r = 1 \end{cases}$$
+   - **Corrente Paralela / Co-corrente** (detectado quando a Corrente 2 entra por `in2` e sai por `out2`):
+     $$\epsilon_{\text{paralelo}} = \frac{1 - e^{-NTU (1 + C_r)}}{1 + C_r}$$
+   - **Utilidade Térmica** ($C_r = 0$):
+     $$\epsilon = 1 - e^{-NTU}$$
+
+   A efetividade é limitada à efetividade máxima física ($\epsilon \le \epsilon_{\max}$, padrão $0{,}95$).
+
+4. **Taxa de Transferência Térmica e Temperaturas de Saída:**
+   A taxa real de calor transferido é:
+   $$\dot{Q} = \epsilon \cdot C_{\min} \cdot |T_{1,\text{in}} - T_{2,\text{in}}|$$
+
+   E as temperaturas de saída acopladas resultam do balanço entálpico:
+   $$T_{1,\text{out}} = T_{1,\text{in}} \pm \frac{\dot{Q}}{C_1}, \qquad T_{2,\text{out}} = T_{2,\text{in}} \mp \frac{\dot{Q}}{C_2}$$
+   *(Onde o fluido de maior temperatura de entrada cede calor e o de menor temperatura recebe calor).*
+
+5. **Perda de Carga Hidráulica Individual:**
+   Cada corrente calcula sua própria perda por acessório singular:
+   $$\Delta P_i = K_{\text{local}} \cdot \frac{\rho_i v_i^2}{2} = K_{\text{local}} \cdot \frac{\rho_i}{2} \left(\frac{Q_i}{A_{\text{hid}}}\right)^2 \quad (i \in \{1, 2\})$$
 
 Onde:
-- $\dot{m}$: Vazão mássica do fluido atravessando o trocador (kg/s)
-- $c_p$: Calor específico do fluido (J/kg·K)
+- $\dot{m}_i$: Vazão mássica da corrente $i$ (kg/s)
+- $c_{p,i}$: Calor específico do fluido da corrente $i$ (J/kg·K)
 - $UA$: Coeficiente global de transferência de calor multiplicado pela área de troca (W/K)
-- $T_{in}, T_{out}$: Temperaturas de entrada e saída do fluido principal (°C ou K)
-- $T_{serviço}$: Temperatura constante da utilidade quente/fria do trocador (°C ou K)
+- $T_{i,\text{in}}, T_{i,\text{out}}$: Temperaturas de entrada e saída da corrente $i$ (°C ou K)
+- $T_{\text{serviço}}$: Temperatura da utilidade quando há apenas 1 corrente ativa (°C)
+- $K_{\text{local}}$: Coeficiente de perda singular do trocador
+- $A_{\text{hid}}$: Área de escoamento da conexão ($m^2$)
 
 ## 6. Automação e Malhas de Controle (PID)
 

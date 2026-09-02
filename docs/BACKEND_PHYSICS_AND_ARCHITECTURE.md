@@ -295,25 +295,60 @@ Onde $Cp_i$ é o calor específico do fluido na entrada $i$ ($\text{J/(kg}\cdot\
 ---
 
 ### 4.5 Trocador de Calor (`TrocadorCalorLogico.js`)
-Modelado a partir do método de **Efetividade - NTU (Número de Unidades de Transferência)**, assumindo um trocador de calor onde um dos fluidos (utilidade térmica) possui vazão mássica virtualmente infinita (temperatura de serviço constante, $T_{\text{serviço}}$):
+Modelado a partir do método de **Efetividade - NTU (Número de Unidades de Transferência)**. Suporta dois modos de operação física:
+1. **Modo Utilidade Térmica (1 corrente conectada):** O fluido de serviço possui capacidade térmica virtualmente infinita e temperatura constante configurada ($T_{\text{serviço}}$).
+2. **Modo Duas Correntes Acopladas (2 correntes conectadas):** Duas correntes de processo hidraulicamente independentes (Corrente 1 nas portas `in1`/`out1` e Corrente 2 nas portas `in2`/`out2`), com troca térmica acoplada governada pelas vazões e temperaturas de ambas as correntes.
 
-#### Capacidade Térmica do Escoamento
-$$C = \dot{m} \cdot Cp = \left(Q_{\text{m}^3\text{/s}} \cdot \rho\right) \cdot Cp \quad \text{[W/K]}$$
+#### Taxas de Capacidade Térmica dos Escoamentos
+Para cada corrente $i \in \{1, 2\}$ com vazão volumétrica $Q_i$ (em $\text{m}^3/\text{s}$), densidade $\rho_i$ e calor específico $Cp_i$:
+
+$$C_i = \dot{m}_i \cdot Cp_i = (Q_i \cdot \rho_i) \cdot Cp_i \quad \text{[W/K]}$$
+
+Quando operando com duas correntes:
+$$C_{\min} = \min(C_1, C_2), \quad C_{\max} = \max(C_1, C_2), \quad C_r = \frac{C_{\min}}{C_{\max}}$$
+
+No modo utilidade (ou se $C_2 = 0$), considera-se $C_{\min} = C_1$ e $C_r = 0$.
 
 #### Número de Unidades de Transferência (NTU)
-$$NTU = \frac{UA}{C}$$
+$$NTU = \frac{UA}{C_{\min}}$$
 
-Onde $UA$ é o coeficiente global de transferência de calor multiplicado pela área de troca ($\text{W/K}$).
+Onde $UA$ é o produto entre o coeficiente global de transferência de calor e a área de troca ($\text{W/K}$).
 
-#### Efetividade Térmica ($\varepsilon$)
-$$\varepsilon = 1 - e^{-NTU}$$
+#### Efetividade Térmica ($\varepsilon$) por Modo de Escoamento
+O modo de escoamento é inferido dinamicamente pela topologia de conexão das portas da Corrente 2 (`getModoEscoamento`):
+- **Contracorrente (Padrão / `in1 \to out1` e `out2 \to in2`):**
+  $$\varepsilon = \begin{cases} \dfrac{1 - e^{-NTU (1 - C_r)}}{1 - C_r e^{-NTU (1 - C_r)}}, & C_r < 1 \\[8pt] \dfrac{NTU}{1 + NTU}, & C_r = 1 \end{cases}$$
 
-A efetividade instantânea do trocador é limitada à efetividade máxima física do componente (padrão $95\%$).
+- **Corrente Paralela / Co-corrente (`in1 \to out1` e `in2 \to out2`):**
+  $$\varepsilon = \frac{1 - e^{-NTU (1 + C_r)}}{1 + C_r}$$
 
-#### Temperatura de Saída do Fluido e Carga Térmica
-$$T_{\text{saída}} = T_{\text{entrada}} + \varepsilon \cdot (T_{\text{serviço}} - T_{\text{entrada}})$$
+- **Utilidade Térmica ($C_r = 0$):**
+  $$\varepsilon = 1 - e^{-NTU}$$
 
-$$Q_{\text{térmico}} = C \cdot (T_{\text{saída}} - T_{\text{entrada}}) \quad \text{[Watts]}$$
+A efetividade instantânea calculada é limitada pela efetividade máxima física do componente ($\varepsilon \le \varepsilon_{\max}$, padrão $95\%$, configurável até $99{,}9\%$).
+
+#### Carga Térmica e Temperaturas de Saída
+A taxa máxima de transferência teórica é $Q_{\max} = C_{\min} \cdot |T_{1,\text{in}} - T_{2,\text{in}}|$, resultando na carga térmica efetiva:
+
+$$Q_{\text{térmico}} = \varepsilon \cdot C_{\min} \cdot |T_{1,\text{in}} - T_{2,\text{in}}| \quad \text{[W]}$$
+
+As temperaturas de saída são obtidas pelo balanço de energia sensível:
+- Se $T_{1,\text{in}} \ge T_{2,\text{in}}$ (Corrente 1 quente resfriando, Corrente 2 fria aquecendo):
+  $$T_{1,\text{out}} = T_{1,\text{in}} - \frac{Q_{\text{térmico}}}{C_1}$$
+  $$T_{2,\text{out}} = T_{2,\text{in}} + \frac{Q_{\text{térmico}}}{C_2} \quad (\text{ou } T_{\text{serviço}} \text{ no modo utilidade})$$
+
+- Se $T_{1,\text{in}} < T_{2,\text{in}}$ (Corrente 1 fria aquecendo, Corrente 2 quente resfriando):
+  $$T_{1,\text{out}} = T_{1,\text{in}} + \frac{Q_{\text{térmico}}}{C_1}$$
+  $$T_{2,\text{out}} = T_{2,\text{in}} - \frac{Q_{\text{térmico}}}{C_2} \quad (\text{ou } T_{\text{serviço}} \text{ no modo utilidade})$$
+
+#### Perdas de Carga Hidráulicas Independentes
+Cada corrente calcula sua própria perda de carga por atrito/acessório singular com base na área hidráulica interna e no coeficiente local $K$:
+$$\Delta P_1 = K_{\text{local}} \cdot \frac{\rho_1 v_1^2}{2}, \qquad \Delta P_2 = K_{\text{local}} \cdot \frac{\rho_2 v_2^2}{2}$$
+
+#### Diagnóstico e Integração de Topologia
+- O motor consulta `engine.isTrocadorComDuasCorrentes(trocador)` para verificar a presença de ambas as correntes.
+- Quando duas correntes estão ativas, a edição da temperatura de serviço no painel é bloqueada (`temperaturaServicoEditavel: false`), e o diagnóstico informa que a troca térmica é governada pela Corrente 2.
+- A remoção de qualquer das conexões da Corrente 2 reverte automaticamente o trocador para o modo utilidade com temperatura de serviço editável.
 
 ---
 
