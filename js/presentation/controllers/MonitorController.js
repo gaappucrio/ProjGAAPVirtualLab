@@ -700,19 +700,6 @@ export function createMonitorController({ engine }) {
             } else {
                 container.appendChild(wrapper);
             }
-
-            hiddenInput = wrapper.querySelector(`#${id}`);
-            hiddenInput.value = activeMode;
-            const label = wrapper.querySelector(`#${id}-label`);
-            label.textContent = selectedOption.label;
-            
-            optionsContainer.querySelectorAll('.custom-select-option').forEach(o => {
-                if (o.dataset.value === activeMode) {
-                    o.classList.add('selected');
-                } else {
-                    o.classList.remove('selected');
-                }
-            });
         }
 
         if (wrapper.parentElement !== container) {
@@ -1111,12 +1098,25 @@ export function createMonitorController({ engine }) {
 
             if (!entry) {
                 elements.card.hidden = index > 0;
+                if (index > 0) {
+                    elements.card.style.display = 'none';
+                } else {
+                    elements.card.style.removeProperty('display');
+                }
                 if (dismissButton) dismissButton.hidden = true;
                 setPumpExportButtonState(exportButton, null);
                 ensureExpandedChartAxisSelector(elements, index, null);
                 if (elements.title) elements.title.textContent = t('chart.waiting');
                 if (elements.subtitle) elements.subtitle.textContent = '';
                 if (elements.canvasWrap) elements.canvasWrap.hidden = true;
+                if (elements.canvas) {
+                    delete elements.canvas.dataset.monitorEntryId;
+                    delete elements.canvas.dataset.monitorEntryKind;
+                    const ctx = elements.canvas.getContext?.('2d');
+                    if (ctx && elements.canvas.width && elements.canvas.height) {
+                        ctx.clearRect(0, 0, elements.canvas.width, elements.canvas.height);
+                    }
+                }
                 if (elements.empty) {
                     elements.empty.hidden = false;
                     elements.empty.textContent = index === 0
@@ -1127,6 +1127,7 @@ export function createMonitorController({ engine }) {
             }
 
             elements.card.hidden = false;
+            elements.card.style.removeProperty('display');
             if (dismissButton) dismissButton.hidden = false;
             setPumpExportButtonState(exportButton, entry.component);
             if (elements.title) elements.title.textContent = getMonitorChartTitle(entry);

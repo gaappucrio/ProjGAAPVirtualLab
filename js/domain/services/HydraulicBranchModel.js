@@ -386,8 +386,28 @@ export class HydraulicBranchModel {
         return component instanceof ValvulaLogica || component instanceof BombaLogica || component instanceof TrocadorCalorLogico;
     }
 
-    getPhysicalOutletPressureBar(component) {
+    getPhysicalOutletPressureBar(component, portId = null) {
         if (!this.isPassThroughComponent(component)) return null;
+
+        if (component instanceof TrocadorCalorLogico) {
+            const isStream2 = portId === 'out2' || portId === 'in2' || portId === '2';
+            const outletPressureBar = finiteNumber(
+                isStream2 ? component?.pressaoSaida2AtualBar : component?.pressaoSaidaAtualBar,
+                null
+            );
+            if (outletPressureBar !== null) return Math.max(0, outletPressureBar);
+
+            const inletPressureBar = finiteNumber(
+                isStream2 ? component?.pressaoEntrada2AtualBar : component?.pressaoEntrada1AtualBar,
+                finiteNumber(component?.pressaoEntradaAtualBar, null)
+            );
+            const dropBar = finiteNumber(
+                isStream2 ? component?.deltaP2AtualBar : component?.deltaPAtualBar,
+                null
+            );
+            if (inletPressureBar === null || dropBar === null) return null;
+            return Math.max(0, inletPressureBar - Math.max(0, dropBar));
+        }
 
         const outletPressureBar = finiteNumber(component?.pressaoSaidaAtualBar, null);
         if (outletPressureBar !== null) return Math.max(0, outletPressureBar);
@@ -430,7 +450,8 @@ export class HydraulicBranchModel {
                 if ((state.flowLps || 0) <= EPSILON_FLOW) return;
 
                 const source = this.context.getComponentById(conn.sourceId);
-                const sourceOutletPressureBar = resolveSourcePressureBar(source);
+                const sourcePortId = conn.sourceEndpoint?.portId || null;
+                const sourceOutletPressureBar = resolveSourcePressureBar(source, sourcePortId);
                 if (sourceOutletPressureBar === null) return;
 
                 const geometry = this.context.getConnectionGeometry(conn);
@@ -467,7 +488,7 @@ export class HydraulicBranchModel {
             });
         };
 
-        reconcileWithSourcePressure((source) => this.getPhysicalOutletPressureBar(source));
+        reconcileWithSourcePressure((source, portId) => this.getPhysicalOutletPressureBar(source, portId));
         reconcileWithSourcePressure((source) => {
             const pressureBar = this.getPressurizedTankOutletPressureBar(source);
             if (pressureBar !== null && source instanceof TanqueLogico) {
@@ -718,7 +739,7 @@ export class HydraulicBranchModel {
 
             return {
                 availableFlowLps: availableFlow,
-                pressureBar: inletPressureBar ?? (streamId === 2 ? comp.getPressaoEntradaPortaBar('in2') : comp.getPressaoEntradaBar()),
+                pressureBar: inletPressureBar ?? comp.getPressaoEntradaPortaBar(streamId === 2 ? 'in2' : 'in1'),
                 hydraulicAreaM2: Math.min(areaM2, parametros.hydraulicAreaM2),
                 connectionBaseLossCoeff: 0,
                 localLossCoeff: parametros.localLossCoeff,

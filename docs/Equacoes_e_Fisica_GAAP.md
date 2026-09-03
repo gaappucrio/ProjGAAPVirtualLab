@@ -27,13 +27,13 @@ Onde:
 
 O simulador avalia o regime em três faixas (`PipeHydraulics.js`):
 
-1. **Regime Laminar ($Re \le 2000$):**
+1. **Regime Laminar ($Re \le 2300$):**
    Aplica-se a solução exata da equação de Hagen-Poiseuille:
 
    $$f = \frac{64}{Re}$$
 
-2. **Regime Transiente ($2000 < Re < 4000$):**
-   Utiliza-se uma interpolação cúbica para suavizar a transição numérica entre o regime laminar e turbulento, garantindo estabilidade no solucionador nodal.
+2. **Regime Transiente ($2300 < Re < 4000$):**
+   Utiliza-se uma interpolação linear suave dos fatores de atrito calculados nos extremos da faixa ($f_{\text{laminar}}(2300)$ e $f_{\text{turbulento}}(4000)$), garantindo transição contínua e estabilidade no solucionador nodal.
 
 3. **Regime Turbulento ($Re \ge 4000$):**
     Para regimes turbulentos, a rugosidade relativa da parede do tubo ($\varepsilon / D$) torna-se relevante. Para mitigar o custo computacional de iterações em malhas em tempo real, o simulador dispensa a formulação iterativa de Colebrook-White e aplica diretamente a **Correlação de Swamee-Jain**, uma aproximação explícita de alta precisão:
@@ -43,7 +43,13 @@ O simulador avalia o regime em três faixas (`PipeHydraulics.js`):
 ### Perdas de Carga Localizadas
 Válvulas, curvas e trocadores de calor adicionam perdas singulares, modeladas pelo coeficiente constante de perda de carga ($K$):
 
-\$$Delta P_{local} = K \cdot \frac{\rho \cdot v^2}{2}$$
+$$\Delta P_{local} = K \cdot \frac{\rho \cdot v^2}{2}$$
+
+Onde:
+- $\Delta P_{local}$: Perda de pressão localizada ou singular (Pa, convertida internamente para bar via divisão por $10^5$)
+- $K$: Coeficiente adimensional de perda de carga localizada da singularidade ($-$)
+- $\rho$: Densidade do fluido em escoamento ($kg/m^3$)
+- $v$: Velocidade média de escoamento do fluido na seção transversal da conexão ($m/s$)
 
 O simulador soma o coeficiente $K$ de todos os componentes da malha à parcela distribuída calculada por Darcy-Weisbach.
 
@@ -104,19 +110,32 @@ Caso $NPSH_a < NPSH_r$, o sistema impõe uma penalidade logística que afunda a 
 A válvula de controle age como um estrangulamento de seção transversal variável.
 
 ### Conversão $C_v / K_v$
-As válvulas operam através da premissa comercial de Fator de Vazão ($C_v$ em GPM/psi ou $K_v$ em m³/h/bar). O laboratório modela a resistência estrita convertendo o Fator de Vazão para o Coeficiente de Perda Local ($K$) através de relações métricas padronizadas, utilizando o diâmtero da tubulação:
+As válvulas operam através da premissa comercial de Fator de Vazão ($C_v$ em GPM/psi ou $K_v$ em m³/h/bar). O simulador modela a resistência convertendo o Fator de Vazão para o Coeficiente de Perda Local ($K$) através de relações métricas padronizadas, utilizando o diâmetro da tubulação:
 
 $$K \approx 0.00214 \cdot \frac{D^4}{K_v^2}$$
 
+Onde:
+- $K$: Coeficiente adimensional de perda de carga localizada equivalente da válvula ($-$)
+- $D$: Diâmetro interno nominal da conexão ou flange da válvula (mm)
+- $K_v$: Coeficiente de vazão em unidades métricas ($m^3/h$ de água a $20^\circ\text{C}$ sob $\Delta P = 1\text{ bar}$)
+- $C_v$: Coeficiente de vazão em unidades imperiais ($\text{GPM}/\text{psi}^{0{,}5}$), relacionado por $K_v \approx 0{,}865 \cdot C_v$ ou $C_v \approx 1{,}156 \cdot K_v$
+
 ### Característica Inerente
-A resposta entre a porcentagem de abertura do atuador e a abertura efetiva ($K_v$ resultante) é descrita por duas equações de curva selecionáveis (`ValvulaLogica.js`):
+A resposta entre a porcentagem de abertura do atuador e a abertura efetiva ($K_v$ resultante) é descrita por equações de curva selecionáveis (`ValvulaLogica.js`):
 
-1. **Linear:** $\text{Fluxo} = \text{Abertura}$
-2. **Igual Porcentagem (Equal Percentage):** Modelada via decaimento exponencial, onde passos iguais no curso resultam em frações iguais de aumento de vazão, crucial para compensar quedas de pressão severas ao longo das linhas:
+1. **Linear:**
+   $$f(x) = x$$
 
-$$f(x) = R^{x - 1}$$
+2. **Igual Porcentagem (Equal Percentage):** Modelada via decaimento exponencial, onde passos iguais no curso resultam em frações iguais de aumento percentual de vazão, crucial para compensar perdas de carga dinâmicas ao longo da tubulação:
+   $$f(x) = R^{x - 1}$$
 
-*(Onde $R$ é o rangeability factor, e $x$ o curso da válvula)*
+3. **Abertura Rápida (Quick Opening):**
+   $$f(x) = \sqrt{x}$$
+
+Onde:
+- $f(x)$: Fração de capacidade efetiva da válvula ($0 \le f(x) \le 1$, tal que $K_{v,\text{efetivo}} = K_{v,\max} \cdot f(x)$)
+- $R$: Rangeabilidade inerente da válvula (razão entre vazão máxima e mínima controlável, padrão $50{,}0$)
+- $x$: Curso normalizado da haste/obturador da válvula ($0 \le x \le 1$, correspondente a $0\%$ a $100\%$ de abertura)
 
 ## 4. Tanques e Conservação de Massa
 
@@ -131,20 +150,29 @@ A integração computada usa o método de Euler explícito:
 $$V_{t+1} = V_t + (\Sigma Q_{in} - \Sigma Q_{out}) \cdot \Delta t$$
 
 Onde:
-- $V$: Volume de líquido no tanque (m³)
-- $Q_{in}, Q_{out}$: Somatório das vazões volumétricas de entrada e saída (m³/s)
-- $\Delta t$: Passo de tempo da simulação (s)
+- $V$: Volume de líquido no tanque ($m^3$, internamente convertido para litros no motor: $1\text{ m}^3 = 1000\text{ L}$)
+- $Q_{in}, Q_{out}$: Somatório das vazões volumétricas de entrada e saída ($m^3/s$)
+- $\Delta t$: Passo de tempo da simulação ($s$)
 
 ### Carga Hidrostática (Fundo de Tanque)
 
 $$P_{hid} = \rho \cdot g \cdot h $$
 
-Onde $h$ é obtido pela geometria do vaso (cilindros perfeitamente modelados com bases).
+Onde:
+- $P_{hid}$: Pressão hidrostática no bocal de fundo do tanque (Pa, convertida para bar no motor: $P_{\text{bar}} = P_{hid} / 10^5$)
+- $\rho$: Densidade do líquido contido no tanque ($kg/m^3$)
+- $g$: Aceleração da gravidade ($9{,}81\text{ m/s}^2$)
+- $h$: Altura do nível de líquido no interior do tanque ($m$, obtida por $h = (V_{\text{atual}} / V_{\max}) \cdot H_{\text{útil}}$)
 
 ### Mistura de Fases e Balanceamento
 No caso de confluência de fluidos distintos, a densidade da mistura é apurada volumetricamente:
 
 $$\rho_{mix} = \frac{\rho_1 V_1 + \rho_2 V_2}{V_1 + V_2}$$
+
+Onde:
+- $\rho_{mix}$: Densidade volumétrica da mistura resultante ($kg/m^3$)
+- $\rho_1, \rho_2$: Densidades dos fluidos 1 e 2 ($kg/m^3$)
+- $V_1, V_2$: Volumes dos fluidos 1 e 2 adicionados ao volume total ($m^3$ ou $L$)
 
 ## 5. Termodinâmica e Transferência de Calor
 
@@ -196,7 +224,7 @@ Os trocadores de calor do laboratório integram o **Método Efetividade-NTU ($\e
      $$T_1(z) = T_{1,\text{in}} + (T_{1,\text{out}} - T_{1,\text{in}}) \cdot \frac{1 - e^{-\alpha z}}{1 - e^{-\alpha}}, \quad T_2(z) = T_{2,\text{in}} + (T_{2,\text{out}} - T_{2,\text{in}}) \cdot \frac{1 - e^{-\alpha z}}{1 - e^{-\alpha}}$$
    - **Contracorrente ($\beta = UA(1/C_1 - 1/C_2)$):**
      $$T_1(z) = T_{1,\text{in}} + (T_{1,\text{out}} - T_{1,\text{in}}) \cdot \frac{1 - e^{-\beta z}}{1 - e^{-\beta}}, \quad T_2(z) = T_{2,\text{out}} + \frac{C_1}{C_2}(T_1(z) - T_{1,\text{in}})$$
-     *(Para $C_1 \approx C_2$, as curvas assumem perfil perfeitamente linear).*
+     *(Para $C_1 \approx C_2$, as curvas assumem perfil linear).*
 
    As grandezas de temperatura podem ser exibidas em Celsius (°C), Fahrenheit (°F) ou Kelvin (K, com $T_{\text{K}} = T_{^\circ\text{C}} + 273{,}15$).
 
@@ -240,13 +268,25 @@ Quando um fluxo encontra múltiplos caminhos (paralelos), a vazão disponível �
 
 $$Q_{\text{ramo } i} = Q_{\text{total disponível}} \cdot \left( \frac{\text{Capacidade}_i}{\sum \text{Capacidade}_{\text{todos os ramos}}} \right)$$
 
+Onde:
+- $Q_{\text{ramo } i}$: Vazão volumétrica alocada para o ramo $i$ ($L/s$ ou $m^3/s$)
+- $Q_{\text{total disponível}}$: Vazão volumétrica total suprida pelo nó de montante ($L/s$ ou $m^3/s$)
+- $\text{Capacidade}_i$: Capacidade de condução estimada do ramo $i$ ($L/s$), função da pressão motriz disponível e perdas acumuladas
+
 **B. Relaxamento Dinâmico de Transientes:**
 Para evitar descontinuidades e saltos instantâneos (que gerariam instabilidade visual e numérica), os fluxos calculados ($Q_{\text{estacionária}}$) não são aplicados abruptamente. Eles sofrem uma suavização de primeira ordem baseada na inércia da tubulação ($\tau_{\text{resposta}}$):
 
 $$Q_{\text{transiente}}^{t + \Delta t} = Q_{\text{transiente}}^{t} + (Q_{\text{estacionária}} - Q_{\text{transiente}}^{t}) \cdot \left(1 - e^{-\Delta t / \tau_{\text{resposta}}}\right)$$
 
+Onde:
+- $Q_{\text{transiente}}^{t + \Delta t}$: Vazão transiente do trecho no instante atual ($L/s$)
+- $Q_{\text{transiente}}^{t}$: Vazão transiente do trecho no instante anterior ($L/s$)
+- $Q_{\text{estacionária}}$: Vazão estacionária calculada pelo solucionador hidráulico ($L/s$)
+- $\Delta t$: Passo temporal de integração ($s$)
+- $\tau_{\text{resposta}}$: Constante de tempo de resposta inercial do trecho ($s$, calculada em função do comprimento $L$, densidade $\rho$ e viscosidade $\mu$)
+
 **C. Conservação de Massa Retroativa (Back-propagation):**
-Componentes *pass-through* (Válvulas, Bombas e Trocadores) não podem acumular líquido. Se após a propagação a vazão que conseguiu sair for menor do que a que entrou ($Q_{\text{out}} < Q_{\text{in}}$), o *solver* aciona a rotina `balancePassThroughMass()`, que retropropaga o bloqueio matemático reduzindo as vazões de entrada a montante estritamente até que:
+Componentes *pass-through* (Válvulas, Bombas e Trocadores) não podem acumular líquido. Se após a propagação a vazão que conseguiu sair for menor do que a que entrou ($Q_{\text{out}} < Q_{\text{in}}$), o *solver* aciona a rotina `balancePassThroughMass()`, que retropropaga o bloqueio matemático reduzindo as vazões de entrada a montante até que:
 
 $$\sum Q_{\text{in}} = \sum Q_{\text{out}}$$
 
@@ -256,10 +296,18 @@ A malha é tratada como um circuito fechado e o motor aplica um esquema de busca
 
 $$\varepsilon(Q) = P_{in} + P_{Bomba}(Q) - \Delta P_{Perdas}(Q) - P_{out}$$
 
+Onde:
+- $\varepsilon(Q)$: Resíduo de fechamento de pressão na malha (bar ou Pa), com convergência para $\varepsilon(Q) \approx 0$
+- $Q$: Vazão iterativa avaliada no loop fechado ($L/s$)
+- $P_{in}$: Pressão de contorno na entrada da linha (bar)
+- $P_{Bomba}(Q)$: Carga manométrica ativa adicionada pela bomba na vazão $Q$ (bar)
+- $\Delta P_{Perdas}(Q)$: Somatório das perdas de carga contínuas e localizadas em todo o anel na vazão $Q$ (bar)
+- $P_{out}$: Pressão de contorno no ponto de fechamento do nó (bar)
+
 O fluxo da malha cíclica converge iterativamente garantindo que a diferença entre a carga provida e as perdas seja $\varepsilon(Q) \approx 0$ em toda a volta do circuito.
 
 ### 7.3 Restrições Físicas e Balanceamento de Massa
-Ambos os motores interagem sob limites estritos. Limites físicos absolutos e restrições de massa (ex. *Over/Underflow* dos tanques) são impostos via matrizes de corte topológicas, forçando uma etapa de balanceamento a jusante caso os componentes não suportem escoar a vazão transiente, garantindo estabilidade do modelo em qualquer um dos *solvers*.
+Ambos os motores operam sob limites físicos definidos. Limites de conservação de massa e restrições de nível (ex. *Over/Underflow* dos tanques) são impostos via matrizes de corte topológicas, acionando uma etapa de balanceamento a jusante caso os componentes não suportem escoar a vazão transiente, garantindo estabilidade do modelo em qualquer um dos *solvers*.
 
 ---
 *Documento gerado e revisado para atestar a termodinâmica, automação e arquitetura híbrida de escoamento fluido do GAAP Virtual Lab.*

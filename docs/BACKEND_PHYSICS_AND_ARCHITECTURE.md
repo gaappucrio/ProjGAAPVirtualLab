@@ -19,7 +19,7 @@ O simulador é projetado seguindo princípios de **Domain-Driven Design (DDD)** 
 ```
 
 ### 1.1 Camada de Domínio (`js/domain/`)
-Contém os modelos lógicos puros e equações matemáticas que descrevem o comportamento físico do sistema. **Regra rígida:** Esta camada não possui imports ou referências a elementos de tela (DOM), estilos ou bibliotecas de terceiros como Chart.js.
+Contém os modelos lógicos puros e equações matemáticas que descrevem o comportamento físico do sistema. **Diretriz de arquitetura:** Esta camada não possui imports ou referências a elementos de tela (DOM), estilos ou bibliotecas de terceiros como Chart.js.
 *   `components/`: Representações puras de equipamentos (Fontes, Bombas, Válvulas, Tanques, Trocadores, Drenos).
 *   `services/`: Algoritmos de rede, como o solver hidráulico, diagnósticos de dimensionamento, cálculo de atrito de tubulações e o controlador PID.
 *   `units/`: Constantes físicas globais e conversores internos de unidades.
@@ -131,6 +131,19 @@ Para evitar descontinuidades numéricas que desestabilizariam o solver, o simula
 $$f = (1 - t) \cdot f_{\text{laminar}} + t \cdot f_{\text{turbulento}} \quad \text{onde } t = \frac{Re - 2300}{4000 - 2300}$$
 
 Em todos os casos, o fator de atrito resultante é limitado por segurança a uma faixa física realista: $f \in [0.008, \; 0.15]$.
+
+---
+
+### 3.4 Rugosidade Relativa e Geometria da Linha
+A rugosidade relativa é a razão adimensional entre as irregularidades microscópicas da parede da tubulação e o diâmetro interno do duto:
+
+$$\text{Rugosidade Relativa} = \frac{\varepsilon}{D} = \frac{\varepsilon_{\text{mm}} / 1000}{D_{\text{m}}}$$
+
+Onde:
+*   $\varepsilon$ é a rugosidade absoluta da parede interna da tubulação ($\text{m}$, informada em $\text{mm}$ nas propriedades da conexão, padrão $0{,}045\text{ mm}$ para aço comercial).
+*   $D$ é o diâmetro interno da tubulação ($\text{m}$, padrão $0{,}05\text{ m} = 50\text{ mm}$).
+*   $A = \frac{\pi \cdot D^2}{4}$ é a área de seção transversal interna de escoamento ($\text{m}^2$).
+*   $L_{\text{total}} = L_{\text{esquemático}} + L_{\text{extra}}$ é o comprimento físico total da linha ($\text{m}$), somando a distância esquemática do canvas ao comprimento extra de projeto configurado pelo usuário.
 
 ---
 
@@ -345,6 +358,15 @@ As temperaturas de saída são obtidas pelo balanço de energia sensível:
 Cada corrente calcula sua própria perda de carga por atrito/acessório singular com base na área hidráulica interna e no coeficiente local $K$:
 $$\Delta P_1 = K_{\text{local}} \cdot \frac{\rho_1 v_1^2}{2}, \qquad \Delta P_2 = K_{\text{local}} \cdot \frac{\rho_2 v_2^2}{2}$$
 
+#### Pressões Hidráulicas e Isolamento entre Correntes
+O trocador de calor opera com segregação hidráulica independente entre a Corrente 1 e a Corrente 2:
+- A Corrente 1 determina sua pressão de entrada específica $P_{1,\text{in}}$ a partir das contribuições na porta `in1` e fornece pressão de saída na porta `out1`:
+  $$P_{1,\text{out}} = \max(0, P_{1,\text{in}} - \Delta P_1)$$
+- A Corrente 2 determina sua pressão de entrada específica $P_{2,\text{in}}$ a partir das contribuições na porta `in2` (ou `out2` em contracorrente) e fornece pressão de saída na porta de descarga correspondente:
+  $$P_{2,\text{out}} = \max(0, P_{2,\text{in}} - \Delta P_2)$$
+
+Os métodos `getPressaoEntradaPortaBar(portId)` e `getPressaoSaidaPortaBar(portId)` em `BaseComponente.js` calculam a pressão média ponderada de escoamento filtrada exclusivamente pela porta e corrente selecionada. Em `HydraulicBranchModel.js`, o método `getPhysicalOutletPressureBar(source, portId)` e a reconciliação de pressões das conexões associam a descarga do trocador diretamente à respectiva corrente física, prevenindo que uma corrente de menor pressão contamine a pressão motriz de uma corrente de maior pressão e evitando reduções artificiais de vazão.
+
 #### Perfis Contínuos de Temperatura e Monitoramento (`HeatExchangerChartAdapter.js`)
 Para fins de monitoramento gráfico e análise de processo, o simulador resolve a distribuição de temperatura ao longo da coordenada adimensional de comprimento $z \in [0, 1]$ (onde $z = 0$ representa a entrada da Corrente 1 e $z = 1$ a saída da Corrente 1):
 
@@ -419,11 +441,17 @@ $$Q_{\text{transiente}}^{t + dt} = Q_{\text{transiente}}^{t} + (Q_{\text{estacio
 ---
 
 ### 5.3 Conservação de Massa em Componentes Passantes (Pass-Through)
-Componentes pass-through lógicos (Válvulas, Bombas e Trocadores de Calor) não acumulam inventário. Portanto, o solver impõe estritamente:
+Componentes pass-through lógicos (Válvulas, Bombas e Trocadores de Calor) não acumulam inventário. Portanto, o solver estabelece:
 
 $$Q_{\text{entrada}} = Q_{\text{saída}}$$
 
 Ao final de cada tick de simulação, o método `balancePassThroughMass()` é executado. Ele percorre a rede de jusante para montante e, caso detecte um desbalanceamento volumétrico $\Delta Q = Q_{\text{in}} - Q_{\text{out}} > 0.0001\text{ L/s}$ (causado por restrições a jusante, como uma válvula fechando), ele reduz proporcionalmente a vazão das conexões de entrada do componente até que a conservação seja plenamente satisfeita.
+
+No caso especial do **Trocador de Calor com Duas Correntes** (`TrocadorCalorLogico`), o algoritmo de conservação de massa trata as conexões de forma separada por corrente:
+*   **Corrente 1:** balanceia as conexões associadas às portas da Corrente 1 (`in1` e `out1`), impondo $Q_{1,\text{in}} = Q_{1,\text{out}}$.
+*   **Corrente 2:** balanceia as conexões associadas às portas da Corrente 2 (`in2` e `out2`), impondo $Q_{2,\text{in}} = Q_{2,\text{out}}$.
+
+Essa independência evita que o somatório global das vazões mascare restrições locais e garante que flutuações ou estrangulamentos em uma das correntes de processo não afetem indevidamente a vazão da outra.
 
 ---
 
@@ -451,3 +479,15 @@ Para facilitar testes cruzados de bombas industriais, o simulador permite export
 *   Carga hidráulica em metros de coluna de fluido ($\text{m}$).
 *   Potência mecânica no eixo em kilowatts ($\text{kW}$).
 *   Eficiência em termos percentuais ($\%$, ex: $78.0$).
+
+### 6.4 Importação de Simulações DWSIM (.dwxmz e .dwxm)
+Para promover interoperabilidade com plantas reais e modelos criados no DWSIM, o módulo `DwsimImporter.js` permite carregar fluxogramas completos de processos:
+*   **Formatos Suportados:** Pacotes `.dwxmz` (arquivo ZIP contendo o XML do fluxograma compactado com `deflate-raw`) e arquivos `.dwxm` (XML puro em texto legível).
+*   **Mapeamento de Equipamentos:**
+    *   `Pump` $\to$ `BombaLogica` (`pump`) com carga manométrica e potência associadas.
+    *   `Valve` $\to$ `ValvulaLogica` (`valve`) com conversão dimensional de $C_v$ e $K_v$ ($K_v \approx 0{,}865 \cdot C_v$).
+    *   `Tank` $\to$ `TanqueLogico` (`tank`) com volume e geometria úteis.
+    *   `MaterialStream` sem nó a montante $\to$ `FonteLogica` (`source`) com temperatura, pressão e vazão máxima importadas.
+    *   `MaterialStream` sem nó a jusante $\to$ `DrenoLogico` (`sink`) com a contrapressão de descarga de processo.
+    *   `Pipe` (`PipeSegment`) $\to$ Parâmetros físicos do `ConnectionModel` (diâmetro interno $D$, comprimento físico $L$, rugosidade $\varepsilon$ e perda localizada $K$).
+*   **Normalização e Layout:** As grandezas de pressão em Pascal são convertidas para bar ($1\text{ Pa} = 10^{-5}\text{ bar}$), as vazões em $\text{m}^3/\text{s}$ para $\text{L/s}$ e as coordenadas de tela são normalizadas com offset de margem para o canvas do GAAP, gerando um snapshot de workspace pronto para restauração e execução dinâmica imediata.

@@ -414,7 +414,16 @@ export class TrocadorCalorLogico extends ComponenteFisico {
             f2?.densidade || 997,
             parametros.localLossCoeff
         );
-        this.pressaoSaidaAtualBar = Math.max(0, this.pressaoEntradaAtualBar - this.deltaPAtualBar);
+        this.pressaoEntrada1AtualBar = this.getPressaoEntradaPortaBar('in1');
+        this.pressaoEntrada2AtualBar = this.getPressaoEntradaPortaBar('in2');
+        const p1In = Number.isFinite(this.pressaoEntrada1AtualBar) && this.pressaoEntrada1AtualBar > 0
+            ? this.pressaoEntrada1AtualBar
+            : this.pressaoEntradaAtualBar;
+        const p2In = Number.isFinite(this.pressaoEntrada2AtualBar) && this.pressaoEntrada2AtualBar > 0
+            ? this.pressaoEntrada2AtualBar
+            : this.pressaoEntradaAtualBar;
+        this.pressaoSaidaAtualBar = Math.max(0, p1In - this.deltaPAtualBar);
+        this.pressaoSaida2AtualBar = Math.max(0, p2In - this.deltaP2AtualBar);
         this._notificarEstado();
     }
 
@@ -429,6 +438,10 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         this.vazaoMassaKgS = 0;
         this.deltaPAtualBar = 0;
         this.deltaP2AtualBar = 0;
+        this.pressaoEntrada1AtualBar = 0;
+        this.pressaoEntrada2AtualBar = 0;
+        this.pressaoSaidaAtualBar = 0;
+        this.pressaoSaida2AtualBar = 0;
         this._notificarEstado(true);
     }
 }

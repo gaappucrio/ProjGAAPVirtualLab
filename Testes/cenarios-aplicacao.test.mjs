@@ -220,6 +220,12 @@ test('trocador de calor com duas correntes no motor preserva independência hidr
 
     assert.ok(trocador.vazao1Lps > 0, 'Corrente 1 deve ter vazao positiva');
     assert.ok(trocador.vazao2Lps > 0, 'Corrente 2 deve ter vazao positiva');
+    const flow1In = engine.getConnectionState(c1In).flowLps;
+    const flow1Out = engine.getConnectionState(c1Out).flowLps;
+    const flow2In = engine.getConnectionState(c2In).flowLps;
+    const flow2Out = engine.getConnectionState(c2Out).flowLps;
+    assert.ok(Math.abs(flow1In - flow1Out) < 0.001, `Vazao de entrada e saida da corrente 1 devem coincidir: ${flow1In} vs ${flow1Out}`);
+    assert.ok(Math.abs(flow2In - flow2Out) < 0.001, `Vazao de entrada e saida da corrente 2 devem coincidir: ${flow2In} vs ${flow2Out}`);
     assert.ok(trocador.temperaturaSaidaC > 15, 'Corrente 1 deve aquecer acima de 15°C');
     assert.ok(trocador.temperaturaSaida2C < 85, 'Corrente 2 deve resfriar abaixo de 85°C');
     assert.ok(trocador.cargaTermicaW > 0, 'Carga termica trocada deve ser maior que zero');
@@ -320,6 +326,38 @@ test('histórico de monitoramento aceita e gerencia trocador de calor', () => {
     assert.equal(history.getEntries()[0].kind, 'heatExchanger');
     assert.equal(history.getEntries()[1].kind, 'tank');
 });
+
+test('remoção de slot de monitoramento compacta entradas e limpa o slot secundário sem criar slots fantasmas', () => {
+    const history = createMonitorSlotHistory({ maxEntries: 2 });
+    const c1 = { id: 'P-1', kind: 'pump' };
+    const c2 = { id: 'T-1', kind: 'tank' };
+
+    history.remember(c1);
+    history.remember(c2);
+    assert.equal(history.getEntries().filter(Boolean).length, 2);
+    assert.equal(history.getEntries()[0].id, 'P-1');
+    assert.equal(history.getEntries()[1].id, 'T-1');
+
+    // Ao remover o primeiro slot (índice 0), o segundo slot deve ser promovido para o índice 0 e o índice 1 deve ser null
+    const resRemove0 = history.removeAt(0);
+    assert.equal(resRemove0.changed, true);
+    assert.equal(history.getEntries().filter(Boolean).length, 1);
+    assert.equal(history.getEntries()[0].id, 'T-1');
+    assert.equal(history.getEntries()[1], null);
+
+    // Re-adicionando para testar remoção do índice 1
+    history.remember(c1);
+    assert.equal(history.getEntries().filter(Boolean).length, 2);
+    assert.equal(history.getEntries()[0].id, 'T-1');
+    assert.equal(history.getEntries()[1].id, 'P-1');
+
+    const resRemove1 = history.removeAt(1);
+    assert.equal(resRemove1.changed, true);
+    assert.equal(history.getEntries().filter(Boolean).length, 1);
+    assert.equal(history.getEntries()[0].id, 'T-1');
+    assert.equal(history.getEntries()[1], null);
+});
+
 
 
 

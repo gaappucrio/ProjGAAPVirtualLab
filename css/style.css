@@ -1899,7 +1899,7 @@
 
   /* Se o script injetar 'hidden' no slot secundário, ele some e o primário estica */
   .chart-compare-card[hidden] {
-      display: none;
+      display: none !important;
   }
 
   .chart-compare-card-header {
@@ -2049,6 +2049,7 @@
       display: none;
   }
 
+  .chart-compare-card[hidden],
   .chart-compare-grid[hidden],
   .chart-compact-stage[hidden] {
       display: none !important;
