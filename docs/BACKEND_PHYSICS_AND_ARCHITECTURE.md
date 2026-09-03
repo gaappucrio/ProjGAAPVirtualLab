@@ -74,7 +74,7 @@ As unidades internas padronizadas do motor hidráulico são:
 *   **Pressão ($P$):** bar ($\text{1 bar} = 10^5\text{ Pa}$)
 *   **Comprimento ($L$) e Diâmetro ($D$):** Metros ($\text{m}$)
 *   **Volume ($V$):** Litros ($\text{L}$)
-*   **Temperatura ($T$):** Graus Celsius ($^\circ\text{C}$)
+*   **Temperatura ($T$):** Graus Celsius ($^\circ\text{C}$). As preferências de exibição (`DisplayUnits.js`) permitem converter valores para Fahrenheit ($^\circ\text{F} = \frac{9}{5} T_{^\circ\text{C}} + 32$) ou Kelvin ($T_{\text{K}} = T_{^\circ\text{C}} + 273{,}15$).
 
 ---
 
@@ -344,6 +344,28 @@ As temperaturas de saída são obtidas pelo balanço de energia sensível:
 #### Perdas de Carga Hidráulicas Independentes
 Cada corrente calcula sua própria perda de carga por atrito/acessório singular com base na área hidráulica interna e no coeficiente local $K$:
 $$\Delta P_1 = K_{\text{local}} \cdot \frac{\rho_1 v_1^2}{2}, \qquad \Delta P_2 = K_{\text{local}} \cdot \frac{\rho_2 v_2^2}{2}$$
+
+#### Perfis Contínuos de Temperatura e Monitoramento (`HeatExchangerChartAdapter.js`)
+Para fins de monitoramento gráfico e análise de processo, o simulador resolve a distribuição de temperatura ao longo da coordenada adimensional de comprimento $z \in [0, 1]$ (onde $z = 0$ representa a entrada da Corrente 1 e $z = 1$ a saída da Corrente 1):
+
+1. **Modo Utilidade Térmica:**
+   $$T_1(z) = T_{1,\text{in}} + (T_{1,\text{out}} - T_{1,\text{in}}) \cdot \frac{1 - e^{-NTU \cdot z}}{1 - e^{-NTU}}, \qquad T_2(z) = T_{\text{serviço}}$$
+
+2. **Modo Corrente Paralela (Co-corrente):**
+   Com $\alpha = UA \left(\frac{1}{C_1} + \frac{1}{C_2}\right)$:
+   $$T_1(z) = T_{1,\text{in}} + (T_{1,\text{out}} - T_{1,\text{in}}) \cdot \frac{1 - e^{-\alpha z}}{1 - e^{-\alpha}}$$
+   $$T_2(z) = T_{2,\text{in}} + (T_{2,\text{out}} - T_{2,\text{in}}) \cdot \frac{1 - e^{-\alpha z}}{1 - e^{-\alpha}}$$
+
+3. **Modo Contracorrente:**
+   Com $\beta = UA \left(\frac{1}{C_1} - \frac{1}{C_2}\right)$:
+   - Para $C_1 \ne C_2$:
+     $$T_1(z) = T_{1,\text{in}} + (T_{1,\text{out}} - T_{1,\text{in}}) \cdot \frac{1 - e^{-\beta z}}{1 - e^{-\beta}}$$
+     $$T_2(z) = T_{2,\text{out}} + \frac{C_1}{C_2} \cdot [T_1(z) - T_{1,\text{in}}]$$
+   - Para $C_1 \approx C_2$, a distribuição degenera para linear:
+     $$T_1(z) = T_{1,\text{in}} + (T_{1,\text{out}} - T_{1,\text{in}}) \cdot z$$
+     $$T_2(z) = T_{2,\text{out}} + (T_{2,\text{in}} - T_{2,\text{out}}) \cdot z$$
+
+O adaptador `HeatExchangerChartAdapter.js` mapeia essas funções analíticas em 40 pontos discretos, posiciona os pontos de operação das entradas e saídas e aplica a unidade de exibição de temperatura selecionada pelo usuário (°C, °F ou K).
 
 #### Diagnóstico e Integração de Topologia
 - O motor consulta `engine.isTrocadorComDuasCorrentes(trocador)` para verificar a presença de ambas as correntes.

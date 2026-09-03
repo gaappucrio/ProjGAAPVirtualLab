@@ -46,7 +46,8 @@ const UNIT_CONFIG = {
         default: 'c',
         units: {
             c: { label: '°C', symbol: '°C', fromBase: (v) => v, toBase: (v) => v, step: 1, digits: 1 },
-            f: { label: '°F', symbol: '°F', fromBase: (v) => ((v * 9) / 5) + 32, toBase: (v) => ((v - 32) * 5) / 9, step: 1, digits: 1 }
+            f: { label: '°F', symbol: '°F', fromBase: (v) => ((v * 9) / 5) + 32, toBase: (v) => ((v - 32) * 5) / 9, step: 1, digits: 1 },
+            k: { label: 'K', symbol: 'K', fromBase: (v) => v + 273.15, toBase: (v) => v - 273.15, step: 1, digits: 1 }
         }
     }
 };

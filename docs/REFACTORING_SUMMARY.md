@@ -145,6 +145,11 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
   - Bomba: permite alternar entre Carga (Head), Eficiência (%) e NPSHr. O ponto de operação é reposicionado automaticamente na curva e no eixo corretos.
   - Válvula: permite alternar entre Delta P estimado, Coeficiente de vazão (Cv ou Kv efetivo) e K equivalente.
 - Gráficos de bomba exibem um botão `JSON` no canto superior direito para baixar os dados da bomba sem exportar a planta inteira.
+- Gráfico de perfil de temperatura para trocador de calor (`HeatExchangerChartAdapter.js`):
+  - Traçado contínuo das curvas de temperatura da Corrente 1 e da Corrente 2 (ou utilidade de serviço) ao longo da extensão interna (0% a 100%).
+  - Representação fidedigna dos perfis térmicos conforme o modo de escoamento (contracorrente, paralelo ou utilidade).
+  - Pontos operacionais discretos de entrada e saída plotados sobre as curvas com tooltips informando a função de cada corrente e ponto de operação.
+  - Suporte completo tanto no monitor compacto quanto no monitor expandido para comparação com outros componentes.
 - Gráfico de pressão por distância para Canos, usando a pressão física de entrada do trecho como ponto inicial e a perda real do próprio Cano como queda exibida.
 - Quando o Cano sai de um componente passante com perda própria, como válvula ou trocador, a queda do componente fica separada da queda do Cano; a queda da válvula continua aparecendo no painel da válvula, e o gráfico do Cano mostra apenas a queda do trecho.
 - Quando a origem do Cano é um componente passante, a pressão inicial do trecho permanece ancorada na saída física desse componente; tanques pressurizados usam a pressão recebida na entrada como pressão de saída, sem queda interna atribuída ao tanque.
@@ -159,7 +164,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
   - Aba ativa.
   - Posição de rolagem.
 - Tooltips em propriedades não triviais.
-- Conversão de unidades para pressão, vazão, comprimento, volume e temperatura.
+- Conversão de unidades para pressão, vazão, comprimento, volume e temperatura (com suporte completo a Celsius `°C`, Fahrenheit `°F` e Kelvin `K` nas preferências de unidades, refletido de forma reativa no canvas SVG, gráficos de monitoramento e relatórios).
 - Bindings de propriedades de bomba, válvula e tanque possuem limpeza explícita ao trocar seleção ou re-renderizar o painel, evitando acúmulo de listeners em componentes ainda vivos.
 - Presets e propriedades de fluido ficam nas propriedades da entrada selecionada.
 - Não existe mais edição de fluido global quando nenhum componente de entrada está selecionado.

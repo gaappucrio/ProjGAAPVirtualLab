@@ -243,27 +243,30 @@ const HEAT_EXCHANGER_COMPONENT_VISUAL = {
                 const hasS1 = (logica.vazao1Lps ?? logica.fluxoReal) > 0.001;
                 const hasS2 = (logica.vazao2Lps || 0) > 0.001;
                 const isDual = (hasS1 && hasS2) || logica.temDuasCorrentesConectadas?.() === true;
-                const t1InStr = (logica.temperaturaEntradaC ?? 25).toFixed(1);
-                const t1OutStr = (logica.temperaturaSaidaC ?? 25).toFixed(1);
-                const t2InStr = (logica.temperaturaEntrada2C ?? logica.temperaturaServicoC ?? 80).toFixed(1);
-                const t2OutStr = (logica.temperaturaSaida2C ?? logica.temperaturaServicoC ?? 80).toFixed(1);
+                const unitSym = getUnitSymbol('temperature') || '°C';
+                const t1InStr = displayUnitValue('temperature', logica.temperaturaEntradaC ?? 25, 1);
+                const t1OutStr = displayUnitValue('temperature', logica.temperaturaSaidaC ?? 25, 1);
+                const t2InStr = displayUnitValue('temperature', logica.temperaturaEntrada2C ?? logica.temperaturaServicoC ?? 80, 1);
+                const t2OutStr = displayUnitValue('temperature', logica.temperaturaSaida2C ?? logica.temperaturaServicoC ?? 80, 1);
 
                 const modo = logica.getModoEscoamento?.(ENGINE) || 'contracorrente';
                 const isContra = modo === 'contracorrente';
 
                 if (isDual) {
                     const tagModo = isContra ? 'Contra' : 'Paralelo';
-                    temp.textContent = `S1: ${t1InStr}→${t1OutStr}° | S2: ${t2InStr}→${t2OutStr}° (${tagModo})`;
+                    temp.textContent = `S1: ${t1InStr}→${t1OutStr} | S2: ${t2InStr}→${t2OutStr} (${tagModo})`;
                     temp.setAttribute('font-size', '8');
                 } else if (hasS2 && !hasS1) {
-                    temp.textContent = `S2: ${t2InStr} → ${t2OutStr} °C`;
+                    temp.textContent = `S2: ${t2InStr} → ${t2OutStr} ${unitSym}`;
                     temp.setAttribute('font-size', '10');
                 } else {
-                    temp.textContent = `${t1InStr} → ${t1OutStr} °C`;
+                    temp.textContent = `${t1InStr} → ${t1OutStr} ${unitSym}`;
                     temp.setAttribute('font-size', '10');
                 }
             }
         };
+
+        registerVisualCleanup(visual, subscribeUnitPreferences(() => atualizarEstadoTermico()));
 
         subscribeVisual(visual, logica, (dados) => {
             if (dados.tipo === COMPONENT_EVENTS.POSITION_UPDATE) atualizarElevacoes();

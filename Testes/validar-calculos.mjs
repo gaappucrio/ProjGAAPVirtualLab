@@ -43,6 +43,15 @@ import {
     createLevelControllerState
 } from '../js/domain/services/LevelController.js';
 import { buildPumpCurveDatasets } from '../js/infrastructure/charts/PumpChartAdapter.js';
+import { buildHeatExchangerCurveDatasets } from '../js/infrastructure/charts/HeatExchangerChartAdapter.js';
+import {
+    formatUnitValue,
+    getUnitOptions,
+    getUnitSymbol,
+    setUnitPreference,
+    toBaseValue,
+    toDisplayValue
+} from '../js/presentation/units/DisplayUnits.js';
 import { buildExportHtml } from '../js/presentation/export/SimulationDataExporter.js';
 import {
     DEFAULT_ATMOSPHERIC_PRESSURE_BAR,
@@ -1312,4 +1321,98 @@ test('trocador de calor com duas correntes conectadas desabilita temperatura de 
 
     trocador.setTemperaturaServico(75);
     assert.equal(trocador.temperaturaServicoC, 75, 'Temperatura de serviço volta a ser editável');
+});
+
+test('unidade Kelvin converte corretamente e integra com preferências de exibição', () => {
+    const options = getUnitOptions('temperature');
+    const kelvinOption = options.find((opt) => opt.id === 'k');
+    assert.ok(kelvinOption, 'Opção de Kelvin deve estar disponível nas unidades');
+    assert.equal(kelvinOption.label, 'K');
+    assert.equal(kelvinOption.symbol, 'K');
+
+    // Estado original
+    const prevPref = getUnitSymbol('temperature');
+
+    try {
+        setUnitPreference('temperature', 'k');
+        assert.equal(getUnitSymbol('temperature'), 'K');
+
+        // Conversões de base (Celsius) para exibição (Kelvin)
+        approx(toDisplayValue('temperature', 25), 298.15, 0.001, '25 °C em Kelvin');
+        approx(toDisplayValue('temperature', 0), 273.15, 0.001, '0 °C em Kelvin');
+        approx(toDisplayValue('temperature', -273.15), 0, 0.001, 'Zero absoluto em Kelvin');
+        approx(toDisplayValue('temperature', 100), 373.15, 0.001, '100 °C em Kelvin');
+
+        // Conversões de exibição (Kelvin) para base (Celsius)
+        approx(toBaseValue('temperature', 298.15), 25, 0.001, '298.15 K em Celsius');
+        approx(toBaseValue('temperature', 0), -273.15, 0.001, '0 K em Celsius');
+
+        // Formatação
+        const formatted = formatUnitValue('temperature', 25);
+        assert.ok(formatted.includes('298'), 'Formatação deve conter valor convertido');
+        const symbol = getUnitSymbol('temperature');
+        assert.equal(symbol, 'K', 'Símbolo deve ser K');
+    } finally {
+        setUnitPreference('temperature', prevPref === 'K' ? 'c' : (prevPref === '°F' ? 'f' : 'c'));
+    }
+});
+
+test('trocador de calor gera curvas de temperatura para monitoramento nos modos utilidade e duas correntes', () => {
+    const trocador = new TrocadorCalorLogico('tc-test', 'TC-01', 0, 0);
+    trocador.temperaturaEntradaC = 20;
+    trocador.temperaturaSaidaC = 60;
+    trocador.temperaturaServicoC = 90;
+    trocador.uaWPorK = 3000;
+    trocador.vazao1Lps = 2.0;
+
+    // Modo 1: Utilidade térmica (corrente única)
+    const datasetsUtilidade = buildHeatExchangerCurveDatasets(trocador);
+    assert.equal(datasetsUtilidade.duasCorrentes, false);
+    assert.equal(datasetsUtilidade.stream1Points.length, 41);
+    assert.equal(datasetsUtilidade.stream2Points.length, 41);
+    assert.equal(datasetsUtilidade.operationPoints.length, 4);
+
+    // Entrada em x = 0%, saída em x = 100%
+    approx(datasetsUtilidade.stream1Points[0].x, 0, 0.001, 'Posição inicial da corrente 1');
+    approx(datasetsUtilidade.stream1Points[0].y, 20, 0.001, 'Temperatura inicial da corrente 1');
+    approx(datasetsUtilidade.stream1Points[40].x, 100, 0.001, 'Posição final da corrente 1');
+    approx(datasetsUtilidade.stream1Points[40].y, 60, 0.001, 'Temperatura final da corrente 1');
+
+    // Corrente de utilidade constante
+    datasetsUtilidade.stream2Points.forEach((pt) => {
+        approx(pt.y, 90, 0.001, 'Temperatura da utilidade constante');
+    });
+
+    // Modo 2: Duas correntes em contracorrente
+    trocador.temDuasCorrentesConectadas = () => true;
+    trocador.getModoEscoamento = () => 'contracorrente';
+    trocador.temperaturaEntrada2C = 85;
+    trocador.temperaturaSaida2C = 45;
+    trocador.vazao2Lps = 2.0;
+
+    const datasetsContra = buildHeatExchangerCurveDatasets(trocador);
+    assert.equal(datasetsContra.duasCorrentes, true);
+    assert.equal(datasetsContra.modo, 'contracorrente');
+    assert.equal(datasetsContra.stream1Points.length, 41);
+    assert.equal(datasetsContra.stream2Points.length, 41);
+
+    // Corrente 1 escoa de x=0 para x=100
+    approx(datasetsContra.stream1Points[0].y, 20, 0.001, 'Contracorrente T1 in');
+    approx(datasetsContra.stream1Points[40].y, 60, 0.001, 'Contracorrente T1 out');
+
+    // Corrente 2 entra em x=100 e sai em x=0
+    approx(datasetsContra.stream2Points[40].y, 85, 0.001, 'Contracorrente T2 in (x=100%)');
+    approx(datasetsContra.stream2Points[0].y, 45, 0.001, 'Contracorrente T2 out (x=0%)');
+
+    // Modo 3: Com preferência em Kelvin
+    try {
+        setUnitPreference('temperature', 'k');
+        const datasetsKelvin = buildHeatExchangerCurveDatasets(trocador);
+        assert.equal(datasetsKelvin.tempUnit, 'K');
+        approx(datasetsKelvin.stream1Points[0].y, 293.15, 0.01, '20 °C em Kelvin no gráfico');
+        approx(datasetsKelvin.stream1Points[40].y, 333.15, 0.01, '60 °C em Kelvin no gráfico');
+        approx(datasetsKelvin.stream2Points[40].y, 358.15, 0.01, '85 °C em Kelvin no gráfico');
+    } finally {
+        setUnitPreference('temperature', 'c');
+    }
 });

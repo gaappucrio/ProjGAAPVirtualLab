@@ -61,7 +61,7 @@ Responsabilidade: implementar adaptadores visuais, renderização SVG, estilos e
 Principais módulos:
 - `infrastructure/dom/` — gerenciamento de elementos visuais de componentes, posições e estado de portas.
 - `infrastructure/rendering/` — adaptadores de desenho de conexões e integração com Chart.js.
-- `infrastructure/charts/` — adaptadores especiais para gráficos de bomba, válvula, tanque e pressão de Canos.
+- `infrastructure/charts/` — adaptadores especiais para gráficos de bomba, válvula, trocador de calor, tanque e pressão de Canos.
 
 Interface com outros módulos:
 - Fornece serviços para a camada de apresentação sem trazer lógica de domínio.
@@ -101,7 +101,7 @@ Este módulo instancia o engine, conecta serviços de visual, cria controladores
 - Tanques e tubulações devem exibir tempo de residência atual quando houver vazão suficiente.
 - Fontes devem definir fluido, pressão de alimentação e vazão máxima; a pressão dirige a vazão resolvida e a vazão máxima limita a capacidade entregue quando a fonte satura. A vazão máxima padrão da entrada é `32 m³/h`.
 - Drenos devem manter contrapressão de saída, exibir a pressão final da rede antes da perda de entrada e explicitar a queda causada pelo `K` de entrada.
-- Trocadores de calor devem suportar operação com utilidade térmica (temperatura de serviço fixa) ou com duas correntes hidraulicamente independentes conectadas em portas dedicadas (Corrente 1: in1/out1; Corrente 2: in2/out2). Quando duas correntes estão conectadas, a edição da temperatura de serviço é desabilitada, o modo de escoamento (contracorrente ou paralelo) é inferido pela topologia das portas e a troca térmica é calculada pelo método $\varepsilon$-NTU com conservação de energia sensível.
+- Trocadores de calor devem suportar operação com utilidade térmica (temperatura de serviço fixa) ou com duas correntes hidraulicamente independentes conectadas em portas dedicadas (Corrente 1: in1/out1; Corrente 2: in2/out2). Quando duas correntes estão conectadas, a edição da temperatura de serviço é desabilitada, o modo de escoamento (contracorrente ou paralelo) é inferido pela topologia das portas e a troca térmica é calculada pelo método $\varepsilon$-NTU com conservação de energia sensível. O trocador conta com perfil gráfico de temperatura ao longo da posição interna para monitoramento em tempo real.
 
 ### 3.4 Exportação e persistência
 
@@ -116,9 +116,11 @@ Este módulo instancia o engine, conecta serviços de visual, cria controladores
 - O sistema deve suportar modo claro e modo escuro com preferência persistente.
 - O sistema deve exibir tutorial de uso em modal.
 - O sistema deve mostrar notificações de diagnóstico de rede e avisos de saturação.
+- O sistema deve permitir configurar unidades de exibição para pressão, vazão, comprimento, volume e temperatura (com opções em Celsius `°C`, Fahrenheit `°F` e Kelvin `K`).
 - O monitoramento, o painel de propriedades e a exportação de Canos devem exibir pressão ao longo da distância usando a pressão física de entrada do trecho e a queda real própria do Cano, sem somar novamente perdas próprias de componentes passantes, como a queda de pressão de válvulas.
 - Canos a jusante de válvulas, bombas ou trocadores devem ancorar a pressão inicial na saída física do componente passante; a pressão da saída/dreno não deve retropropagar esse ponto quando a vazão for limitada.
 - O monitoramento deve permitir selecionar válvulas e visualizar curva por abertura baseada no perfil selecionado, com `Cv` efetivo, `Delta P` estimado na vazão atual, `K` equivalente e ponto operacional.
+- O monitoramento deve permitir selecionar trocadores de calor e visualizar curvas de temperatura das Correntes 1 e 2 (ou utilidade de serviço) ao longo da posição do trocador (0% a 100%), refletindo escoamento contracorrente, paralelo ou utilidade e destacando os pontos operacionais de entrada e saída.
 - Componentes com perda própria calculada devem mostrar essa queda no painel de propriedades: válvula, trocador de calor e saída/dreno.
 
 ## 4. Requisitos Não Funcionais

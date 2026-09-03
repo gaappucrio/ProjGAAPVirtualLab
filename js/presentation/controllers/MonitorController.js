@@ -1,6 +1,7 @@
 import { BombaLogica } from '../../domain/components/BombaLogica.js';
 import { ConnectionModel } from '../../domain/models/ConnectionModel.js';
 import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
+import { TrocadorCalorLogico } from '../../domain/components/TrocadorCalorLogico.js';
 import { ValvulaLogica } from '../../domain/components/ValvulaLogica.js';
 import {
     createCompositePipePressureChart,
@@ -9,6 +10,10 @@ import {
     refreshPipePressureChart
 } from '../../infrastructure/charts/PipePressureChartAdapter.js';
 import { createPumpChart, refreshPumpChart } from '../../infrastructure/charts/PumpChartAdapter.js';
+import {
+    createHeatExchangerChart,
+    refreshHeatExchangerChart
+} from '../../infrastructure/charts/HeatExchangerChartAdapter.js';
 import { createValveChart, refreshValveChart } from '../../infrastructure/charts/ValveChartAdapter.js';
 import {
     createEmptyMonitorChart,
@@ -20,7 +25,7 @@ import { exportPumpDwsimJson } from '../export/PumpDwsimJsonExporter.js';
 import { createMonitorSlotHistory } from '../monitoring/MonitorSlotHistory.js';
 import { canMergePipeMonitorEntries, isPipeMonitorEntry } from '../monitoring/PipeMonitorGrouping.js';
 import { resolvePipePressureProfileOptions } from '../monitoring/PipePressureProfile.js';
-import { getUnitSymbol } from '../units/DisplayUnits.js';
+import { getUnitSymbol, subscribeUnitPreferences } from '../units/DisplayUnits.js';
 import { t } from '../i18n/LanguageManager.js';
 
 const MAX_MONITOR_CHART_HISTORY = 2;
@@ -35,6 +40,7 @@ export function createMonitorController({ engine }) {
     let chartedTankId = null;
     let chartedPumpId = null;
     let chartedValveId = null;
+    let chartedHeatExchangerId = null;
     let chartedConnectionId = null;
     let monitorChartMode = 'empty';
     let expandedMonitorCharts = [null, null];
@@ -76,6 +82,7 @@ export function createMonitorController({ engine }) {
         if (component instanceof TanqueLogico) return 'tank';
         if (component instanceof BombaLogica) return 'pump';
         if (component instanceof ValvulaLogica) return 'valve';
+        if (component instanceof TrocadorCalorLogico) return 'heatExchanger';
         if (component instanceof ConnectionModel) return 'pipe';
         return null;
     }
@@ -84,6 +91,7 @@ export function createMonitorController({ engine }) {
         if (kind === 'tank') return t('chart.tank');
         if (kind === 'pump') return t('chart.pump');
         if (kind === 'valve') return t('chart.valve');
+        if (kind === 'heatExchanger') return t('chart.heatExchanger');
         if (kind === 'pipe') return t('chart.pipe');
         if (kind === 'pipeGroup') return t('chart.pipeGroup');
         return t('chart.component');
@@ -315,6 +323,7 @@ export function createMonitorController({ engine }) {
         chartedTankId = null;
         chartedPumpId = null;
         chartedValveId = null;
+        chartedHeatExchangerId = null;
         chartedConnectionId = null;
         refreshCompactPumpExportButton(null);
     }
@@ -338,6 +347,7 @@ export function createMonitorController({ engine }) {
         chartedTankId = component.id;
         chartedPumpId = null;
         chartedValveId = null;
+        chartedHeatExchangerId = null;
         chartedConnectionId = null;
         refreshCompactPumpExportButton(null);
     }
@@ -455,6 +465,7 @@ export function createMonitorController({ engine }) {
         chartedPumpId = component.id;
         chartedTankId = null;
         chartedValveId = null;
+        chartedHeatExchangerId = null;
         chartedConnectionId = null;
         refreshCompactPumpExportButton(component);
     }
@@ -475,6 +486,7 @@ export function createMonitorController({ engine }) {
         chartedValveId = component.id;
         chartedPumpId = null;
         chartedTankId = null;
+        chartedHeatExchangerId = null;
         chartedConnectionId = null;
         refreshCompactPumpExportButton(null);
     }
@@ -482,6 +494,49 @@ export function createMonitorController({ engine }) {
     function refreshValveMonitorChartInstance(chart, component) {
         if (!(component instanceof ValvulaLogica) || !chart) return;
         refreshValveChart(chart, component, { expanded: isExpanded() });
+    }
+
+    function createHeatExchangerMonitorChartInstance(ctx, component) {
+        return createHeatExchangerChart(ctx, component, { expanded: isExpanded() });
+    }
+
+    function createHeatExchangerCompactChart(component) {
+        const ctx = getCompactChartContext();
+        if (!ctx) return;
+
+        destroyCompactChart();
+        compactChart = createHeatExchangerMonitorChartInstance(ctx, component);
+
+        setCompactMonitorMode('heatExchanger');
+        chartedHeatExchangerId = component.id;
+        chartedTankId = null;
+        chartedPumpId = null;
+        chartedValveId = null;
+        chartedConnectionId = null;
+        refreshCompactPumpExportButton(null);
+    }
+
+    function refreshHeatExchangerMonitorChartInstance(chart, component) {
+        if (!(component instanceof TrocadorCalorLogico) || !chart) return;
+        refreshHeatExchangerChart(chart, component, { expanded: isExpanded() });
+    }
+
+    function refreshHeatExchangerCompactChart(component) {
+        if (!(component instanceof TrocadorCalorLogico) || !compactChart || monitorChartMode !== 'heatExchanger' || chartedHeatExchangerId !== component.id) {
+            return;
+        }
+
+        refreshHeatExchangerMonitorChartInstance(compactChart, component);
+        refreshCompactPumpExportButton(null);
+    }
+
+    function refreshCompactHeatExchangerMonitorChart() {
+        if (monitorChartMode !== 'heatExchanger' || !chartedHeatExchangerId || !compactChart) return;
+
+        const hx = engine.componentes.find((component) => component.id === chartedHeatExchangerId);
+        if (hx instanceof TrocadorCalorLogico) {
+            refreshHeatExchangerCompactChart(hx);
+        }
     }
 
     function createPipeCompactChart(connection) {
@@ -496,6 +551,7 @@ export function createMonitorController({ engine }) {
         chartedPumpId = null;
         chartedValveId = null;
         chartedTankId = null;
+        chartedHeatExchangerId = null;
         refreshCompactPumpExportButton(null);
     }
 
@@ -763,6 +819,16 @@ export function createMonitorController({ engine }) {
             return;
         }
 
+        if (monitorChartMode === 'heatExchanger') {
+            const hx = engine.componentes.find((component) => component.id === chartedHeatExchangerId);
+            if (hx instanceof TrocadorCalorLogico) {
+                refreshHeatExchangerCompactChart(hx);
+            } else {
+                createEmptyCompactChart();
+            }
+            return;
+        }
+
         if (monitorChartMode === 'pipe') {
             const connection = engine.conexoes.find((candidate) => candidate.id === chartedConnectionId);
             if (connection instanceof ConnectionModel) {
@@ -939,6 +1005,11 @@ export function createMonitorController({ engine }) {
         if (entry.kind === 'valve') {
             return t('chart.valveSubtitle');
         }
+        if (entry.kind === 'heatExchanger') {
+            return t('chart.heatExchangerSubtitle', {
+                tempUnit: getUnitSymbol('temperature')
+            });
+        }
         if (entry.kind === 'pipe') {
             return t('chart.pipeSubtitle', {
                 pressureUnit: getUnitSymbol('pressure'),
@@ -992,6 +1063,10 @@ export function createMonitorController({ engine }) {
 
         if (component instanceof ValvulaLogica) {
             return createValveMonitorChartInstance(ctx, component, { yAxisMode });
+        }
+
+        if (component instanceof TrocadorCalorLogico) {
+            return createHeatExchangerMonitorChartInstance(ctx, component);
         }
 
         if (component instanceof ConnectionModel) {
@@ -1120,6 +1195,8 @@ export function createMonitorController({ engine }) {
                 refreshPumpMonitorChartInstance(chart, entry.component);
             } else if (entry.component instanceof ValvulaLogica) {
                 refreshValveMonitorChartInstance(chart, entry.component);
+            } else if (entry.component instanceof TrocadorCalorLogico) {
+                refreshHeatExchangerMonitorChartInstance(chart, entry.component);
             } else if (entry.component instanceof ConnectionModel) {
                 refreshPipeMonitorChartInstance(chart, entry.component);
             } else if (Array.isArray(entry.component)) {
@@ -1175,6 +1252,7 @@ export function createMonitorController({ engine }) {
         refreshCompactTankMonitorChart();
         refreshCompactPumpMonitorChart();
         refreshCompactValveMonitorChart();
+        refreshCompactHeatExchangerMonitorChart();
         refreshCompactPipeMonitorChart();
         refreshExpandedMonitorCharts();
     }
@@ -1190,6 +1268,13 @@ export function createMonitorController({ engine }) {
         if (!(component instanceof ValvulaLogica)) return;
 
         refreshValveCompactChart(component);
+        if (isExpanded()) refreshExpandedMonitorCharts();
+    }
+
+    function refreshHeatExchangerMonitorCharts(component) {
+        if (!(component instanceof TrocadorCalorLogico)) return;
+
+        refreshHeatExchangerCompactChart(component);
         if (isExpanded()) refreshExpandedMonitorCharts();
     }
 
@@ -1236,6 +1321,17 @@ export function createMonitorController({ engine }) {
             return;
         }
 
+        if (component instanceof TrocadorCalorLogico) {
+            rememberMonitorChartComponent(component);
+            if (monitorChartMode !== 'heatExchanger' || chartedHeatExchangerId !== component.id) {
+                createHeatExchangerCompactChart(component);
+            } else {
+                refreshHeatExchangerCompactChart(component);
+            }
+            if (isExpanded()) renderExpandedMonitorCharts();
+            return;
+        }
+
         if (connection || !(component instanceof TanqueLogico)) {
             if (monitorChartMode !== 'empty') {
                 createEmptyCompactChart();
@@ -1263,6 +1359,11 @@ export function createMonitorController({ engine }) {
         refreshMonitorCharts({ appendTankSamples });
     }
 
+    subscribeUnitPreferences(() => {
+        refreshPresentation();
+        if (isExpanded()) refreshExpandedMonitorCharts();
+    });
+
     return {
         setup: createEmptyCompactChart,
         updateLayout,
@@ -1270,6 +1371,7 @@ export function createMonitorController({ engine }) {
         refreshPresentation,
         refreshPump: refreshPumpMonitorCharts,
         refreshValve: refreshValveMonitorCharts,
+        refreshHeatExchanger: refreshHeatExchangerMonitorCharts,
         handleSimulationUpdate
     };
 }

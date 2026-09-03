@@ -14,6 +14,7 @@ import {
     FLOWCHART_DOCUMENT_TYPE,
     parseFlowchartDocument
 } from '../js/presentation/flowchart/FlowchartPersistence.js';
+import { createMonitorSlotHistory } from '../js/presentation/monitoring/MonitorSlotHistory.js';
 import { setLanguage, translateDefaultComponentTag } from '../js/presentation/i18n/LanguageManager.js';
 
 function createEngine() {
@@ -300,6 +301,24 @@ test('alternância de idioma traduz tag padrão do trocador de calor entre TC e 
     // Retorna para o idioma padrão
     setLanguage('pt');
     assert.equal(translateDefaultComponentTag('HX-01'), 'TC-01');
+});
+
+test('histórico de monitoramento aceita e gerencia trocador de calor', () => {
+    const history = createMonitorSlotHistory({ maxEntries: 2 });
+    const trocador = new TrocadorCalorLogico('TC-1', 'TC-01', 0, 0);
+    const tanque = new TanqueLogico('T-1', 'Tanque-01', 50, 0);
+
+    const r1 = history.remember({ id: trocador.id, kind: 'heatExchanger', label: trocador.tag, component: trocador });
+    assert.equal(r1.changed, true);
+    assert.equal(history.getEntries().filter(Boolean).length, 1);
+    assert.equal(history.getEntries()[0].kind, 'heatExchanger');
+    assert.equal(history.getEntries()[0].id, 'TC-1');
+
+    const r2 = history.remember({ id: tanque.id, kind: 'tank', label: tanque.tag, component: tanque });
+    assert.equal(r2.changed, true);
+    assert.equal(history.getEntries().filter(Boolean).length, 2);
+    assert.equal(history.getEntries()[0].kind, 'heatExchanger');
+    assert.equal(history.getEntries()[1].kind, 'tank');
 });
 
 

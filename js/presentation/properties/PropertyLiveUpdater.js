@@ -389,7 +389,7 @@ function updatePumpValues(component, { monitorController } = {}) {
     monitorController?.refreshPump(component);
 }
 
-function updateHeatExchangerValues(component, engine = null) {
+function updateHeatExchangerValues(component, engine = null, { monitorController } = {}) {
     const inputTempServico = byId('input-hx-service-temp');
     const painelAlerta = byId('painel-alerta-duas-correntes-hx');
     const textoAviso = byId('texto-aviso-temp-servico-hx');
@@ -423,6 +423,8 @@ function updateHeatExchangerValues(component, engine = null) {
     setFieldValue('disp-hx-temp-out-2', component.temperaturaSaida2C ?? component.temperaturaServicoC, 'temperature', 2);
     setValue('disp-hx-delta-t-2', (component.deltaTemperatura2C || 0).toFixed(2));
     setFieldValue('disp-hx-deltap-2', component.deltaP2AtualBar ?? 0, 'pressure', 2);
+
+    monitorController?.refreshHeatExchanger(component);
 }
 
 export function updatePropertyPanelValues({
@@ -460,7 +462,7 @@ export function updatePropertyPanelValues({
     }
 
     if (component instanceof TrocadorCalorLogico) {
-        updateHeatExchangerValues(component, engine);
+        updateHeatExchangerValues(component, engine, { monitorController });
     }
 
     if (typeof document !== 'undefined') {

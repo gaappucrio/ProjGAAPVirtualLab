@@ -188,12 +188,24 @@ Os trocadores de calor do laboratório integram o **Método Efetividade-NTU ($\e
    Cada corrente calcula sua própria perda por acessório singular:
    $$\Delta P_i = K_{\text{local}} \cdot \frac{\rho_i v_i^2}{2} = K_{\text{local}} \cdot \frac{\rho_i}{2} \left(\frac{Q_i}{A_{\text{hid}}}\right)^2 \quad (i \in \{1, 2\})$$
 
+6. **Perfis Espaciais de Temperatura para Monitoramento Gráfico:**
+   A distribuição contínua da temperatura ao longo da coordenada longitudinal $z \in [0, 1]$ (onde $z = 0$ é a entrada da Corrente 1 e $z = 1$ é a saída da Corrente 1) é calculada analiticamente por:
+   - **Utilidade Térmica ($T_2(z) = T_{\text{serviço}}$):**
+     $$T_1(z) = T_{1,\text{in}} + (T_{1,\text{out}} - T_{1,\text{in}}) \cdot \frac{1 - e^{-NTU \cdot z}}{1 - e^{-NTU}}$$
+   - **Corrente Paralela ($\alpha = UA(1/C_1 + 1/C_2)$):**
+     $$T_1(z) = T_{1,\text{in}} + (T_{1,\text{out}} - T_{1,\text{in}}) \cdot \frac{1 - e^{-\alpha z}}{1 - e^{-\alpha}}, \quad T_2(z) = T_{2,\text{in}} + (T_{2,\text{out}} - T_{2,\text{in}}) \cdot \frac{1 - e^{-\alpha z}}{1 - e^{-\alpha}}$$
+   - **Contracorrente ($\beta = UA(1/C_1 - 1/C_2)$):**
+     $$T_1(z) = T_{1,\text{in}} + (T_{1,\text{out}} - T_{1,\text{in}}) \cdot \frac{1 - e^{-\beta z}}{1 - e^{-\beta}}, \quad T_2(z) = T_{2,\text{out}} + \frac{C_1}{C_2}(T_1(z) - T_{1,\text{in}})$$
+     *(Para $C_1 \approx C_2$, as curvas assumem perfil perfeitamente linear).*
+
+   As grandezas de temperatura podem ser exibidas em Celsius (°C), Fahrenheit (°F) ou Kelvin (K, com $T_{\text{K}} = T_{^\circ\text{C}} + 273{,}15$).
+
 Onde:
 - $\dot{m}_i$: Vazão mássica da corrente $i$ (kg/s)
 - $c_{p,i}$: Calor específico do fluido da corrente $i$ (J/kg·K)
 - $UA$: Coeficiente global de transferência de calor multiplicado pela área de troca (W/K)
-- $T_{i,\text{in}}, T_{i,\text{out}}$: Temperaturas de entrada e saída da corrente $i$ (°C ou K)
-- $T_{\text{serviço}}$: Temperatura da utilidade quando há apenas 1 corrente ativa (°C)
+- $T_{i,\text{in}}, T_{i,\text{out}}$: Temperaturas de entrada e saída da corrente $i$ (°C, °F ou K)
+- $T_{\text{serviço}}$: Temperatura da utilidade quando há apenas 1 corrente ativa (°C, °F ou K)
 - $K_{\text{local}}$: Coeficiente de perda singular do trocador
 - $A_{\text{hid}}$: Área de escoamento da conexão ($m^2$)
 
