@@ -418,12 +418,12 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         this.pressaoEntrada2AtualBar = this.getPressaoEntradaPortaBar('in2');
         const p1In = Number.isFinite(this.pressaoEntrada1AtualBar) && this.pressaoEntrada1AtualBar > 0
             ? this.pressaoEntrada1AtualBar
-            : this.pressaoEntradaAtualBar;
+            : (this.vazao1Lps > EPSILON_FLOW && Number.isFinite(this.pressaoEntradaAtualBar) && this.pressaoEntradaAtualBar > 0 ? this.pressaoEntradaAtualBar : 0);
         const p2In = Number.isFinite(this.pressaoEntrada2AtualBar) && this.pressaoEntrada2AtualBar > 0
             ? this.pressaoEntrada2AtualBar
-            : this.pressaoEntradaAtualBar;
-        this.pressaoSaidaAtualBar = Math.max(0, p1In - this.deltaPAtualBar);
-        this.pressaoSaida2AtualBar = Math.max(0, p2In - this.deltaP2AtualBar);
+            : (this.vazao2Lps > EPSILON_FLOW && Number.isFinite(this.pressaoEntradaAtualBar) && this.pressaoEntradaAtualBar > 0 ? this.pressaoEntradaAtualBar : 0);
+        this.pressaoSaidaAtualBar = this.vazao1Lps > EPSILON_FLOW ? Math.max(0, p1In - this.deltaPAtualBar) : 0;
+        this.pressaoSaida2AtualBar = this.vazao2Lps > EPSILON_FLOW ? Math.max(0, p2In - this.deltaP2AtualBar) : 0;
         this._notificarEstado();
     }
 

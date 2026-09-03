@@ -3,6 +3,7 @@ import {
     getPipeHydraulics
 } from '../../domain/services/PipeHydraulics.js';
 import { mixFluidos } from '../../domain/components/Fluido.js';
+import { TrocadorCalorLogico } from '../../domain/components/TrocadorCalorLogico.js';
 
 export class HydraulicNetworkContext {
     constructor(engine) {
@@ -154,7 +155,23 @@ export class HydraulicScopedNetworkContext {
         this.conexoes.forEach((connection) => {
             this.engine.connectionStateStore.delete(connection);
         });
-        this.componentes.forEach((component) => component.resetEstadoHidraulico());
+        this.componentes.forEach((component) => {
+            if (component instanceof TrocadorCalorLogico && typeof component.resetEstadoHidraulicoStream === 'function') {
+                const conns = this.conexoes;
+                const isStream2 = (portId) => portId === 'in2' || portId === 'out2' || portId === '2';
+                const hasStream1 = conns.some((c) => !isStream2(c.targetEndpoint?.portId) && !isStream2(c.sourceEndpoint?.portId));
+                const hasStream2 = conns.some((c) => isStream2(c.targetEndpoint?.portId) || isStream2(c.sourceEndpoint?.portId));
+                if (hasStream1 && !hasStream2) {
+                    component.resetEstadoHidraulicoStream(1);
+                    return;
+                }
+                if (hasStream2 && !hasStream1) {
+                    component.resetEstadoHidraulicoStream(2);
+                    return;
+                }
+            }
+            component.resetEstadoHidraulico();
+        });
     }
 
     getComponentFluid(component) {

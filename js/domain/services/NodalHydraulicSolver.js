@@ -468,6 +468,24 @@ export class NodalHydraulicSolver {
         };
 
         this.context.componentes.forEach((component) => {
+            if (component instanceof TrocadorCalorLogico) {
+                const in1Node = addNode(`${component.id}:in1`, component, 'in1');
+                const out1Node = addNode(`${component.id}:out1`, component, 'out1');
+                const in2Node = addNode(`${component.id}:in2`, component, 'in2');
+                const out2Node = addNode(`${component.id}:out2`, component, 'out2');
+                const fluid = this.resolveComponentFluid(component);
+
+                const internalBranch1 = this.createHeatExchangerInternalBranch(component, 1, in1Node.id, out1Node.id, fluid);
+                if (internalBranch1) branches.push(internalBranch1);
+
+                const isCounter = typeof component.isContracorrente === 'function' ? component.isContracorrente() : false;
+                const stream2From = isCounter ? out2Node.id : in2Node.id;
+                const stream2To = isCounter ? in2Node.id : out2Node.id;
+                const internalBranch2 = this.createHeatExchangerInternalBranch(component, 2, stream2From, stream2To, fluid);
+                if (internalBranch2) branches.push(internalBranch2);
+                return;
+            }
+
             const inputNode = addNode(inputNodeId(component), component, 'in');
             const outputNode = addNode(outputNodeId(component), component, 'out');
             const fluid = this.resolveComponentFluid(component);
@@ -511,7 +529,11 @@ export class NodalHydraulicSolver {
             if (!island.isFloating) return;
 
             const candidateNodes = island.componentIds
-                .flatMap((componentId) => [`${componentId}:in`, `${componentId}:out`])
+                .flatMap((componentId) => [
+                    `${componentId}:in`, `${componentId}:out`,
+                    `${componentId}:in1`, `${componentId}:out1`,
+                    `${componentId}:in2`, `${componentId}:out2`
+                ])
                 .map((nodeId) => nodes.get(nodeId))
                 .filter(Boolean);
 
@@ -614,8 +636,8 @@ export class NodalHydraulicSolver {
             id: `connection:${connection.id}`,
             kind: 'connection',
             connection,
-            fromNodeId: outputNodeId(source),
-            toNodeId: inputNodeId(target),
+            fromNodeId: this.resolveConnectionSourceNodeId(source, connection),
+            toNodeId: this.resolveConnectionTargetNodeId(target, connection),
             source,
             target,
             areaM2,
@@ -626,6 +648,49 @@ export class NodalHydraulicSolver {
             staticHeadBar: pressureFromHeadBar(geometry.headGainM, fluid.densidade),
             fluid,
             disabled,
+            maxFlowLps: MAX_NETWORK_FLOW_LPS
+        };
+    }
+
+    resolveConnectionSourceNodeId(source, connection) {
+        if (source instanceof TrocadorCalorLogico) {
+            const portId = connection.sourceEndpoint?.portId;
+            const isStream2 = portId === 'out2' || portId === 'in2' || portId === '2';
+            if (isStream2) {
+                return `${source.id}:${portId === 'in2' ? 'in2' : 'out2'}`;
+            }
+            return `${source.id}:${portId === 'in1' ? 'in1' : 'out1'}`;
+        }
+        return outputNodeId(source);
+    }
+
+    resolveConnectionTargetNodeId(target, connection) {
+        if (target instanceof TrocadorCalorLogico) {
+            const portId = connection.targetEndpoint?.portId;
+            const isStream2 = portId === 'in2' || portId === 'out2' || portId === '2';
+            if (isStream2) {
+                return `${target.id}:${portId === 'out2' ? 'out2' : 'in2'}`;
+            }
+            return `${target.id}:${portId === 'out1' ? 'out1' : 'in1'}`;
+        }
+        return inputNodeId(target);
+    }
+
+    createHeatExchangerInternalBranch(component, streamId, fromNodeId, toNodeId, fluid) {
+        const parametros = component.getParametrosHidraulicos();
+        return {
+            id: `internal:${component.id}:${streamId}`,
+            kind: 'internal',
+            component,
+            streamId,
+            fromNodeId,
+            toNodeId,
+            areaM2: parametros.hydraulicAreaM2,
+            geometry: null,
+            baseLossCoeff: parametros.localLossCoeff,
+            staticHeadBar: 0,
+            fluid,
+            disabled: false,
             maxFlowLps: MAX_NETWORK_FLOW_LPS
         };
     }

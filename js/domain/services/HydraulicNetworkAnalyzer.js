@@ -1,3 +1,4 @@
+import { TrocadorCalorLogico } from '../components/TrocadorCalorLogico.js';
 import { BombaLogica } from '../components/BombaLogica.js';
 import { DrenoLogico } from '../components/DrenoLogico.js';
 import { FonteLogica } from '../components/FonteLogica.js';
@@ -25,45 +26,96 @@ function isActivePump(component) {
     return component instanceof BombaLogica && component.getDriveAtual() > EPSILON_FLOW;
 }
 
-function buildUndirectedAdjacency(componentes, conexoes) {
-    const adjacency = new Map(componentes.map((component) => [component.id, new Set()]));
+function isStream2Port(portId) {
+    return portId === 'in2' || portId === 'out2' || portId === '2';
+}
+
+function getComponentEndpointKey(comp, portId) {
+    if (!comp) return '';
+    if (comp instanceof TrocadorCalorLogico || comp?.tipo === 'trocador-calor') {
+        return `${comp.id}:${isStream2Port(portId) ? 'stream2' : 'stream1'}`;
+    }
+    return comp.id;
+}
+
+function getEndpointKeysForComponent(comp, conexoes) {
+    if (!(comp instanceof TrocadorCalorLogico || comp?.tipo === 'trocador-calor')) {
+        return [comp.id];
+    }
+    const hasStream1 = conexoes.some((c) =>
+        (c.sourceId === comp.id && !isStream2Port(c.sourceEndpoint?.portId)) ||
+        (c.targetId === comp.id && !isStream2Port(c.targetEndpoint?.portId))
+    );
+    const hasStream2 = conexoes.some((c) =>
+        (c.sourceId === comp.id && isStream2Port(c.sourceEndpoint?.portId)) ||
+        (c.targetId === comp.id && isStream2Port(c.targetEndpoint?.portId))
+    );
+    const keys = [];
+    if (hasStream1) keys.push(`${comp.id}:stream1`);
+    if (hasStream2) keys.push(`${comp.id}:stream2`);
+    if (keys.length === 0) keys.push(comp.id);
+    return keys;
+}
+
+function buildUndirectedAdjacency(componentes, conexoes, endpointKeys) {
+    const componentById = new Map(componentes.map((c) => [c.id, c]));
+    const adjacency = new Map(endpointKeys.map((k) => [k, new Set()]));
 
     conexoes.forEach((connection) => {
-        if (!adjacency.has(connection.sourceId) || !adjacency.has(connection.targetId)) return;
-        adjacency.get(connection.sourceId).add(connection.targetId);
-        adjacency.get(connection.targetId).add(connection.sourceId);
+        const source = componentById.get(connection.sourceId);
+        const target = componentById.get(connection.targetId);
+        if (!source || !target) return;
+
+        const u = getComponentEndpointKey(source, connection.sourceEndpoint?.portId);
+        const v = getComponentEndpointKey(target, connection.targetEndpoint?.portId);
+        if (adjacency.has(u) && adjacency.has(v)) {
+            adjacency.get(u).add(v);
+            adjacency.get(v).add(u);
+        }
     });
 
     return adjacency;
 }
 
 function findUndirectedIslands(componentes, conexoes) {
-    const adjacency = buildUndirectedAdjacency(componentes, conexoes);
+    const componentById = new Map(componentes.map((c) => [c.id, c]));
+    const allEndpointKeys = componentes.flatMap((c) => getEndpointKeysForComponent(c, conexoes));
+    const adjacency = buildUndirectedAdjacency(componentes, conexoes, allEndpointKeys);
     const visited = new Set();
     const islands = [];
 
-    componentes.forEach((component) => {
-        if (visited.has(component.id)) return;
+    allEndpointKeys.forEach((startKey) => {
+        if (visited.has(startKey)) return;
 
         const island = createEmptyIsland();
-        const queue = [component.id];
-        visited.add(component.id);
+        const queue = [startKey];
+        visited.add(startKey);
+        const islandEndpointKeys = [];
 
         while (queue.length > 0) {
-            const componentId = queue.shift();
-            island.componentIds.push(componentId);
+            const currentKey = queue.shift();
+            islandEndpointKeys.push(currentKey);
 
-            (adjacency.get(componentId) || []).forEach((nextId) => {
-                if (visited.has(nextId)) return;
-                visited.add(nextId);
-                queue.push(nextId);
+            (adjacency.get(currentKey) || []).forEach((nextKey) => {
+                if (visited.has(nextKey)) return;
+                visited.add(nextKey);
+                queue.push(nextKey);
             });
         }
 
-        const componentIdSet = new Set(island.componentIds);
+        const endpointKeySet = new Set(islandEndpointKeys);
+        island.endpointKeys = islandEndpointKeys;
+        island.componentIds = [...new Set(islandEndpointKeys.map((k) => k.split(':')[0]))];
         island.connectionIds = conexoes
-            .filter((connection) => componentIdSet.has(connection.sourceId) && componentIdSet.has(connection.targetId))
+            .filter((connection) => {
+                const source = componentById.get(connection.sourceId);
+                const target = componentById.get(connection.targetId);
+                const u = getComponentEndpointKey(source, connection.sourceEndpoint?.portId);
+                const v = getComponentEndpointKey(target, connection.targetEndpoint?.portId);
+                return endpointKeySet.has(u) && endpointKeySet.has(v);
+            })
             .map((connection) => connection.id);
+
         islands.push(island);
     });
 
@@ -71,46 +123,58 @@ function findUndirectedIslands(componentes, conexoes) {
 }
 
 function findDirectedCycleComponentIds(componentes, conexoes) {
-    const adjacency = new Map(componentes.map((component) => [component.id, []]));
+    const componentById = new Map(componentes.map((c) => [c.id, c]));
+    const allEndpointKeys = componentes.flatMap((c) => getEndpointKeysForComponent(c, conexoes));
+    const adjacency = new Map(allEndpointKeys.map((k) => [k, []]));
+
     conexoes.forEach((connection) => {
-        if (!adjacency.has(connection.sourceId) || !adjacency.has(connection.targetId)) return;
-        adjacency.get(connection.sourceId).push(connection.targetId);
+        const source = componentById.get(connection.sourceId);
+        const target = componentById.get(connection.targetId);
+        if (!source || !target) return;
+
+        const u = getComponentEndpointKey(source, connection.sourceEndpoint?.portId);
+        const v = getComponentEndpointKey(target, connection.targetEndpoint?.portId);
+        if (adjacency.has(u) && adjacency.has(v)) {
+            adjacency.get(u).push(v);
+        }
     });
 
     const visiting = new Set();
     const visited = new Set();
-    const cyclic = new Set();
+    const cyclicEndpoints = new Set();
     const stack = [];
 
-    const visit = (componentId) => {
-        if (visiting.has(componentId)) {
-            const cycleStart = stack.indexOf(componentId);
-            const cycleMembers = cycleStart >= 0 ? stack.slice(cycleStart) : [componentId];
-            cycleMembers.forEach((id) => cyclic.add(id));
+    const visit = (k) => {
+        if (visiting.has(k)) {
+            const cycleStart = stack.indexOf(k);
+            const cycleMembers = cycleStart >= 0 ? stack.slice(cycleStart) : [k];
+            cycleMembers.forEach((id) => cyclicEndpoints.add(id));
             return;
         }
-        if (visited.has(componentId)) return;
+        if (visited.has(k)) return;
 
-        visiting.add(componentId);
-        stack.push(componentId);
+        visiting.add(k);
+        stack.push(k);
 
-        (adjacency.get(componentId) || []).forEach((nextId) => visit(nextId));
+        (adjacency.get(k) || []).forEach((nextKey) => visit(nextKey));
 
         stack.pop();
-        visiting.delete(componentId);
-        visited.add(componentId);
+        visiting.delete(k);
+        visited.add(k);
     };
 
-    componentes.forEach((component) => visit(component.id));
-    return cyclic;
+    allEndpointKeys.forEach((k) => visit(k));
+    return cyclicEndpoints;
 }
 
 export function analyzeHydraulicNetwork({ componentes = [], conexoes = [] } = {}) {
     const componentById = new Map(componentes.map((component) => [component.id, component]));
-    const cyclicComponentIds = findDirectedCycleComponentIds(componentes, conexoes);
+    const cyclicEndpoints = findDirectedCycleComponentIds(componentes, conexoes);
+    const cyclicComponentIds = new Set([...cyclicEndpoints].map((k) => k.split(':')[0]));
     const islands = findUndirectedIslands(componentes, conexoes).map((island) => {
         const componentIds = island.componentIds;
-        const hasDirectedCycle = componentIds.some((id) => cyclicComponentIds.has(id));
+        const endpointKeys = island.endpointKeys || componentIds;
+        const hasDirectedCycle = endpointKeys.some((k) => cyclicEndpoints.has(k));
         const hasPressureBoundary = componentIds.some((id) => isPressureBoundary(componentById.get(id)));
         const hasActivePump = componentIds.some((id) => isActivePump(componentById.get(id)));
 

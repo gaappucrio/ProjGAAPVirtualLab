@@ -228,7 +228,23 @@ export class HydraulicBranchModel {
     }
 
     rebuildComponentHydraulicStateFromConnections() {
-        this.context.componentes.forEach((component) => component.resetEstadoHidraulico());
+        this.context.componentes.forEach((component) => {
+            if (component instanceof TrocadorCalorLogico && typeof component.resetEstadoHidraulicoStream === 'function') {
+                const conns = this.context.conexoes;
+                const isStream2 = (portId) => portId === 'in2' || portId === 'out2' || portId === '2';
+                const hasStream1 = conns.some((c) => !isStream2(c.targetEndpoint?.portId) && !isStream2(c.sourceEndpoint?.portId));
+                const hasStream2 = conns.some((c) => isStream2(c.targetEndpoint?.portId) || isStream2(c.sourceEndpoint?.portId));
+                if (hasStream1 && !hasStream2) {
+                    component.resetEstadoHidraulicoStream(1);
+                    return;
+                }
+                if (hasStream2 && !hasStream1) {
+                    component.resetEstadoHidraulicoStream(2);
+                    return;
+                }
+            }
+            component.resetEstadoHidraulico();
+        });
 
         this.context.conexoes.forEach((conn) => {
             const state = this.context.getConnectionState(conn);
@@ -399,7 +415,7 @@ export class HydraulicBranchModel {
 
             const inletPressureBar = finiteNumber(
                 isStream2 ? component?.pressaoEntrada2AtualBar : component?.pressaoEntrada1AtualBar,
-                finiteNumber(component?.pressaoEntradaAtualBar, null)
+                null
             );
             const dropBar = finiteNumber(
                 isStream2 ? component?.deltaP2AtualBar : component?.deltaPAtualBar,
@@ -586,15 +602,19 @@ export class HydraulicBranchModel {
     combineSerialFlowLimits(upstreamLimitLps, downstreamLimitLps) {
         if (upstreamLimitLps <= EPSILON_FLOW || downstreamLimitLps <= EPSILON_FLOW) return 0;
 
-        const upstreamResistance = 1 / (upstreamLimitLps * upstreamLimitLps);
+            const upstreamResistance = 1 / (upstreamLimitLps * upstreamLimitLps);
         const downstreamResistance = 1 / (downstreamLimitLps * downstreamLimitLps);
         return 1 / Math.sqrt(upstreamResistance + downstreamResistance);
     }
 
-    hasPendingEmission(comp) {
-        if (comp instanceof FonteLogica) return !comp.jaEmitiuIntrinseco();
+    hasPendingEmission(comp, dt, streamId = null) {
+        if (!comp) return false;
+
+        if (comp instanceof FonteLogica) {
+            return comp.vazaoMaxima > 0;
+        }
         if (comp instanceof TanqueLogico) {
-            return !comp.jaEmitiuIntrinseco() && comp.volumeAtual > EPSILON_FLOW && comp.capacidadeMaxima > 0;
+            return comp.volumeAtual > 0;
         }
         if (comp instanceof BombaLogica) {
             const drive = comp.getDriveAtual();
@@ -604,9 +624,14 @@ export class HydraulicBranchModel {
             return comp.getAberturaNormalizadaAtual() > 0 && comp.getFluxoPendenteLps() > EPSILON_FLOW;
         }
         if (comp instanceof TrocadorCalorLogico) {
+            if (streamId === 1) {
+                return (comp.getFluxoPendentePorStream?.(1) || 0) > EPSILON_FLOW;
+            }
+            if (streamId === 2) {
+                return (comp.getFluxoPendentePorStream?.(2) || 0) > EPSILON_FLOW;
+            }
             return (comp.getFluxoPendentePorStream?.(1) || 0) > EPSILON_FLOW
-                || (comp.getFluxoPendentePorStream?.(2) || 0) > EPSILON_FLOW
-                || comp.getFluxoPendenteLps() > EPSILON_FLOW;
+                || (comp.getFluxoPendentePorStream?.(2) || 0) > EPSILON_FLOW;
         }
         return false;
     }

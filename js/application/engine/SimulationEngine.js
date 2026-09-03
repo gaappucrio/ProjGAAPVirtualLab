@@ -486,6 +486,11 @@ export class SistemaSimulacao extends Observable {
             lastDiagnostics: islandMetrics.flatMap((metrics) => metrics.lastDiagnostics || []),
             islandMetrics
         };
+
+        if (hasNodalIsland) {
+            this.hydraulicBranchModel.rebuildComponentHydraulicStateFromConnections();
+            this.hydraulicBranchModel.reconcileConnectionPressureStatesFromComponentDrops();
+        }
     }
 
     resolveHydraulicNetwork(dt) {

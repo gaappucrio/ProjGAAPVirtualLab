@@ -4,11 +4,13 @@ import test from 'node:test';
 import { SistemaSimulacao, FLUID_PRESETS } from '../js/application/engine/SimulationEngine.js';
 import { SelectionStore } from '../js/application/stores/SelectionStore.js';
 import { ConnectionModel } from '../js/domain/models/ConnectionModel.js';
+import { BombaLogica } from '../js/domain/components/BombaLogica.js';
 import { DrenoLogico } from '../js/domain/components/DrenoLogico.js';
 import { FonteLogica } from '../js/domain/components/FonteLogica.js';
 import { TanqueLogico } from '../js/domain/components/TanqueLogico.js';
 import { TrocadorCalorLogico } from '../js/domain/components/TrocadorCalorLogico.js';
 import { ValvulaLogica } from '../js/domain/components/ValvulaLogica.js';
+import { analyzeHydraulicNetwork } from '../js/domain/services/HydraulicNetworkAnalyzer.js';
 import {
     createFlowchartDocument,
     FLOWCHART_DOCUMENT_TYPE,
@@ -16,6 +18,13 @@ import {
 } from '../js/presentation/flowchart/FlowchartPersistence.js';
 import { createMonitorSlotHistory } from '../js/presentation/monitoring/MonitorSlotHistory.js';
 import { setLanguage, translateDefaultComponentTag } from '../js/presentation/i18n/LanguageManager.js';
+
+function approx(actual, expected, tolerance = 1e-4, message = '') {
+    assert.ok(
+        Math.abs(actual - expected) <= tolerance,
+        `${message ? `${message}: ` : ''}esperado ${expected} +/- ${tolerance}, recebido ${actual}`
+    );
+}
 
 function createEngine() {
     const engine = new SistemaSimulacao();
@@ -356,6 +365,119 @@ test('remoção de slot de monitoramento compacta entradas e limpa o slot secund
     assert.equal(history.getEntries().filter(Boolean).length, 1);
     assert.equal(history.getEntries()[0].id, 'T-1');
     assert.equal(history.getEntries()[1], null);
+});
+
+test('trocador de calor com válvulas a jusante mantém independência hidráulica estrita ao abrir e fechar', () => {
+    function simulateScenario(aberturaV1) {
+        const engine = createEngine();
+
+        const fonte1 = new FonteLogica('F-01', 'Fonte-1', 0, 0);
+        fonte1.pressaoFonteBar = 2.0;
+
+        const tc = new TrocadorCalorLogico('TC-01', 'TC-01', 100, 0);
+        tc.uaWPorK = 3000;
+
+        const valvula1 = new ValvulaLogica('V-01', 'Valvula-1', 150, 0);
+        valvula1.setAbertura(aberturaV1);
+        valvula1.aberturaEfetiva = aberturaV1;
+
+        const dreno1 = new DrenoLogico('D-01', 'Dreno-1', 200, 0);
+        dreno1.pressaoSaidaBar = 0;
+
+        const fonte2 = new FonteLogica('F-02', 'Fonte-2', 0, 100);
+        fonte2.pressaoFonteBar = 2.0;
+
+        const valvula2 = new ValvulaLogica('V-02', 'Valvula-2', 150, 100);
+        valvula2.setAbertura(100);
+        valvula2.aberturaEfetiva = 100;
+
+        const dreno2 = new DrenoLogico('D-02', 'Dreno-2', 200, 100);
+        dreno2.pressaoSaidaBar = 0;
+
+        const c1In = new ConnectionModel({ id: 'C1-IN', sourceId: fonte1.id, targetId: tc.id, targetEndpoint: { portId: 'in1', portType: 'in' } });
+        const c1Mid = new ConnectionModel({ id: 'C1-MID', sourceId: tc.id, targetId: valvula1.id, sourceEndpoint: { portId: 'out1', portType: 'out' } });
+        const c1Out = new ConnectionModel({ id: 'C1-OUT', sourceId: valvula1.id, targetId: dreno1.id });
+
+        const c2In = new ConnectionModel({ id: 'C2-IN', sourceId: fonte2.id, targetId: tc.id, targetEndpoint: { portId: 'in2', portType: 'in' } });
+        const c2Mid = new ConnectionModel({ id: 'C2-MID', sourceId: tc.id, targetId: valvula2.id, sourceEndpoint: { portId: 'out2', portType: 'out' } });
+        const c2Out = new ConnectionModel({ id: 'C2-OUT', sourceId: valvula2.id, targetId: dreno2.id });
+
+        [fonte1, tc, valvula1, dreno1, fonte2, valvula2, dreno2].forEach(c => engine.add(c));
+        [c1In, c1Mid, c1Out, c2In, c2Mid, c2Out].forEach(c => engine.addConnection(c));
+
+        for (let i = 0; i < 80; i++) {
+            engine.componentes.forEach((c) => c.atualizarDinamica(0.1, engine.hydraulicContext.getComponentFluid(c) || engine.fluidoOperante));
+            engine.resolveHydraulicNetwork(0.1);
+            engine.componentes.forEach((c) => c.sincronizarMetricasFisicas(engine.hydraulicContext.getComponentFluid(c) || engine.fluidoOperante));
+        }
+
+        return {
+            vazao1: tc.vazao1Lps,
+            vazao2: tc.vazao2Lps,
+            pressaoSaida1: tc.pressaoSaidaAtualBar,
+            fluxoC2In: engine.getConnectionState(c2In).flowLps,
+            fluxoC2Out: engine.getConnectionState(c2Out).flowLps
+        };
+    }
+
+    const open = simulateScenario(100);
+    const half = simulateScenario(50);
+    const closed = simulateScenario(0);
+
+    assert.ok(open.vazao1 > 1.0, 'Corrente 1 deve ter vazão aberta');
+    assert.equal(closed.vazao1, 0, 'Corrente 1 deve zerar com válvula fechada');
+    assert.equal(closed.pressaoSaida1, 0, 'Pressão de saída da Corrente 1 deve ser zero quando fechada');
+    assert.ok(half.vazao1 > 0 && half.vazao1 < open.vazao1, 'Corrente 1 intermediária a 50%');
+
+    approx(closed.vazao2, open.vazao2, 1e-9, 'Vazão da Corrente 2 deve ser idêntica com V1 fechada');
+    approx(half.vazao2, open.vazao2, 1e-9, 'Vazão da Corrente 2 deve ser idêntica com V1 a 50%');
+    approx(closed.fluxoC2In, open.fluxoC2In, 1e-9, 'Fluxo de entrada da Corrente 2 deve ser idêntico');
+    approx(closed.fluxoC2Out, open.fluxoC2Out, 1e-9, 'Fluxo de saída da Corrente 2 deve ser idêntico');
+});
+
+test('análise de rede hidráulica separa correntes do trocador em ilhas independentes sem contaminação de ciclo', () => {
+    const t1 = new TanqueLogico('T1', 'T-01', 0, 0);
+    t1.volumeAtual = 1000;
+    t1.capacidadeMaxima = 2000;
+
+    const b1 = new BombaLogica('B1', 'B-01', 50, 0);
+    b1.isOn = true;
+    b1.grauAcionamento = 100;
+    b1.acionamentoEfetivo = 100;
+
+    const tc = new TrocadorCalorLogico('TC', 'TC-01', 150, 0);
+
+    const f2 = new FonteLogica('F2', 'F-02', 0, 100);
+    f2.pressaoFonteBar = 2.0;
+
+    const d2 = new DrenoLogico('D2', 'D-02', 200, 100);
+    d2.pressaoSaidaBar = 0;
+
+    const conns = [
+        new ConnectionModel({ id: 'c1_1', sourceId: t1.id, targetId: b1.id }),
+        new ConnectionModel({ id: 'c1_2', sourceId: b1.id, targetId: tc.id, targetEndpoint: { portId: 'in1', portType: 'in' } }),
+        new ConnectionModel({ id: 'c1_3', sourceId: tc.id, targetId: t1.id, sourceEndpoint: { portId: 'out1', portType: 'out' } }),
+
+        new ConnectionModel({ id: 'c2_1', sourceId: f2.id, targetId: tc.id, targetEndpoint: { portId: 'in2', portType: 'in' } }),
+        new ConnectionModel({ id: 'c2_2', sourceId: tc.id, targetId: d2.id, sourceEndpoint: { portId: 'out2', portType: 'out' } })
+    ];
+
+    const componentes = [t1, b1, tc, f2, d2];
+    const analysis = analyzeHydraulicNetwork({ componentes, conexoes: conns });
+
+    assert.equal(analysis.islands.length, 2, 'Deve identificar exatamente 2 ilhas hidráulicas desacopladas');
+
+    const islandLoop = analysis.islands.find(isl => isl.componentIds.includes(t1.id));
+    const islandOpen = analysis.islands.find(isl => isl.componentIds.includes(f2.id));
+
+    assert.ok(islandLoop, 'Ilha do circuito fechado deve existir');
+    assert.ok(islandOpen, 'Ilha do circuito aberto deve existir');
+
+    assert.equal(islandLoop.hasDirectedCycle, true, 'Ilha do circuito de recirculação deve ter ciclo dirigido');
+    assert.equal(islandOpen.hasDirectedCycle, false, 'Ilha do circuito aberto NÃO deve ter ciclo dirigido');
+    assert.ok(islandLoop.connectionIds.includes('c1_2'), 'Conexões da Corrente 1 pertencem à ilha em ciclo');
+    assert.ok(islandOpen.connectionIds.includes('c2_1'), 'Conexões da Corrente 2 pertencem à ilha aberta');
+    assert.ok(!islandOpen.connectionIds.includes('c1_2'), 'Conexões da Corrente 1 não devem vazar para a ilha 2');
 });
 
 
