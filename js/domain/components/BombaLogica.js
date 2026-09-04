@@ -221,4 +221,16 @@ export class BombaLogica extends ComponenteFisico {
     getFluxoSaidaFromTank() {
         return this.fluxoReal;
     }
+
+    getPotenciaHidraulicaKw(flowLps = this.fluxoReal, boostBar = this.cargaGeradaBar) {
+        const safeFlowLps = Math.max(0, Number(flowLps) || 0);
+        const safeBoostBar = Math.max(0, Number(boostBar) || 0);
+        return (safeBoostBar * safeFlowLps) / 10.0;
+    }
+
+    getPotenciaEixoKw(flowLps = this.fluxoReal, boostBar = this.cargaGeradaBar, efficiency = this.eficienciaAtual) {
+        const hydraulicKw = this.getPotenciaHidraulicaKw(flowLps, boostBar);
+        const safeEff = clamp(Number(efficiency) || this.eficienciaHidraulica, 0.05, 1.0);
+        return hydraulicKw / safeEff;
+    }
 }

@@ -199,19 +199,23 @@ Calculada por uma curva parabólica em torno do ponto de melhor eficiência (BEP
 
 $$\eta(Q) = \eta_{\text{nominal}} \cdot \left( 1 - 0.32 \cdot \left(\frac{Q - Q_{\text{BEP}}}{Q_{\text{BEP}}}\right)^2 \right)$$
 
-#### Potência Hidráulica
-A energia líquida transmitida ao fluido na descarga é:
+#### Potência Hidráulica e Potência de Eixo
+A energia líquida transmitida ao fluido na descarga da bomba é calculada por:
 
-$$P_{\text{hidráulica}} = Q_{\text{m}^3\text{/s}} \cdot \Delta P_{\text{Pa}} \quad \text{[Watts]}$$
+$$P_{\text{hidráulica}} = \frac{\Delta P_{\text{bar}} \cdot Q_{\text{L/s}}}{10} \quad \text{[kW]} \qquad \left(\equiv Q_{\text{m}^3\text{/s}} \cdot \Delta P_{\text{Pa}} \cdot 10^{-3}\right)$$
 
-A potência mecânica consumida no eixo da bomba é:
+A potência mecânica no eixo (Brake Horsepower / BHP) requerida pelo acionador elétrico ou motor é:
 
-$$P_{\text{eixo}} = \frac{P_{\text{hidráulica}}}{\eta(Q)}$$
+$$P_{\text{eixo}} = \frac{P_{\text{hidráulica}}}{\eta(Q)} \quad \text{[kW]}$$
+
+Essas relações são implementadas diretamente no modelo de domínio (`BombaLogica.js`) pelos métodos canônicos `getPotenciaHidraulicaKw(flowLps, boostBar)` e `getPotenciaEixoKw(flowLps, boostBar, efficiency)`, alimentando gráficos de monitoramento, balanços energéticos e exportação de dados para DWSIM.
 
 #### NPSH (Net Positive Suction Head) e Cavitação
 O NPSH disponível no flange de sucção ($NPSH_{\text{a}}$) é avaliado considerando a carga de pressão manométrica absoluta, a pressão de vapor do fluido na temperatura local e a carga cinética:
 
 $$NPSH_{\text{a}} = \frac{P_{\text{sucção, abs}} - P_{\text{vapor}}}{\rho \cdot g} + \frac{v_{\text{sucção}}^2}{2 \cdot g} \quad \text{[metros]}$$
+
+O solver de ramos (`HydraulicBranchModel.js`) e o solver nodal (`NodalHydraulicSolver.js`) implementam verificações defensivas robustas: se a pressão atmosférica, a densidade ou a pressão de vapor não estiverem disponíveis no estado intermediário, são aplicados valores canônicos de fallback físico seguro ($P_{\text{atm}} = 1.01325\text{ bar}$, $\rho = 997\text{ kg/m}^3$, $P_{\text{vap}} = 0.0317\text{ bar}$), evitando a propagação de `NaN` ou descontinuidades numéricas em transientes.
 
 O NPSH requerido ($NPSH_{\text{r}}$) cresce com o quadrado da vazão de sucção:
 
@@ -256,6 +260,14 @@ A fração de vazão máxima ($f(x)$) em função da abertura fracionária ($x \
 Onde $R$ é a rangeabilidade inerente da válvula (padrão $50.0$). O $Cv$ efetivo é:
 
 $$Cv_{\text{efetivo}} = Cv_{\text{máximo}} \cdot f(x)$$
+
+#### Isolamento de Pressão e Bloqueio de Jusante
+Quando a abertura efetiva da válvula é nula ($x \le 0$ / `aberturaEfetiva <= 0`), a válvula atua como barreira de estanqueidade física completa:
+- O obturador fecha mecanicamente a passagem de fluido, interrompendo a transmissão da pressão de montante para o circuito a jusante.
+- A pressão física de saída passa a ser desacoplada e assume o nível de pressão da rede a jusante ($P_{\text{saída}} = P_{\text{jusante}}$), enquanto a pressão de montante $P_{\text{in}}$ é plenamente contida.
+- O diferencial de pressão registrado pela válvula reflete o $\Delta P$ de bloqueio real estático ($\Delta P = P_{\text{in}} - P_{\text{jusante}}$).
+
+Isso elimina o comportamento irreal onde uma válvula fechada sem vazão transmitia erroneamente toda a pressão de montante para tubulações e equipamentos subsequentes despressurizados.
 
 ---
 
@@ -304,6 +316,16 @@ Assumindo calor sensível ideal sem reação química associada:
 $$T_{\text{mix}} = \frac{\sum (Q_i \cdot \rho_i \cdot Cp_i \cdot T_i)}{\sum (Q_i \cdot \rho_i \cdot Cp_i)}$$
 
 Onde $Cp_i$ é o calor específico do fluido na entrada $i$ ($\text{J/(kg}\cdot\text{K)}$).
+
+#### Termodinâmica de Fluidos Puros e Regularização de Singularidades
+Para além das misturas, as propriedades térmicas e de transporte dos componentes puros são regidas por modelos analíticos sensíveis à temperatura:
+1. **Densidade da Água (Polinômio Racional):**
+   $$f_{\text{dens}}(T) = \max\left(0.1, \; 1 - \frac{(T - 3.98)^2 \cdot (T + 286.9)}{508929.2 \cdot (T + 68.12)}\right)$$
+   Para prevenir a singularidade matemática em $T = -68.12^\circ\text{C}$ (onde o denominador se anula gerando divisão por zero e divergência para $\pm\infty$), a temperatura de entrada é delimitada entre $[-30^\circ\text{C}, 350^\circ\text{C}]$. Ademais, impõe-se cota mínima de densidade líquida ($\rho \ge 100\text{ kg/m}^3$), impedindo que condições criogênicas extremas colapsem numericamente o líquido em valores de gás.
+2. **Viscosidade Dinâmica e Equação de Andrade:**
+   A viscosidade é modelada por correlação exponencial de Andrade em função da temperatura absoluta $T_K$, com salvaguarda estrita contra temperaturas abaixo do zero absoluto ($T_K \ge 1\text{ K}$).
+3. **Pressão de Vapor e Equação de Antoine:**
+   A pressão de saturação $P_{\text{vap}}(T)$ para água utiliza a equação de Antoine ajustada em relação ao estado de referência padrão ($T_{\text{ref}} = 25^\circ\text{C}$, $P_{\text{vap,ref}} = 0.0317\text{ bar}$). O simulador preserva $T_{\text{ref}}$ em fluidos puros quando a temperatura operacional varia, garantindo que em temperaturas elevadas (ex: $250^\circ\text{C}$ na saída do trocador) a pressão de vapor atinja $\approx 41.5\text{ bar}$, detectando imediatamente o risco de flashing e cavitação severa em bombas a jusante.
 
 ---
 
@@ -359,6 +381,17 @@ As temperaturas de saída são obtidas pelo balanço de energia sensível:
 - Se $T_{1,\text{in}} < T_{2,\text{in}}$ (Corrente 1 fria aquecendo, Corrente 2 quente resfriando):
   $$T_{1,\text{out}} = T_{1,\text{in}} + \frac{Q_{\text{térmico}}}{C_1}$$
   $$T_{2,\text{out}} = T_{2,\text{in}} - \frac{Q_{\text{térmico}}}{C_2} \quad (\text{ou } T_{\text{serviço}} \text{ no modo utilidade})$$
+
+#### Cumprimento Estrito da Segunda Lei da Termodinâmica
+Para assegurar estrita validade termodinâmica e prevenir extrapolações sob condições de $UA$ extremo ou flutuações transitórias de vazão:
+1. **Limites Universais de Temperatura:** Nenhuma temperatura de saída de qualquer corrente pode ultrapassar o intervalo delimitado pelas temperaturas de entrada:
+   $$T_{\text{out}, i} \in \left[\min(T_{1,\text{in}}, T_{2,\text{in}}), \; \max(T_{1,\text{in}}, T_{2,\text{in}})\right], \quad \forall i \in \{1, 2\}$$
+2. **Princípio de Não-Cruzamento em Escoamento Paralelo (Co-corrente):**
+   Em arranjos co-correntes, a física impõe que as correntes quente e fria convergem assintoticamente para uma temperatura de equilíbrio comum ($T_{\text{eq}}$), sem jamais se cruzarem. O motor impõe essa restrição termodinâmica:
+   $$T_{1,\text{in}} \ge T_{2,\text{in}} \implies T_{1,\text{out}} \ge T_{2,\text{out}} \ge T_{2,\text{in}}$$
+   Caso a integração numérica preliminar indicasse $T_{1,\text{out}} < T_{2,\text{out}}$, o algoritmo reajusta as temperaturas na fronteira de equilíbrio assintótico:
+   $$T_{\text{eq}} = \frac{C_1 T_{1,\text{in}} + C_2 T_{2,\text{in}}}{C_1 + C_2}, \qquad T_{1,\text{out}} = T_{2,\text{out}} = T_{\text{eq}}$$
+3. **Regularização Numérica de Capacidade:** Parâmetros de fluido recebem salvaguardas mínimas ($c_p \ge 1\text{ J/(kg}\cdot\text{K)}$ e $\rho \ge 1\text{ kg/m}^3$), eliminando singularidades de divisão por zero no cálculo do $NTU$ e das taxas $C_1, C_2$.
 
 #### Perdas de Carga Hidráulicas Independentes
 Cada corrente calcula sua própria perda de carga por atrito/acessório singular com base na área hidráulica interna e no coeficiente local $K$:
@@ -520,4 +553,5 @@ Para promover interoperabilidade com plantas reais e modelos criados no DWSIM, o
     *   `MaterialStream` sem nó a montante $\to$ `FonteLogica` (`source`) com temperatura, pressão e vazão máxima importadas.
     *   `MaterialStream` sem nó a jusante $\to$ `DrenoLogico` (`sink`) com a contrapressão de descarga de processo.
     *   `Pipe` (`PipeSegment`) $\to$ Parâmetros físicos do `ConnectionModel` (diâmetro interno $D$, comprimento físico $L$, rugosidade $\varepsilon$ e perda localizada $K$).
+*   **Mapeamento de Múltiplas Correntes:** Em trocadores de calor com duas correntes de processo, o importador rastreia determinísticamente o índice de conector (`connIndex`) de cada corrente material conectada. A admissão da primeira corrente vincula-se à porta `in1` e o produto a `out1`; a admissão da segunda corrente associa-se a `in2` e seu efluente a `out2`, viabilizando o carregamento de trocadores industriais multi-stream sem colapso de topologia.
 *   **Normalização e Layout:** As grandezas de pressão em Pascal são convertidas para bar ($1\text{ Pa} = 10^{-5}\text{ bar}$), as vazões em $\text{m}^3/\text{s}$ para $\text{L/s}$ e as coordenadas de tela são normalizadas com offset de margem para o canvas do GAAP, gerando um snapshot de workspace pronto para restauração e execução dinâmica imediata.

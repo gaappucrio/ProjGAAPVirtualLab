@@ -443,11 +443,17 @@ export class ValvulaLogica extends ComponenteFisico {
         const parametros = this.getParametrosHidraulicos();
         const context = this.getSimulationContext();
         const fluid = context.queries.getComponentFluid?.(this) || context.fluidoOperante;
-        this.deltaPAtualBar = parametros.opening > 0 && fluid
-            ? pressureLossFromFlow(this.fluxoReal, parametros.hydraulicAreaM2, fluid.densidade, parametros.localLossCoeff)
-            : 0;
 
-        this.pressaoSaidaAtualBar = Math.max(0, this.pressaoEntradaAtualBar - this.deltaPAtualBar);
+        if (parametros.opening <= 0) {
+            const pDownstream = Math.max(0, this.getPressaoSaidaBar());
+            this.pressaoSaidaAtualBar = pDownstream;
+            this.deltaPAtualBar = Math.max(0, this.pressaoEntradaAtualBar - pDownstream);
+        } else {
+            this.deltaPAtualBar = fluid
+                ? pressureLossFromFlow(this.fluxoReal, parametros.hydraulicAreaM2, fluid.densidade, parametros.localLossCoeff)
+                : 0;
+            this.pressaoSaidaAtualBar = Math.max(0, this.pressaoEntradaAtualBar - this.deltaPAtualBar);
+        }
     }
 
     getDiagnosticoDimensionamento() {

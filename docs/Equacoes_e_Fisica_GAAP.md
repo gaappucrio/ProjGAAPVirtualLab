@@ -105,6 +105,20 @@ Onde:
 
 Caso $NPSH_a < NPSH_r$, o sistema impõe uma penalidade logística que afunda a eficiência volumétrica e a carga da bomba, mitigando sua capacidade propulsora e replicando as bolhas de cavitação bloqueando o rotor (`fatorCavitacao`).
 
+### Potência Hidráulica e Potência de Eixo (BHP)
+A energia mecânica transmitida ao escoamento e a potência absorvida pelo eixo da bomba são quantificadas analiticamente por:
+
+$$P_{\text{hid}} = \frac{\Delta P_{\text{bar}} \cdot Q_{\text{L/s}}}{10} \quad [\text{kW}] \qquad \left(\equiv \frac{\Delta P_{\text{Pa}} \cdot Q_{\text{m}^3\text{/s}}}{1000}\right)$$
+
+$$P_{\text{eixo}} = \frac{P_{\text{hid}}}{\eta(Q)} \quad [\text{kW}]$$
+
+Onde:
+- $P_{\text{hid}}$: Potência hidráulica líquida entregue ao fluido ($kW$)
+- $\Delta P_{\text{bar}}$: Ganho de pressão efetivo gerado pela bomba ($bar$)
+- $Q_{\text{L/s}}$: Vazão volumétrica operacional da bomba ($L/s$)
+- $\eta(Q)$: Eficiência total instantânea da bomba no ponto de operação ($0 < \eta \le 1$)
+- $P_{\text{eixo}}$: Potência mecânica consumida no eixo acionador (BHP - *Brake Horsepower*, em $kW$)
+
 ## 3. Dinâmica das Válvulas de Controle
 
 A válvula de controle age como um estrangulamento de seção transversal variável.
@@ -136,6 +150,20 @@ Onde:
 - $f(x)$: Fração de capacidade efetiva da válvula ($0 \le f(x) \le 1$, tal que $K_{v,\text{efetivo}} = K_{v,\max} \cdot f(x)$)
 - $R$: Rangeabilidade inerente da válvula (razão entre vazão máxima e mínima controlável, padrão $50{,}0$)
 - $x$: Curso normalizado da haste/obturador da válvula ($0 \le x \le 1$, correspondente a $0\%$ a $100\%$ de abertura)
+
+### Isolamento de Pressão e Bloqueio em Válvula Fechada
+Quando a válvula atinge o fechamento estanque ($x \le 0$), a continuidade de escoamento é interrompida e o acoplamento de pressão entre montante e jusante é desacoplado:
+
+$$P_{\text{saída}} = P_{\text{jusante}}$$
+$$\Delta P_{\text{bloqueio}} = P_{\text{in}} - P_{\text{jusante}}$$
+
+Onde:
+- $P_{\text{saída}}$: Pressão física transmitida pela válvula para a conexão de saída ($bar$)
+- $P_{\text{jusante}}$: Nível de pressão presente na rede conectada a jusante da válvula ($bar$)
+- $P_{\text{in}}$: Pressão fornecida pela rede a montante ($bar$)
+- $\Delta P_{\text{bloqueio}}$: Queda de pressão estática retida pela sede fechada da válvula ($bar$)
+
+Essa modelagem impede que tubulações despressurizadas a jusante de válvulas de bloqueio recebam artificialmente a pressão de montante quando a válvula está fechada.
 
 ## 4. Tanques e Conservação de Massa
 
@@ -179,9 +207,23 @@ Onde:
 Diferente de modelos puramente isotérmicos, o motor integra dependências térmicas para propriedades físicas em tempo real.
 
 ### 5.1 Propriedades Termo-Físicas Dependentes da Temperatura
-As propriedades fundamentais do fluido (Densidade $\rho$, Viscosidade $\mu$ e Pressão de Vapor $P_{vap}$) são ativamente recalculadas em função da temperatura da mistura. No caso da água, o simulador aplica curvas polinomiais complexas que capturam até mesmo a anomalia térmica da água próxima aos $4^\circ\text{C}$:
+As propriedades fundamentais do fluido (Densidade $\rho$, Viscosidade $\mu$ e Pressão de Vapor $P_{vap}$) são ativamente recalculadas em função da temperatura da mistura. No caso da água, o simulador aplica curvas polinomiais complexas que capturam a anomalia térmica da água próxima aos $4^\circ\text{C}$:
 
-$$\rho(T) = \rho_{ref} \cdot f_{anomalia}(T)$$
+$$\rho(T) = \rho_{ref} \cdot f_{\text{dens}}(T)$$
+
+Onde a função racional de densidade é dada por:
+
+$$f_{\text{dens}}(T) = \max\left(0.1, \; 1 - \frac{(T - 3.98)^2 \cdot (T + 286.9)}{508929.2 \cdot (T + 68.12)}\right)$$
+
+Para evitar a singularidade numérica do denominador em $T = -68.12^\circ\text{C}$, a temperatura é limitada no intervalo seguro $[-30^\circ\text{C}, 350^\circ\text{C}]$, e impõe-se a cota física inferior $\rho \ge 100\text{ kg/m}^3$ para prevenir o colapso numérico da fase líquida.
+
+A viscosidade dinâmica utiliza a correlação de Andrade, com salvaguarda estrita contra temperaturas absolutas inválidas ($T_K \ge 1\text{ K}$).
+
+A pressão de vapor da água é regida pela formulação de Antoine ancorada ao ponto padrão ($T_{\text{ref}} = 25^\circ\text{C}, P_{\text{vap,ref}} = 0.0317\text{ bar}$):
+
+$$\log_{10}\left(\frac{P_{\text{vap}}(T)}{P_{\text{vap,ref}}}\right) = \frac{1730.63}{T_{\text{ref}} + 233.426} - \frac{1730.63}{T + 233.426}$$
+
+Essa formulação garante que, sob aquecimento intenso (ex: $250^\circ\text{C}$), a pressão de vapor aumente realisticamente para $\approx 41.5\text{ bar}$, detectando prontamente cavitação em bombas na jusante.
 
 ### 5.2 Trocadores de Calor (Método $\epsilon$-NTU)
 Os trocadores de calor do laboratório integram o **Método Efetividade-NTU ($\epsilon$-NTU)** para calcular a taxa real de transferência térmica, suportando operação com utilidade térmica ($T_{\text{serviço}}$ constante) ou com duas correntes de processo hidraulicamente independentes conectadas em portas dedicadas (Corrente 1: `in1`/`out1`; Corrente 2: `in2`/`out2`).
@@ -202,6 +244,8 @@ Os trocadores de calor do laboratório integram o **Método Efetividade-NTU ($\e
 2. **Número de Unidades de Transferência (NTU):**
    $$NTU = \frac{UA}{C_{\min}}$$
 
+   *(Com proteções numéricas $c_p \ge 1\text{ J/(kg}\cdot\text{K)}$ e $\rho \ge 1\text{ kg/m}^3$ para mitigar divisão por zero).*
+
 3. **Efetividade Térmica ($\epsilon$) por Modo de Escoamento:**
    - **Contracorrente** (detectado pela topologia quando a Corrente 2 entra por `out2` e sai por `in2`, via `isContracorrente(engine)`):
      $$\epsilon_{\text{contra}} = \begin{cases} \dfrac{1 - e^{-NTU (1 - C_r)}}{1 - C_r e^{-NTU (1 - C_r)}}, & C_r < 1 \\[6pt] \dfrac{NTU}{1 + NTU}, & C_r = 1 \end{cases}$$
@@ -212,13 +256,18 @@ Os trocadores de calor do laboratório integram o **Método Efetividade-NTU ($\e
 
    A efetividade é limitada à efetividade máxima física ($\epsilon \le \epsilon_{\max}$, padrão $0{,}95$).
 
-4. **Taxa de Transferência Térmica e Temperaturas de Saída:**
+4. **Taxa de Transferência Térmica e Segunda Lei da Termodinâmica:**
    A taxa real de calor transferido é:
    $$\dot{Q} = \epsilon \cdot C_{\min} \cdot |T_{1,\text{in}} - T_{2,\text{in}}|$$
 
    E as temperaturas de saída acopladas resultam do balanço entálpico:
    $$T_{1,\text{out}} = T_{1,\text{in}} \pm \frac{\dot{Q}}{C_1}, \qquad T_{2,\text{out}} = T_{2,\text{in}} \mp \frac{\dot{Q}}{C_2}$$
    *(Onde o fluido de maior temperatura de entrada cede calor e o de menor temperatura recebe calor; no modo utilidade, a corrente ausente é substituída por $T_{\text{serviço}}$).*
+
+   **Restrições Rígidas da 2ª Lei da Termodinâmica:**
+   - **Envoltória de Temperatura:** Nenhuma temperatura de descarga pode violar os extremos de admissão:
+     $$T_{\text{out}, i} \in \left[\min(T_{1,\text{in}}, T_{2,\text{in}}), \; \max(T_{1,\text{in}}, T_{2,\text{in}})\right], \quad \forall i \in \{1, 2\}$$
+   - **Não-Cruzamento em Co-corrente:** Em escoamento paralelo, as correntes convergem para uma temperatura de equilíbrio comum $T_{\text{eq}} = (C_1 T_{1,\text{in}} + C_2 T_{2,\text{in}})/(C_1 + C_2)$, sendo proibido o cruzamento térmico ($T_{1,\text{out}} \ge T_{2,\text{out}}$ se $T_{1,\text{in}} \ge T_{2,\text{in}}$).
 
 5. **Perda de Carga Hidráulica Individual:**
    Cada corrente calcula sua própria perda por acessório singular:

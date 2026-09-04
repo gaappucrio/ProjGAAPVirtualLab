@@ -614,7 +614,8 @@ function defaultEndpointFor(componentType, portType) {
 
     const defaults = map[componentType]?.[portType] || { offsetX: 0, offsetY: 0, floorOffsetY: 0, dynamicHeight: null };
     return {
-        portType,
+        portId: portType,
+        portType: (portType === 'in1' || portType === 'in2') ? 'in' : ((portType === 'out1' || portType === 'out2') ? 'out' : portType),
         offsetX: defaults.offsetX,
         offsetY: defaults.offsetY,
         floorOffsetY: defaults.floorOffsetY,
@@ -752,35 +753,46 @@ export function translateDwsimToWorkspace(parsed) {
 
     const findReachableEquipment = (startName) => {
         const results = [];
-        const queue = [{ current: startName, pipes: [] }];
-        const localVisited = new Set([startName]);
+        const startGObj = graphicObjects.get(startName);
+        if (!startGObj) return results;
 
-        while (queue.length > 0) {
-            const { current, pipes } = queue.shift();
-            const gObj = graphicObjects.get(current);
-            if (!gObj) continue;
+        startGObj.outputs.forEach((initialOutput) => {
+            const sourceConnIndex = initialOutput.connIndex || 0;
+            const queue = [{ current: initialOutput.targetName, previous: startName, pipes: [] }];
+            const localVisited = new Set([startName, initialOutput.targetName]);
 
-            for (const output of gObj.outputs) {
-                const next = output.targetName;
-                if (localVisited.has(next)) continue;
-                localVisited.add(next);
-
-                const nextGObj = graphicObjects.get(next);
+            while (queue.length > 0) {
+                const { current, previous, pipes } = queue.shift();
+                const nextGObj = graphicObjects.get(current);
                 if (!nextGObj) continue;
 
-                if (equipmentNames.has(next) && next !== startName) {
-                    results.push({ target: next, pipes: [...pipes] });
+                if (equipmentNames.has(current) && current !== startName) {
+                    const targetConn = nextGObj.inputs.find((inp) => inp.sourceName === previous);
+                    const targetConnIndex = targetConn ? (targetConn.connIndex || 0) : 0;
+                    results.push({
+                        target: current,
+                        pipes: [...pipes],
+                        sourceConnIndex,
+                        targetConnIndex
+                    });
                     continue; // não atravessa o equipamento
                 }
 
                 const newPipes = [...pipes];
                 if (nextGObj.objectType === 'Pipe') {
-                    const simObj = simObjects.get(next);
+                    const simObj = simObjects.get(current);
                     if (simObj) newPipes.push(simObj);
                 }
-                queue.push({ current: next, pipes: newPipes });
+
+                for (const output of nextGObj.outputs) {
+                    const next = output.targetName;
+                    if (localVisited.has(next)) continue;
+                    localVisited.add(next);
+                    queue.push({ current: next, previous: current, pipes: newPipes });
+                }
             }
-        }
+        });
+
         return results;
     };
 
@@ -790,12 +802,12 @@ export function translateDwsimToWorkspace(parsed) {
         const sourceType = componentTypeByDwsimName.get(startName);
         if (!sourceId) return;
 
-        reachable.forEach(({ target, pipes }) => {
+        reachable.forEach(({ target, pipes, sourceConnIndex = 0, targetConnIndex = 0 }) => {
             const targetId = componentByDwsimName.get(target);
             const targetType = componentTypeByDwsimName.get(target);
             if (!targetId) return;
 
-            const pairKey = `${sourceId}->${targetId}`;
+            const pairKey = `${sourceId}:${sourceConnIndex}->${targetId}:${targetConnIndex}`;
             if (visitedPairs.has(pairKey)) return;
             visitedPairs.add(pairKey);
 
@@ -803,11 +815,18 @@ export function translateDwsimToWorkspace(parsed) {
                 ? pipeParameters(pipes[0].element)
                 : defaultPipeParams();
 
+            const sourcePort = sourceType === 'heat_exchanger'
+                ? (sourceConnIndex === 1 ? 'out2' : 'out1')
+                : 'out';
+            const targetPort = targetType === 'heat_exchanger'
+                ? (targetConnIndex === 1 ? 'in2' : 'in1')
+                : 'in';
+
             connections.push({
                 sourceId,
                 targetId,
-                sourceEndpoint: defaultSourceEndpoint(sourceType),
-                targetEndpoint: defaultTargetEndpoint(targetType),
+                sourceEndpoint: defaultEndpointFor(sourceType, sourcePort),
+                targetEndpoint: defaultEndpointFor(targetType, targetPort),
                 diameterM: pipeParams.diameterM,
                 roughnessMm: pipeParams.roughnessMm,
                 extraLengthM: pipeParams.extraLengthM,

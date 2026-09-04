@@ -656,8 +656,9 @@ A seguir estão as funções/chaves de alto valor do sistema, com seus objetivos
 - Saída: nenhuma função retornada explicitamente.
 - Pós-condições:
   - O layout é recalculado em resposta a mudanças de painel ou janela.
+  - O gráfico de monitoramento é desacoplado para a `.sandbox-container` em modo expandido e restaurado à barra de propriedades em modo compacto, persistindo visível mesmo com as barras colapsadas.
   - O callback de gráfico é invocado quando necessário.
-- Interface com o usuário: mantém o layout fluido e evita sobreposição de painéis.
+- Interface com o usuário: mantém o layout fluido, desacopla o monitoramento expandido dos painéis laterais e evita sobreposição de painéis.
 
 ### 5.28 `restoreFlowchartDocument(engine, payload, { undoManager } = {})`
 

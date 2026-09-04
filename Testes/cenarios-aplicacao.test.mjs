@@ -522,6 +522,188 @@ test('solver nodal resolve circuitos fechados simultaneos nas correntes 1 e 2 do
     assert.ok(tc.vazaoMassa2KgS > 0);
 });
 
+test('gráfico detalhado desacopla da barra de propriedades ao expandir e permanece visível ao colapsar', async () => {
+    const prevDoc = global.document;
+    const prevWin = global.window;
+    const prevRaf = global.requestAnimationFrame;
+
+    try {
+        const createMockEl = (tag, id = '') => {
+            const el = {
+                tagName: tag.toUpperCase(),
+                id,
+                classList: {
+                    _s: new Set(),
+                    add(...c) { c.forEach(x => this._s.add(x)); },
+                    remove(...c) { c.forEach(x => this._s.delete(x)); },
+                    contains(x) { return this._s.has(x); },
+                    toggle(x) { if (this._s.has(x)) { this._s.delete(x); return false; } this._s.add(x); return true; }
+                },
+                style: {
+                    _p: new Map(),
+                    setProperty(k, v) { this._p.set(k, v); },
+                    getPropertyValue(k) { return this._p.get(k) || ''; },
+                    removeProperty(k) { this._p.delete(k); }
+                },
+                children: [],
+                parentElement: null,
+                parentNode: null,
+                listeners: {},
+                attributes: {},
+                addEventListener(ev, fn) { (this.listeners[ev] = this.listeners[ev] || []).push(fn); },
+                removeEventListener(ev, fn) { if (this.listeners[ev]) this.listeners[ev] = this.listeners[ev].filter(f => f !== fn); },
+                dispatchEvent(ev, data = {}) { (this.listeners[ev] || []).forEach(fn => fn({ type: ev, target: this, preventDefault() {}, ...data })); },
+                appendChild(c) {
+                    if (c.parentNode) c.parentNode.removeChild(c);
+                    this.children.push(c);
+                    c.parentElement = this;
+                    c.parentNode = this;
+                    return c;
+                },
+                insertBefore(n, ref) {
+                    if (n.parentNode) n.parentNode.removeChild(n);
+                    const idx = this.children.indexOf(ref);
+                    if (idx === -1) return this.appendChild(n);
+                    this.children.splice(idx, 0, n);
+                    n.parentElement = this;
+                    n.parentNode = this;
+                    return n;
+                },
+                removeChild(c) {
+                    const idx = this.children.indexOf(c);
+                    if (idx !== -1) { this.children.splice(idx, 1); c.parentElement = null; c.parentNode = null; }
+                    return c;
+                },
+                remove() { if (this.parentNode) this.parentNode.removeChild(this); },
+                prepend(c) {
+                    if (c.parentNode) c.parentNode.removeChild(c);
+                    this.children.unshift(c);
+                    c.parentElement = this;
+                    c.parentNode = this;
+                    return c;
+                },
+                setAttribute(k, v) { this.attributes[k] = v; },
+                getAttribute(k) { return this.attributes[k]; },
+                getBoundingClientRect() {
+                    return { width: this.id === 'palette' ? 280 : this.id === 'properties' ? 340 : 1000, height: 400, left: 0, top: 0, right: 1000, bottom: 400 };
+                },
+                querySelector(sel) {
+                    for (const ch of this.children) {
+                        if (sel.startsWith('#') && ch.id === sel.slice(1)) return ch;
+                        if (sel.startsWith('.') && ch.classList.contains(sel.slice(1))) return ch;
+                        const f = ch.querySelector?.(sel);
+                        if (f) return f;
+                    }
+                    return null;
+                }
+            };
+            return el;
+        };
+
+        const elements = {};
+        const reg = (id, el) => { elements[id] = el; return el; };
+
+        const sandbox = createMockEl('div');
+        sandbox.classList.add('sandbox-container');
+
+        const palette = reg('palette', createMockEl('div', 'palette'));
+        palette.classList.add('side-panel');
+        const toggleLeft = reg('toggle-left', createMockEl('div', 'toggle-left'));
+
+        const workspace = reg('workspace', createMockEl('div', 'workspace'));
+        const topToolbar = createMockEl('div');
+        topToolbar.classList.add('top-toolbar');
+        workspace.appendChild(topToolbar);
+
+        const toggleRight = reg('toggle-right', createMockEl('div', 'toggle-right'));
+        const properties = reg('properties', createMockEl('div', 'properties'));
+        properties.classList.add('side-panel');
+
+        const propertiesContent = createMockEl('div');
+        propertiesContent.classList.add('side-panel-content');
+        properties.appendChild(propertiesContent);
+
+        const btnMax = reg('btn-max-chart', createMockEl('button', 'btn-max-chart'));
+        propertiesContent.appendChild(btnMax);
+
+        const chartWrapper = reg('chart-wrapper', createMockEl('div', 'chart-wrapper'));
+        chartWrapper.classList.add('chart-container');
+        propertiesContent.appendChild(chartWrapper);
+
+        const chartMaxHeader = reg('chart-max-header', createMockEl('div', 'chart-max-header'));
+        chartWrapper.appendChild(chartMaxHeader);
+
+        const btnClose = reg('btn-close-max-chart', createMockEl('button', 'btn-close-max-chart'));
+        chartMaxHeader.appendChild(btnClose);
+
+        sandbox.appendChild(palette);
+        sandbox.appendChild(toggleLeft);
+        sandbox.appendChild(workspace);
+        sandbox.appendChild(toggleRight);
+        sandbox.appendChild(properties);
+
+        global.document = {
+            getElementById(id) { return elements[id] || null; },
+            querySelector(sel) {
+                if (sel === '.sandbox-container') return sandbox;
+                if (sel === '.top-toolbar') return topToolbar;
+                if (sel === '#properties .side-panel-content') return propertiesContent;
+                return null;
+            },
+            createElement(tag) { return createMockEl(tag); },
+            documentElement: { style: { setProperty() {} } }
+        };
+
+        global.window = {
+            innerWidth: 1200,
+            innerHeight: 800,
+            addEventListener() {},
+            clearTimeout(id) { clearTimeout(id); },
+            setTimeout(fn, ms) { return setTimeout(fn, ms); }
+        };
+
+        global.requestAnimationFrame = (fn) => setTimeout(fn, 0);
+
+        const { setupLayoutController } = await import('../js/presentation/controllers/LayoutController.js');
+
+        let layoutUpdates = 0;
+        setupLayoutController({ onChartLayoutChange: () => { layoutUpdates++; } });
+
+        // Compacto: filho de .side-panel-content
+        assert.equal(chartWrapper.parentElement, propertiesContent);
+        assert.ok(!chartWrapper.classList.contains('maximized'));
+
+        // Expandir: desacopla da barra e anexa ao sandboxContainer
+        btnMax.dispatchEvent('click');
+        assert.ok(chartWrapper.classList.contains('maximized'));
+        assert.equal(chartWrapper.parentElement, sandbox);
+        assert.ok(propertiesContent.querySelector('#chart-wrapper-placeholder'));
+
+        // Colapsar a barra da direita: gráfico permanece no sandbox e expande métrica para 16px
+        toggleRight.dispatchEvent('click');
+        assert.ok(properties.classList.contains('collapsed'));
+        assert.equal(chartWrapper.parentElement, sandbox);
+        assert.equal(sandbox.style.getPropertyValue('--chart-max-right'), '16px');
+
+        // Colapsar a barra da esquerda: gráfico expande métrica esquerda para 16px
+        toggleLeft.dispatchEvent('click');
+        assert.ok(palette.classList.contains('collapsed'));
+        assert.equal(sandbox.style.getPropertyValue('--chart-max-left'), '16px');
+
+        // Fechar gráfico detalhado: retorna ao lugar original no painel de propriedades
+        btnClose.dispatchEvent('click');
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        assert.ok(!chartWrapper.classList.contains('maximized'));
+        assert.equal(chartWrapper.parentElement, propertiesContent);
+        assert.equal(propertiesContent.querySelector('#chart-wrapper-placeholder'), null);
+        assert.ok(layoutUpdates > 0);
+    } finally {
+        global.document = prevDoc;
+        global.window = prevWin;
+        global.requestAnimationFrame = prevRaf;
+    }
+});
+
 
 
 

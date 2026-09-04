@@ -1368,6 +1368,7 @@
       bottom: 0px;
       left: var(--chart-max-left, 290px);
       right: var(--chart-max-right, 350px);
+      margin: 0;
       width: auto;
       height: var(--chart-max-height, 44vh);
       max-height: calc(100vh - 24px);

@@ -718,10 +718,10 @@ export class HydraulicBranchModel {
             );
             const suctionVelocityMps = areaM2 > 0 ? lpsToM3s(suctionFlowReference) / areaM2 : 0;
             const suctionVelocityHeadM = (suctionVelocityMps * suctionVelocityMps) / (2 * GRAVITY);
-            const absSuctionBar = fluid.pressaoAtmosfericaBar + inletPressure;
+            const absSuctionBar = (fluid.pressaoAtmosfericaBar || 1.01325) + inletPressure;
             const npshAvailableM = Math.max(
                 0,
-                (((absSuctionBar - fluid.pressaoVaporBar) * BAR_TO_PA) / (fluid.densidade * GRAVITY))
+                (((absSuctionBar - (fluid.pressaoVaporBar || 0)) * BAR_TO_PA) / ((fluid.densidade || 997) * GRAVITY))
                 + suctionVelocityHeadM
             );
             const npshRequiredM = comp.getCurvaNpshRequeridoM(suctionFlowReference, drive);

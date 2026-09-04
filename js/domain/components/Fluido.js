@@ -53,9 +53,10 @@ function getComponentRefState(name, fluido) {
 }
 
 function getWaterDensityFactor(T) {
-    const term1 = Math.pow(T - 3.98, 2) * (T + 286.9);
-    const term2 = 508929.2 * (T + 68.12);
-    return 1 - (term1 / term2);
+    const safeT = Math.max(-30, Math.min(350, Number(T) || 0));
+    const term1 = Math.pow(safeT - 3.98, 2) * (safeT + 286.9);
+    const term2 = 508929.2 * (safeT + 68.12);
+    return Math.max(0.1, 1 - (term1 / term2));
 }
 
 function calculateDensityAtTemp(fluido, T) {
@@ -82,7 +83,7 @@ function calculateDensityAtTemp(fluido, T) {
         } else {
             compDensity = refDensity * (1 - 0.0005 * (T - refT));
         }
-        densitySum += fraction * Math.max(1.0, compDensity);
+        densitySum += fraction * Math.max(100.0, compDensity);
     });
 
     return totalFraction > 0 ? (densitySum / totalFraction) : DEFAULT_FLUID_DENSITY;
@@ -93,14 +94,14 @@ function calculateViscosityAtTemp(fluido, T) {
     let logViscSum = 0;
     let totalFraction = 0;
 
-    const Tk = T + 273.15;
+    const Tk = Math.max(1, (Number(T) || 0) + 273.15);
 
     Object.entries(composition).forEach(([name, fraction]) => {
         totalFraction += fraction;
         const ref = getComponentRefState(name, fluido);
         const refVisc = ref.viscosity;
         const refT = ref.temp;
-        const refTk = refT + 273.15;
+        const refTk = Math.max(1, (Number(refT) || 0) + 273.15);
         const normName = name.toLowerCase();
 
         let compVisc = refVisc;
@@ -126,26 +127,27 @@ function calculateVaporPressureAtTemp(fluido, T) {
     let vaporPressureSum = 0;
     let totalFraction = 0;
 
-    const Tk = T + 273.15;
+    const safeT = Math.max(-50, Number(T) || 0);
+    const Tk = Math.max(1, safeT + 273.15);
 
     Object.entries(composition).forEach(([name, fraction]) => {
         totalFraction += fraction;
         const ref = getComponentRefState(name, fluido);
         const refVap = ref.vaporPressure;
-        const refT = ref.temp;
-        const refTk = refT + 273.15;
+        const refT = Math.max(-50, Number(ref.temp) || 0);
+        const refTk = Math.max(1, refT + 273.15);
         const normName = name.toLowerCase();
 
         let compVap = refVap;
         if (normName.includes('água') || normName.includes('agua')) {
             const expRef = 1730.63 / Math.max(10, refT + 233.426);
-            const expT = 1730.63 / Math.max(10, T + 233.426);
+            const expT = 1730.63 / Math.max(10, safeT + 233.426);
             compVap = refVap * Math.pow(10, expRef - expT);
         } else if (normName.includes('óleo') || normName.includes('oleo') || normName.includes('oil')) {
             compVap = refVap * Math.pow(10, 2033.7 * ((1 / refTk) - (1 / Tk)));
         } else if (normName.includes('glicol') || normName.includes('glycol')) {
             const expRef = 1730.63 / Math.max(10, refT + 233.426);
-            const expT = 1730.63 / Math.max(10, T + 233.426);
+            const expT = 1730.63 / Math.max(10, safeT + 233.426);
             compVap = refVap * Math.pow(10, expRef - expT);
         } else {
             compVap = refVap * Math.exp(-4000 * ((1 / Tk) - (1 / refTk)));
@@ -215,7 +217,7 @@ export function updateFluidoProperties(fluido, dados = {}) {
     fluido.nome = dados.nome ?? fluido.nome ?? DEFAULT_FLUID_NAME;
 
     if (fluido.refTemperatura === undefined) {
-        fluido.refTemperatura = fluido.temperatura !== undefined ? fluido.temperatura : DEFAULT_FLUID_TEMPERATURE;
+        fluido.refTemperatura = dados.refTemperatura !== undefined ? dados.refTemperatura : DEFAULT_FLUID_TEMPERATURE;
         fluido.refDensidade = fluido.densidade !== undefined ? fluido.densidade : DEFAULT_FLUID_DENSITY;
         fluido.refViscosidadeDinamicaPaS = fluido.viscosidadeDinamicaPaS !== undefined ? fluido.viscosidadeDinamicaPaS : DEFAULT_FLUID_VISCOSITY_PA_S;
         fluido.refPressaoVaporBar = fluido.pressaoVaporBar !== undefined ? fluido.pressaoVaporBar : DEFAULT_FLUID_VAPOR_PRESSURE_BAR;
@@ -231,7 +233,7 @@ export function updateFluidoProperties(fluido, dados = {}) {
     const hasExplicitVisc = dados.viscosidadeDinamicaPaS !== undefined;
     const hasExplicitVapor = dados.pressaoVaporBar !== undefined;
 
-    if (hasExplicitDensity || hasExplicitTemp || hasExplicitVisc || hasExplicitVapor) {
+    if (hasExplicitDensity || hasExplicitVisc || hasExplicitVapor) {
         if (hasExplicitDensity && dados.refDensidade === undefined) {
             fluido.refDensidade = positiveNumber(dados.densidade, DEFAULT_FLUID_DENSITY, 1);
         }
@@ -241,8 +243,8 @@ export function updateFluidoProperties(fluido, dados = {}) {
         if (hasExplicitVapor && dados.refPressaoVaporBar === undefined) {
             fluido.refPressaoVaporBar = positiveNumber(dados.pressaoVaporBar, DEFAULT_FLUID_VAPOR_PRESSURE_BAR, 0.0001);
         }
-        if (dados.refTemperatura === undefined) {
-            fluido.refTemperatura = hasExplicitTemp ? Number(dados.temperatura) : fluido.temperatura;
+        if (dados.refTemperatura === undefined && hasExplicitTemp) {
+            fluido.refTemperatura = Number(dados.temperatura);
         }
     }
 

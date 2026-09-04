@@ -193,8 +193,8 @@ export class TrocadorCalorLogico extends ComponenteFisico {
                 return { t1Out: t1, t2Out: t2, duty: 0, ef: 0, dt1: 0, dt2: 0, modo };
             }
             if (vazao1 <= EPSILON_FLOW && vazao2 > EPSILON_FLOW) {
-                const cp2 = numeroSeguro(fluido2?.calorEspecificoJkgK, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK);
-                const den2 = numeroSeguro(fluido2?.densidade, 997);
+                const cp2 = Math.max(1, numeroSeguro(fluido2?.calorEspecificoJkgK, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK));
+                const den2 = Math.max(1, numeroSeguro(fluido2?.densidade, 997));
                 const m2 = lpsToM3s(vazao2) * den2;
                 const c2 = m2 * cp2;
                 if (c2 <= 0) {
@@ -204,13 +204,16 @@ export class TrocadorCalorLogico extends ComponenteFisico {
                 const efetividade = clamp(1 - Math.exp(-ntu), 0, this.efetividadeMaxima);
                 const maxHeat = c2 * Math.abs(t2 - this.temperaturaServicoC);
                 const duty = maxHeat * efetividade;
-                const t2Out = t2 + (this.temperaturaServicoC > t2 ? duty / c2 : -duty / c2);
+                let t2Out = t2 + (this.temperaturaServicoC > t2 ? duty / c2 : -duty / c2);
+                const minT = Math.min(t2, this.temperaturaServicoC);
+                const maxT = Math.max(t2, this.temperaturaServicoC);
+                t2Out = clamp(t2Out, minT, maxT);
                 return { t1Out: t1, t2Out, duty, ef: efetividade, dt1: 0, dt2: t2Out - t2, modo };
             }
         }
 
-        const cp1 = numeroSeguro(fluido1?.calorEspecificoJkgK, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK);
-        const den1 = numeroSeguro(fluido1?.densidade, 997);
+        const cp1 = Math.max(1, numeroSeguro(fluido1?.calorEspecificoJkgK, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK));
+        const den1 = Math.max(1, numeroSeguro(fluido1?.densidade, 997));
         const m1 = lpsToM3s(vazao1) * den1;
         const c1 = m1 * cp1;
 
@@ -220,8 +223,8 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         let cr = 0;
 
         if (fluido2 && vazao2 > EPSILON_FLOW) {
-            const cp2 = numeroSeguro(fluido2.calorEspecificoJkgK, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK);
-            const den2 = numeroSeguro(fluido2.densidade, 997);
+            const cp2 = Math.max(1, numeroSeguro(fluido2.calorEspecificoJkgK, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK));
+            const den2 = Math.max(1, numeroSeguro(fluido2.densidade, 997));
             const m2 = lpsToM3s(vazao2) * den2;
             c2 = m2 * cp2;
             cmin = Math.min(c1, c2);
@@ -229,7 +232,7 @@ export class TrocadorCalorLogico extends ComponenteFisico {
             cr = cmin / cmax;
         }
 
-        const ntu = ua / cmin;
+        const ntu = ua / Math.max(Number.EPSILON, cmin);
         let efetividade = 0;
 
         if (cr === 0) {
@@ -253,11 +256,31 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         const maxHeat = cmin * Math.abs(t1 - t2);
         const duty = maxHeat * efetividade;
 
-        const t1Out = t1 + (t1 > t2 ? -duty / c1 : duty / c1);
+        let t1Out = t1 + (t1 > t2 ? -duty / c1 : duty / c1);
         let t2Out = t2;
         
         if (c2 > 0) {
             t2Out = t2 + (t1 > t2 ? duty / c2 : -duty / c2);
+        }
+
+        // Limites físicos da Segunda Lei da Termodinâmica:
+        // Nenhuma corrente pode ultrapassar a faixa térmica imposta pelas entradas.
+        const minT = Math.min(t1, t2);
+        const maxT = Math.max(t1, t2);
+        t1Out = clamp(t1Out, minT, maxT);
+        t2Out = clamp(t2Out, minT, maxT);
+
+        // Em escoamento paralelo (cocorrente), as temperaturas convergem mas nunca se cruzam
+        if ((modo === 'paralelo' || modo === 'cocorrente') && c2 > 0) {
+            if (t1 >= t2 && t1Out < t2Out) {
+                const tEq = (c1 * t1 + c2 * t2) / Math.max(Number.EPSILON, c1 + c2);
+                t1Out = tEq;
+                t2Out = tEq;
+            } else if (t1 < t2 && t1Out > t2Out) {
+                const tEq = (c1 * t1 + c2 * t2) / Math.max(Number.EPSILON, c1 + c2);
+                t1Out = tEq;
+                t2Out = tEq;
+            }
         }
 
         return { t1Out, t2Out, duty, ef: efetividade, dt1: t1Out - t1, dt2: t2Out - t2, modo };
