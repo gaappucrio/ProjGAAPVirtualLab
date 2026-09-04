@@ -313,14 +313,20 @@ Modelado a partir do método de **Efetividade - NTU (Número de Unidades de Tran
 2. **Modo Duas Correntes Acopladas (2 correntes conectadas):** Duas correntes de processo hidraulicamente independentes (Corrente 1 nas portas `in1`/`out1` e Corrente 2 nas portas `in2`/`out2`), com troca térmica acoplada governada pelas vazões e temperaturas de ambas as correntes.
 
 #### Taxas de Capacidade Térmica dos Escoamentos
-Para cada corrente $i \in \{1, 2\}$ com vazão volumétrica $Q_i$ (em $\text{m}^3/\text{s}$), densidade $\rho_i$ e calor específico $Cp_i$:
+Para cada corrente $i \in \{1, 2\}$ com vazão volumétrica $Q_i$ (em $\text{m}^3/\text{s}$), densidade $\rho_i$ e calor específico $Cp_i$, as vazões mássicas são rastreadas independentemente no estado físico (`vazaoMassaKgS` para a Corrente 1 e `vazaoMassa2KgS` para a Corrente 2):
 
-$$C_i = \dot{m}_i \cdot Cp_i = (Q_i \cdot \rho_i) \cdot Cp_i \quad \text{[W/K]}$$
+$$\dot{m}_1 = Q_1 \cdot \rho_1, \qquad \dot{m}_2 = Q_2 \cdot \rho_2 \quad \text{[kg/s]}$$
+$$C_1 = \dot{m}_1 \cdot Cp_1, \qquad C_2 = \dot{m}_2 \cdot Cp_2 \quad \text{[W/K]}$$
 
-Quando operando com duas correntes:
+Quando operando com duas correntes de processo ativas ($Q_1 > 0$ e $Q_2 > 0$):
 $$C_{\min} = \min(C_1, C_2), \quad C_{\max} = \max(C_1, C_2), \quad C_r = \frac{C_{\min}}{C_{\max}}$$
 
-No modo utilidade (ou se $C_2 = 0$), considera-se $C_{\min} = C_1$ e $C_r = 0$.
+No modo utilidade térmica (quando apenas uma das correntes está conectada à rede):
+- Se apenas a Corrente 1 está conectada ($Q_1 > 0, Q_2 = 0$): $C_{\min} = C_1$ e $C_r = 0$, trocando calor com $T_{\text{serviço}}$.
+- Se apenas a Corrente 2 está conectada ($Q_1 = 0, Q_2 > 0$): $C_{\min} = C_2$ e $C_r = 0$, trocando calor com $T_{\text{serviço}}$.
+
+> [!IMPORTANT]
+> Quando **ambas** as correntes estão fisicamente conectadas no canvas, se uma das correntes for interrompida ($Q = 0$ por bloqueio de válvula ou desligamento de bomba), a taxa de transferência de calor é estritamente anulada ($Q_{\text{térmico}} = 0$). Isso impede que um fluido estagnado troque calor indefinidamente ou atue falsamente como utilidade infinita, refletindo com fidelidade a física de escoamento de um trocador de processo real.
 
 #### Número de Unidades de Transferência (NTU)
 $$NTU = \frac{UA}{C_{\min}}$$
@@ -328,7 +334,7 @@ $$NTU = \frac{UA}{C_{\min}}$$
 Onde $UA$ é o produto entre o coeficiente global de transferência de calor e a área de troca ($\text{W/K}$).
 
 #### Efetividade Térmica ($\varepsilon$) por Modo de Escoamento
-O modo de escoamento é inferido dinamicamente pela topologia de conexão das portas da Corrente 2 (`getModoEscoamento`):
+O modo de escoamento é inferido dinamicamente pela topologia de conexão das portas da Corrente 2 por meio de `getModoEscoamento(engine)` e do predicado de compatibilidade `isContracorrente(engine)`:
 - **Contracorrente (Padrão / `in1 \to out1` e `out2 \to in2`):**
   $$\varepsilon = \begin{cases} \dfrac{1 - e^{-NTU (1 - C_r)}}{1 - C_r e^{-NTU (1 - C_r)}}, & C_r < 1 \\[8pt] \dfrac{NTU}{1 + NTU}, & C_r = 1 \end{cases}$$
 
@@ -366,6 +372,15 @@ O trocador de calor opera com segregação hidráulica independente entre a Corr
   $$P_{2,\text{out}} = \max(0, P_{2,\text{in}} - \Delta P_2)$$
 
 Os métodos `getPressaoEntradaPortaBar(portId)` e `getPressaoSaidaPortaBar(portId)` em `BaseComponente.js` calculam a pressão média ponderada de escoamento filtrada exclusivamente pela porta e corrente selecionada. Em `HydraulicBranchModel.js`, o método `getPhysicalOutletPressureBar(source, portId)` e a reconciliação de pressões das conexões associam a descarga do trocador diretamente à respectiva corrente física, prevenindo que uma corrente de menor pressão contamine a pressão motriz de uma corrente de maior pressão e evitando reduções artificiais de vazão.
+
+#### Representação Nodal em Grafos Hidráulicos
+No solucionador nodal simultâneo (`NodalHydraulicSolver.js`), o trocador de calor é modelado como **4 nós lógicos distintos** interconectados por **2 ramos internos independentes**:
+- **Corrente 1:** nó de entrada `${id}:in1` conectado ao nó de saída `${id}:out1` pelo ramo `internal:${id}:1`.
+- **Corrente 2:** nós `${id}:in2` e `${id}:out2` conectados pelo ramo `internal:${id}:2`. A orientação deste ramo depende estritamente do modo de escoamento:
+  - Em **Contracorrente** (`isContracorrente(engine) === true`), o ramo interno é orientado de `${id}:out2` para `${id}:in2`, respeitando a convenção de que a porta `out2` atua fisicamente como a admissão da Corrente 2.
+  - Em **Co-corrente / Paralelo**, o ramo interno é orientado de `${id}:in2` para `${id}:out2`.
+
+Essa representação garante continuidade topológica nos nós de conexão e viabiliza a solução simultânea de circuitos fechados onde uma ou ambas as correntes pertençam a anéis de recirculação.
 
 #### Perfis Contínuos de Temperatura e Monitoramento (`HeatExchangerChartAdapter.js`)
 Para fins de monitoramento gráfico e análise de processo, o simulador resolve a distribuição de temperatura ao longo da coordenada adimensional de comprimento $z \in [0, 1]$ (onde $z = 0$ representa a entrada da Corrente 1 e $z = 1$ a saída da Corrente 1):
@@ -447,11 +462,25 @@ $$Q_{\text{entrada}} = Q_{\text{saída}}$$
 
 Ao final de cada tick de simulação, o método `balancePassThroughMass()` é executado. Ele percorre a rede de jusante para montante e, caso detecte um desbalanceamento volumétrico $\Delta Q = Q_{\text{in}} - Q_{\text{out}} > 0.0001\text{ L/s}$ (causado por restrições a jusante, como uma válvula fechando), ele reduz proporcionalmente a vazão das conexões de entrada do componente até que a conservação seja plenamente satisfeita.
 
-No caso especial do **Trocador de Calor com Duas Correntes** (`TrocadorCalorLogico`), o algoritmo de conservação de massa trata as conexões de forma separada por corrente:
+No caso especial do **Trocador de Calor com Duas Correntes** (`TrocadorCalorLogico`), o algoritmo de conservação de massa trata as conexões e o cálculo de resíduos de forma estritamente desacoplada por corrente:
 *   **Corrente 1:** balanceia as conexões associadas às portas da Corrente 1 (`in1` e `out1`), impondo $Q_{1,\text{in}} = Q_{1,\text{out}}$.
 *   **Corrente 2:** balanceia as conexões associadas às portas da Corrente 2 (`in2` e `out2`), impondo $Q_{2,\text{in}} = Q_{2,\text{out}}$.
+*   **Critério de Convergência Residual:** o erro residual do componente é avaliado individualmente para cada corrente, calculando-se o desbalanço como o máximo dos resíduos independentes:
+    $$\Delta Q_{\text{residual}} = \max\left(|Q_{1,\text{in}} - Q_{1,\text{out}}|, \; |Q_{2,\text{in}} - Q_{2,\text{out}}|\right)$$
 
-Essa independência evita que o somatório global das vazões mascare restrições locais e garante que flutuações ou estrangulamentos em uma das correntes de processo não afetem indevidamente a vazão da outra.
+Essa independência evita que o somatório global das vazões mascare restrições locais (onde um desbalanço positivo em uma corrente pudesse anular aritmeticamente um desbalanço negativo na outra) e garante que flutuações ou estrangulamentos em uma das correntes de processo não afetem indevidamente a vazão da outra.
+
+---
+
+### 5.4 Solução Simultânea em Malhas Fechadas (`NodalHydraulicSolver.js`)
+Para ilhas hidráulicas contendo circuitos fechados (anéis de recirculação), o solver sequencial push-based não é capaz de definir as condições de contorno de montante. Nesses casos, o sistema delega a resolução para o **Solucionador Nodal**:
+1. **Montagem do Grafo Nodal:** o método `buildNetwork()` mapeia cada conexão em um ramo hidráulico com impedância e cada equipamento em seus nós correspondentes.
+2. **Orientação Dinâmica de Ramos Internos:** para componentes com múltiplas vias e modos operacionais (como o trocador de calor), a orientação dos nós internos respeita dinamicamente a topologia de conexão. Em contracorrente (`isContracorrente(engine)`), o ramo interno da Corrente 2 conecta `${id}:out2` $\to$ `${id}:in2`, alinhando-se perfeitamente com a direção do escoamento externo.
+3. **Resolução de Anéis Flutuantes em Série (`buildFloatingSeriesLoop`):**
+   - Quando um circuito fechado não possui conexões com reservatórios abertos, o loop em série é resolvido por busca de raiz via bisseção sobre a função de resíduo de carga $\varepsilon(Q) = 0$.
+   - O mapeamento interno de ramos indexa componentes multi-via pela chave composta `${branch.component.id}:${streamId}`, permitindo que correntes distintas do mesmo equipamento pertençam simultaneamente a loops fechados independentes sem sobrescrita mútua de ramos internos.
+   - A validação de topologia em série filtra estritamente as conexões pertencentes à ilha em resolução (`island.connectionIds`), evitando que conexões de outras ilhas abertas ou nós compartilhados invalidem o grau topológico da malha fechada.
+   - O traçado e cálculo da perda de carga do loop utiliza os identificadores exatos dos nós dos ramos internos (`internalBranch.fromNodeId` e `internalBranch.toNodeId`), garantindo estabilidade e convergência numérica para qualquer combinação de portas conectadas.
 
 ---
 
@@ -487,6 +516,7 @@ Para promover interoperabilidade com plantas reais e modelos criados no DWSIM, o
     *   `Pump` $\to$ `BombaLogica` (`pump`) com carga manométrica e potência associadas.
     *   `Valve` $\to$ `ValvulaLogica` (`valve`) com conversão dimensional de $C_v$ e $K_v$ ($K_v \approx 0{,}865 \cdot C_v$).
     *   `Tank` $\to$ `TanqueLogico` (`tank`) com volume e geometria úteis.
+    *   `HeatExchanger`, `Cooler`, `Heater` $\to$ `TrocadorCalorLogico` (`heat_exchanger`) com recuperação do coeficiente global de troca $UA$ ($\text{W/K}$), temperatura de serviço/utilidade ($T_{\text{serviço}}$) e coeficiente de perda de carga localizado $K$.
     *   `MaterialStream` sem nó a montante $\to$ `FonteLogica` (`source`) com temperatura, pressão e vazão máxima importadas.
     *   `MaterialStream` sem nó a jusante $\to$ `DrenoLogico` (`sink`) com a contrapressão de descarga de processo.
     *   `Pipe` (`PipeSegment`) $\to$ Parâmetros físicos do `ConnectionModel` (diâmetro interno $D$, comprimento físico $L$, rugosidade $\varepsilon$ e perda localizada $K$).

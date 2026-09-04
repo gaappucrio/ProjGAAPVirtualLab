@@ -310,9 +310,11 @@ export class NodalHydraulicSolver {
             return null;
         }
 
+        const islandConnectionIdSet = new Set(island?.connectionIds || []);
         const connectionBySourceId = new Map();
         const connectionByTargetId = new Map();
         this.context.conexoes.forEach((connection) => {
+            if (islandConnectionIdSet.size > 0 && !islandConnectionIdSet.has(connection.id)) return;
             if (!componentIdSet.has(connection.sourceId) || !componentIdSet.has(connection.targetId)) return;
             connectionBySourceId.set(connection.sourceId, [
                 ...(connectionBySourceId.get(connection.sourceId) || []),
@@ -362,7 +364,16 @@ export class NodalHydraulicSolver {
             current = nextComponent;
         }
 
-        const orderedInternalBranches = orderedComponents.map((component) => internalBranchByComponentId.get(component.id));
+        const orderedInternalBranches = orderedComponents.map((component, index) => {
+            if (component instanceof TrocadorCalorLogico) {
+                const outConnBranch = orderedConnectionBranches[index];
+                const portId = outConnBranch?.connection?.sourceEndpoint?.portId;
+                const isStream2 = portId === 'in2' || portId === 'out2' || portId === '2';
+                const streamId = isStream2 ? 2 : 1;
+                return network.branches.find((b) => (b.kind === 'internal' || b.kind === 'pump') && b.component === component && b.streamId === streamId);
+            }
+            return internalBranchByComponentId.get(component.id);
+        });
         if (orderedInternalBranches.some((branch) => !branch)) return null;
 
         const pumpBranches = orderedInternalBranches.filter((branch) => branch.kind === 'pump' && !branch.disabled);
@@ -385,12 +396,13 @@ export class NodalHydraulicSolver {
         const resultByBranchId = new Map();
         let pressureBar = 0;
 
-        pressureByNodeId.set(inputNodeId(loop.startComponent), pressureBar);
+        const firstInternalBranch = loop.orderedInternalBranches[0];
+        pressureByNodeId.set(firstInternalBranch?.fromNodeId || inputNodeId(loop.startComponent), pressureBar);
 
         loop.orderedComponents.forEach((component, index) => {
             const internalBranch = loop.orderedInternalBranches[index];
-            const inputId = inputNodeId(component);
-            const outputId = outputNodeId(component);
+            const inputId = internalBranch?.fromNodeId || inputNodeId(component);
+            const outputId = internalBranch?.toNodeId || outputNodeId(component);
             pressureByNodeId.set(inputId, pressureBar);
 
             if (internalBranch.kind === 'pump') {
@@ -425,7 +437,6 @@ export class NodalHydraulicSolver {
             pressureByNodeId.set(outputId, pressureBar);
 
             const connectionBranch = loop.orderedConnectionBranches[index];
-            const nextComponent = loop.orderedComponents[(index + 1) % loop.orderedComponents.length];
             const connectionLossBar = this.getBranchLossBar(connectionBranch, flowLps);
             const nextPressureBar = pressureBar + connectionBranch.staticHeadBar - connectionLossBar;
             resultByBranchId.set(connectionBranch.id, this.createPassiveResultAtFlow(
@@ -435,7 +446,7 @@ export class NodalHydraulicSolver {
                 nextPressureBar
             ));
             pressureBar = nextPressureBar;
-            pressureByNodeId.set(inputNodeId(nextComponent), pressureBar);
+            pressureByNodeId.set(connectionBranch.toNodeId, pressureBar);
         });
 
         return {
@@ -478,7 +489,9 @@ export class NodalHydraulicSolver {
                 const internalBranch1 = this.createHeatExchangerInternalBranch(component, 1, in1Node.id, out1Node.id, fluid);
                 if (internalBranch1) branches.push(internalBranch1);
 
-                const isCounter = typeof component.isContracorrente === 'function' ? component.isContracorrente() : false;
+                const isCounter = typeof component.isContracorrente === 'function'
+                    ? component.isContracorrente(this.context)
+                    : (typeof component.getModoEscoamento === 'function' ? component.getModoEscoamento(this.context) === 'contracorrente' : false);
                 const stream2From = isCounter ? out2Node.id : in2Node.id;
                 const stream2To = isCounter ? in2Node.id : out2Node.id;
                 const internalBranch2 = this.createHeatExchangerInternalBranch(component, 2, stream2From, stream2To, fluid);

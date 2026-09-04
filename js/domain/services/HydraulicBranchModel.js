@@ -587,6 +587,22 @@ export class HydraulicBranchModel {
         const residualImbalanceLps = componentsFromDownstream.reduce((maxImbalance, component) => {
             if (!this.isPassThroughComponent(component)) return maxImbalance;
 
+            if (component instanceof TrocadorCalorLogico) {
+                const isStream2 = (portId) => portId === 'in2' || portId === 'out2' || portId === '2';
+                const inputConns = this.context.getInputConnections(component);
+                const outputConns = this.context.getOutputConnections(component);
+                const in1 = inputConns.filter(c => !isStream2(c.targetEndpoint?.portId))
+                    .reduce((sum, c) => sum + this.context.getConnectionState(c).flowLps, 0);
+                const out1 = outputConns.filter(c => !isStream2(c.sourceEndpoint?.portId))
+                    .reduce((sum, c) => sum + this.context.getConnectionState(c).flowLps, 0);
+                const in2 = inputConns.filter(c => isStream2(c.targetEndpoint?.portId))
+                    .reduce((sum, c) => sum + this.context.getConnectionState(c).flowLps, 0);
+                const out2 = outputConns.filter(c => isStream2(c.sourceEndpoint?.portId))
+                    .reduce((sum, c) => sum + this.context.getConnectionState(c).flowLps, 0);
+                const streamImbalance = Math.max(Math.abs(in1 - out1), Math.abs(in2 - out2));
+                return Math.max(maxImbalance, streamImbalance);
+            }
+
             const inputFlowLps = this.context.getInputConnections(component)
                 .reduce((sum, conn) => sum + this.context.getConnectionState(conn).flowLps, 0);
             const outputFlowLps = this.context.getOutputConnections(component)

@@ -45,7 +45,10 @@ const POSITION_ORIGIN_Y = 120;
 const DWSIM_EQUIPMENT_MAP = {
     Pump: 'pump',
     Valve: 'valve',
-    Tank: 'tank'
+    Tank: 'tank',
+    HeatExchanger: 'heat_exchanger',
+    Cooler: 'heat_exchanger',
+    Heater: 'heat_exchanger'
 };
 
 const SOURCE_COMPONENT_TYPE = 'source';
@@ -460,6 +463,23 @@ function sinkParameters() {
     };
 }
 
+function heatExchangerParameters(simEl) {
+    const ua = queryNumeric(simEl, 'UA', 0)
+        || queryNumeric(simEl, 'OverallHTC_Area', 0)
+        || 5000;
+    const tempServico = queryNumeric(simEl, 'ServiceTemperature', 0)
+        || queryNumeric(simEl, 'UtilityTemperature', 0)
+        || 80;
+    const perdaK = queryNumeric(simEl, 'MinorLoss', 0) || 1.2;
+
+    return {
+        temperaturaServicoC: tempServico,
+        uaWPorK: Math.max(10, ua),
+        perdaLocalK: perdaK,
+        efetividadeMaxima: 0.95
+    };
+}
+
 function pipeParameters(simEl) {
     // DWSIM Pipe: seções serializadas dentro de <Sections>.
     // Campos: <Comprimento> (m), <DI> (pol), <DE> (pol), <PipeWallRugosity> (m).
@@ -613,6 +633,7 @@ function defaultTagFor(gaapType) {
         case 'pump': return 'P';
         case 'valve': return 'V';
         case 'tank': return 'T';
+        case 'heat_exchanger': return 'TC';
         case 'source': return 'Entrada';
         case 'sink': return 'Saída';
         default: return 'Cmp';
@@ -624,6 +645,7 @@ function extractPropertiesFor(gaapType, simObj) {
     if (gaapType === 'pump') return pumpParameters(element);
     if (gaapType === 'valve') return valveParameters(element);
     if (gaapType === 'tank') return tankParameters(element);
+    if (gaapType === 'heat_exchanger') return heatExchangerParameters(element);
     if (gaapType === 'source') return sourceParameters(element);
     if (gaapType === 'sink') return sinkParameters();
     return null;

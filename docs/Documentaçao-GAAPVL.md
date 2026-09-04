@@ -28,8 +28,8 @@ A organização do código segue conceitos fundamentais do DDD:
 4. **Serviços de Domínio (Domain Services):**
    Operações físicas que envolvem múltiplos elementos da rede:
    - `HydraulicNetworkSolver.js`: método sequencial push-based para propagação de vazão e pressão em redes abertas.
-   - `NodalHydraulicSolver.js`: solucionador simultâneo não linear por bisseção para circuitos fechados (anéis).
-   - `HydraulicBranchModel.js`: modelagem de capacidade de ramos, perdas de carga singulares e reconciliação de pressões.
+   - `NodalHydraulicSolver.js`: solucionador simultâneo não linear por bisseção para circuitos fechados (anéis), com suporte a anéis flutuantes em série e resolução topológica de ramos internos para equipamentos multi-corrente (`TrocadorCalorLogico`).
+   - `HydraulicBranchModel.js`: modelagem de capacidade de ramos, perdas de carga singulares, conservação de massa desacoplada por corrente e reconciliação de pressões.
    - `HydraulicNetworkAnalyzer.js`: análise topológica de grafos, detecção de ciclos e particionamento em ilhas hidráulicas.
    - `PipeHydraulics.js`: equações de Darcy-Weisbach, Colebrook/Swamee-Jain, regimes de Reynolds e diâmetro sugerido.
    - `ResidenceTime.js`: cálculo de tempo de residência hidráulico de tanques e trechos de tubulação.
@@ -242,14 +242,14 @@ Este módulo instancia o engine, conecta serviços de visual, cria controladores
 - Tanques e tubulações devem exibir tempo de residência atual quando houver vazão suficiente.
 - Fontes devem definir fluido, pressão de alimentação e vazão máxima; a pressão dirige a vazão resolvida e a vazão máxima limita a capacidade entregue quando a fonte satura. A vazão máxima padrão da entrada é `32 m³/h`.
 - Drenos devem manter contrapressão de saída, exibir a pressão final da rede antes da perda de entrada e explicitar a queda causada pelo `K` de entrada.
-- Trocadores de calor devem suportar operação com utilidade térmica (temperatura de serviço fixa) ou com duas correntes hidraulicamente independentes conectadas em portas dedicadas (Corrente 1: in1/out1; Corrente 2: in2/out2). Quando duas correntes estão conectadas, a edição da temperatura de serviço é desabilitada, o modo de escoamento (contracorrente ou paralelo) é inferido pela topologia das portas e a troca térmica é calculada pelo método $\varepsilon$-NTU com conservação de energia sensível. Cada corrente preserva pressões de entrada e saída independentes ($P_{1,\text{in}}, P_{1,\text{out}}$ e $P_{2,\text{in}}, P_{2,\text{out}}$) e balanço de massa individual ($Q_{1,\text{in}} = Q_{1,\text{out}}$ e $Q_{2,\text{in}} = Q_{2,\text{out}}$), sem que divergências de pressão de alimentação afetem indevidamente a capacidade da outra corrente. O trocador conta com perfil gráfico de temperatura ao longo da posição interna para monitoramento em tempo real.
+- Trocadores de calor devem suportar operação com utilidade térmica (temperatura de serviço fixa para escoamento monostream tanto na Corrente 1 quanto na Corrente 2) ou com duas correntes hidraulicamente independentes conectadas em portas dedicadas (Corrente 1: in1/out1; Corrente 2: in2/out2). Quando duas correntes estão conectadas, a edição da temperatura de serviço é desabilitada, o modo de escoamento (contracorrente ou paralelo) é inferido pela topologia das portas via `isContracorrente(engine)` e a troca térmica é calculada pelo método $\varepsilon$-NTU com conservação de energia sensível. Caso uma das correntes conectadas tenha vazão nula, a taxa de calor é estritamente zerada para impedir troca com fluido estagnado. Cada corrente preserva pressões de entrada e saída independentes ($P_{1,\text{in}}, P_{1,\text{out}}$ e $P_{2,\text{in}}, P_{2,\text{out}}$), balanço de massa individual ($Q_{1,\text{in}} = Q_{1,\text{out}}$ e $Q_{2,\text{in}} = Q_{2,\text{out}}$) com convergência residual desacoplada ($\Delta Q_{\text{residual}} = \max(|Q_{1,\text{in}} - Q_{1,\text{out}}|, |Q_{2,\text{in}} - Q_{2,\text{out}}|)$), e rastreamento explícito de vazões mássicas (`vazaoMassaKgS` e `vazaoMassa2KgS`). O trocador conta com perfil gráfico longitudinal de temperatura em tempo real e integração plena com o solucionador nodal para circuitos fechados em série flutuantes.
 
 ### 3.4 Exportação e persistência
 
 - O usuário deve exportar dados de simulação em formato tabular compatível com planilhas.
 - O usuário deve exportar o fluxograma completo em JSON.
 - O usuário deve importar o fluxograma salvo em JSON.
-- O usuário deve poder importar simulações do software DWSIM (formatos `.dwxmz` e `.dwxm`), traduzindo equipamentos (bombas, válvulas, tanques, fontes, drenos e tubulações) automaticamente para o workspace do GAAP.
+- O usuário deve poder importar simulações do software DWSIM (formatos `.dwxmz` e `.dwxm`), traduzindo equipamentos (bombas, válvulas, tanques, trocadores de calor `HeatExchanger`, aquecedores `Heater`, resfriadores `Cooler`, fontes, drenos e tubulações) automaticamente para o workspace do GAAP.
 - A exportação deve preservar unidades de exibição selecionadas.
 
 ### 3.5 Interface de usuário
@@ -1008,7 +1008,7 @@ A seguir estão as funções/chaves de alto valor do sistema, com seus objetivos
 - Saída: `Promise` que resolve para o snapshot restaurado ou objeto de status da importação.
 - Pós-condições:
   - Descompacta o ZIP ou lê o XML puro.
-  - Mapeia bombas, válvulas, tanques, fontes, drenos e canos.
+  - Mapeia bombas, válvulas, tanques, trocadores de calor (`HeatExchanger`, `Cooler`, `Heater`), fontes, drenos e canos.
   - Reconstrói a planta visual e hidráulica no workspace.
 - Interface com o usuário: alimenta o fluxo de importação da toolbar.
 

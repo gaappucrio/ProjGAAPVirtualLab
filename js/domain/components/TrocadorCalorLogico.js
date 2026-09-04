@@ -90,6 +90,7 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         this.cargaTermicaW = 0;
         this.efetividadeAtual = 0;
         this.vazaoMassaKgS = 0;
+        this.vazaoMassa2KgS = 0;
         this.deltaPAtualBar = 0;
         this.deltaP2AtualBar = 0;
         this._ultimoEstadoNotificado = '';
@@ -100,6 +101,10 @@ export class TrocadorCalorLogico extends ComponenteFisico {
             hydraulicAreaM2: this.getAreaConexaoM2(),
             localLossCoeff: Math.max(0, numeroSeguro(this.perdaLocalK, PERDA_LOCAL_PADRAO_K))
         };
+    }
+
+    isContracorrente(engine = null) {
+        return this.getModoEscoamento(engine) === 'contracorrente';
     }
 
     getModoEscoamento(engine = null) {
@@ -174,8 +179,34 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         const t2 = (fluido2 && vazao2 > EPSILON_FLOW) ? numeroSeguro(fluido2.temperatura, 25) : this.temperaturaServicoC;
         const ua = this.uaWPorK;
 
-        if (vazao1 <= EPSILON_FLOW || ua <= 0) {
+        if (ua <= 0) {
             return { t1Out: t1, t2Out: t2, duty: 0, ef: 0, dt1: 0, dt2: 0, modo };
+        }
+
+        const isDual = this.temDuasCorrentesConectadas();
+        if (isDual) {
+            if (vazao1 <= EPSILON_FLOW || vazao2 <= EPSILON_FLOW) {
+                return { t1Out: t1, t2Out: t2, duty: 0, ef: 0, dt1: 0, dt2: 0, modo };
+            }
+        } else {
+            if (vazao1 <= EPSILON_FLOW && vazao2 <= EPSILON_FLOW) {
+                return { t1Out: t1, t2Out: t2, duty: 0, ef: 0, dt1: 0, dt2: 0, modo };
+            }
+            if (vazao1 <= EPSILON_FLOW && vazao2 > EPSILON_FLOW) {
+                const cp2 = numeroSeguro(fluido2?.calorEspecificoJkgK, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK);
+                const den2 = numeroSeguro(fluido2?.densidade, 997);
+                const m2 = lpsToM3s(vazao2) * den2;
+                const c2 = m2 * cp2;
+                if (c2 <= 0) {
+                    return { t1Out: t1, t2Out: t2, duty: 0, ef: 0, dt1: 0, dt2: 0, modo };
+                }
+                const ntu = ua / c2;
+                const efetividade = clamp(1 - Math.exp(-ntu), 0, this.efetividadeMaxima);
+                const maxHeat = c2 * Math.abs(t2 - this.temperaturaServicoC);
+                const duty = maxHeat * efetividade;
+                const t2Out = t2 + (this.temperaturaServicoC > t2 ? duty / c2 : -duty / c2);
+                return { t1Out: t1, t2Out, duty, ef: efetividade, dt1: 0, dt2: t2Out - t2, modo };
+            }
         }
 
         const cp1 = numeroSeguro(fluido1?.calorEspecificoJkgK, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK);
@@ -367,6 +398,8 @@ export class TrocadorCalorLogico extends ComponenteFisico {
             fluxoReal: this.fluxoReal,
             vazao1Lps: this.vazao1Lps,
             vazao2Lps: this.vazao2Lps,
+            vazaoMassaKgS: this.vazaoMassaKgS,
+            vazaoMassa2KgS: this.vazaoMassa2KgS,
             temperaturaEntradaC: this.temperaturaEntradaC,
             temperaturaSaidaC: this.temperaturaSaidaC,
             temperaturaEntrada2C: this.temperaturaEntrada2C,
@@ -402,6 +435,7 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         this.cargaTermicaW = resultado.duty;
         this.efetividadeAtual = resultado.ef;
         this.vazaoMassaKgS = lpsToM3s(this.vazao1Lps) * (f1?.densidade || 997);
+        this.vazaoMassa2KgS = lpsToM3s(this.vazao2Lps) * (f2?.densidade || 997);
         this.deltaPAtualBar = pressureLossFromFlow(
             this.vazao1Lps,
             parametros.hydraulicAreaM2,
@@ -436,6 +470,7 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         this.cargaTermicaW = 0;
         this.efetividadeAtual = 0;
         this.vazaoMassaKgS = 0;
+        this.vazaoMassa2KgS = 0;
         this.deltaPAtualBar = 0;
         this.deltaP2AtualBar = 0;
         this.pressaoEntrada1AtualBar = 0;

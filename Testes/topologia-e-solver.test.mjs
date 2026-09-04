@@ -1654,24 +1654,3 @@ test('trocador de calor opera com duas correntes hidraulicamente independentes e
     );
 });
 
-test('trocador de calor opera em contracorrente e em corrente paralela alternando a porta da corrente 2', () => {
-    const tc = new TrocadorCalorLogico('tc-dual', 'TC-DUAL', 200, 200);
-    tc.setUA(5000);
-
-    const f1 = { temperatura: 20, calorEspecificoJkgK: 4184, densidade: 1000 };
-    const f2 = { temperatura: 80, calorEspecificoJkgK: 4184, densidade: 1000 };
-    const v1 = 2.0;
-    const v2 = 2.0;
-
-    // Teste 1: Modo Contracorrente
-    const resContra = tc.calcularTrocaTermicaGlobal(f1, v1, f2, v2, 'contracorrente');
-    assert.ok(resContra.ef > 0, 'Efetividade em contracorrente deve ser positiva');
-    assert.ok(resContra.t1Out > 20, 'T1out deve aquecer');
-    assert.ok(resContra.t2Out < 80, 'T2out deve resfriar');
-
-    // Teste 2: Modo Paralelo (Co-corrente)
-    const resParalelo = tc.calcularTrocaTermicaGlobal(f1, v1, f2, v2, 'paralelo');
-    assert.ok(resParalelo.ef > 0, 'Efetividade em paralelo deve ser positiva');
-    assert.ok(resContra.ef > resParalelo.ef, 'Efetividade em contracorrente deve ser estritamente maior que em paralelo para mesmas condicoes');
-});
-

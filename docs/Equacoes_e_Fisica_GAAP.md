@@ -186,16 +186,24 @@ $$\rho(T) = \rho_{ref} \cdot f_{anomalia}(T)$$
 ### 5.2 Trocadores de Calor (Método $\epsilon$-NTU)
 Os trocadores de calor do laboratório integram o **Método Efetividade-NTU ($\epsilon$-NTU)** para calcular a taxa real de transferência térmica, suportando operação com utilidade térmica ($T_{\text{serviço}}$ constante) ou com duas correntes de processo hidraulicamente independentes conectadas em portas dedicadas (Corrente 1: `in1`/`out1`; Corrente 2: `in2`/`out2`).
 
-1. **Taxas de Capacidade Térmica:**
-   $$C_1 = \dot{m}_1 \cdot c_{p,1}, \qquad C_2 = \dot{m}_2 \cdot c_{p,2}$$
-   $$C_{\min} = \min(C_1, C_2), \qquad C_{\max} = \max(C_1, C_2), \qquad C_r = \frac{C_{\min}}{C_{\max}}$$
-   *(No modo utilidade térmica de 1 corrente, $C_2 \to \infty$, logo $C_{\min} = C_1$ e $C_r = 0$).*
+1. **Taxas de Capacidade Térmica e Vazões Mássicas:**
+   As vazões mássicas são obtidas a partir das vazões volumétricas $Q_i$ e densidades $\rho_i$ das correntes:
+   $$\dot{m}_1 = Q_1 \cdot \rho_1, \qquad \dot{m}_2 = Q_2 \cdot \rho_2 \quad [\text{kg/s}]$$
+   $$C_1 = \dot{m}_1 \cdot c_{p,1}, \qquad C_2 = \dot{m}_2 \cdot c_{p,2} \quad [\text{W/K}]$$
+
+   - **Modo Duas Correntes Ativas ($Q_1 > 0$ e $Q_2 > 0$):**
+     $$C_{\min} = \min(C_1, C_2), \qquad C_{\max} = \max(C_1, C_2), \qquad C_r = \frac{C_{\min}}{C_{\max}}$$
+   - **Modo Utilidade Térmica Monostream (1 corrente conectada):**
+     Se apenas a Corrente 1 estiver ativa ($Q_2 = 0$): $C_{\min} = C_1$ e $C_r = 0$.
+     Se apenas a Corrente 2 estiver ativa ($Q_1 = 0$): $C_{\min} = C_2$ e $C_r = 0$.
+   - **Regra de Estagnação Acoplada:**
+     Quando ambas as correntes estão conectadas fisicamente à rede, caso qualquer uma das correntes tenha vazão nula ($Q_1 \le \epsilon_{\text{vazão}}$ ou $Q_2 \le \epsilon_{\text{vazão}}$), a carga térmica é estritamente anulada ($\dot{Q} = 0$), impedindo troca térmica irreal com fluido parado.
 
 2. **Número de Unidades de Transferência (NTU):**
    $$NTU = \frac{UA}{C_{\min}}$$
 
 3. **Efetividade Térmica ($\epsilon$) por Modo de Escoamento:**
-   - **Contracorrente** (detectado pela topologia quando a Corrente 2 entra por `out2` e sai por `in2`):
+   - **Contracorrente** (detectado pela topologia quando a Corrente 2 entra por `out2` e sai por `in2`, via `isContracorrente(engine)`):
      $$\epsilon_{\text{contra}} = \begin{cases} \dfrac{1 - e^{-NTU (1 - C_r)}}{1 - C_r e^{-NTU (1 - C_r)}}, & C_r < 1 \\[6pt] \dfrac{NTU}{1 + NTU}, & C_r = 1 \end{cases}$$
    - **Corrente Paralela / Co-corrente** (detectado quando a Corrente 2 entra por `in2` e sai por `out2`):
      $$\epsilon_{\text{paralelo}} = \frac{1 - e^{-NTU (1 + C_r)}}{1 + C_r}$$
@@ -210,7 +218,7 @@ Os trocadores de calor do laboratório integram o **Método Efetividade-NTU ($\e
 
    E as temperaturas de saída acopladas resultam do balanço entálpico:
    $$T_{1,\text{out}} = T_{1,\text{in}} \pm \frac{\dot{Q}}{C_1}, \qquad T_{2,\text{out}} = T_{2,\text{in}} \mp \frac{\dot{Q}}{C_2}$$
-   *(Onde o fluido de maior temperatura de entrada cede calor e o de menor temperatura recebe calor).*
+   *(Onde o fluido de maior temperatura de entrada cede calor e o de menor temperatura recebe calor; no modo utilidade, a corrente ausente é substituída por $T_{\text{serviço}}$).*
 
 5. **Perda de Carga Hidráulica Individual:**
    Cada corrente calcula sua própria perda por acessório singular:
@@ -286,9 +294,15 @@ Onde:
 - $\tau_{\text{resposta}}$: Constante de tempo de resposta inercial do trecho ($s$, calculada em função do comprimento $L$, densidade $\rho$ e viscosidade $\mu$)
 
 **C. Conservação de Massa Retroativa (Back-propagation):**
-Componentes *pass-through* (Válvulas, Bombas e Trocadores) não podem acumular líquido. Se após a propagação a vazão que conseguiu sair for menor do que a que entrou ($Q_{\text{out}} < Q_{\text{in}}$), o *solver* aciona a rotina `balancePassThroughMass()`, que retropropaga o bloqueio matemático reduzindo as vazões de entrada a montante até que:
+Componentes *pass-through* (Válvulas, Bombas e Trocadores) não podem acumular líquido. Se após a propagação a vazão que conseguiu sair for menor do que a que entrou ($Q_{\text{out}} < Q_{\text{in}}$), o *solver* aciona a rotina `balancePassThroughMass()`, que retropropaga o bloqueio matemático reduzindo as vazões de entrada a montante até satisfazer:
 
 $$\sum Q_{\text{in}} = \sum Q_{\text{out}}$$
+
+Para equipamentos multi-via como o **Trocador de Calor de Duas Correntes** (`TrocadorCalorLogico`), o balanço de massa é executado de forma estritamente independente para cada corrente ($Q_{1,\text{in}} = Q_{1,\text{out}}$ e $Q_{2,\text{in}} = Q_{2,\text{out}}$), e o resíduo de convergência do componente é avaliado sem acoplamento mútuo:
+
+$$\Delta Q_{\text{residual}} = \max\left(|Q_{1,\text{in}} - Q_{1,\text{out}}|, \; |Q_{2,\text{in}} - Q_{2,\text{out}}|\right)$$
+
+Isso impede que uma restrição hidráulica em uma corrente mascare o balanço de massa da outra por compensação algébrica global.
 
 ### 7.2 Ilhas Cíclicas (Loops): Solver Nodal Simultâneo
 Se a ilha contém um ciclo fechado de tubulações (ex: uma tubulação que retorna para a própria sucção da bomba ou forma um anel), a propagação linear falha. Para esses casos, o sistema delega o cálculo ao `NodalHydraulicSolver.js`.
@@ -303,6 +317,16 @@ Onde:
 - $P_{Bomba}(Q)$: Carga manométrica ativa adicionada pela bomba na vazão $Q$ (bar)
 - $\Delta P_{Perdas}(Q)$: Somatório das perdas de carga contínuas e localizadas em todo o anel na vazão $Q$ (bar)
 - $P_{out}$: Pressão de contorno no ponto de fechamento do nó (bar)
+
+#### Representação Nodal de Componentes Passantes e Loops em Série
+Para componentes multi-corrente (`TrocadorCalorLogico`), a rede nodal instancia 4 nós lógicos (`in1`, `out1`, `in2`, `out2`) e ramos internos direcionados:
+$$\text{Ramo Interno Corrente 1: } \text{in1} \to \text{out1}$$
+$$\text{Ramo Interno Corrente 2: } \begin{cases} \text{out2} \to \text{in2} & (\text{contracorrente, } \text{isContracorrente} = \text{true}) \\ \text{in2} \to \text{out2} & (\text{co-corrente / paralelo}) \end{cases}$$
+
+Na resolução de anéis fechados em série (`buildFloatingSeriesLoop`):
+1. Os ramos internos são indexados pela tupla `${component.id}:${streamId}`, permitindo que correntes distintas do mesmo equipamento componham circuitos fechados independentes simultâneos.
+2. A validação dos graus de nó (`inDegree === 1 && outDegree === 1`) filtra estritamente as conexões associadas à ilha cíclica em resolução (`island.connectionIds`), isolando o circuito fechado de nós de processo adjacentes.
+3. A integração da função de resíduo $\varepsilon(Q)$ utiliza os nós de fronteira exatos dos ramos (`internalBranch.fromNodeId` e `internalBranch.toNodeId`), garantindo convergência robusta para qualquer orientação de montagem.
 
 O fluxo da malha cíclica converge iterativamente garantindo que a diferença entre a carga provida e as perdas seja $\varepsilon(Q) \approx 0$ em toda a volta do circuito.
 

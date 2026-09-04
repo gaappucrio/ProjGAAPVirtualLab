@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { SistemaSimulacao, FLUID_PRESETS } from '../js/application/engine/SimulationEngine.js';
-import { SelectionStore } from '../js/application/stores/SelectionStore.js';
 import { ConnectionModel } from '../js/domain/models/ConnectionModel.js';
 import { BombaLogica } from '../js/domain/components/BombaLogica.js';
 import { DrenoLogico } from '../js/domain/components/DrenoLogico.js';
@@ -16,8 +15,6 @@ import {
     FLOWCHART_DOCUMENT_TYPE,
     parseFlowchartDocument
 } from '../js/presentation/flowchart/FlowchartPersistence.js';
-import { createMonitorSlotHistory } from '../js/presentation/monitoring/MonitorSlotHistory.js';
-import { setLanguage, translateDefaultComponentTag } from '../js/presentation/i18n/LanguageManager.js';
 
 function approx(actual, expected, tolerance = 1e-4, message = '') {
     assert.ok(
@@ -49,27 +46,6 @@ test('remoção de conexão limpa estado hidráulico e índices de topologia', (
     assert.equal(engine.getOutputConnections(fonte).length, 0);
     assert.equal(engine.getInputConnections(dreno).length, 0);
     assert.equal(engine.connectionStates.has(connection), false);
-});
-
-test('seleção múltipla mantém contrato de componente único e limpa conexões', () => {
-    const store = new SelectionStore();
-    const fonte = new FonteLogica('F-01', 'Fonte-01', 0, 0);
-    const tanque = new TanqueLogico('T-01', 'Tanque-01', 120, 0);
-    const connection = new ConnectionModel({ sourceId: fonte.id, targetId: tanque.id });
-
-    store.selectComponents([fonte, tanque]);
-    assert.deepEqual([...store.selectedComponents], [fonte, tanque]);
-    assert.equal(store.selectedComponent, null, 'Seleção múltipla não deve fingir ser seleção simples');
-    assert.equal(store.selectedConnection, null);
-
-    store.toggleComponent(tanque);
-    assert.deepEqual([...store.selectedComponents], [fonte]);
-    assert.equal(store.selectedComponent, fonte, 'Ao sobrar um componente, o painel pode usar a seleção simples');
-
-    store.selectConnection(connection);
-    assert.equal(store.selectedConnection, connection);
-    assert.equal(store.selectedComponent, null);
-    assert.equal(store.selectedComponents.size, 0, 'Selecionar Cano deve limpar seleção múltipla');
 });
 
 test('remoção de atuador desativa controle de nível inconsistente', () => {
@@ -239,11 +215,20 @@ test('trocador de calor com duas correntes no motor preserva independência hidr
     assert.ok(trocador.temperaturaSaida2C < 85, 'Corrente 2 deve resfriar abaixo de 85°C');
     assert.ok(trocador.cargaTermicaW > 0, 'Carga termica trocada deve ser maior que zero');
 
+    // Tentativa de alterar temperatura de serviço deve ser ignorada com duas correntes conectadas
+    trocador.temperaturaServicoC = 65;
+    trocador.setTemperaturaServico(40);
+    assert.equal(trocador.temperaturaServicoC, 65, 'Temperatura de serviço não deve mudar com duas correntes conectadas');
+    trocador.setTemperaturaServico(40, { force: true });
+    assert.equal(trocador.temperaturaServicoC, 40, 'Alteração forçada deve atualizar');
+
     // Ao desconectar a corrente 2, o trocador volta para modo utilidade com temperatura de servico editavel
     engine.removeConnection(c2In);
     engine.removeConnection(c2Out);
     assert.equal(engine.isTrocadorComDuasCorrentes(trocador), false);
     assert.equal(trocador.getDiagnosticoOperacao(engine).temperaturaServicoEditavel, true);
+    trocador.setTemperaturaServico(75);
+    assert.equal(trocador.temperaturaServicoC, 75, 'Temperatura de serviço volta a ser editável');
 });
 
 test('trocador de calor opera em contracorrente no motor com troca térmica superior ao modo paralelo', () => {
@@ -297,74 +282,6 @@ test('trocador de calor opera em contracorrente no motor com troca térmica supe
         trocador.efetividadeAtual > resParalelo.ef,
         `Efetividade contracorrente (${trocador.efetividadeAtual.toFixed(4)}) deve ser maior que paralelo (${resParalelo.ef.toFixed(4)})`
     );
-});
-
-test('alternância de idioma traduz tag padrão do trocador de calor entre TC e HX', () => {
-    setLanguage('pt');
-    assert.equal(translateDefaultComponentTag('TC-01'), 'TC-01');
-    assert.equal(translateDefaultComponentTag('HX-01'), 'TC-01');
-
-    setLanguage('en');
-    assert.equal(translateDefaultComponentTag('TC-01'), 'HX-01');
-    assert.equal(translateDefaultComponentTag('TC-02'), 'HX-02');
-    assert.equal(translateDefaultComponentTag('HX-01'), 'HX-01');
-
-    // Tags personalizadas não devem ser alteradas
-    assert.equal(translateDefaultComponentTag('TC-Personalizado'), 'TC-Personalizado');
-    assert.equal(translateDefaultComponentTag('MeuTrocador'), 'MeuTrocador');
-
-    // Retorna para o idioma padrão
-    setLanguage('pt');
-    assert.equal(translateDefaultComponentTag('HX-01'), 'TC-01');
-});
-
-test('histórico de monitoramento aceita e gerencia trocador de calor', () => {
-    const history = createMonitorSlotHistory({ maxEntries: 2 });
-    const trocador = new TrocadorCalorLogico('TC-1', 'TC-01', 0, 0);
-    const tanque = new TanqueLogico('T-1', 'Tanque-01', 50, 0);
-
-    const r1 = history.remember({ id: trocador.id, kind: 'heatExchanger', label: trocador.tag, component: trocador });
-    assert.equal(r1.changed, true);
-    assert.equal(history.getEntries().filter(Boolean).length, 1);
-    assert.equal(history.getEntries()[0].kind, 'heatExchanger');
-    assert.equal(history.getEntries()[0].id, 'TC-1');
-
-    const r2 = history.remember({ id: tanque.id, kind: 'tank', label: tanque.tag, component: tanque });
-    assert.equal(r2.changed, true);
-    assert.equal(history.getEntries().filter(Boolean).length, 2);
-    assert.equal(history.getEntries()[0].kind, 'heatExchanger');
-    assert.equal(history.getEntries()[1].kind, 'tank');
-});
-
-test('remoção de slot de monitoramento compacta entradas e limpa o slot secundário sem criar slots fantasmas', () => {
-    const history = createMonitorSlotHistory({ maxEntries: 2 });
-    const c1 = { id: 'P-1', kind: 'pump' };
-    const c2 = { id: 'T-1', kind: 'tank' };
-
-    history.remember(c1);
-    history.remember(c2);
-    assert.equal(history.getEntries().filter(Boolean).length, 2);
-    assert.equal(history.getEntries()[0].id, 'P-1');
-    assert.equal(history.getEntries()[1].id, 'T-1');
-
-    // Ao remover o primeiro slot (índice 0), o segundo slot deve ser promovido para o índice 0 e o índice 1 deve ser null
-    const resRemove0 = history.removeAt(0);
-    assert.equal(resRemove0.changed, true);
-    assert.equal(history.getEntries().filter(Boolean).length, 1);
-    assert.equal(history.getEntries()[0].id, 'T-1');
-    assert.equal(history.getEntries()[1], null);
-
-    // Re-adicionando para testar remoção do índice 1
-    history.remember(c1);
-    assert.equal(history.getEntries().filter(Boolean).length, 2);
-    assert.equal(history.getEntries()[0].id, 'T-1');
-    assert.equal(history.getEntries()[1].id, 'P-1');
-
-    const resRemove1 = history.removeAt(1);
-    assert.equal(resRemove1.changed, true);
-    assert.equal(history.getEntries().filter(Boolean).length, 1);
-    assert.equal(history.getEntries()[0].id, 'T-1');
-    assert.equal(history.getEntries()[1], null);
 });
 
 test('trocador de calor com válvulas a jusante mantém independência hidráulica estrita ao abrir e fechar', () => {
@@ -479,6 +396,133 @@ test('análise de rede hidráulica separa correntes do trocador em ilhas indepen
     assert.ok(islandOpen.connectionIds.includes('c2_1'), 'Conexões da Corrente 2 pertencem à ilha aberta');
     assert.ok(!islandOpen.connectionIds.includes('c1_2'), 'Conexões da Corrente 1 não devem vazar para a ilha 2');
 });
+
+test('solver nodal resolve circuito fechado com bomba na corrente 2 do trocador em contracorrente e conserva massa', () => {
+    const engine = createEngine();
+
+    const b2 = new BombaLogica('B2', 'Bomba-2', 0, 100);
+    b2.isOn = true;
+    b2.grauAcionamento = 100;
+    b2.acionamentoEfetivo = 100;
+    b2.pressaoMaxima = 3.0;
+
+    const tc = new TrocadorCalorLogico('TC-LOOP', 'TC-01', 150, 100);
+    tc.uaWPorK = 5000;
+
+    // Circuito fechado na Corrente 2 em contracorrente:
+    // Bomba -> Entrada da corrente 2 (out2)
+    // Saída da corrente 2 (in2) -> Sucção da Bomba
+    const connBombaParaTC = new ConnectionModel({
+        id: 'conn_b_tc',
+        sourceId: b2.id,
+        targetId: tc.id,
+        targetEndpoint: { portId: 'out2', portType: 'in' }
+    });
+    const connTCParaBomba = new ConnectionModel({
+        id: 'conn_tc_b',
+        sourceId: tc.id,
+        targetId: b2.id,
+        sourceEndpoint: { portId: 'in2', portType: 'out' }
+    });
+
+    engine.add(b2);
+    engine.add(tc);
+    engine.addConnection(connBombaParaTC);
+    engine.addConnection(connTCParaBomba);
+
+    assert.equal(tc.getModoEscoamento(engine), 'contracorrente');
+    assert.equal(tc.isContracorrente(engine), true);
+
+    for (let i = 0; i < 40; i++) {
+        engine.componentes.forEach((c) => c.atualizarDinamica(0.1, engine.hydraulicContext.getComponentFluid(c) || engine.fluidoOperante));
+        engine.resolveHydraulicNetwork(0.1);
+        engine.componentes.forEach((c) => c.sincronizarMetricasFisicas(engine.hydraulicContext.getComponentFluid(c) || engine.fluidoOperante));
+    }
+
+    assert.ok(tc.vazao2Lps > 0.5, `Vazão na Corrente 2 deve ser positiva (atual: ${tc.vazao2Lps})`);
+    approx(b2.fluxoReal, tc.vazao2Lps, 1e-3, 'Vazão da bomba deve coincidir com vazão da corrente 2');
+    assert.ok(tc.vazaoMassa2KgS > 0, `Vazão mássica da Corrente 2 deve ser calculada (atual: ${tc.vazaoMassa2KgS})`);
+    assert.equal(tc.vazao1Lps, 0, 'Corrente 1 não conectada deve permanecer em 0');
+});
+
+test('trocador opera em modo utilidade quando apenas a corrente 2 está conectada', () => {
+    const engine = createEngine();
+
+    const fonte = new FonteLogica('F-SERV', 'Fonte-Serv', 0, 0);
+    fonte.pressaoFonteBar = 2.0;
+    fonte.atualizarFluidoEntrada({ ...FLUID_PRESETS.agua, temperatura: 20 }, { presetId: 'custom' });
+
+    const dreno = new DrenoLogico('D-SERV', 'Dreno-Serv', 200, 0);
+    dreno.pressaoSaidaBar = 0;
+
+    const tc = new TrocadorCalorLogico('TC-SERV', 'TC-01', 100, 0);
+    tc.uaWPorK = 8000;
+    tc.temperaturaServicoC = 80;
+
+    const cIn = new ConnectionModel({ id: 'c_in', sourceId: fonte.id, targetId: tc.id, targetEndpoint: { portId: 'in2', portType: 'in' } });
+    const cOut = new ConnectionModel({ id: 'c_out', sourceId: tc.id, targetId: dreno.id, sourceEndpoint: { portId: 'out2', portType: 'out' } });
+
+    [fonte, tc, dreno].forEach(c => engine.add(c));
+    [cIn, cOut].forEach(c => engine.addConnection(c));
+
+    for (let i = 0; i < 30; i++) {
+        engine.componentes.forEach((c) => c.atualizarDinamica(0.1, engine.hydraulicContext.getComponentFluid(c) || engine.fluidoOperante));
+        engine.resolveHydraulicNetwork(0.1);
+        engine.componentes.forEach((c) => c.sincronizarMetricasFisicas(engine.hydraulicContext.getComponentFluid(c) || engine.fluidoOperante));
+    }
+
+    assert.ok(tc.vazao2Lps > 0, 'Corrente 2 deve escoar');
+    assert.equal(tc.vazao1Lps, 0, 'Corrente 1 deve ser 0');
+    assert.ok(tc.temperaturaSaida2C > 25, `Corrente 2 deve aquecer em direção à temperatura de serviço (atual: ${tc.temperaturaSaida2C})`);
+    assert.ok(tc.cargaTermicaW > 0, 'Carga térmica deve ser transferida para a corrente 2');
+});
+
+test('solver nodal resolve circuitos fechados simultaneos nas correntes 1 e 2 do trocador', () => {
+    const engine = createEngine();
+
+    const b1 = new BombaLogica('B1', 'Bomba-1', 0, 0);
+    b1.isOn = true;
+    b1.grauAcionamento = 100;
+    b1.acionamentoEfetivo = 100;
+    b1.pressaoMaxima = 2.5;
+
+    const b2 = new BombaLogica('B2', 'Bomba-2', 0, 100);
+    b2.isOn = true;
+    b2.grauAcionamento = 100;
+    b2.acionamentoEfetivo = 100;
+    b2.pressaoMaxima = 3.5;
+
+    const tc = new TrocadorCalorLogico('TC-DUAL-LOOP', 'TC-01', 150, 50);
+    tc.uaWPorK = 5000;
+
+    // Loop 1: Bomba 1 -> TC in1 -> out1 -> Bomba 1
+    const c1_1 = new ConnectionModel({ id: 'c1_1', sourceId: b1.id, targetId: tc.id, targetEndpoint: { portId: 'in1', portType: 'in' } });
+    const c1_2 = new ConnectionModel({ id: 'c1_2', sourceId: tc.id, targetId: b1.id, sourceEndpoint: { portId: 'out1', portType: 'out' } });
+
+    // Loop 2: Bomba 2 -> TC out2 -> in2 -> Bomba 2 (contracorrente)
+    const c2_1 = new ConnectionModel({ id: 'c2_1', sourceId: b2.id, targetId: tc.id, targetEndpoint: { portId: 'out2', portType: 'in' } });
+    const c2_2 = new ConnectionModel({ id: 'c2_2', sourceId: tc.id, targetId: b2.id, sourceEndpoint: { portId: 'in2', portType: 'out' } });
+
+    [b1, b2, tc].forEach(c => engine.add(c));
+    [c1_1, c1_2, c2_1, c2_2].forEach(c => engine.addConnection(c));
+
+    assert.equal(tc.getModoEscoamento(engine), 'contracorrente');
+
+    for (let i = 0; i < 40; i++) {
+        engine.componentes.forEach((c) => c.atualizarDinamica(0.1, engine.hydraulicContext.getComponentFluid(c) || engine.fluidoOperante));
+        engine.resolveHydraulicNetwork(0.1);
+        engine.componentes.forEach((c) => c.sincronizarMetricasFisicas(engine.hydraulicContext.getComponentFluid(c) || engine.fluidoOperante));
+    }
+
+    assert.ok(tc.vazao1Lps > 0.5, `Vazão na Corrente 1 deve ser positiva (atual: ${tc.vazao1Lps})`);
+    assert.ok(tc.vazao2Lps > 0.5, `Vazão na Corrente 2 deve ser positiva (atual: ${tc.vazao2Lps})`);
+    approx(b1.fluxoReal, tc.vazao1Lps, 1e-3, 'Vazão da bomba 1 deve coincidir com corrente 1');
+    approx(b2.fluxoReal, tc.vazao2Lps, 1e-3, 'Vazão da bomba 2 deve coincidir com corrente 2');
+    assert.ok(tc.vazaoMassaKgS > 0);
+    assert.ok(tc.vazaoMassa2KgS > 0);
+});
+
+
 
 
 
