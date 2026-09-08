@@ -1,6 +1,9 @@
 import { analyzeHydraulicNetwork } from '../../domain/services/HydraulicNetworkAnalyzer.js';
 import { getLanguage } from '../i18n/LanguageManager.js';
 import { createWorkspaceSnapshot, restoreWorkspaceSnapshot } from '../controllers/UndoController.js';
+import { getComponentDefinition } from '../registry/ComponentDefinitionRegistry.js';
+import { applyComponentClipboardSnapshot, cloneSnapshotValue } from '../controllers/ClipboardController.js';
+import { ConnectionModel } from '../../domain/models/ConnectionModel.js';
 
 export const FLOWCHART_DOCUMENT_TYPE = 'gaap-virtual-lab-flowchart';
 const FLOWCHART_DOCUMENT_VERSION = 1;
@@ -99,16 +102,65 @@ export function parseFlowchartDocument(payload) {
     };
 }
 
+export function loadWorkspaceIntoEngine(engine, workspace) {
+    if (!engine || !workspace) return false;
+
+    if (engine.isRunning) engine.stop();
+    engine.clear();
+    engine.setUsarAlturaRelativa?.(workspace.config?.usarAlturaRelativa === true);
+
+    const componentsById = new Map();
+
+    (workspace.components || []).forEach((entry) => {
+        const componentSnapshot = entry.snapshot;
+        const spec = getComponentDefinition(componentSnapshot.type);
+        if (!spec) return;
+
+        const logica = new spec.Classe(entry.id, componentSnapshot.tag, componentSnapshot.x, componentSnapshot.y);
+        applyComponentClipboardSnapshot(componentSnapshot, logica, { tag: componentSnapshot.tag });
+        logica.x = componentSnapshot.x;
+        logica.y = componentSnapshot.y;
+        engine.add(logica);
+        componentsById.set(entry.id, logica);
+    });
+
+    (workspace.connections || []).forEach((connectionSnapshot) => {
+        const sourceComponent = componentsById.get(connectionSnapshot.sourceId);
+        const targetComponent = componentsById.get(connectionSnapshot.targetId);
+        if (!sourceComponent || !targetComponent) return;
+
+        sourceComponent.conectarSaida(targetComponent);
+        engine.addConnection(new ConnectionModel({
+            ...connectionSnapshot,
+            sourceEndpoint: cloneSnapshotValue(connectionSnapshot.sourceEndpoint),
+            targetEndpoint: cloneSnapshotValue(connectionSnapshot.targetEndpoint)
+        }));
+    });
+
+    engine.componentes.forEach((component) => {
+        component.garantirConsistenciaControleNivel?.();
+    });
+
+    return true;
+}
+
 export function restoreFlowchartDocument(engine, payload, { undoManager } = {}) {
-    const { workspace, document } = parseFlowchartDocument(payload);
+    const { workspace, document: doc } = parseFlowchartDocument(payload);
     if (engine?.componentes?.length || engine?.conexoes?.length) {
         undoManager?.record('import-flowchart');
     }
 
-    const restored = restoreWorkspaceSnapshot(engine, workspace, { undoManager });
+    const hasDomCanvas = typeof window !== 'undefined'
+        && typeof document !== 'undefined'
+        && Boolean(document.getElementById?.('workspace-canvas'));
+
+    const restored = hasDomCanvas
+        ? restoreWorkspaceSnapshot(engine, workspace, { undoManager })
+        : loadWorkspaceIntoEngine(engine, workspace);
+
     return {
         restored,
-        document
+        document: doc
     };
 }
 

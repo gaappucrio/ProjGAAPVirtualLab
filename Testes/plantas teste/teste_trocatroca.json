@@ -1,0 +1,960 @@
+{
+  "type": "gaap-virtual-lab-flowchart",
+  "version": 1,
+  "name": "Fluxograma GAAP",
+  "exportedAt": "2026-09-03T20:06:41.610Z",
+  "language": "pt",
+  "app": "GAAP Virtual Lab",
+  "workspace": {
+    "config": {
+      "usarAlturaRelativa": false
+    },
+    "components": [
+      {
+        "id": "heat_exchanger-1788458677679-1",
+        "snapshot": {
+          "type": "heat_exchanger",
+          "tag": "TC-01",
+          "x": 240,
+          "y": 400,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "temperaturaServicoC": 80,
+            "uaWPorK": 2500,
+            "perdaLocalK": 0,
+            "efetividadeMaxima": 0.95
+          }
+        }
+      },
+      {
+        "id": "source-1788458679705-2",
+        "snapshot": {
+          "type": "source",
+          "tag": "Entrada-01",
+          "x": 80,
+          "y": 400,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "pressaoFonteBar": 1.5,
+            "vazaoMaxima": 1,
+            "fluidoEntrada": {
+              "nome": "Água",
+              "densidade": 997,
+              "viscosidade": 0.0008899999999999996,
+              "temperatura": 25,
+              "viscosidadeDinamicaPaS": 0.0008899999999999996,
+              "calorEspecificoJkgK": 4182,
+              "pressaoVaporBar": 0.0317,
+              "pressaoAtmosfericaBar": 1.01325,
+              "corVisual": "#3498db",
+              "corVisualComposicao": {
+                "#3498db": 1
+              },
+              "refTemperatura": 25,
+              "refDensidade": 997,
+              "refViscosidadeDinamicaPaS": 0.00089,
+              "refPressaoVaporBar": 0.0317,
+              "composicao": {
+                "Água": 1
+              }
+            },
+            "fluidoEntradaPresetId": "agua"
+          }
+        }
+      },
+      {
+        "id": "heat_exchanger-1788458688610-3",
+        "snapshot": {
+          "type": "heat_exchanger",
+          "tag": "TC-01 - copia",
+          "x": 240,
+          "y": 680,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "temperaturaServicoC": 80,
+            "uaWPorK": 2500,
+            "perdaLocalK": 0,
+            "efetividadeMaxima": 0.95
+          }
+        }
+      },
+      {
+        "id": "source-1788458688611-4",
+        "snapshot": {
+          "type": "source",
+          "tag": "Entrada-01 - copia",
+          "x": 80,
+          "y": 640,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "pressaoFonteBar": 1.5,
+            "vazaoMaxima": 1,
+            "fluidoEntrada": {
+              "nome": "Água",
+              "densidade": 997,
+              "viscosidade": 0.0008899999999999996,
+              "temperatura": 25,
+              "viscosidadeDinamicaPaS": 0.0008899999999999996,
+              "calorEspecificoJkgK": 4182,
+              "pressaoVaporBar": 0.0317,
+              "pressaoAtmosfericaBar": 1.01325,
+              "corVisual": "#3498db",
+              "corVisualComposicao": {
+                "#3498db": 1
+              },
+              "refTemperatura": 25,
+              "refDensidade": 997,
+              "refViscosidadeDinamicaPaS": 0.00089,
+              "refPressaoVaporBar": 0.0317,
+              "composicao": {
+                "Água": 1
+              }
+            },
+            "fluidoEntradaPresetId": "agua"
+          }
+        }
+      },
+      {
+        "id": "heat_exchanger-1788458690482-5",
+        "snapshot": {
+          "type": "heat_exchanger",
+          "tag": "TC-01 - copia",
+          "x": 240,
+          "y": 960,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "temperaturaServicoC": 80,
+            "uaWPorK": 2500,
+            "perdaLocalK": 0,
+            "efetividadeMaxima": 0.95
+          }
+        }
+      },
+      {
+        "id": "source-1788458690482-6",
+        "snapshot": {
+          "type": "source",
+          "tag": "Entrada-01 - copia",
+          "x": 80,
+          "y": 920,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "pressaoFonteBar": 1.5,
+            "vazaoMaxima": 1,
+            "fluidoEntrada": {
+              "nome": "Água",
+              "densidade": 997,
+              "viscosidade": 0.0008899999999999996,
+              "temperatura": 25,
+              "viscosidadeDinamicaPaS": 0.0008899999999999996,
+              "calorEspecificoJkgK": 4182,
+              "pressaoVaporBar": 0.0317,
+              "pressaoAtmosfericaBar": 1.01325,
+              "corVisual": "#3498db",
+              "corVisualComposicao": {
+                "#3498db": 1
+              },
+              "refTemperatura": 25,
+              "refDensidade": 997,
+              "refViscosidadeDinamicaPaS": 0.00089,
+              "refPressaoVaporBar": 0.0317,
+              "composicao": {
+                "Água": 1
+              }
+            },
+            "fluidoEntradaPresetId": "agua"
+          }
+        }
+      },
+      {
+        "id": "source-1788458703374-8",
+        "snapshot": {
+          "type": "source",
+          "tag": "Entrada-02 - copia",
+          "x": 80,
+          "y": 760,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "pressaoFonteBar": 1.5,
+            "vazaoMaxima": 1,
+            "fluidoEntrada": {
+              "nome": "Água",
+              "densidade": 997,
+              "viscosidade": 0.0008899999999999996,
+              "temperatura": 80,
+              "viscosidadeDinamicaPaS": 0.0008899999999999996,
+              "calorEspecificoJkgK": 4182,
+              "pressaoVaporBar": 0.0317,
+              "pressaoAtmosfericaBar": 1.01325,
+              "corVisual": "#5dade2",
+              "corVisualComposicao": {
+                "#5dade2": 1
+              },
+              "refTemperatura": 80,
+              "refDensidade": 997,
+              "refViscosidadeDinamicaPaS": 0.0008899999999999996,
+              "refPressaoVaporBar": 0.0317,
+              "composicao": {
+                "Água": 1
+              }
+            },
+            "fluidoEntradaPresetId": "custom"
+          }
+        }
+      },
+      {
+        "id": "source-1788458722799-9",
+        "snapshot": {
+          "type": "source",
+          "tag": "Entrada-03",
+          "x": 560,
+          "y": 1080,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 180,
+            "pressaoFonteBar": 1.5,
+            "vazaoMaxima": 1,
+            "fluidoEntrada": {
+              "nome": "Água",
+              "densidade": 997,
+              "viscosidade": 0.0008899999999999996,
+              "temperatura": 80,
+              "viscosidadeDinamicaPaS": 0.0008899999999999996,
+              "calorEspecificoJkgK": 4182,
+              "pressaoVaporBar": 0.0317,
+              "pressaoAtmosfericaBar": 1.01325,
+              "corVisual": "#5dade2",
+              "corVisualComposicao": {
+                "#5dade2": 1
+              },
+              "refTemperatura": 80,
+              "refDensidade": 997,
+              "refViscosidadeDinamicaPaS": 0.0008899999999999996,
+              "refPressaoVaporBar": 0.0317,
+              "composicao": {
+                "Água": 1
+              }
+            },
+            "fluidoEntradaPresetId": "custom"
+          }
+        }
+      },
+      {
+        "id": "sink-1788458739469-10",
+        "snapshot": {
+          "type": "sink",
+          "tag": "Saída-01",
+          "x": 680,
+          "y": 1040,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "pressaoSaidaBar": 0,
+            "perdaEntradaK": 0
+          }
+        }
+      },
+      {
+        "id": "valve-1788458743418-11",
+        "snapshot": {
+          "type": "valve",
+          "tag": "V-01",
+          "x": 560,
+          "y": 1200,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "aberta": true,
+            "grauAbertura": 10,
+            "aberturaEfetiva": 10,
+            "cv": 160,
+            "unidadeCoeficienteVazao": "cv",
+            "perdaLocalK": 0,
+            "considerarPerdaEstrangulamento": false,
+            "perfilCaracteristica": "equal_percentage",
+            "tipoCaracteristica": "equal_percentage",
+            "rangeabilidade": 30,
+            "tempoCursoSegundos": 6
+          }
+        }
+      },
+      {
+        "id": "valve-1788458755824-12",
+        "snapshot": {
+          "type": "valve",
+          "tag": "V-02",
+          "x": 560,
+          "y": 800,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "aberta": true,
+            "grauAbertura": 10,
+            "aberturaEfetiva": 10,
+            "cv": 160,
+            "unidadeCoeficienteVazao": "cv",
+            "perdaLocalK": 0,
+            "considerarPerdaEstrangulamento": false,
+            "perfilCaracteristica": "equal_percentage",
+            "tipoCaracteristica": "equal_percentage",
+            "rangeabilidade": 30,
+            "tempoCursoSegundos": 6
+          }
+        }
+      },
+      {
+        "id": "sink-1788458759038-13",
+        "snapshot": {
+          "type": "sink",
+          "tag": "Saída-02",
+          "x": 680,
+          "y": 760,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "pressaoSaidaBar": 0,
+            "perdaEntradaK": 0
+          }
+        }
+      },
+      {
+        "id": "valve-1788465476105-14",
+        "snapshot": {
+          "type": "valve",
+          "tag": "V-03",
+          "x": 560,
+          "y": 920,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "aberta": true,
+            "grauAbertura": 10,
+            "aberturaEfetiva": 10,
+            "cv": 160,
+            "unidadeCoeficienteVazao": "cv",
+            "perdaLocalK": 0,
+            "considerarPerdaEstrangulamento": false,
+            "perfilCaracteristica": "equal_percentage",
+            "tipoCaracteristica": "equal_percentage",
+            "rangeabilidade": 30,
+            "tempoCursoSegundos": 6
+          }
+        }
+      },
+      {
+        "id": "sink-1788465482663-15",
+        "snapshot": {
+          "type": "sink",
+          "tag": "Saída-03",
+          "x": 680,
+          "y": 960,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "pressaoSaidaBar": 0,
+            "perdaEntradaK": 0
+          }
+        }
+      },
+      {
+        "id": "valve-1788465513927-16",
+        "snapshot": {
+          "type": "valve",
+          "tag": "V-04",
+          "x": 560,
+          "y": 640,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "aberta": true,
+            "grauAbertura": 10,
+            "aberturaEfetiva": 10,
+            "cv": 160,
+            "unidadeCoeficienteVazao": "cv",
+            "perdaLocalK": 0,
+            "considerarPerdaEstrangulamento": false,
+            "perfilCaracteristica": "equal_percentage",
+            "tipoCaracteristica": "equal_percentage",
+            "rangeabilidade": 30,
+            "tempoCursoSegundos": 6
+          }
+        }
+      },
+      {
+        "id": "sink-1788465517721-17",
+        "snapshot": {
+          "type": "sink",
+          "tag": "Saída-04",
+          "x": 680,
+          "y": 680,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "pressaoSaidaBar": 0,
+            "perdaEntradaK": 0
+          }
+        }
+      },
+      {
+        "id": "sink-1788465529201-18",
+        "snapshot": {
+          "type": "sink",
+          "tag": "Saída-05",
+          "x": 680,
+          "y": 440,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "pressaoSaidaBar": 0,
+            "perdaEntradaK": 0
+          }
+        }
+      },
+      {
+        "id": "valve-1788465532695-19",
+        "snapshot": {
+          "type": "valve",
+          "tag": "V-05",
+          "x": 560,
+          "y": 360,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "aberta": true,
+            "grauAbertura": 10,
+            "aberturaEfetiva": 10,
+            "cv": 160,
+            "unidadeCoeficienteVazao": "cv",
+            "perdaLocalK": 0,
+            "considerarPerdaEstrangulamento": false,
+            "perfilCaracteristica": "equal_percentage",
+            "tipoCaracteristica": "equal_percentage",
+            "rangeabilidade": 30,
+            "tempoCursoSegundos": 6
+          }
+        }
+      }
+    ],
+    "connections": [
+      {
+        "id": "conn-0001",
+        "sourceId": "source-1788458679705-2",
+        "targetId": "heat_exchanger-1788458677679-1",
+        "sourceEndpoint": {
+          "portType": "out",
+          "portId": "out",
+          "offsetX": 45,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "portId": "in1",
+          "offsetX": 0,
+          "offsetY": 24,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 99,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 0,
+        "transientFlowLps": 0.2641680015427909,
+        "lastResolvedFlowLps": 0.657335555059405
+      },
+      {
+        "id": "conn-0002",
+        "sourceId": "source-1788458688611-4",
+        "targetId": "heat_exchanger-1788458688610-3",
+        "sourceEndpoint": {
+          "portType": "out",
+          "portId": "out",
+          "offsetX": 45,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "portId": "in1",
+          "offsetX": 0,
+          "offsetY": 24,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 99,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 0,
+        "transientFlowLps": 0.6231687329089816,
+        "lastResolvedFlowLps": 0.6619199878303405
+      },
+      {
+        "id": "conn-0003",
+        "sourceId": "source-1788458690482-6",
+        "targetId": "heat_exchanger-1788458690482-5",
+        "sourceEndpoint": {
+          "portType": "out",
+          "portId": "out",
+          "offsetX": 45,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "portId": "in1",
+          "offsetX": 0,
+          "offsetY": 24,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 99,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 0,
+        "transientFlowLps": 0.6622954667677456,
+        "lastResolvedFlowLps": 0.6622954667677547
+      },
+      {
+        "id": "conn-0005",
+        "sourceId": "source-1788458703374-8",
+        "targetId": "heat_exchanger-1788458688610-3",
+        "sourceEndpoint": {
+          "portType": "out",
+          "portId": "out",
+          "offsetX": 45,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "inout",
+          "portId": "in2",
+          "offsetX": 0,
+          "offsetY": 76,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 99,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 0,
+        "transientFlowLps": 0.5923080296531461,
+        "lastResolvedFlowLps": 0.6556368363676174
+      },
+      {
+        "id": "conn-0006",
+        "sourceId": "source-1788458722799-9",
+        "targetId": "heat_exchanger-1788458690482-5",
+        "sourceEndpoint": {
+          "portType": "out",
+          "portId": "out",
+          "offsetX": 45,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "inout",
+          "portId": "out2",
+          "offsetX": 200,
+          "offsetY": 76,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 99,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 0,
+        "transientFlowLps": 0.655192980181065,
+        "lastResolvedFlowLps": 0.6551929801810559
+      },
+      {
+        "id": "conn-0007",
+        "sourceId": "heat_exchanger-1788458690482-5",
+        "targetId": "valve-1788458743418-11",
+        "sourceEndpoint": {
+          "portType": "inout",
+          "portId": "in2",
+          "offsetX": 0,
+          "offsetY": 76,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "portId": "in",
+          "offsetX": 0,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 99,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 0,
+        "transientFlowLps": 0.04347243176699354,
+        "lastResolvedFlowLps": 0.04347243176699354
+      },
+      {
+        "id": "conn-0008",
+        "sourceId": "valve-1788458743418-11",
+        "targetId": "sink-1788458739469-10",
+        "sourceEndpoint": {
+          "portType": "out",
+          "portId": "out",
+          "offsetX": 40,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "portId": "in",
+          "offsetX": -5,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 99,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 0,
+        "transientFlowLps": 0.6551587042095586,
+        "lastResolvedFlowLps": 0.6551587042095586
+      },
+      {
+        "id": "conn-0009",
+        "sourceId": "heat_exchanger-1788458688610-3",
+        "targetId": "valve-1788458755824-12",
+        "sourceEndpoint": {
+          "portType": "inout",
+          "portId": "out2",
+          "offsetX": 200,
+          "offsetY": 76,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "portId": "in",
+          "offsetX": 0,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 99,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 0,
+        "transientFlowLps": 0.03238020679289669,
+        "lastResolvedFlowLps": 0.03238020679289669
+      },
+      {
+        "id": "conn-0010",
+        "sourceId": "valve-1788458755824-12",
+        "targetId": "sink-1788458759038-13",
+        "sourceEndpoint": {
+          "portType": "out",
+          "portId": "out",
+          "offsetX": 40,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "portId": "in",
+          "offsetX": -5,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 99,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 0,
+        "transientFlowLps": 0.5922953352628416,
+        "lastResolvedFlowLps": 0.5922953352628416
+      },
+      {
+        "id": "conn-0011",
+        "sourceId": "heat_exchanger-1788458690482-5",
+        "targetId": "valve-1788465476105-14",
+        "sourceEndpoint": {
+          "portType": "out",
+          "portId": "out1",
+          "offsetX": 200,
+          "offsetY": 24,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "portId": "in",
+          "offsetX": 0,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 99,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 0,
+        "transientFlowLps": 0.03637498277796353,
+        "lastResolvedFlowLps": 0.03637498277796353
+      },
+      {
+        "id": "conn-0012",
+        "sourceId": "valve-1788465476105-14",
+        "targetId": "sink-1788465482663-15",
+        "sourceEndpoint": {
+          "portType": "out",
+          "portId": "out",
+          "offsetX": 40,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "portId": "in",
+          "offsetX": -5,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 99,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 0,
+        "transientFlowLps": 0.6622809680553521,
+        "lastResolvedFlowLps": 0.6622809680553521
+      },
+      {
+        "id": "conn-0013",
+        "sourceId": "heat_exchanger-1788458688610-3",
+        "targetId": "valve-1788465513927-16",
+        "sourceEndpoint": {
+          "portType": "out",
+          "portId": "out1",
+          "offsetX": 200,
+          "offsetY": 24,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "portId": "in",
+          "offsetX": 0,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 99,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 0,
+        "transientFlowLps": 0.030886192835861408,
+        "lastResolvedFlowLps": 0.030886192835861408
+      },
+      {
+        "id": "conn-0014",
+        "sourceId": "valve-1788465513927-16",
+        "targetId": "sink-1788465517721-17",
+        "sourceEndpoint": {
+          "portType": "out",
+          "portId": "out",
+          "offsetX": 40,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "portId": "in",
+          "offsetX": -5,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 99,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 0,
+        "transientFlowLps": 0.6231601760033618,
+        "lastResolvedFlowLps": 0.6231601760033618
+      },
+      {
+        "id": "conn-0015",
+        "sourceId": "heat_exchanger-1788458677679-1",
+        "targetId": "valve-1788465532695-19",
+        "sourceEndpoint": {
+          "portType": "out",
+          "portId": "out1",
+          "offsetX": 200,
+          "offsetY": 24,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "portId": "in",
+          "offsetX": 0,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 99,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 0,
+        "transientFlowLps": 0.2641680015427909,
+        "lastResolvedFlowLps": 0.2641680015427909
+      },
+      {
+        "id": "conn-0016",
+        "sourceId": "valve-1788465532695-19",
+        "targetId": "sink-1788465529201-18",
+        "sourceEndpoint": {
+          "portType": "out",
+          "portId": "out",
+          "offsetX": 40,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "portId": "in",
+          "offsetX": -5,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 99,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 0,
+        "transientFlowLps": 0.2641680015427909,
+        "lastResolvedFlowLps": 0.2641680015427909
+      }
+    ],
+    "selection": {
+      "componentIds": [
+        "heat_exchanger-1788458677679-1"
+      ],
+      "connectionId": null
+    }
+  },
+  "analysis": {
+    "hasDirectedCycle": false,
+    "shouldUseNodalSolver": false,
+    "cyclicComponentIds": [],
+    "islands": [
+      {
+        "componentIds": [
+          "heat_exchanger-1788458677679-1",
+          "source-1788458679705-2",
+          "valve-1788465532695-19",
+          "sink-1788465529201-18"
+        ],
+        "connectionIds": [
+          "conn-0001",
+          "conn-0015",
+          "conn-0016"
+        ],
+        "hasDirectedCycle": false,
+        "hasPressureBoundary": true,
+        "hasActivePump": false,
+        "isFloating": false
+      },
+      {
+        "componentIds": [
+          "heat_exchanger-1788458688610-3",
+          "source-1788458688611-4",
+          "source-1788458703374-8",
+          "valve-1788458755824-12",
+          "valve-1788465513927-16",
+          "sink-1788458759038-13",
+          "sink-1788465517721-17"
+        ],
+        "connectionIds": [
+          "conn-0002",
+          "conn-0005",
+          "conn-0009",
+          "conn-0010",
+          "conn-0013",
+          "conn-0014"
+        ],
+        "hasDirectedCycle": false,
+        "hasPressureBoundary": true,
+        "hasActivePump": false,
+        "isFloating": false
+      },
+      {
+        "componentIds": [
+          "heat_exchanger-1788458690482-5",
+          "source-1788458690482-6",
+          "source-1788458722799-9",
+          "valve-1788458743418-11",
+          "valve-1788465476105-14",
+          "sink-1788458739469-10",
+          "sink-1788465482663-15"
+        ],
+        "connectionIds": [
+          "conn-0003",
+          "conn-0006",
+          "conn-0007",
+          "conn-0008",
+          "conn-0011",
+          "conn-0012"
+        ],
+        "hasDirectedCycle": false,
+        "hasPressureBoundary": true,
+        "hasActivePump": false,
+        "isFloating": false
+      }
+    ],
+    "diagnostics": []
+  }
+}

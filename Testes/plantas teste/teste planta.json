@@ -1,0 +1,1254 @@
+{
+  "type": "gaap-virtual-lab-flowchart",
+  "version": 1,
+  "name": "Fluxograma GAAP",
+  "exportedAt": "2026-07-10T19:59:47.433Z",
+  "language": "pt",
+  "app": "GAAP Virtual Lab",
+  "workspace": {
+    "config": {
+      "usarAlturaRelativa": false
+    },
+    "components": [
+      {
+        "id": "source-1781107067232-1",
+        "snapshot": {
+          "type": "source",
+          "tag": "Entrada-01",
+          "x": 80,
+          "y": 200,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "pressaoFonteBar": 0.5,
+            "vazaoMaxima": 8.88888888888889,
+            "fluidoEntrada": {
+              "nome": "Água",
+              "densidade": 997,
+              "viscosidade": 0.00089,
+              "temperatura": 25,
+              "viscosidadeDinamicaPaS": 0.00089,
+              "calorEspecificoJkgK": 4182,
+              "pressaoVaporBar": 0.0317,
+              "pressaoAtmosfericaBar": 1.01325,
+              "corVisual": "#3498db",
+              "corVisualComposicao": {
+                "#3498db": 1
+              },
+              "refTemperatura": 25,
+              "refDensidade": 997,
+              "refViscosidadeDinamicaPaS": 0.00089,
+              "refPressaoVaporBar": 0.0317,
+              "composicao": {
+                "Água": 1
+              }
+            },
+            "fluidoEntradaPresetId": "agua"
+          }
+        }
+      },
+      {
+        "id": "sink-1781107068222-2",
+        "snapshot": {
+          "type": "sink",
+          "tag": "Saída-01",
+          "x": 600,
+          "y": 200,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "pressaoSaidaBar": 0,
+            "perdaEntradaK": 0
+          }
+        }
+      },
+      {
+        "id": "pump-1781107070073-3",
+        "snapshot": {
+          "type": "pump",
+          "tag": "P-01",
+          "x": 280,
+          "y": 160,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "isOn": true,
+            "vazaoNominal": 45,
+            "grauAcionamento": 100,
+            "acionamentoEfetivo": 100,
+            "pressaoMaxima": 5.03,
+            "eficienciaHidraulica": 0.78,
+            "eficienciaAtual": 0.6485438109402685,
+            "npshRequeridoM": 2.5,
+            "npshRequeridoAtualM": 1.1282204052534377,
+            "tempoRampaSegundos": 1.6,
+            "fracaoMelhorEficiencia": 0.72
+          }
+        }
+      },
+      {
+        "id": "tank-1781113998187-4",
+        "snapshot": {
+          "type": "tank",
+          "tag": "T-01",
+          "x": 200,
+          "y": 520,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "capacidadeMaxima": 1000,
+            "volumeAtual": 0.2783602333803334,
+            "alturaUtilMetros": 2.4,
+            "coeficienteSaida": 0.82,
+            "alturaBocalEntradaM": 2.2,
+            "alturaBocalSaidaM": 0.1,
+            "volumeInicial": 790,
+            "fluidoConteudo": {
+              "nome": "Água",
+              "densidade": 997,
+              "viscosidade": 0.0008899999999999996,
+              "temperatura": 25,
+              "viscosidadeDinamicaPaS": 0.0008899999999999996,
+              "calorEspecificoJkgK": 4182,
+              "pressaoVaporBar": 0.0317,
+              "pressaoAtmosfericaBar": 1.01325,
+              "corVisual": "#3498db",
+              "corVisualComposicao": {
+                "#3498db": 1
+              },
+              "refTemperatura": 25,
+              "refDensidade": 997,
+              "refViscosidadeDinamicaPaS": 0.0008899999999999996,
+              "refPressaoVaporBar": 0.0317,
+              "composicao": {
+                "Água": 1
+              }
+            },
+            "setpointAtivo": false,
+            "setpoint": 50,
+            "kp": 4,
+            "ki": 0.6,
+            "kd": 0
+          }
+        }
+      },
+      {
+        "id": "source-1781113999804-5",
+        "snapshot": {
+          "type": "source",
+          "tag": "Entrada-02",
+          "x": -40,
+          "y": 440,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "pressaoFonteBar": 0.5,
+            "vazaoMaxima": 16.666666666666668,
+            "fluidoEntrada": {
+              "nome": "Água",
+              "densidade": 997,
+              "viscosidade": 0.00089,
+              "temperatura": 25,
+              "viscosidadeDinamicaPaS": 0.00089,
+              "calorEspecificoJkgK": 4182,
+              "pressaoVaporBar": 0.0317,
+              "pressaoAtmosfericaBar": 1.01325,
+              "corVisual": "#3498db",
+              "corVisualComposicao": {
+                "#3498db": 1
+              },
+              "refTemperatura": 25,
+              "refDensidade": 997,
+              "refViscosidadeDinamicaPaS": 0.00089,
+              "refPressaoVaporBar": 0.0317,
+              "composicao": {
+                "Água": 1
+              }
+            },
+            "fluidoEntradaPresetId": "agua"
+          }
+        }
+      },
+      {
+        "id": "sink-1781114047855-7",
+        "snapshot": {
+          "type": "sink",
+          "tag": "Saída-02",
+          "x": 480,
+          "y": 760,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "pressaoSaidaBar": 0,
+            "perdaEntradaK": 0
+          }
+        }
+      },
+      {
+        "id": "tank-1781114774470-8",
+        "snapshot": {
+          "type": "tank",
+          "tag": "T-01 - copia",
+          "x": 160,
+          "y": 960,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "capacidadeMaxima": 1000,
+            "volumeAtual": 999.7280179122853,
+            "alturaUtilMetros": 2.4,
+            "coeficienteSaida": 0.82,
+            "alturaBocalEntradaM": 2.2,
+            "alturaBocalSaidaM": 0.1,
+            "volumeInicial": 790,
+            "fluidoConteudo": {
+              "nome": "Água",
+              "densidade": 997.0000000000033,
+              "viscosidade": 0.0008899999999999609,
+              "temperatura": 24.99999999999996,
+              "viscosidadeDinamicaPaS": 0.0008899999999999609,
+              "calorEspecificoJkgK": 4182.000000000008,
+              "pressaoVaporBar": 0.03170000000000024,
+              "pressaoAtmosfericaBar": 1.013250000000005,
+              "corVisual": "#3498db",
+              "corVisualComposicao": {
+                "#3498db": 1
+              },
+              "refTemperatura": 24.99999999999996,
+              "refDensidade": 997.0000000000033,
+              "refViscosidadeDinamicaPaS": 0.0008899999999999609,
+              "refPressaoVaporBar": 0.03170000000000024,
+              "composicao": {
+                "Água": 1
+              }
+            },
+            "setpointAtivo": false,
+            "setpoint": 50,
+            "kp": 4,
+            "ki": 0.6,
+            "kd": 0
+          }
+        }
+      },
+      {
+        "id": "source-1781114774472-9",
+        "snapshot": {
+          "type": "source",
+          "tag": "Entrada-02 - copia",
+          "x": -80,
+          "y": 880,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "pressaoFonteBar": 0.5,
+            "vazaoMaxima": 16.666666666666668,
+            "fluidoEntrada": {
+              "nome": "Água",
+              "densidade": 997,
+              "viscosidade": 0.00089,
+              "temperatura": 25,
+              "viscosidadeDinamicaPaS": 0.00089,
+              "calorEspecificoJkgK": 4182,
+              "pressaoVaporBar": 0.0317,
+              "pressaoAtmosfericaBar": 1.01325,
+              "corVisual": "#3498db",
+              "corVisualComposicao": {
+                "#3498db": 1
+              },
+              "refTemperatura": 25,
+              "refDensidade": 997,
+              "refViscosidadeDinamicaPaS": 0.00089,
+              "refPressaoVaporBar": 0.0317,
+              "composicao": {
+                "Água": 1
+              }
+            },
+            "fluidoEntradaPresetId": "agua"
+          }
+        }
+      },
+      {
+        "id": "sink-1781114774472-10",
+        "snapshot": {
+          "type": "sink",
+          "tag": "Saída-02 - copia",
+          "x": 560,
+          "y": 1200,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "pressaoSaidaBar": 0,
+            "perdaEntradaK": 0
+          }
+        }
+      },
+      {
+        "id": "valve-1781114790206-11",
+        "snapshot": {
+          "type": "valve",
+          "tag": "V-01",
+          "x": 440,
+          "y": 1200,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "aberta": true,
+            "grauAbertura": 50,
+            "aberturaEfetiva": 50,
+            "cv": 220,
+            "unidadeCoeficienteVazao": "cv",
+            "perdaLocalK": 0,
+            "considerarPerdaEstrangulamento": false,
+            "perfilCaracteristica": "linear",
+            "tipoCaracteristica": "linear",
+            "rangeabilidade": 50,
+            "tempoCursoSegundos": 4
+          }
+        }
+      },
+      {
+        "id": "tank-1781114954505-12",
+        "snapshot": {
+          "type": "tank",
+          "tag": "T-06",
+          "x": 120,
+          "y": 1640,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "capacidadeMaxima": 1000,
+            "volumeAtual": 0.5930063529875641,
+            "alturaUtilMetros": 2.4,
+            "coeficienteSaida": 0.82,
+            "alturaBocalEntradaM": 2.2,
+            "alturaBocalSaidaM": 0.1,
+            "volumeInicial": 790,
+            "fluidoConteudo": {
+              "nome": "Água",
+              "densidade": 997,
+              "viscosidade": 0.0008899999999999996,
+              "temperatura": 25,
+              "viscosidadeDinamicaPaS": 0.0008899999999999996,
+              "calorEspecificoJkgK": 4182,
+              "pressaoVaporBar": 0.031700000000000006,
+              "pressaoAtmosfericaBar": 1.01325,
+              "corVisual": "#3498db",
+              "corVisualComposicao": {
+                "#3498db": 1
+              },
+              "refTemperatura": 25,
+              "refDensidade": 997,
+              "refViscosidadeDinamicaPaS": 0.0008899999999999996,
+              "refPressaoVaporBar": 0.031700000000000006,
+              "composicao": {
+                "Água": 1
+              }
+            },
+            "setpointAtivo": false,
+            "setpoint": 50,
+            "kp": 4,
+            "ki": 0.6,
+            "kd": 0
+          }
+        }
+      },
+      {
+        "id": "source-1781114954506-13",
+        "snapshot": {
+          "type": "source",
+          "tag": "Entrada-02 - copia - copia",
+          "x": -400,
+          "y": 1640,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "pressaoFonteBar": 0.5,
+            "vazaoMaxima": 27.77777777777778,
+            "fluidoEntrada": {
+              "nome": "Água",
+              "densidade": 997,
+              "viscosidade": 0.00089,
+              "temperatura": 25,
+              "viscosidadeDinamicaPaS": 0.00089,
+              "calorEspecificoJkgK": 4182,
+              "pressaoVaporBar": 0.0317,
+              "pressaoAtmosfericaBar": 1.01325,
+              "corVisual": "#3498db",
+              "corVisualComposicao": {
+                "#3498db": 1
+              },
+              "refTemperatura": 25,
+              "refDensidade": 997,
+              "refViscosidadeDinamicaPaS": 0.00089,
+              "refPressaoVaporBar": 0.0317,
+              "composicao": {
+                "Água": 1
+              }
+            },
+            "fluidoEntradaPresetId": "agua"
+          }
+        }
+      },
+      {
+        "id": "sink-1781114954507-14",
+        "snapshot": {
+          "type": "sink",
+          "tag": "Saída-02 - copia - copia",
+          "x": 600,
+          "y": 1880,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "pressaoSaidaBar": 0,
+            "perdaEntradaK": 0
+          }
+        }
+      },
+      {
+        "id": "valve-1781114954507-15",
+        "snapshot": {
+          "type": "valve",
+          "tag": "V-01 - copia",
+          "x": 400,
+          "y": 1880,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "aberta": true,
+            "grauAbertura": 50,
+            "aberturaEfetiva": 50,
+            "cv": 220,
+            "unidadeCoeficienteVazao": "cv",
+            "perdaLocalK": 0,
+            "considerarPerdaEstrangulamento": false,
+            "perfilCaracteristica": "linear",
+            "tipoCaracteristica": "linear",
+            "rangeabilidade": 50,
+            "tempoCursoSegundos": 4
+          }
+        }
+      },
+      {
+        "id": "pump-1781114964236-16",
+        "snapshot": {
+          "type": "pump",
+          "tag": "P-02",
+          "x": -120,
+          "y": 1560,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "isOn": true,
+            "vazaoNominal": 45,
+            "grauAcionamento": 100,
+            "acionamentoEfetivo": 100,
+            "pressaoMaxima": 5,
+            "eficienciaHidraulica": 0.78,
+            "eficienciaAtual": 0.7749051704959669,
+            "npshRequeridoM": 2.5,
+            "npshRequeridoAtualM": 1.6582051604491022,
+            "tempoRampaSegundos": 1.6,
+            "fracaoMelhorEficiencia": 0.72
+          }
+        }
+      },
+      {
+        "id": "valve-1781115568787-17",
+        "snapshot": {
+          "type": "valve",
+          "tag": "V-02",
+          "x": 360,
+          "y": 0,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "aberta": true,
+            "grauAbertura": 50,
+            "aberturaEfetiva": 50,
+            "cv": 160,
+            "unidadeCoeficienteVazao": "cv",
+            "perdaLocalK": 0,
+            "considerarPerdaEstrangulamento": false,
+            "perfilCaracteristica": "equal_percentage",
+            "tipoCaracteristica": "equal_percentage",
+            "rangeabilidade": 30,
+            "tempoCursoSegundos": 6
+          }
+        }
+      },
+      {
+        "id": "sink-1781115569804-18",
+        "snapshot": {
+          "type": "sink",
+          "tag": "Saída-03",
+          "x": 760,
+          "y": 40,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "pressaoSaidaBar": 0,
+            "perdaEntradaK": 0
+          }
+        }
+      },
+      {
+        "id": "source-1781115571928-19",
+        "snapshot": {
+          "type": "source",
+          "tag": "Entrada-03",
+          "x": 0,
+          "y": 80,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "pressaoFonteBar": 0.5,
+            "vazaoMaxima": 8.88888888888889,
+            "fluidoEntrada": {
+              "nome": "Água",
+              "densidade": 997,
+              "viscosidade": 0.00089,
+              "temperatura": 25,
+              "viscosidadeDinamicaPaS": 0.00089,
+              "calorEspecificoJkgK": 4182,
+              "pressaoVaporBar": 0.0317,
+              "pressaoAtmosfericaBar": 1.01325,
+              "corVisual": "#3498db",
+              "corVisualComposicao": {
+                "#3498db": 1
+              },
+              "refTemperatura": 25,
+              "refDensidade": 997,
+              "refViscosidadeDinamicaPaS": 0.00089,
+              "refPressaoVaporBar": 0.0317,
+              "composicao": {
+                "Água": 1
+              }
+            },
+            "fluidoEntradaPresetId": "agua"
+          }
+        }
+      },
+      {
+        "id": "tank-1781116004664-20",
+        "snapshot": {
+          "type": "tank",
+          "tag": "T-07",
+          "x": 120,
+          "y": 2160,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "capacidadeMaxima": 1000,
+            "volumeAtual": 577.2939595841116,
+            "alturaUtilMetros": 2.4,
+            "coeficienteSaida": 0.82,
+            "alturaBocalEntradaM": 2.2,
+            "alturaBocalSaidaM": 0.1,
+            "volumeInicial": 790,
+            "fluidoConteudo": {
+              "nome": "Água",
+              "densidade": 997.0000000000003,
+              "viscosidade": 0.0008900000000000028,
+              "temperatura": 25.000000000000806,
+              "viscosidadeDinamicaPaS": 0.0008900000000000028,
+              "calorEspecificoJkgK": 4182.000000000014,
+              "pressaoVaporBar": 0.03169999999999997,
+              "pressaoAtmosfericaBar": 1.0132500000000029,
+              "corVisual": "#3498db",
+              "corVisualComposicao": {
+                "#3498db": 1
+              },
+              "refTemperatura": 25.000000000000806,
+              "refDensidade": 997.0000000000003,
+              "refViscosidadeDinamicaPaS": 0.0008900000000000028,
+              "refPressaoVaporBar": 0.03169999999999997,
+              "composicao": {
+                "Água": 1
+              }
+            },
+            "setpointAtivo": true,
+            "setpoint": 57,
+            "kp": 4,
+            "ki": 0.6,
+            "kd": 0
+          }
+        }
+      },
+      {
+        "id": "source-1781116004665-21",
+        "snapshot": {
+          "type": "source",
+          "tag": "Entrada-05",
+          "x": -400,
+          "y": 2120,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "pressaoFonteBar": 0.5,
+            "vazaoMaxima": 27.77777777777778,
+            "fluidoEntrada": {
+              "nome": "Água",
+              "densidade": 997,
+              "viscosidade": 0.00089,
+              "temperatura": 25,
+              "viscosidadeDinamicaPaS": 0.00089,
+              "calorEspecificoJkgK": 4182,
+              "pressaoVaporBar": 0.0317,
+              "pressaoAtmosfericaBar": 1.01325,
+              "corVisual": "#3498db",
+              "corVisualComposicao": {
+                "#3498db": 1
+              },
+              "refTemperatura": 25,
+              "refDensidade": 997,
+              "refViscosidadeDinamicaPaS": 0.00089,
+              "refPressaoVaporBar": 0.0317,
+              "composicao": {
+                "Água": 1
+              }
+            },
+            "fluidoEntradaPresetId": "agua"
+          }
+        }
+      },
+      {
+        "id": "sink-1781116004665-22",
+        "snapshot": {
+          "type": "sink",
+          "tag": "Saída-05",
+          "x": 600,
+          "y": 2360,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "pressaoSaidaBar": 0,
+            "perdaEntradaK": 0
+          }
+        }
+      },
+      {
+        "id": "valve-1781116004665-23",
+        "snapshot": {
+          "type": "valve",
+          "tag": "V-05",
+          "x": 400,
+          "y": 2360,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "aberta": true,
+            "grauAbertura": 34.434221592633705,
+            "aberturaEfetiva": 34.434221592633705,
+            "cv": 220,
+            "unidadeCoeficienteVazao": "cv",
+            "perdaLocalK": 0,
+            "considerarPerdaEstrangulamento": false,
+            "perfilCaracteristica": "linear",
+            "tipoCaracteristica": "linear",
+            "rangeabilidade": 50,
+            "tempoCursoSegundos": 4
+          }
+        }
+      },
+      {
+        "id": "pump-1781116004665-24",
+        "snapshot": {
+          "type": "pump",
+          "tag": "P-05",
+          "x": -120,
+          "y": 2040,
+          "properties": {
+            "diametroConexaoM": 0.08,
+            "rotacaoVisualGraus": 0,
+            "isOn": true,
+            "vazaoNominal": 45,
+            "grauAcionamento": 100,
+            "acionamentoEfetivo": 100,
+            "pressaoMaxima": 5,
+            "eficienciaHidraulica": 0.78,
+            "eficienciaAtual": 0.7749051704959669,
+            "npshRequeridoM": 2.5,
+            "npshRequeridoAtualM": 1.6582051604491022,
+            "tempoRampaSegundos": 1.6,
+            "fracaoMelhorEficiencia": 0.72
+          }
+        }
+      }
+    ],
+    "connections": [
+      {
+        "id": "conn-0001",
+        "sourceId": "source-1781107067232-1",
+        "targetId": "pump-1781107070073-3",
+        "sourceEndpoint": {
+          "portType": "out",
+          "offsetX": 45,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "offsetX": 0,
+          "offsetY": 40,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 0,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 8.88671875,
+        "transientFlowLps": 8.886718749999998,
+        "lastResolvedFlowLps": 8.88671875
+      },
+      {
+        "id": "conn-0002",
+        "sourceId": "pump-1781107070073-3",
+        "targetId": "sink-1781107068222-2",
+        "sourceEndpoint": {
+          "portType": "out",
+          "offsetX": 80,
+          "offsetY": 40,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "offsetX": -5,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 0,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 8.88671874999999,
+        "transientFlowLps": 8.886718749999998,
+        "lastResolvedFlowLps": 8.886718749999998
+      },
+      {
+        "id": "conn-0003",
+        "sourceId": "source-1781113999804-5",
+        "targetId": "tank-1781113998187-4",
+        "sourceEndpoint": {
+          "portType": "out",
+          "offsetX": 45,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "offsetX": 80,
+          "offsetY": -40,
+          "floorOffsetY": 200,
+          "dynamicHeight": "tank_inlet"
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 0,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 0,
+        "transientFlowLps": 16.666666666666664,
+        "lastResolvedFlowLps": 16.666666666666668
+      },
+      {
+        "id": "conn-0004",
+        "sourceId": "tank-1781113998187-4",
+        "targetId": "sink-1781114047855-7",
+        "sourceEndpoint": {
+          "portType": "out",
+          "offsetX": 80,
+          "offsetY": 200,
+          "floorOffsetY": 200,
+          "dynamicHeight": "tank_outlet"
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "offsetX": -5,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 0,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 0,
+        "transientFlowLps": 16.674144338088155,
+        "lastResolvedFlowLps": 16.776166429237623
+      },
+      {
+        "id": "conn-0005",
+        "sourceId": "source-1781114774472-9",
+        "targetId": "tank-1781114774470-8",
+        "sourceEndpoint": {
+          "portType": "out",
+          "offsetX": 45,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "offsetX": 80,
+          "offsetY": -40,
+          "floorOffsetY": 200,
+          "dynamicHeight": "tank_inlet"
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 0,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 0,
+        "transientFlowLps": 16.292625660628353,
+        "lastResolvedFlowLps": 16.392234849231585
+      },
+      {
+        "id": "conn-0007",
+        "sourceId": "valve-1781114790206-11",
+        "targetId": "sink-1781114774472-10",
+        "sourceEndpoint": {
+          "portType": "out",
+          "offsetX": 40,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "offsetX": -5,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 0,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 0,
+        "transientFlowLps": 16.28485392670681,
+        "lastResolvedFlowLps": 16.28485392670681
+      },
+      {
+        "id": "conn-0008",
+        "sourceId": "tank-1781114774470-8",
+        "targetId": "valve-1781114790206-11",
+        "sourceEndpoint": {
+          "portType": "out",
+          "offsetX": 80,
+          "offsetY": 200,
+          "floorOffsetY": 200,
+          "dynamicHeight": "tank_outlet"
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "offsetX": 0,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 0,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 0,
+        "transientFlowLps": 16.28485392670681,
+        "lastResolvedFlowLps": 16.306109384998397
+      },
+      {
+        "id": "conn-0010",
+        "sourceId": "valve-1781114954507-15",
+        "targetId": "sink-1781114954507-14",
+        "sourceEndpoint": {
+          "portType": "out",
+          "offsetX": 40,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "offsetX": -5,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 0,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 8.864885979053211,
+        "transientFlowLps": 27.77035361184402,
+        "lastResolvedFlowLps": 27.77035361184402
+      },
+      {
+        "id": "conn-0011",
+        "sourceId": "tank-1781114954505-12",
+        "targetId": "valve-1781114954507-15",
+        "sourceEndpoint": {
+          "portType": "out",
+          "offsetX": 80,
+          "offsetY": 200,
+          "floorOffsetY": 200,
+          "dynamicHeight": "tank_outlet"
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "offsetX": 0,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 0,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 0,
+        "transientFlowLps": 27.77035361184402,
+        "lastResolvedFlowLps": 27.85621740199987
+      },
+      {
+        "id": "conn-0012",
+        "sourceId": "source-1781114954506-13",
+        "targetId": "pump-1781114964236-16",
+        "sourceEndpoint": {
+          "portType": "out",
+          "offsetX": 45,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "offsetX": 0,
+          "offsetY": 40,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 0,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 0,
+        "transientFlowLps": 27.770996093749996,
+        "lastResolvedFlowLps": 27.77099609375
+      },
+      {
+        "id": "conn-0013",
+        "sourceId": "pump-1781114964236-16",
+        "targetId": "tank-1781114954505-12",
+        "sourceEndpoint": {
+          "portType": "out",
+          "offsetX": 80,
+          "offsetY": 40,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "offsetX": 80,
+          "offsetY": -40,
+          "floorOffsetY": 200,
+          "dynamicHeight": "tank_inlet"
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 0,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 0,
+        "transientFlowLps": 27.770996093749996,
+        "lastResolvedFlowLps": 27.770996093749996
+      },
+      {
+        "id": "conn-0014",
+        "sourceId": "source-1781115571928-19",
+        "targetId": "valve-1781115568787-17",
+        "sourceEndpoint": {
+          "portType": "out",
+          "offsetX": 45,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "offsetX": 0,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 0,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 0,
+        "transientFlowLps": 3.7479548772985485,
+        "lastResolvedFlowLps": 3.7479548756743
+      },
+      {
+        "id": "conn-0015",
+        "sourceId": "valve-1781115568787-17",
+        "targetId": "sink-1781115569804-18",
+        "sourceEndpoint": {
+          "portType": "out",
+          "offsetX": 40,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "offsetX": -5,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 0,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 0,
+        "transientFlowLps": 3.7479548772985485,
+        "lastResolvedFlowLps": 3.7479548772985485
+      },
+      {
+        "id": "conn-0016",
+        "sourceId": "valve-1781116004665-23",
+        "targetId": "sink-1781116004665-22",
+        "sourceEndpoint": {
+          "portType": "out",
+          "offsetX": 40,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "offsetX": -5,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 0,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 8.864885979053211,
+        "transientFlowLps": 30.289451620085703,
+        "lastResolvedFlowLps": 30.289451620085703
+      },
+      {
+        "id": "conn-0017",
+        "sourceId": "tank-1781116004664-20",
+        "targetId": "valve-1781116004665-23",
+        "sourceEndpoint": {
+          "portType": "out",
+          "offsetX": 80,
+          "offsetY": 200,
+          "floorOffsetY": 200,
+          "dynamicHeight": "tank_outlet"
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "offsetX": 0,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 0,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 20.50955995779499,
+        "transientFlowLps": 30.289451620085703,
+        "lastResolvedFlowLps": 30.29568285678365
+      },
+      {
+        "id": "conn-0018",
+        "sourceId": "source-1781116004665-21",
+        "targetId": "pump-1781116004665-24",
+        "sourceEndpoint": {
+          "portType": "out",
+          "offsetX": 45,
+          "offsetY": 20,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "offsetX": 0,
+          "offsetY": 40,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 0,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 27.77099609375,
+        "transientFlowLps": 27.770996093749996,
+        "lastResolvedFlowLps": 27.77099609375
+      },
+      {
+        "id": "conn-0019",
+        "sourceId": "pump-1781116004665-24",
+        "targetId": "tank-1781116004664-20",
+        "sourceEndpoint": {
+          "portType": "out",
+          "offsetX": 80,
+          "offsetY": 40,
+          "floorOffsetY": 0,
+          "dynamicHeight": null
+        },
+        "targetEndpoint": {
+          "portType": "in",
+          "offsetX": 80,
+          "offsetY": -40,
+          "floorOffsetY": 200,
+          "dynamicHeight": "tank_inlet"
+        },
+        "diameterM": 0.08,
+        "roughnessMm": 0.045,
+        "extraLengthM": 0,
+        "perdaLocalK": 0,
+        "designVelocityMps": 2,
+        "designFlowLps": 27.770996093749982,
+        "transientFlowLps": 27.770996093749996,
+        "lastResolvedFlowLps": 27.770996093749996
+      }
+    ],
+    "selection": {
+      "componentIds": [
+        "pump-1781114964236-16"
+      ],
+      "connectionId": null
+    }
+  },
+  "analysis": {
+    "hasDirectedCycle": false,
+    "shouldUseNodalSolver": false,
+    "cyclicComponentIds": [],
+    "islands": [
+      {
+        "componentIds": [
+          "source-1781107067232-1",
+          "pump-1781107070073-3",
+          "sink-1781107068222-2"
+        ],
+        "connectionIds": [
+          "conn-0001",
+          "conn-0002"
+        ],
+        "hasDirectedCycle": false,
+        "hasPressureBoundary": true,
+        "hasActivePump": true,
+        "isFloating": false
+      },
+      {
+        "componentIds": [
+          "tank-1781113998187-4",
+          "source-1781113999804-5",
+          "sink-1781114047855-7"
+        ],
+        "connectionIds": [
+          "conn-0003",
+          "conn-0004"
+        ],
+        "hasDirectedCycle": false,
+        "hasPressureBoundary": true,
+        "hasActivePump": false,
+        "isFloating": false
+      },
+      {
+        "componentIds": [
+          "tank-1781114774470-8",
+          "source-1781114774472-9",
+          "valve-1781114790206-11",
+          "sink-1781114774472-10"
+        ],
+        "connectionIds": [
+          "conn-0005",
+          "conn-0007",
+          "conn-0008"
+        ],
+        "hasDirectedCycle": false,
+        "hasPressureBoundary": true,
+        "hasActivePump": false,
+        "isFloating": false
+      },
+      {
+        "componentIds": [
+          "tank-1781114954505-12",
+          "valve-1781114954507-15",
+          "pump-1781114964236-16",
+          "sink-1781114954507-14",
+          "source-1781114954506-13"
+        ],
+        "connectionIds": [
+          "conn-0010",
+          "conn-0011",
+          "conn-0012",
+          "conn-0013"
+        ],
+        "hasDirectedCycle": false,
+        "hasPressureBoundary": true,
+        "hasActivePump": true,
+        "isFloating": false
+      },
+      {
+        "componentIds": [
+          "valve-1781115568787-17",
+          "source-1781115571928-19",
+          "sink-1781115569804-18"
+        ],
+        "connectionIds": [
+          "conn-0014",
+          "conn-0015"
+        ],
+        "hasDirectedCycle": false,
+        "hasPressureBoundary": true,
+        "hasActivePump": false,
+        "isFloating": false
+      },
+      {
+        "componentIds": [
+          "tank-1781116004664-20",
+          "valve-1781116004665-23",
+          "pump-1781116004665-24",
+          "sink-1781116004665-22",
+          "source-1781116004665-21"
+        ],
+        "connectionIds": [
+          "conn-0016",
+          "conn-0017",
+          "conn-0018",
+          "conn-0019"
+        ],
+        "hasDirectedCycle": false,
+        "hasPressureBoundary": true,
+        "hasActivePump": true,
+        "isFloating": false
+      }
+    ],
+    "diagnostics": []
+  }
+}

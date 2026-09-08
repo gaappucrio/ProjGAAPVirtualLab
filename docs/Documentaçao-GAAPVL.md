@@ -1156,7 +1156,7 @@ A seguir, a lista completa de módulos e símbolos exportados.
 - `js/presentation/controllers/WorkspaceSelectionController.js`: setupWorkspaceSelectionController
 - `js/presentation/export/PumpDwsimJsonExporter.js`: buildPumpDwsimJsonData, exportPumpDwsimJson
 - `js/presentation/export/SimulationDataExporter.js`: buildExportHtml, exportSimulationData
-- `js/presentation/flowchart/FlowchartPersistence.js`: FLOWCHART_DOCUMENT_TYPE, FLOWCHART_DOCUMENT_VERSION, createFlowchartDocument, downloadFlowchartDocument, getFlowchartFileName, parseFlowchartDocument, readFlowchartFile, restoreFlowchartDocument
+- `js/presentation/flowchart/FlowchartPersistence.js`: FLOWCHART_DOCUMENT_TYPE, FLOWCHART_DOCUMENT_VERSION, createFlowchartDocument, downloadFlowchartDocument, getFlowchartFileName, loadWorkspaceIntoEngine, parseFlowchartDocument, readFlowchartFile, restoreFlowchartDocument
 - `js/presentation/i18n/LanguageManager.js`: TEXTS, applyLanguageToDocument, createTranslationProxy, getComponentTagPrefix, getFluidNameVariants, getLanguage, isEnglishLanguage, localizeElement, setLanguage, subscribeLanguageChanges, t, translateDefaultComponentTag, translateFluidName, translateLiteral
 - `js/presentation/import/DwsimImporter.js`: importDwsimDocument, parseDwsimXml, readDwsimFile, translateDwsimToWorkspace
 - `js/presentation/monitoring/MonitorSlotHistory.js`: createMonitorSlotHistory

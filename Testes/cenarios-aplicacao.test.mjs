@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import fs from 'node:fs';
+import path from 'node:path';
+
 import { SistemaSimulacao, FLUID_PRESETS } from '../js/application/engine/SimulationEngine.js';
 import { ConnectionModel } from '../js/domain/models/ConnectionModel.js';
 import { BombaLogica } from '../js/domain/components/BombaLogica.js';
@@ -13,7 +16,8 @@ import { analyzeHydraulicNetwork } from '../js/domain/services/HydraulicNetworkA
 import {
     createFlowchartDocument,
     FLOWCHART_DOCUMENT_TYPE,
-    parseFlowchartDocument
+    parseFlowchartDocument,
+    restoreFlowchartDocument
 } from '../js/presentation/flowchart/FlowchartPersistence.js';
 
 function approx(actual, expected, tolerance = 1e-4, message = '') {
@@ -703,6 +707,118 @@ test('gráfico detalhado desacopla da barra de propriedades ao expandir e perman
         global.requestAnimationFrame = prevRaf;
     }
 });
+
+const PLANTAS_TESTE_DIR = path.resolve('Testes/plantas teste');
+
+function simulateTicks(engine, ticks = 30, dt = 0.1) {
+    for (let i = 0; i < ticks; i += 1) {
+        engine.componentes.forEach((c) => c.atualizarDinamica(dt, engine.hydraulicContext.getComponentFluid(c) || engine.fluidoOperante));
+        engine.resolveHydraulicNetwork(dt);
+        engine.componentes.forEach((c) => {
+            const fluid = engine.hydraulicContext.getComponentFluid(c) || engine.fluidoOperante;
+            if (c instanceof TanqueLogico) c.atualizarFisica(dt, fluid);
+            else c.sincronizarMetricasFisicas(fluid);
+        });
+        engine.reconcileConnectionPressureStatesFromComponentDrops();
+    }
+}
+
+test('importacao de planta teste: teste planta.json (6 ilhas / cenarios integrados)', () => {
+    const raw = fs.readFileSync(path.join(PLANTAS_TESTE_DIR, 'teste planta.json'), 'utf8');
+    const engine = createEngine();
+    const { restored } = restoreFlowchartDocument(engine, raw);
+
+    assert.equal(restored, true);
+    assert.equal(engine.componentes.length, 23);
+    assert.equal(engine.conexoes.length, 17);
+
+    simulateTicks(engine, 35, 0.1);
+
+    // Ilha 1: Recalque Direto (Entrada-01 -> P-01 -> Saída-01)
+    const p1 = engine.componentes.find((c) => c.tag === 'P-01');
+    assert.ok(p1.fluxoReal > 8.0, `P-01 deve recalcar vazao ativa: ${p1.fluxoReal}`);
+    assert.ok(p1.cargaGeradaBar > 4.0, `P-01 deve gerar carga motriz alta: ${p1.cargaGeradaBar}`);
+
+    // Ilha 2: Drenagem Livre (Entrada-02 -> T-01 -> Saída-02)
+    const t1 = engine.componentes.find((c) => c.tag === 'T-01');
+    assert.ok(t1.lastQin > 15.0, `T-01 deve receber vazao estavel: ${t1.lastQin}`);
+    assert.ok(t1.lastQout > 15.0, `T-01 deve descarregar por gravidade: ${t1.lastQout}`);
+
+    // Ilha 3: Tanque com Válvula Linear (Entrada-02 - copia -> T-01 - copia -> V-01 -> Saída-02 - copia)
+    const v1 = engine.componentes.find((c) => c.tag === 'V-01');
+    assert.ok(v1.fluxoReal > 15.0, `V-01 deve escoar: ${v1.fluxoReal}`);
+    assert.ok(v1.deltaPAtualBar > 0.2, `V-01 a 50% deve gerar deltaP mensuravel: ${v1.deltaPAtualBar}`);
+
+    // Ilha 4: Recalque e Pulmão (Entrada-02 - copia - copia -> P-02 -> T-06 -> V-01 - copia -> Saída-02 - copia - copia)
+    const p2 = engine.componentes.find((c) => c.tag === 'P-02');
+    const t6 = engine.componentes.find((c) => c.tag === 'T-06');
+    assert.ok(p2.fluxoReal > 25.0, `P-02 deve alimentar T-06: ${p2.fluxoReal}`);
+    assert.ok(t6.lastQout > 25.0, `T-06 deve descarregar atraves de V-01 - copia: ${t6.lastQout}`);
+
+    // Ilha 5: Linha Equal Percentage (Entrada-03 -> V-02 -> Saída-03)
+    const v2 = engine.componentes.find((c) => c.tag === 'V-02');
+    assert.ok(v2.fluxoReal > 3.0 && v2.fluxoReal < 5.0, `V-02 equal percentage deve estrangular vazao em torno de 3.75 L/s: ${v2.fluxoReal}`);
+
+    // Ilha 6: Controle de Nível em 57% (Entrada-05 -> P-05 -> T-07 -> V-05 -> Saída-05)
+    const t7 = engine.componentes.find((c) => c.tag === 'T-07');
+    const v5 = engine.componentes.find((c) => c.tag === 'V-05');
+    assert.equal(t7.setpointAtivo, true);
+    assert.equal(t7.setpoint, 57);
+    assert.ok(t7.volumeAtual > 500 && t7.volumeAtual < 650, `T-07 deve regular volume proximo de 57% (570 L): ${t7.volumeAtual}`);
+    assert.ok(v5.aberturaEfetiva > 25 && v5.aberturaEfetiva < 45, `V-05 modulante deve operar em abertura parcial controlada: ${v5.aberturaEfetiva}`);
+
+    // Verificação de todas as 17 conexões ativas
+    const activeConns = engine.conexoes.filter((c) => engine.getConnectionState(c).flowLps > 0.001);
+    assert.equal(activeConns.length, 17, 'Todas as 17 conexoes de teste planta.json devem estar ativas');
+});
+
+test('importacao de planta teste: teste_trocatroca.json (3 cenarios termicos: utilidade, paralelo e contracorrente)', () => {
+    const raw = fs.readFileSync(path.join(PLANTAS_TESTE_DIR, 'teste_trocatroca.json'), 'utf8');
+    const engine = createEngine();
+    const { restored } = restoreFlowchartDocument(engine, raw);
+
+    assert.equal(restored, true);
+    assert.equal(engine.componentes.length, 18);
+    assert.equal(engine.conexoes.length, 15);
+
+    simulateTicks(engine, 35, 0.1);
+
+    const tcList = engine.componentes.filter((c) => c.constructor.name === 'TrocadorCalorLogico');
+    assert.equal(tcList.length, 3, 'Devem existir exatamente 3 trocadores de calor na planta');
+
+    // Cenário 1: Trocador em Modo Utilidade (TC-01, topo)
+    const tcUtil = tcList.find((c) => c.y === 400);
+    assert.ok(tcUtil, 'Trocador de utilidade deve ser localizado na cota y=400');
+    assert.equal(tcUtil.temDuasCorrentesConectadas(), false);
+    assert.ok(tcUtil.vazao1Lps > 0.35, 'Corrente 1 deve fluir');
+    assert.ok(tcUtil.temperaturaSaidaC > 65.0, `Fluido deve aquecer ate proximo de 68C via utilidade (atual: ${tcUtil.temperaturaSaidaC})`);
+    assert.ok(tcUtil.efetividadeAtual > 0.70, `Efetividade em utilidade monostream deve ser > 70%: ${tcUtil.efetividadeAtual}`);
+
+    // Cenário 2: Trocador Dual-Stream em Co-corrente / Paralelo (TC-01 - copia, meio)
+    const tcParalelo = tcList.find((c) => c.y === 680);
+    assert.ok(tcParalelo, 'Trocador em paralelo deve ser localizado na cota y=680');
+    assert.equal(tcParalelo.temDuasCorrentesConectadas(), true);
+    assert.equal(tcParalelo.getModoEscoamento(engine), 'paralelo');
+    assert.ok(tcParalelo.temperaturaSaidaC >= 49.0 && tcParalelo.temperaturaSaidaC <= 52.0, `T1 out paralelo deve convergir para ~50-51 C: ${tcParalelo.temperaturaSaidaC}`);
+    assert.ok(tcParalelo.temperaturaSaida2C >= 51.5 && tcParalelo.temperaturaSaida2C <= 54.0, `T2 out paralelo deve convergir para ~52-53 C: ${tcParalelo.temperaturaSaida2C}`);
+    assert.ok(tcParalelo.efetividadeAtual <= 0.52, `Efetividade em paralelo nao pode ultrapassar o teto termodinamico (~51.7%): ${tcParalelo.efetividadeAtual}`);
+
+    // Cenário 3: Trocador Dual-Stream em Contracorrente (TC-01 - copia, inferior)
+    const tcContra = tcList.find((c) => c.y === 960);
+    assert.ok(tcContra, 'Trocador em contracorrente deve ser localizado na cota y=960');
+    assert.equal(tcContra.temDuasCorrentesConectadas(), true);
+    assert.equal(tcContra.getModoEscoamento(engine), 'contracorrente');
+    // Em contracorrente: cruzamento térmico estrito (T1_out > T2_out)
+    assert.ok(
+        tcContra.temperaturaSaidaC > tcContra.temperaturaSaida2C,
+        `Cruzamento termico deve ocorrer em contracorrente: T1out (${tcContra.temperaturaSaidaC}) > T2out (${tcContra.temperaturaSaida2C})`
+    );
+    assert.ok(
+        tcContra.efetividadeAtual > tcParalelo.efetividadeAtual,
+        `Efetividade em contracorrente (${tcContra.efetividadeAtual}) deve ser superior a paralelo (${tcParalelo.efetividadeAtual})`
+    );
+});
+
 
 
 
