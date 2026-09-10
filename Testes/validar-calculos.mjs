@@ -9,6 +9,7 @@ import { FonteLogica } from '../js/domain/components/FonteLogica.js';
 import { TanqueLogico } from '../js/domain/components/TanqueLogico.js';
 import {
     TrocadorCalorLogico,
+    calcularLmtd,
     calcularSaidaTrocadorCalor
 } from '../js/domain/components/TrocadorCalorLogico.js';
 import { translateDwsimToWorkspace } from '../js/presentation/import/DwsimImporter.js';
@@ -1466,4 +1467,60 @@ test('importador DWSIM preserva conexoes com multiplas correntes no trocador de 
 
     assert.deepEqual(inPortIds, ['in1', 'in2'], 'Correntes de entrada no trocador devem ser mapeadas para in1 e in2');
     assert.deepEqual(outPortIds, ['out1', 'out2'], 'Correntes de saída do trocador devem ser mapeadas para out1 e out2');
+});
+
+test('trocador de calor calcula LMTD, Qmax e gera perfil termico com exatidao', () => {
+    // 1. Validar cálculo do LMTD com os dados de referência:
+    // T1in = 25 °C, T1out = 51.5008 °C
+    // T2in = 80 °C, T2out = 51.9556 °C
+    // Escoamento paralelo (cocorrente)
+    const lmtdDWSIM = calcularLmtd({
+        t1In: 25.0,
+        t1Out: 51.5008,
+        t2In: 80.0,
+        t2Out: 51.9556,
+        modo: 'paralelo'
+    });
+    // No DWSIM: LMTD = 11.3754 °C
+    approx(lmtdDWSIM.lmtd, 11.3754, 0.01, 'LMTD deve bater com o DWSIM (11.375 °C)');
+    approx(lmtdDWSIM.minDt, 0.4548, 0.01, 'Pinch point minDt');
+
+    // 2. Validar dimensionamento com Área e U
+    const trocador = new TrocadorCalorLogico('tc-dwsim', 'TC-DWSIM', 0, 0);
+    trocador.setArea(1.0);
+    trocador.setU(2500);
+    assert.equal(trocador.uaWPorK, 2500, 'UA = A * U deve ser 2500');
+    assert.equal(trocador.uWPorM2K, 2500, 'U = UA / A');
+
+    trocador.setArea(2.0);
+    assert.equal(trocador.uaWPorK, 5000, 'Ao dobrar a área mantendo U, UA dobra');
+
+    trocador.setUA(2500);
+    approx(trocador.uWPorM2K, 1250, 0.01, 'Ao ajustar UA com A=2, U vira 1250');
+
+    // Reset para 1 m² e 2500 W/m²K
+    trocador.setArea(1.0);
+    trocador.setU(2500);
+    trocador.temperaturaEntradaC = 25;
+    trocador.temperaturaSaidaC = 51.5;
+    trocador.temperaturaEntrada2C = 80;
+    trocador.temperaturaSaida2C = 51.95;
+    trocador.cargaTermicaW = 28438;
+    trocador.cargaTermicaMaximaW = 55132;
+    trocador.temDuasCorrentesConectadas = () => true;
+    trocador.getModoEscoamento = () => 'paralelo';
+
+    // 3. Validar geração do Perfil Térmico (T x Q)
+    const datasetsThermal = buildHeatExchangerCurveDatasets(trocador, { mode: 'thermal' });
+    assert.equal(datasetsThermal.isThermalMode, true);
+    assert.equal(datasetsThermal.chartMode, 'thermal');
+    assert.ok(datasetsThermal.xAxisTitle.includes('kW'), 'Eixo X deve indicar kW');
+    assert.equal(datasetsThermal.operatingLinePoints.length, 2, 'Linha vertical de Operating Point');
+    approx(datasetsThermal.operatingLinePoints[0].x, 28.438, 0.01, 'Linha vertical do Operating Point em 28.438 kW');
+
+    // As curvas T x Q partem de Q=0 em T_in
+    approx(datasetsThermal.stream1Points[0].x, 0, 0.001, 'Curva fria Q=0');
+    approx(datasetsThermal.stream1Points[0].y, 25, 0.001, 'Curva fria T=25 em Q=0');
+    approx(datasetsThermal.stream2Points[0].x, 0, 0.001, 'Curva quente Q=0');
+    approx(datasetsThermal.stream2Points[0].y, 80, 0.001, 'Curva quente T=80 em Q=0');
 });

@@ -382,6 +382,47 @@ As temperaturas de saída são obtidas pelo balanço de energia sensível:
   $$T_{1,\text{out}} = T_{1,\text{in}} + \frac{Q_{\text{térmico}}}{C_1}$$
   $$T_{2,\text{out}} = T_{2,\text{in}} - \frac{Q_{\text{térmico}}}{C_2} \quad (\text{ou } T_{\text{serviço}} \text{ no modo utilidade})$$
 
+#### Dimensionamento: Área ($A$), Coeficiente Global ($U$) e Produto $UA$
+O trocador de calor desacopla a geometria e a transmissão térmica mantendo a relação fundamental de dimensionamento:
+
+$$UA = U \cdot A \quad [\text{W/K}]$$
+
+- **$A$ (Área de Troca Térmica, $\text{m}^2$):** Área superficial total efetiva de troca térmica (padrão $1{,}0\text{ m}^2$).
+- **$U$ (Coeficiente Global de Transferência de Calor, $\text{W/(m}^2\cdot\text{K)}$):** Facilidade global de transferência de calor por condução e convecção ($U = UA / A$, padrão $2500\text{ W/(m}^2\cdot\text{K)}$).
+- **$UA$ (Condutância Térmica Global, $\text{W/K}$):** Produto usado diretamente nas equações de $NTU$. Quando o usuário ajusta a área $A$ mantendo $U$, o $UA$ é reescalonado proporcionalmente ($UA = U \cdot A$); se o usuário altera o $UA$ diretamente, o coeficiente $U$ correspondente é recalculado ($U = UA / A$).
+
+#### Diferença Média Logarítmica de Temperatura (LMTD) e Pinch Point
+Para análise clássica de projeto e verificação de convergência térmica com simuladores de processos, o modelo calcula a Diferença Média Logarítmica de Temperatura ($\text{LMTD}$ ou $\Delta T_{lm}$):
+
+$$\text{LMTD} = \begin{cases} \dfrac{\Delta T_a - \Delta T_b}{\ln\left(\dfrac{\Delta T_a}{\Delta T_b}\right)}, & \Delta T_a \ne \Delta T_b \text{ e } \Delta T_a, \Delta T_b > 0 \\[10pt] \Delta T_a, & |\Delta T_a - \Delta T_b| < 10^{-6} \\[10pt] \max(\Delta T_a, \Delta T_b), & \Delta T_a \le 0 \text{ ou } \Delta T_b \le 0 \end{cases}$$
+
+Onde as diferenças de temperatura nos extremos ($\Delta T_a$ e $\Delta T_b$) dependem do arranjo de escoamento:
+- **Contracorrente (1 quente resfriando, 2 fria aquecendo):**
+  $$\Delta T_a = T_{1,\text{in}} - T_{2,\text{out}}, \qquad \Delta T_b = T_{1,\text{out}} - T_{2,\text{in}}$$
+- **Corrente Paralela / Co-corrente:**
+  $$\Delta T_a = T_{1,\text{in}} - T_{2,\text{in}}, \qquad \Delta T_b = T_{1,\text{out}} - T_{2,\text{out}}$$
+- **Modo Utilidade Térmica ($T_{\text{serviço}}$):**
+  $$\Delta T_a = |T_{\text{in}} - T_{\text{serviço}}|, \qquad \Delta T_b = |T_{\text{out}} - T_{\text{serviço}}|$$
+
+##### Relação com a Carga Térmica Global e Fator de Correção $F_T$:
+$$Q_{\text{térmico}} = U \cdot A \cdot F_T \cdot \text{LMTD} = UA \cdot F_T \cdot \text{LMTD}$$
+
+Em trocadores de passe único contracorrente e co-corrente puros sem cruzamento multipasse de carcaça e tubos, o fator de correção é $F_T = 1{,}0$.
+
+##### Diferença Mínima de Temperatura (Pinch Point):
+O ponto de aproximação térmico mais crítico entre as duas correntes ao longo do trocador é medido pelo $\Delta T_{\min}$:
+$$\Delta T_{\min} = \min(\Delta T_a, \Delta T_b) \quad [^\circ\text{C}]$$
+
+#### Perfis de Temperatura no Monitoramento (Espacial e Térmico)
+O monitor detalhado e o gráfico compacto oferecem dois modos visuais de diagnóstico térmico:
+1. **Perfil Espacial ($T \times \text{Comprimento}$):**
+   Evolução contínua das temperaturas ao longo da coordenada longitudinal relativa $z \in [0\%, 100\%]$ do equipamento.
+2. **Perfil Térmico ($T \times Q$):**
+   Traçado das temperaturas de ambas as correntes em função da carga térmica transferida $Q$ em $\text{kW}$, partindo de $Q = 0$ nas respectivas temperaturas de entrada ($T_{1,\text{in}}$ e $T_{2,\text{in}}$) até a carga térmica teórica máxima $Q_{\max} = C_{\min} \cdot |T_{1,\text{in}} - T_{2,\text{in}}| / 1000$:
+   $$T_c(Q) = T_{c,\text{in}} + \frac{Q \cdot 1000}{C_c} \quad [^\circ\text{C}]$$
+   $$T_h(Q) = T_{h,\text{in}} - \frac{Q \cdot 1000}{C_h} \quad [^\circ\text{C}]$$
+   O gráfico plota uma linha vertical indicadora no ponto de operação real $Q_{\text{operação}} = Q_{\text{térmico}} / 1000\text{ kW}$, com marcadores pontuais nas temperaturas operacionais de saída $T_{1,\text{out}}$ e $T_{2,\text{out}}$.
+
 #### Cumprimento Estrito da Segunda Lei da Termodinâmica
 Para assegurar estrita validade termodinâmica e prevenir extrapolações sob condições de $UA$ extremo ou flutuações transitórias de vazão:
 1. **Limites Universais de Temperatura:** Nenhuma temperatura de saída de qualquer corrente pode ultrapassar o intervalo delimitado pelas temperaturas de entrada:

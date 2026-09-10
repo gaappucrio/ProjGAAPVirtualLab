@@ -22,7 +22,7 @@ const VALVE_CHART_COLORS = Object.freeze({
 });
 
 function getGridColors() {
-    const isDark = document.body.classList.contains('theme-dark');
+    const isDark = typeof document !== 'undefined' && document.body?.classList?.contains('theme-dark');
     return {
         grid: isDark ? 'rgba(125, 153, 174, 0.28)' : '#e1e8ed',
         border: isDark ? 'rgba(155, 178, 193, 0.45)' : '#c9d8df',

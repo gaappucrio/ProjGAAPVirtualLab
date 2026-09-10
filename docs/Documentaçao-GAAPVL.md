@@ -1013,20 +1013,34 @@ A seguir estão as funções/chaves de alto valor do sistema, com seus objetivos
   - Reconstrói a planta visual e hidráulica no workspace.
 - Interface com o usuário: alimenta o fluxo de importação da toolbar.
 
-### 5.59 `createHeatExchangerChart(ctx, component, { expanded = false } = {})`
+### 5.59 `createHeatExchangerChart(ctx, component, { expanded = false, mode = 'position' } = {})`
 
 - Módulo: `js/infrastructure/charts/HeatExchangerChartAdapter.js`
-- Objetivo: criar o gráfico de perfis longitudinais de temperatura ao longo do trocador de calor.
+- Objetivo: criar o gráfico de perfis de temperatura do trocador de calor (suportando os modos Perfil Espacial $T \times \text{Comprimento}$ e Perfil Térmico $T \times Q$).
 - Pré-condições: contexto canvas 2D válido e componente `TrocadorCalorLogico`.
 - Entrada:
   - `ctx`: contexto de renderização do canvas.
   - `component`: instância de `TrocadorCalorLogico`.
-  - `options`: opções de exibição (`expanded`).
+  - `options`: opções de exibição (`expanded`, `mode`: `'position'` ou `'thermal'`).
 - Saída: instância do Chart.js configurada.
 - Pós-condições:
-  - Plota as curvas de temperatura contínuas (Corrente 1 e Corrente 2 ou utilidade) em 40 pontos discretos.
-  - Destaca pontos operacionais de entrada e saída com marcadores circulares.
-- Interface com o usuário: renderiza o gráfico no slot do painel de monitoramento.
+  - No modo `'position'`: plota as curvas contínuas ao longo de 40 pontos no comprimento relativo ($0\%$ a $100\%$).
+  - No modo `'thermal'`: plota as curvas de aquecimento e resfriamento em função de $Q$ ($\text{kW}$), com marcadores pontuais nas temperaturas reais e linha indicadora vertical no ponto operacional.
+- Interface com o usuário: renderiza o gráfico dinâmico no painel de monitoramento com seletor de modo do perfil.
+
+### 5.59b `calcularLmtd({ t1In, t1Out, t2In, t2Out, modo })`
+
+- Módulo: `js/domain/components/TrocadorCalorLogico.js`
+- Objetivo: calcular a Diferença Média Logarítmica de Temperatura ($\text{LMTD}$) e o $\Delta T_{\min}$ (Pinch Point) a partir das temperaturas das correntes e da topologia de escoamento.
+- Pré-condições: temperaturas numéricas finitas e modo de escoamento válido (`'contracorrente'`, `'paralelo'` ou `'utilidade'`).
+- Entrada:
+  - `t1In`, `t1Out`: temperaturas da Corrente 1 (°C).
+  - `t2In`, `t2Out`: temperaturas da Corrente 2 ou utilidade (°C).
+  - `modo`: modo de escoamento.
+- Saída: objeto `{ lmtd, minDt, dtA, dtB }`.
+- Pós-condições:
+  - Calcula analiticamente $\Delta T_a$, $\Delta T_b$, LMTD com proteções contra divisão por zero e logaritmo negativo, e o Pinch Point $\Delta T_{\min} = \min(\Delta T_a, \Delta T_b)$.
+- Interface com o usuário: alimenta as métricas do painel de propriedades (`disp-hx-lmtd`, `disp-hx-pinch`, `disp-hx-ft`, `disp-hx-max-duty`).
 
 ### 5.60 `canMergePipeMonitorEntries(sourceEntry, targetEntry, connections = [])`
 
@@ -1103,7 +1117,7 @@ A seguir, a lista completa de módulos e símbolos exportados.
 - `js/domain/components/Fluido.js`: cloneFluido, createFluidoFromProperties, mixFluidos, updateFluidoProperties
 - `js/domain/components/FonteLogica.js`: FonteLogica
 - `js/domain/components/TanqueLogico.js`: TanqueLogico
-- `js/domain/components/TrocadorCalorLogico.js`: TrocadorCalorLogico, calcularSaidaTrocadorCalor
+- `js/domain/components/TrocadorCalorLogico.js`: TrocadorCalorLogico, calcularLmtd, calcularSaidaTrocadorCalor
 - `js/domain/components/ValvulaLogica.js`: VALVE_PROFILE_DEFINITIONS, ValvulaLogica
 - `js/domain/context/SimulationContext.js`: createSimulationContext, mergeSimulationContext
 - `js/domain/events/ComponentEventPayloads.js`: ComponentEventPayloads

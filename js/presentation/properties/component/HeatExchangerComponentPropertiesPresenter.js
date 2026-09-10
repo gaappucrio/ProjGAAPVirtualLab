@@ -75,10 +75,25 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
         const basicContent = `
             ${renderHeatExchangerDualStreamAlert(duasCorrentesConectadas)}
             <div style="font-weight: bold; margin-bottom: 8px; color: ${isDark ? '#d8e4ec' : '#2c3e50'}; border-bottom: 1px solid ${isDark ? '#2d3748' : '#e2e8f0'}; padding-bottom: 4px;">Troca Térmica Global</div>
+            <div class="prop-group">
+                ${makeLabel('Modo do gráfico', 'Define a exibição do perfil térmico no monitor: Espacial (T vs Comprimento) ou Térmico (T vs Q).')}
+                <select id="input-hx-chart-mode" class="gaap-select" style="width:100%; padding:5px 8px; font-size:12px; border-radius:4px; border:1px solid ${isDark ? '#3b4e5d' : '#cbd5e1'}; background:${isDark ? '#1a2634' : '#ffffff'}; color:${isDark ? '#e2e8f0' : '#1e293b'};">
+                    <option value="position" ${comp.tipoPerfilGrafico === 'position' ? 'selected' : ''}>${translateLiteral('Perfil Espacial (T × Comprimento)')}</option>
+                    <option value="thermal" ${comp.tipoPerfilGrafico === 'thermal' ? 'selected' : ''}>${translateLiteral('Perfil Térmico (T × Q)')}</option>
+                </select>
+            </div>
             <div class="prop-group" id="grp-hx-service-temp">
                 ${makeUnitLabel('Temperatura de serviço', 'temperature', serviceTempTooltip)}
                 <input type="number" id="input-hx-service-temp" ${hintAttr(serviceTempTooltip)} value="${displayEditableUnitValue('temperature', comp.temperaturaServicoC, 2)}" step="${displayStep('temperature', 1)}" min="${displayEditableUnitValue('temperature', -20, 2)}" max="${displayEditableUnitValue('temperature', 250, 2)}" ${bloqueioServicoAttr}>
                 <p id="texto-aviso-temp-servico-hx" style="margin:6px 0 0; font-size:11px; line-height:1.45; color:${inlineAvisoCor}; display:${duasCorrentesConectadas ? 'block' : 'none'};">${translateLiteral('Desabilitada: a Corrente 2 está conectada e governa a temperatura de troca.')}</p>
+            </div>
+            <div class="prop-group">
+                ${makeLabel('Área de troca (m²)', 'Área superficial total de transferência de calor.')}
+                <input type="number" id="input-hx-area" value="${(comp.areaM2 || 1.0).toFixed(2)}" step="0.1" min="0.01" max="10000">
+            </div>
+            <div class="prop-group">
+                ${makeLabel('Coeficiente global U (W/m²·K)', 'Coeficiente global de transferência de calor U.')}
+                <input type="number" id="input-hx-u" value="${(comp.uWPorM2K || 2500).toFixed(1)}" step="50" min="0" max="50000">
             </div>
             <div class="prop-group">
                 ${makeLabel('Coeficiente global UA (W/K)', TOOLTIP.heatExchangerUA)}
@@ -89,8 +104,24 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
                 <input type="text" id="disp-hx-duty" ${hintAttr(TOOLTIP.heatExchangerDuty)} value="${thermalPowerText(comp.cargaTermicaW)}" disabled>
             </div>
             <div class="prop-group">
+                ${makeLabel('Carga térmica máxima', 'Troca térmica teórica máxima admissível pela Segunda Lei da Termodinâmica.')}
+                <input type="text" id="disp-hx-max-duty" value="${thermalPowerText(comp.cargaTermicaMaximaW)}" disabled>
+            </div>
+            <div class="prop-group">
                 ${makeLabel('Efetividade atual', TOOLTIP.heatExchangerEffectiveness)}
                 <input type="text" id="disp-hx-effectiveness" ${hintAttr(TOOLTIP.heatExchangerEffectiveness)} value="${(comp.efetividadeAtual * 100).toFixed(1)}%" disabled>
+            </div>
+            <div class="prop-group">
+                ${makeLabel('LMTD (Diferença Média Logarítmica)', 'Diferença Média Logarítmica de Temperatura entre as correntes.')}
+                <input type="text" id="disp-hx-lmtd" value="${(comp.lmtdC || 0).toFixed(2)} °C" disabled>
+            </div>
+            <div class="prop-group">
+                ${makeLabel('Fator de correção LMTD', 'Fator FT de correção geométrica shell-and-tube.')}
+                <input type="text" id="disp-hx-ft" value="${(comp.fatorCorrecaoLmtd || 1.0).toFixed(2)}" disabled>
+            </div>
+            <div class="prop-group">
+                ${makeLabel('Pinch Point (ΔT mín)', 'Menor diferença pontual de temperatura entre os dois fluidos.')}
+                <input type="text" id="disp-hx-pinch" value="${(comp.pinchPointMinDeltaTC || 0).toFixed(2)} °C" disabled>
             </div>
             <div class="prop-group">
                 ${makeLabel('Arranjo térmico')}
@@ -203,6 +234,44 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
             );
         });
 
+        const handleChartModeChange = (event) => {
+            const newMode = event.target.value;
+            comp.setTipoPerfilGrafico(newMode);
+            const engine = resolvePresentationEngine();
+            if (engine?.monitorController) {
+                engine.monitorController.refreshHeatExchanger?.(comp);
+            }
+        };
+        bind('input-hx-chart-mode', 'change', handleChartModeChange);
+        bind('input-hx-chart-mode', 'input', handleChartModeChange);
+
+        bind('input-hx-area', 'change', (event) => {
+            validateInputWithFeedback(
+                event.target,
+                (value, name) => InputValidator.validateNumber(value, 0.01, 10000, name),
+                'Área de troca',
+                (validated) => {
+                    comp.setArea(validated);
+                    setValue('input-hx-ua', comp.uaWPorK.toFixed(1));
+                    setValue('input-hx-u', comp.uWPorM2K.toFixed(1));
+                    refreshNetworkAfterThermalChange();
+                }
+            );
+        });
+
+        bind('input-hx-u', 'change', (event) => {
+            validateInputWithFeedback(
+                event.target,
+                (value, name) => InputValidator.validateNumber(value, 0, 50000, name),
+                'Coeficiente U',
+                (validated) => {
+                    comp.setU(validated);
+                    setValue('input-hx-ua', comp.uaWPorK.toFixed(1));
+                    refreshNetworkAfterThermalChange();
+                }
+            );
+        });
+
         bind('input-hx-ua', 'change', (event) => {
             validateInputWithFeedback(
                 event.target,
@@ -210,6 +279,7 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
                 'Coeficiente UA',
                 (validated) => {
                     comp.setUA(validated);
+                    setValue('input-hx-u', comp.uWPorM2K.toFixed(1));
                     refreshNetworkAfterThermalChange();
                 }
             );

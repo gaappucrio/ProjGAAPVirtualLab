@@ -17,7 +17,8 @@ const HEAT_EXCHANGER_CHART_COLORS = Object.freeze({
     operation1: '#c0392b',
     operation1Border: '#ffd8d2',
     operation2: '#2980b9',
-    operation2Border: '#d4edfa'
+    operation2Border: '#d4edfa',
+    operatingLine: '#27ae60'
 });
 
 function getGridColors() {
@@ -65,7 +66,9 @@ function getScaleProfile({ expanded = false } = {}) {
     };
 }
 
-export function buildHeatExchangerCurveDatasets(component) {
+export function buildHeatExchangerCurveDatasets(component, options = {}) {
+    const chartMode = options.mode || options.yAxisMode || component?.tipoPerfilGrafico || 'position';
+    const isThermalMode = chartMode === 'thermal';
     const tempUnit = getUnitSymbol('temperature');
     const t1In = finiteNumber(component?.temperaturaEntradaC, 25);
     const t1Out = finiteNumber(component?.temperaturaSaidaC, t1In);
@@ -95,71 +98,137 @@ export function buildHeatExchangerCurveDatasets(component) {
 
     const stream1Points = [];
     const stream2Points = [];
+    let operationPoints = [];
+    let operatingLinePoints = [];
 
-    for (let i = 0; i <= HEAT_EXCHANGER_CURVE_POINT_COUNT; i += 1) {
-        const z = i / HEAT_EXCHANGER_CURVE_POINT_COUNT;
-        const xPercent = z * 100;
+    let xAxisMin = 0;
+    let xAxisMax = 100;
+    let xAxisTitle = `${t('chart.heatExchangerPosition')} (%)`;
+    let xTickFormatter = (value) => `${formatAxisTick(value)}%`;
 
-        let t1 = t1In;
-        let t2 = t2In;
+    if (isThermalMode) {
+        // Modo Perfil Térmico (T x Q)
+        const dutyKW = finiteNumber(component?.cargaTermicaW, 0) / 1000;
+        let maxDutyKW = finiteNumber(component?.cargaTermicaMaximaW, 0) / 1000;
 
-        if (v1 <= EPSILON_FLOW || ua <= 0) {
-            t1 = t1In;
-            t2 = duasCorrentes ? t2In : tServico;
-        } else if (!duasCorrentes || c2 <= 0) {
-            // Modo utilidade térmica
-            t2 = tServico;
-            const ntu = ua / Math.max(Number.EPSILON, c1);
-            if (ntu > 0.0001) {
-                const decay = (1 - Math.exp(-ntu * z)) / (1 - Math.exp(-ntu));
-                t1 = t1In + (t1Out - t1In) * decay;
+        if (maxDutyKW <= 0.001) {
+            if (c1 > 0 && c2 > 0) {
+                maxDutyKW = (Math.min(c1, c2) * Math.abs(t1In - t2In)) / 1000;
+            } else if (c1 > 0 && !duasCorrentes) {
+                maxDutyKW = (c1 * Math.abs(t1In - tServico)) / 1000;
             } else {
-                t1 = t1In + (t1Out - t1In) * z;
-            }
-        } else if (modo === 'paralelo' || modo === 'cocorrente') {
-            // Modo corrente paralela (co-corrente)
-            const alpha = ua * ((1 / Math.max(Number.EPSILON, c1)) + (1 / Math.max(Number.EPSILON, c2)));
-            let decay = z;
-            if (alpha > 0.0001) {
-                decay = (1 - Math.exp(-alpha * z)) / (1 - Math.exp(-alpha));
-            }
-            t1 = t1In + (t1Out - t1In) * decay;
-            t2 = t2In + (t2Out - t2In) * decay;
-        } else {
-            // Modo contracorrente
-            if (Math.abs(c1 - c2) < 0.001 * Math.max(c1, c2)) {
-                t1 = t1In + (t1Out - t1In) * z;
-                t2 = t2Out + (t2In - t2Out) * z;
-            } else {
-                const beta = ua * ((1 / Math.max(Number.EPSILON, c1)) - (1 / Math.max(Number.EPSILON, c2)));
-                let decay = z;
-                if (Math.abs(beta) > 0.0001) {
-                    decay = (1 - Math.exp(-beta * z)) / (1 - Math.exp(-beta));
-                }
-                t1 = t1In + (t1Out - t1In) * decay;
-                t2 = t2Out + (c1 / c2) * (t1 - t1In);
+                maxDutyKW = Math.max(1, dutyKW * 1.5);
             }
         }
 
-        stream1Points.push({
-            x: xPercent,
-            y: toDisplayValue('temperature', t1)
-        });
-        stream2Points.push({
-            x: xPercent,
-            y: toDisplayValue('temperature', t2)
-        });
+        const pointCount = 10;
+        const qEnd = Math.max(0.1, maxDutyKW);
+
+        for (let i = 0; i <= pointCount; i += 1) {
+            const qKW = (qEnd * i) / pointCount;
+            let t1 = t1In;
+            let t2 = t2In;
+
+            if (c1 > 0) {
+                const dt1Sign = t2In > t1In ? 1 : -1;
+                t1 = t1In + dt1Sign * ((qKW * 1000) / c1);
+            }
+
+            if (duasCorrentes && c2 > 0) {
+                const dt2Sign = t1In > t2In ? 1 : -1;
+                t2 = t2In + dt2Sign * ((qKW * 1000) / c2);
+            } else {
+                t2 = tServico;
+            }
+
+            stream1Points.push({
+                x: qKW,
+                y: toDisplayValue('temperature', t1)
+            });
+            stream2Points.push({
+                x: qKW,
+                y: toDisplayValue('temperature', t2)
+            });
+        }
+
+        operationPoints = [
+            { x: dutyKW, y: toDisplayValue('temperature', t1Out), pointRole: 'out1' },
+            { x: dutyKW, y: toDisplayValue('temperature', t2Out), pointRole: 'out2' }
+        ];
+
+        xAxisMin = 0;
+        xAxisMax = Math.ceil(Math.max(qEnd, dutyKW) * 1.12);
+        xAxisTitle = `${t('chart.heatExchangerHeatDuty')} (kW)`;
+        xTickFormatter = (value) => `${formatAxisTick(value)} kW`;
+    } else {
+        // Modo Perfil Espacial ao Longo do Trocador (T x Posição %)
+        for (let i = 0; i <= HEAT_EXCHANGER_CURVE_POINT_COUNT; i += 1) {
+            const z = i / HEAT_EXCHANGER_CURVE_POINT_COUNT;
+            const xPercent = z * 100;
+
+            let t1 = t1In;
+            let t2 = t2In;
+
+            if (v1 <= EPSILON_FLOW || ua <= 0) {
+                t1 = t1In;
+                t2 = duasCorrentes ? t2In : tServico;
+            } else if (!duasCorrentes || c2 <= 0) {
+                t2 = tServico;
+                const ntu = ua / Math.max(Number.EPSILON, c1);
+                if (ntu > 0.0001) {
+                    const decay = (1 - Math.exp(-ntu * z)) / (1 - Math.exp(-ntu));
+                    t1 = t1In + (t1Out - t1In) * decay;
+                } else {
+                    t1 = t1In + (t1Out - t1In) * z;
+                }
+            } else if (modo === 'paralelo' || modo === 'cocorrente') {
+                const alpha = ua * ((1 / Math.max(Number.EPSILON, c1)) + (1 / Math.max(Number.EPSILON, c2)));
+                let decay = z;
+                if (alpha > 0.0001) {
+                    decay = (1 - Math.exp(-alpha * z)) / (1 - Math.exp(-alpha));
+                }
+                t1 = t1In + (t1Out - t1In) * decay;
+                t2 = t2In + (t2Out - t2In) * decay;
+            } else {
+                if (Math.abs(c1 - c2) < 0.001 * Math.max(c1, c2)) {
+                    t1 = t1In + (t1Out - t1In) * z;
+                    t2 = t2Out + (t2In - t2Out) * z;
+                } else {
+                    const beta = ua * ((1 / Math.max(Number.EPSILON, c1)) - (1 / Math.max(Number.EPSILON, c2)));
+                    let decay = z;
+                    if (Math.abs(beta) > 0.0001) {
+                        decay = (1 - Math.exp(-beta * z)) / (1 - Math.exp(-beta));
+                    }
+                    t1 = t1In + (t1Out - t1In) * decay;
+                    t2 = t2Out + (c1 / c2) * (t1 - t1In);
+                }
+            }
+
+            stream1Points.push({
+                x: xPercent,
+                y: toDisplayValue('temperature', t1)
+            });
+            stream2Points.push({
+                x: xPercent,
+                y: toDisplayValue('temperature', t2)
+            });
+        }
+
+        const in2X = (modo === 'paralelo' || modo === 'cocorrente') ? 0 : (duasCorrentes ? 100 : 0);
+        const out2X = (modo === 'paralelo' || modo === 'cocorrente') ? 100 : (duasCorrentes ? 0 : 100);
+
+        operationPoints = [
+            { x: 0, y: toDisplayValue('temperature', t1In), pointRole: 'in1' },
+            { x: 100, y: toDisplayValue('temperature', t1Out), pointRole: 'out1' },
+            { x: in2X, y: toDisplayValue('temperature', t2In), pointRole: 'in2' },
+            { x: out2X, y: toDisplayValue('temperature', t2Out), pointRole: 'out2' }
+        ];
+
+        xAxisMin = 0;
+        xAxisMax = 100;
+        xAxisTitle = `${t('chart.heatExchangerPosition')} (%)`;
+        xTickFormatter = (value) => `${formatAxisTick(value)}%`;
     }
-
-    const in2X = (modo === 'paralelo' || modo === 'cocorrente') ? 0 : (duasCorrentes ? 100 : 0);
-    const out2X = (modo === 'paralelo' || modo === 'cocorrente') ? 100 : (duasCorrentes ? 0 : 100);
-
-    const operationPoints = [
-        { x: 0, y: toDisplayValue('temperature', t1In), pointRole: 'in1' },
-        { x: 100, y: toDisplayValue('temperature', t1Out), pointRole: 'out1' },
-        { x: in2X, y: toDisplayValue('temperature', t2In), pointRole: 'in2' },
-        { x: out2X, y: toDisplayValue('temperature', t2Out), pointRole: 'out2' }
-    ];
 
     const allValues = [
         ...stream1Points.map((p) => p.y),
@@ -173,18 +242,33 @@ export function buildHeatExchangerCurveDatasets(component) {
     const yAxisMin = Math.floor(minVal - span * 0.1);
     const yAxisMax = Math.ceil(maxVal + span * 0.1);
 
+    if (isThermalMode) {
+        const dutyKW = finiteNumber(component?.cargaTermicaW, 0) / 1000;
+        operatingLinePoints = [
+            { x: dutyKW, y: yAxisMin },
+            { x: dutyKW, y: yAxisMax }
+        ];
+    }
+
     return {
         stream1Points,
         stream2Points,
         operationPoints,
+        operatingLinePoints,
         tempUnit,
         duasCorrentes,
         modo,
+        chartMode,
+        isThermalMode,
         t1In,
         t1Out,
         t2In,
         t2Out,
         tServico,
+        xAxisMin,
+        xAxisMax,
+        xAxisTitle,
+        xTickFormatter,
         yAxisMin,
         yAxisMax
     };
@@ -205,15 +289,15 @@ export function applyHeatExchangerChartPresentation(chart, datasets, { expanded 
     chart.options.plugins.legend.labels.font = { size: profile.legendFontSize };
     chart.options.plugins.legend.labels.color = colors.legend;
 
-    chart.options.scales.x.title.text = `${t('chart.heatExchangerPosition')} (%)`;
+    chart.options.scales.x.title.text = datasets.xAxisTitle;
     chart.options.scales.x.title.font = { size: profile.titleFontSize };
     chart.options.scales.x.title.color = colors.label;
     chart.options.scales.x.ticks.font = { size: profile.tickFontSize };
     chart.options.scales.x.ticks.maxTicksLimit = profile.maxTicksX;
     chart.options.scales.x.ticks.color = colors.tick;
-    chart.options.scales.x.ticks.callback = (value) => `${formatAxisTick(value)}%`;
-    chart.options.scales.x.min = 0;
-    chart.options.scales.x.max = 100;
+    chart.options.scales.x.ticks.callback = (value) => datasets.xTickFormatter(value);
+    chart.options.scales.x.min = datasets.xAxisMin;
+    chart.options.scales.x.max = datasets.xAxisMax;
     chart.options.scales.x.grid.color = colors.grid;
     chart.options.scales.x.border.color = colors.border;
 
@@ -234,11 +318,21 @@ export function applyHeatExchangerChartPresentation(chart, datasets, { expanded 
         chart.data.datasets[2].pointHoverRadius = profile.pointHoverRadius;
         chart.data.datasets[2].pointBorderWidth = expanded ? 2 : 1.5;
     }
+
+    if (chart.data.datasets[3]) {
+        chart.data.datasets[3].data = datasets.operatingLinePoints || [];
+        chart.data.datasets[3].hidden = !datasets.isThermalMode;
+        chart.data.datasets[3].label = t('chart.operatingPointLine');
+    }
 }
 
 function getTooltipLabel(ctx, datasets) {
     const value = Number(ctx.parsed.y);
     if (!Number.isFinite(value)) return ctx.dataset.label;
+
+    if (ctx.datasetIndex === 3) {
+        return `${t('chart.operatingPointLine')}: Q = ${Number(ctx.parsed.x).toFixed(2)} kW`;
+    }
 
     if (ctx.datasetIndex === 0) {
         return `${t('chart.stream1')}: ${value.toFixed(1)} ${datasets.tempUnit}`;
@@ -259,8 +353,8 @@ function getTooltipLabel(ctx, datasets) {
     return `${roleLabel}: ${value.toFixed(1)} ${datasets.tempUnit}`;
 }
 
-export function createHeatExchangerChart(ctx, component, { expanded = false } = {}) {
-    const datasets = buildHeatExchangerCurveDatasets(component);
+export function createHeatExchangerChart(ctx, component, { expanded = false, mode = null } = {}) {
+    const datasets = buildHeatExchangerCurveDatasets(component, { mode });
 
     const chart = new Chart(ctx, {
         type: 'line',
@@ -273,8 +367,8 @@ export function createHeatExchangerChart(ctx, component, { expanded = false } = 
                     backgroundColor: HEAT_EXCHANGER_CHART_COLORS.stream1Fill,
                     borderWidth: 2.5,
                     fill: false,
-                    tension: 0.24,
-                    pointRadius: 0,
+                    tension: datasets.isThermalMode ? 0 : 0.24,
+                    pointRadius: datasets.isThermalMode ? 3 : 0,
                     borderCapStyle: 'round',
                     borderJoinStyle: 'round'
                 },
@@ -285,8 +379,8 @@ export function createHeatExchangerChart(ctx, component, { expanded = false } = 
                     backgroundColor: HEAT_EXCHANGER_CHART_COLORS.stream2Fill,
                     borderWidth: 2.5,
                     fill: false,
-                    tension: 0.24,
-                    pointRadius: 0,
+                    tension: datasets.isThermalMode ? 0 : 0.24,
+                    pointRadius: datasets.isThermalMode ? 3 : 0,
                     borderCapStyle: 'round',
                     borderJoinStyle: 'round'
                 },
@@ -301,10 +395,21 @@ export function createHeatExchangerChart(ctx, component, { expanded = false } = 
                             ? HEAT_EXCHANGER_CHART_COLORS.operation2
                             : HEAT_EXCHANGER_CHART_COLORS.operation1;
                     },
-                    pointRadius: 5,
-                    pointHoverRadius: 6,
+                    pointRadius: 6,
+                    pointHoverRadius: 8,
                     pointBorderWidth: 1.5,
                     clip: false
+                },
+                {
+                    label: t('chart.operatingPointLine'),
+                    type: 'line',
+                    data: datasets.operatingLinePoints || [],
+                    borderColor: HEAT_EXCHANGER_CHART_COLORS.operatingLine,
+                    borderWidth: 2.5,
+                    borderDash: [5, 4],
+                    pointRadius: 0,
+                    fill: false,
+                    hidden: !datasets.isThermalMode
                 }
             ]
         },
@@ -335,7 +440,12 @@ export function createHeatExchangerChart(ctx, component, { expanded = false } = 
                     titleColor: '#ffffff',
                     bodyColor: '#ffffff',
                     callbacks: {
-                        title: (tooltipCtx) => `${t('chart.heatExchangerPosition')}: ${Number(tooltipCtx[0].parsed.x).toFixed(0)}%`,
+                        title: (tooltipCtx) => {
+                            if (datasets.isThermalMode) {
+                                return `Q: ${Number(tooltipCtx[0].parsed.x).toFixed(2)} kW`;
+                            }
+                            return `${t('chart.heatExchangerPosition')}: ${Number(tooltipCtx[0].parsed.x).toFixed(0)}%`;
+                        },
                         label: (tooltipCtx) => getTooltipLabel(tooltipCtx, datasets)
                     }
                 }
@@ -343,7 +453,7 @@ export function createHeatExchangerChart(ctx, component, { expanded = false } = 
             scales: {
                 x: {
                     type: 'linear',
-                    title: { display: true, text: `${t('chart.heatExchangerPosition')} (%)` },
+                    title: { display: true, text: datasets.xAxisTitle },
                     ticks: { maxTicksLimit: 6, color: getGridColors().tick },
                     grid: { color: getGridColors().grid },
                     border: { color: getGridColors().border }
@@ -360,27 +470,44 @@ export function createHeatExchangerChart(ctx, component, { expanded = false } = 
         }
     });
 
+    chart.chartMode = datasets.chartMode;
     applyHeatExchangerChartPresentation(chart, datasets, { expanded });
     chart.update();
     return chart;
 }
 
-export function refreshHeatExchangerChart(chart, component, { expanded = false } = {}) {
+export function refreshHeatExchangerChart(chart, component, { expanded = false, mode = null } = {}) {
     if (!chart) return;
 
-    const datasets = buildHeatExchangerCurveDatasets(component);
+    const activeMode = mode || component?.tipoPerfilGrafico || chart.chartMode || 'position';
+    const datasets = buildHeatExchangerCurveDatasets(component, { mode: activeMode });
+    chart.chartMode = datasets.chartMode;
 
     chart.data.datasets[0].label = `${t('chart.stream1')} (${datasets.tempUnit})`;
     chart.data.datasets[0].data = datasets.stream1Points;
+    chart.data.datasets[0].tension = datasets.isThermalMode ? 0 : 0.24;
+    chart.data.datasets[0].pointRadius = datasets.isThermalMode ? 3 : 0;
 
     chart.data.datasets[1].label = `${datasets.duasCorrentes ? t('chart.stream2') : t('chart.utility')} (${datasets.tempUnit})`;
     chart.data.datasets[1].data = datasets.stream2Points;
+    chart.data.datasets[1].tension = datasets.isThermalMode ? 0 : 0.24;
+    chart.data.datasets[1].pointRadius = datasets.isThermalMode ? 3 : 0;
 
     chart.data.datasets[2].label = t('chart.operatingPoints');
     chart.data.datasets[2].data = datasets.operationPoints;
 
-    chart.options.plugins.tooltip.callbacks.title = (tooltipCtx) =>
-        `${t('chart.heatExchangerPosition')}: ${Number(tooltipCtx[0].parsed.x).toFixed(0)}%`;
+    if (chart.data.datasets[3]) {
+        chart.data.datasets[3].data = datasets.operatingLinePoints || [];
+        chart.data.datasets[3].hidden = !datasets.isThermalMode;
+        chart.data.datasets[3].label = t('chart.operatingPointLine');
+    }
+
+    chart.options.plugins.tooltip.callbacks.title = (tooltipCtx) => {
+        if (datasets.isThermalMode) {
+            return `Q: ${Number(tooltipCtx[0].parsed.x).toFixed(2)} kW`;
+        }
+        return `${t('chart.heatExchangerPosition')}: ${Number(tooltipCtx[0].parsed.x).toFixed(0)}%`;
+    };
     chart.options.plugins.tooltip.callbacks.label = (tooltipCtx) => getTooltipLabel(tooltipCtx, datasets);
 
     applyHeatExchangerChartPresentation(chart, datasets, { expanded });

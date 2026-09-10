@@ -407,7 +407,11 @@ function updateHeatExchangerValues(component, engine = null, { monitorController
     }
 
     setValue('disp-hx-duty', `${(component.cargaTermicaW / 1000).toFixed(2)} kW`);
+    setValue('disp-hx-max-duty', `${((component.cargaTermicaMaximaW || 0) / 1000).toFixed(2)} kW`);
     setValue('disp-hx-effectiveness', `${(component.efetividadeAtual * 100).toFixed(1)}%`);
+    setValue('disp-hx-lmtd', `${(component.lmtdC || 0).toFixed(2)} °C`);
+    setValue('disp-hx-pinch', `${(component.pinchPointMinDeltaTC || 0).toFixed(2)} °C`);
+    setValue('disp-hx-ft', `${(component.fatorCorrecaoLmtd || 1.0).toFixed(2)}`);
     setValue('disp-hx-flow-mode', component.getModoEscoamento?.(engine) === 'paralelo' ? 'Corrente Paralela (Co-corrente)' : 'Contracorrente');
 
     // Corrente 1

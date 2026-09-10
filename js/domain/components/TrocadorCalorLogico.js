@@ -9,12 +9,38 @@ import { cloneFluido } from './Fluido.js';
 
 const TEMPERATURA_SERVICO_PADRAO_C = 80;
 const UA_PADRAO_W_K = 2500;
+const AREA_PADRAO_M2 = 1.0;
 const PERDA_LOCAL_PADRAO_K = 0;
 const EFETIVIDADE_MAXIMA_PADRAO = 0.95;
 
 function numeroSeguro(value, fallback) {
     const numericValue = Number(value);
     return Number.isFinite(numericValue) ? numericValue : fallback;
+}
+
+export function calcularLmtd({ t1In, t1Out, t2In, t2Out, modo = 'contracorrente' } = {}) {
+    let dtA = 0;
+    let dtB = 0;
+
+    if (modo === 'paralelo' || modo === 'cocorrente') {
+        dtA = Math.abs(t1In - t2In);
+        dtB = Math.abs(t1Out - t2Out);
+    } else {
+        dtA = Math.abs(t1In - t2Out);
+        dtB = Math.abs(t1Out - t2In);
+    }
+
+    const minDt = Math.min(dtA, dtB);
+    if (dtA <= 1e-6 || dtB <= 1e-6) {
+        return { lmtd: 0, minDt, ft: 1.0 };
+    }
+
+    if (Math.abs(dtA - dtB) < 1e-4) {
+        return { lmtd: (dtA + dtB) / 2, minDt, ft: 1.0 };
+    }
+
+    const lmtd = (dtA - dtB) / Math.log(dtA / dtB);
+    return { lmtd: Math.max(0, lmtd), minDt, ft: 1.0 };
 }
 
 export function calcularSaidaTrocadorCalor({
@@ -47,6 +73,10 @@ export function calcularSaidaTrocadorCalor({
             temperaturaSaidaC: inletTemperatureC,
             deltaTemperaturaC: 0,
             cargaTermicaW: 0,
+            cargaTermicaMaximaW: 0,
+            lmtdC: 0,
+            fatorCorrecaoLmtd: 1.0,
+            pinchPointMinDeltaTC: 0,
             efetividade: 0,
             vazaoMassaKgS: 0,
             capacidadeTermicaWPorK: 0
@@ -59,12 +89,24 @@ export function calcularSaidaTrocadorCalor({
     const efetividade = clamp(1 - Math.exp(-ntu), 0, safeMaxEffectiveness);
     const outletTemperatureC = inletTemperatureC + (efetividade * (serviceTemperatureC - inletTemperatureC));
     const heatDutyW = heatCapacityRateWPorK * (outletTemperatureC - inletTemperatureC);
+    const maxHeatDutyW = heatCapacityRateWPorK * Math.abs(serviceTemperatureC - inletTemperatureC);
+    const lmtdCalc = calcularLmtd({
+        t1In: inletTemperatureC,
+        t1Out: outletTemperatureC,
+        t2In: serviceTemperatureC,
+        t2Out: serviceTemperatureC,
+        modo: 'utilidade'
+    });
 
     return {
         temperaturaEntradaC: inletTemperatureC,
         temperaturaSaidaC: outletTemperatureC,
         deltaTemperaturaC: outletTemperatureC - inletTemperatureC,
         cargaTermicaW: heatDutyW,
+        cargaTermicaMaximaW: maxHeatDutyW,
+        lmtdC: lmtdCalc.lmtd,
+        fatorCorrecaoLmtd: lmtdCalc.ft,
+        pinchPointMinDeltaTC: lmtdCalc.minDt,
         efetividade,
         vazaoMassaKgS: massFlowKgS,
         capacidadeTermicaWPorK: heatCapacityRateWPorK
@@ -76,6 +118,7 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         super(id, tag, x, y);
         this.temperaturaServicoC = TEMPERATURA_SERVICO_PADRAO_C;
         this.uaWPorK = UA_PADRAO_W_K;
+        this.areaM2 = AREA_PADRAO_M2;
         this.perdaLocalK = PERDA_LOCAL_PADRAO_K;
         this.efetividadeMaxima = EFETIVIDADE_MAXIMA_PADRAO;
         this.fluxoReal = 0;
@@ -88,6 +131,11 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         this.deltaTemperaturaC = 0;
         this.deltaTemperatura2C = 0;
         this.cargaTermicaW = 0;
+        this.cargaTermicaMaximaW = 0;
+        this.lmtdC = 0;
+        this.fatorCorrecaoLmtd = 1.0;
+        this.pinchPointMinDeltaTC = 0;
+        this.tipoPerfilGrafico = 'position';
         this.efetividadeAtual = 0;
         this.vazaoMassaKgS = 0;
         this.vazaoMassa2KgS = 0;
@@ -180,17 +228,17 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         const ua = this.uaWPorK;
 
         if (ua <= 0) {
-            return { t1Out: t1, t2Out: t2, duty: 0, ef: 0, dt1: 0, dt2: 0, modo };
+            return { t1Out: t1, t2Out: t2, duty: 0, ef: 0, dt1: 0, dt2: 0, modo, maxHeat: 0, lmtd: 0, ft: 1.0, minDt: 0 };
         }
 
         const isDual = this.temDuasCorrentesConectadas();
         if (isDual) {
             if (vazao1 <= EPSILON_FLOW || vazao2 <= EPSILON_FLOW) {
-                return { t1Out: t1, t2Out: t2, duty: 0, ef: 0, dt1: 0, dt2: 0, modo };
+                return { t1Out: t1, t2Out: t2, duty: 0, ef: 0, dt1: 0, dt2: 0, modo, maxHeat: 0, lmtd: 0, ft: 1.0, minDt: 0 };
             }
         } else {
             if (vazao1 <= EPSILON_FLOW && vazao2 <= EPSILON_FLOW) {
-                return { t1Out: t1, t2Out: t2, duty: 0, ef: 0, dt1: 0, dt2: 0, modo };
+                return { t1Out: t1, t2Out: t2, duty: 0, ef: 0, dt1: 0, dt2: 0, modo, maxHeat: 0, lmtd: 0, ft: 1.0, minDt: 0 };
             }
             if (vazao1 <= EPSILON_FLOW && vazao2 > EPSILON_FLOW) {
                 const cp2 = Math.max(1, numeroSeguro(fluido2?.calorEspecificoJkgK, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK));
@@ -198,7 +246,7 @@ export class TrocadorCalorLogico extends ComponenteFisico {
                 const m2 = lpsToM3s(vazao2) * den2;
                 const c2 = m2 * cp2;
                 if (c2 <= 0) {
-                    return { t1Out: t1, t2Out: t2, duty: 0, ef: 0, dt1: 0, dt2: 0, modo };
+                    return { t1Out: t1, t2Out: t2, duty: 0, ef: 0, dt1: 0, dt2: 0, modo, maxHeat: 0, lmtd: 0, ft: 1.0, minDt: 0 };
                 }
                 const ntu = ua / c2;
                 const efetividade = clamp(1 - Math.exp(-ntu), 0, this.efetividadeMaxima);
@@ -208,7 +256,26 @@ export class TrocadorCalorLogico extends ComponenteFisico {
                 const minT = Math.min(t2, this.temperaturaServicoC);
                 const maxT = Math.max(t2, this.temperaturaServicoC);
                 t2Out = clamp(t2Out, minT, maxT);
-                return { t1Out: t1, t2Out, duty, ef: efetividade, dt1: 0, dt2: t2Out - t2, modo };
+                const lmtdCalc = calcularLmtd({
+                    t1In: t2,
+                    t1Out: t2Out,
+                    t2In: this.temperaturaServicoC,
+                    t2Out: this.temperaturaServicoC,
+                    modo: 'utilidade'
+                });
+                return {
+                    t1Out: t1,
+                    t2Out,
+                    duty,
+                    ef: efetividade,
+                    dt1: 0,
+                    dt2: t2Out - t2,
+                    modo,
+                    maxHeat,
+                    lmtd: lmtdCalc.lmtd,
+                    ft: lmtdCalc.ft,
+                    minDt: lmtdCalc.minDt
+                };
             }
         }
 
@@ -283,7 +350,27 @@ export class TrocadorCalorLogico extends ComponenteFisico {
             }
         }
 
-        return { t1Out, t2Out, duty, ef: efetividade, dt1: t1Out - t1, dt2: t2Out - t2, modo };
+        const lmtdCalc = calcularLmtd({
+            t1In: t1,
+            t1Out,
+            t2In: c2 > 0 ? t2 : this.temperaturaServicoC,
+            t2Out: c2 > 0 ? t2Out : this.temperaturaServicoC,
+            modo
+        });
+
+        return {
+            t1Out,
+            t2Out,
+            duty,
+            ef: efetividade,
+            dt1: t1Out - t1,
+            dt2: t2Out - t2,
+            modo,
+            maxHeat,
+            lmtd: lmtdCalc.lmtd,
+            ft: lmtdCalc.ft,
+            minDt: lmtdCalc.minDt
+        };
     }
 
     getFluxoPendentePorStream(streamId = 1) {
@@ -379,6 +466,29 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         return this.temperaturaServicoC;
     }
 
+    get uWPorM2K() {
+        return this.uaWPorK / Math.max(0.0001, this.areaM2 || 1.0);
+    }
+
+    setArea(valor) {
+        const numero = Math.max(0.01, Number(valor) || 1.0);
+        const currentU = this.uWPorM2K;
+        this.areaM2 = numero;
+        this.uaWPorK = clamp(this.areaM2 * currentU, 0, 100000);
+        this._notificarEstado(true);
+    }
+
+    setU(valor) {
+        const numero = Math.max(0, Number(valor) || 0);
+        this.uaWPorK = clamp((this.areaM2 || 1.0) * numero, 0, 100000);
+        this._notificarEstado(true);
+    }
+
+    setTipoPerfilGrafico(tipo) {
+        this.tipoPerfilGrafico = tipo === 'thermal' ? 'thermal' : 'position';
+        this._notificarEstado(true);
+    }
+
     setUA(valor) {
         const numero = Number(valor);
         this.uaWPorK = clamp(Number.isFinite(numero) ? numero : this.uaWPorK, 0, 100000);
@@ -409,9 +519,14 @@ export class TrocadorCalorLogico extends ComponenteFisico {
             (this.temperaturaEntrada2C || 0).toFixed(2),
             (this.temperaturaSaida2C || 0).toFixed(2),
             this.cargaTermicaW.toFixed(1),
+            this.cargaTermicaMaximaW.toFixed(1),
+            this.lmtdC.toFixed(2),
             this.efetividadeAtual.toFixed(4),
             this.deltaPAtualBar.toFixed(5),
             (this.deltaP2AtualBar || 0).toFixed(5),
+            (this.areaM2 || 1).toFixed(3),
+            this.uWPorM2K.toFixed(1),
+            this.tipoPerfilGrafico,
             duasCorrentes ? 'dual' : 'single'
         ].join('|');
 
@@ -430,6 +545,13 @@ export class TrocadorCalorLogico extends ComponenteFisico {
             deltaTemperaturaC: this.deltaTemperaturaC,
             deltaTemperatura2C: this.deltaTemperatura2C,
             cargaTermicaW: this.cargaTermicaW,
+            cargaTermicaMaximaW: this.cargaTermicaMaximaW,
+            lmtdC: this.lmtdC,
+            fatorCorrecaoLmtd: this.fatorCorrecaoLmtd,
+            pinchPointMinDeltaTC: this.pinchPointMinDeltaTC,
+            areaM2: this.areaM2,
+            uWPorM2K: this.uWPorM2K,
+            tipoPerfilGrafico: this.tipoPerfilGrafico,
             efetividadeAtual: this.efetividadeAtual,
             deltaPAtualBar: this.deltaPAtualBar,
             deltaP2AtualBar: this.deltaP2AtualBar,
@@ -456,6 +578,10 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         this.deltaTemperaturaC = resultado.dt1;
         this.deltaTemperatura2C = resultado.dt2;
         this.cargaTermicaW = resultado.duty;
+        this.cargaTermicaMaximaW = resultado.maxHeat || 0;
+        this.lmtdC = resultado.lmtd || 0;
+        this.fatorCorrecaoLmtd = resultado.ft || 1.0;
+        this.pinchPointMinDeltaTC = resultado.minDt || 0;
         this.efetividadeAtual = resultado.ef;
         this.vazaoMassaKgS = lpsToM3s(this.vazao1Lps) * (f1?.densidade || 997);
         this.vazaoMassa2KgS = lpsToM3s(this.vazao2Lps) * (f2?.densidade || 997);
@@ -491,6 +617,9 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         this.deltaTemperaturaC = 0;
         this.deltaTemperatura2C = 0;
         this.cargaTermicaW = 0;
+        this.cargaTermicaMaximaW = 0;
+        this.lmtdC = 0;
+        this.pinchPointMinDeltaTC = 0;
         this.efetividadeAtual = 0;
         this.vazaoMassaKgS = 0;
         this.vazaoMassa2KgS = 0;

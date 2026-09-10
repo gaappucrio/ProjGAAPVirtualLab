@@ -708,6 +708,169 @@ test('gráfico detalhado desacopla da barra de propriedades ao expandir e perman
     }
 });
 
+test('monitorController gerencia trocador de calor sem erro de referencia em modo compacto e expandido', async () => {
+    const prevDoc = global.document;
+    const prevWin = global.window;
+    const prevRaf = global.requestAnimationFrame;
+    const prevChart = global.Chart;
+
+    try {
+        class MockChart {
+            constructor(ctx, config) {
+                this.ctx = ctx;
+                this.config = config;
+                this.data = config.data || { datasets: [] };
+                this.options = config.options || { scales: { x: { ticks: {} }, y: { ticks: {} } }, plugins: { tooltip: { callbacks: {} } } };
+                this.destroyed = false;
+            }
+            update() {}
+            destroy() { this.destroyed = true; }
+            resize() {}
+        }
+        global.Chart = MockChart;
+
+        const elements = {};
+        const createMockEl = (tag, id = '') => {
+            const el = {
+                tagName: tag.toUpperCase(),
+                id,
+                attributes: {},
+                setAttribute(name, val) { this.attributes[name] = String(val); },
+                getAttribute(name) { return this.attributes[name] || null; },
+                classList: {
+                    _s: new Set(),
+                    add(...c) { c.forEach(x => this._s.add(x)); },
+                    remove(...c) { c.forEach(x => this._s.delete(x)); },
+                    contains(x) { return this._s.has(x); },
+                    toggle(x) { if (this._s.has(x)) { this._s.delete(x); return false; } this._s.add(x); return true; }
+                },
+                style: {
+                    removeProperty() {}
+                },
+                children: [],
+                parentElement: null,
+                parentNode: null,
+                dataset: {},
+                getContext() {
+                    return {
+                        clearRect() {},
+                        fillRect() {},
+                        beginPath() {},
+                        moveTo() {},
+                        lineTo() {},
+                        stroke() {}
+                    };
+                },
+                appendChild(c) {
+                    this.children.push(c);
+                    c.parentElement = this;
+                    c.parentNode = this;
+                    return c;
+                },
+                insertBefore(n) {
+                    this.children.push(n);
+                    n.parentElement = this;
+                    n.parentNode = this;
+                    return n;
+                },
+                querySelector(sel) {
+                    if (sel === '.chart-compare-card-header') return elements['header-1'] || null;
+                    return null;
+                },
+                querySelectorAll() { return []; },
+                addEventListener() {},
+                removeEventListener() {},
+                remove() {}
+            };
+            if (id) elements[id] = el;
+            return el;
+        };
+
+        const chartWrapper = createMockEl('div', 'chart-wrapper');
+        const compactStage = createMockEl('div', 'chart-compact-stage');
+        const compareGrid = createMockEl('div', 'chart-compare-grid');
+        const compactCanvas = createMockEl('canvas', 'gaap-volume-chart');
+        const card1 = createMockEl('div', 'chart-compare-card-1');
+        const header1 = createMockEl('div', 'header-1');
+        elements['header-1'] = header1;
+        card1.appendChild(header1);
+        const card2 = createMockEl('div', 'chart-compare-card-2');
+        const title1 = createMockEl('h4', 'chart-compare-title-1');
+        const subtitle1 = createMockEl('p', 'chart-compare-subtitle-1');
+        const title2 = createMockEl('h4', 'chart-compare-title-2');
+        const subtitle2 = createMockEl('p', 'chart-compare-subtitle-2');
+        const canvas1 = createMockEl('canvas', 'gaap-compare-chart-1');
+        const canvas2 = createMockEl('canvas', 'gaap-compare-chart-2');
+        const wrap1 = createMockEl('div', 'chart-compare-wrap-1');
+        const wrap2 = createMockEl('div', 'chart-compare-wrap-2');
+        const empty1 = createMockEl('div', 'chart-compare-empty-1');
+        const empty2 = createMockEl('div', 'chart-compare-empty-2');
+        const badge = createMockEl('span', 'chart-max-badge');
+        const status = createMockEl('p', 'chart-max-status');
+
+        global.document = {
+            getElementById(id) { return elements[id] || null; },
+            querySelector(sel) {
+                if (sel === '#chart-compact-stage') return compactStage;
+                if (sel === '#chart-compare-grid') return compareGrid;
+                return null;
+            },
+            querySelectorAll() { return []; },
+            createElement(tag) { return createMockEl(tag); }
+        };
+
+        global.window = {
+            addEventListener() {},
+            removeEventListener() {}
+        };
+        global.requestAnimationFrame = (fn) => fn();
+
+        const { createMonitorController } = await import('../js/presentation/controllers/MonitorController.js');
+        const engine = createEngine();
+        const tc = new TrocadorCalorLogico('tc-test-mon', 'TC-MON', 0, 0);
+        tc.temperaturaEntradaC = 25;
+        tc.temperaturaSaidaC = 50;
+        tc.cargaTermicaW = 25000;
+        engine.add(tc);
+
+        const monitor = createMonitorController({ engine });
+        monitor.setup();
+
+        // 1. Seleciona o trocador em modo compacto
+        monitor.refreshSelection(tc);
+        assert.doesNotThrow(() => {
+            monitor.refreshHeatExchanger(tc);
+        }, 'Atualização do trocador no modo compacto não deve lançar erro');
+
+        // 2. Expande o monitor e atualiza o layout
+        chartWrapper.classList.add('maximized');
+        assert.doesNotThrow(() => {
+            monitor.updateLayout();
+        }, 'updateLayout com trocador no histórico não deve lançar ReferenceError');
+
+        assert.ok(subtitle1.textContent.includes('Perfil'), 'Subtítulo deve indicar o perfil do trocador');
+
+        // 3. Altera para modo térmico e atualiza
+        tc.setTipoPerfilGrafico('thermal');
+        assert.doesNotThrow(() => {
+            monitor.refreshHeatExchanger(tc);
+        }, 'Atualização em modo térmico não deve lançar erro');
+        assert.ok(subtitle1.textContent.includes('kW'), 'Subtítulo no modo térmico deve mencionar kW');
+
+        // 4. Alterna de volta para modo espacial
+        tc.setTipoPerfilGrafico('position');
+        assert.doesNotThrow(() => {
+            monitor.refreshHeatExchanger(tc);
+        }, 'Atualização retornando ao modo espacial não deve lançar erro');
+        assert.ok(!subtitle1.textContent.includes('kW'), 'Subtítulo no modo espacial não deve mencionar kW');
+    } finally {
+        global.document = prevDoc;
+        global.window = prevWin;
+        global.requestAnimationFrame = prevRaf;
+        global.Chart = prevChart;
+    }
+});
+
 const PLANTAS_TESTE_DIR = path.resolve('Testes/plantas teste');
 
 function simulateTicks(engine, ticks = 30, dt = 0.1) {

@@ -285,6 +285,29 @@ Os trocadores de calor do laboratório integram o **Método Efetividade-NTU ($\e
 
    As grandezas de temperatura podem ser exibidas em Celsius (°C), Fahrenheit (°F) ou Kelvin (K, com $T_{\text{K}} = T_{^\circ\text{C}} + 273{,}15$).
 
+7. **Diferença Média Logarítmica de Temperatura (LMTD) e Fator de Correção $F_T$:**
+   $$\text{LMTD} = \frac{\Delta T_a - \Delta T_b}{\ln(\Delta T_a / \Delta T_b)}$$
+   - **Contracorrente:** $\Delta T_a = T_{1,\text{in}} - T_{2,\text{out}}$, $\Delta T_b = T_{1,\text{out}} - T_{2,\text{in}}$
+   - **Co-corrente (Paralelo):** $\Delta T_a = T_{1,\text{in}} - T_{2,\text{in}}$, $\Delta T_b = T_{1,\text{out}} - T_{2,\text{out}}$
+   - **Utilidade:** $\Delta T_a = |T_{\text{in}} - T_{\text{serviço}}|$, $\Delta T_b = |T_{\text{out}} - T_{\text{serviço}}|$
+
+   A taxa de transferência global relaciona-se com o LMTD por:
+   $$\dot{Q} = U \cdot A \cdot F_T \cdot \text{LMTD} = UA \cdot F_T \cdot \text{LMTD}$$
+   *(Para escoamento puro de passe único em contracorrente ou paralelo, $F_T = 1{,}0$)*.
+
+8. **Dimensionamento por Área ($A$) e Coeficiente Global ($U$):**
+   O produto de condutância térmica é desacoplado entre área superficial e convecção/condução global:
+   $$UA = U \cdot A \quad [\text{W/K}], \qquad U = \frac{UA}{A} \quad [\text{W/m}^2\cdot\text{K}]$$
+
+9. **Diferença Mínima de Temperatura (Pinch Point):**
+   $$\Delta T_{\min} = \min(\Delta T_a, \Delta T_b) \quad [^\circ\text{C}]$$
+
+10. **Perfil Térmico ($T \times Q$):**
+    Curvas de temperatura em função da carga térmica transferida $Q$ ($\text{kW}$), variando de $0$ até $Q_{\max} = C_{\min} \cdot |T_{1,\text{in}} - T_{2,\text{in}}| / 1000$:
+    $$T_c(Q) = T_{c,\text{in}} + \frac{Q \cdot 1000}{C_c} \quad [^\circ\text{C}]$$
+    $$T_h(Q) = T_{h,\text{in}} - \frac{Q \cdot 1000}{C_h} \quad [^\circ\text{C}]$$
+    Apresentando linha vertical tracejada na carga operacional $\dot{Q} / 1000\text{ kW}$ e marcadores pontuais nas saídas reais.
+
 Onde:
 - $\dot{m}_i$: Vazão mássica da corrente $i$ (kg/s)
 - $c_{p,i}$: Calor específico do fluido da corrente $i$ (J/kg·K)

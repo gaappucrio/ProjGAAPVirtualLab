@@ -56,6 +56,7 @@ export function createMonitorController({ engine }) {
     });
 
     function getCompactChartContext() {
+        if (typeof document === 'undefined') return null;
         const canvas = document.getElementById('gaap-volume-chart');
         return canvas ? canvas.getContext('2d') : null;
     }
@@ -68,12 +69,14 @@ export function createMonitorController({ engine }) {
     }
 
     function isExpanded() {
+        if (typeof document === 'undefined') return false;
         const wrapper = document.getElementById('chart-wrapper');
         return wrapper?.classList.contains('maximized') === true && wrapper?.classList.contains('is-closing') === false;
     }
 
     function setCompactMonitorMode(mode) {
         monitorChartMode = mode;
+        if (typeof document === 'undefined') return;
         const chartWrapper = document.getElementById('chart-wrapper');
         if (chartWrapper) chartWrapper.dataset.monitorMode = mode;
     }
@@ -406,7 +409,7 @@ export function createMonitorController({ engine }) {
     }
 
     function ensurePumpExportButton(container, id) {
-        if (!container) return null;
+        if (!container || typeof document === 'undefined') return null;
 
         let button = document.getElementById(id);
         if (!button) {
@@ -422,11 +425,11 @@ export function createMonitorController({ engine }) {
             container.appendChild(button);
         }
 
-        button.classList.toggle('is-header-action', container.classList.contains('chart-compare-card-header'));
-        button.classList.toggle('is-compact-action', id === 'chart-pump-export-compact');
+        button.classList?.toggle('is-header-action', container.classList?.contains('chart-compare-card-header') === true);
+        button.classList?.toggle('is-compact-action', id === 'chart-pump-export-compact');
         button.textContent = 'JSON';
         button.title = t('chart.exportPumpJsonTitle');
-        button.setAttribute('aria-label', t('chart.exportPumpJson'));
+        button.setAttribute?.('aria-label', t('chart.exportPumpJson'));
         return button;
     }
 
@@ -435,17 +438,18 @@ export function createMonitorController({ engine }) {
 
         if (component instanceof BombaLogica) {
             button.hidden = false;
-            button.dataset.pumpId = component.id;
+            if (button.dataset) button.dataset.pumpId = component.id;
             button.title = t('chart.exportPumpJsonTitle');
-            button.setAttribute('aria-label', t('chart.exportPumpJson'));
+            button.setAttribute?.('aria-label', t('chart.exportPumpJson'));
             return;
         }
 
         button.hidden = true;
-        delete button.dataset.pumpId;
+        if (button.dataset) delete button.dataset.pumpId;
     }
 
     function refreshCompactPumpExportButton(component = null) {
+        if (typeof document === 'undefined') return;
         const button = ensurePumpExportButton(
             document.getElementById('chart-compact-stage'),
             'chart-pump-export-compact'
@@ -496,8 +500,9 @@ export function createMonitorController({ engine }) {
         refreshValveChart(chart, component, { expanded: isExpanded() });
     }
 
-    function createHeatExchangerMonitorChartInstance(ctx, component) {
-        return createHeatExchangerChart(ctx, component, { expanded: isExpanded() });
+    function createHeatExchangerMonitorChartInstance(ctx, component, { yAxisMode = null } = {}) {
+        const mode = yAxisMode || component?.tipoPerfilGrafico || 'position';
+        return createHeatExchangerChart(ctx, component, { expanded: isExpanded(), mode });
     }
 
     function createHeatExchangerCompactChart(component) {
@@ -516,13 +521,20 @@ export function createMonitorController({ engine }) {
         refreshCompactPumpExportButton(null);
     }
 
-    function refreshHeatExchangerMonitorChartInstance(chart, component) {
+    function refreshHeatExchangerMonitorChartInstance(chart, component, { yAxisMode = null } = {}) {
         if (!(component instanceof TrocadorCalorLogico) || !chart) return;
-        refreshHeatExchangerChart(chart, component, { expanded: isExpanded() });
+        const mode = yAxisMode || component?.tipoPerfilGrafico || chart.chartMode || 'position';
+        refreshHeatExchangerChart(chart, component, { expanded: isExpanded(), mode });
     }
 
     function refreshHeatExchangerCompactChart(component) {
         if (!(component instanceof TrocadorCalorLogico) || !compactChart || monitorChartMode !== 'heatExchanger' || chartedHeatExchangerId !== component.id) {
+            return;
+        }
+
+        const expectedMode = component.tipoPerfilGrafico || 'position';
+        if (compactChart.chartMode && compactChart.chartMode !== expectedMode) {
+            createHeatExchangerCompactChart(component);
             return;
         }
 
@@ -637,12 +649,16 @@ export function createMonitorController({ engine }) {
         }
     }
 
-    function getValidDefaultYAxisMode(kind, storedMode) {
+    function getValidDefaultYAxisMode(kind, storedMode, component = null) {
         if (kind === 'pump') {
             return ['yHead', 'yEff', 'yNpsh'].includes(storedMode) ? storedMode : 'yHead';
         }
         if (kind === 'valve') {
             return ['yPressure', 'yCv'].includes(storedMode) ? storedMode : 'yPressure';
+        }
+        if (kind === 'heatExchanger') {
+            const fallback = component?.tipoPerfilGrafico || 'position';
+            return ['position', 'thermal'].includes(storedMode) ? storedMode : fallback;
         }
         return null;
     }
@@ -668,6 +684,12 @@ export function createMonitorController({ engine }) {
                 { value: 'yCv', label: t('chart.effectiveFlowCoefficient', { unit: unitLabel }) }
             ];
         }
+        if (kind === 'heatExchanger') {
+            return [
+                { value: 'position', label: t('chart.heatExchangerModePosition') },
+                { value: 'thermal', label: t('chart.heatExchangerModeThermal') }
+            ];
+        }
         return [];
     }
 
@@ -675,7 +697,7 @@ export function createMonitorController({ engine }) {
         if (!container) return null;
 
         let wrapper = document.getElementById(id);
-        if (kind !== 'pump' && kind !== 'valve') {
+        if (kind !== 'pump' && kind !== 'valve' && kind !== 'heatExchanger') {
             if (wrapper) wrapper.style.display = 'none';
             return null;
         }
@@ -686,7 +708,12 @@ export function createMonitorController({ engine }) {
             return null;
         }
 
-        const activeMode = chart?.yAxisMode || (kind === 'pump' ? 'yHead' : 'yPressure');
+        const fallbackDefault = kind === 'pump'
+            ? 'yHead'
+            : (kind === 'heatExchanger' ? (component?.tipoPerfilGrafico || 'position') : 'yPressure');
+        const activeMode = kind === 'heatExchanger'
+            ? (component?.tipoPerfilGrafico || chart?.yAxisMode || chart?.chartMode || 'position')
+            : (chart?.yAxisMode || chart?.chartMode || fallbackDefault);
         const selectedOption = expectedOptions.find(opt => opt.value === activeMode) || expectedOptions[0];
 
         if (!wrapper) {
@@ -713,6 +740,25 @@ export function createMonitorController({ engine }) {
 
         wrapper.style.display = '';
 
+        const optionsHash = expectedOptions.map(opt => `${opt.value}:${opt.label}`).join('|');
+        if (wrapper.dataset?.optionsHash === optionsHash) {
+            const labelEl = wrapper.querySelector?.(`#${id}-label`);
+            if (labelEl && selectedOption) {
+                labelEl.textContent = selectedOption.label;
+            }
+            const opts = wrapper.querySelectorAll?.('.custom-select-option');
+            opts?.forEach(opt => {
+                opt.classList?.toggle('selected', opt.dataset?.value === activeMode);
+            });
+            if (wrapper.dataset) wrapper.dataset.activeMode = activeMode;
+            return wrapper;
+        }
+
+        if (wrapper.dataset) {
+            wrapper.dataset.optionsHash = optionsHash;
+            wrapper.dataset.activeMode = activeMode;
+        }
+
         const optionsHTML = expectedOptions
             .map(opt => `<li class="custom-select-option ${opt.value === activeMode ? 'selected' : ''}" data-value="${opt.value}">${opt.label}</li>`)
             .join('');
@@ -727,27 +773,36 @@ export function createMonitorController({ engine }) {
             </ul>
         `;
 
-        const trigger = wrapper.querySelector('.custom-select-trigger');
-        const options = wrapper.querySelectorAll('.custom-select-option');
+        const trigger = wrapper.querySelector?.('.custom-select-trigger');
+        const options = wrapper.querySelectorAll?.('.custom-select-option');
 
-        trigger.addEventListener('click', (e) => {
-            e.stopPropagation();
-            document.querySelectorAll('.custom-select-wrapper.open').forEach(w => {
-                if (w !== wrapper) w.classList.remove('open');
-            });
-            wrapper.classList.toggle('open');
-        });
-
-        options.forEach(opt => {
-            opt.addEventListener('click', (e) => {
+        if (trigger) {
+            trigger.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const newMode = opt.dataset.value;
-                wrapper.classList.remove('open');
-                if (newMode !== activeMode) {
-                    onSelect(newMode);
-                }
+                document.querySelectorAll?.('.custom-select-wrapper.open')?.forEach(w => {
+                    if (w !== wrapper) w.classList.remove('open');
+                });
+                wrapper.classList.toggle('open');
             });
-        });
+        }
+
+        if (options) {
+            options.forEach(opt => {
+                opt.addEventListener?.('click', (e) => {
+                    e.stopPropagation();
+                    const newMode = opt.dataset?.value;
+                    wrapper.classList.remove('open');
+                    const currentActive = wrapper.dataset?.activeMode;
+                    if (newMode && newMode !== currentActive) {
+                        if (wrapper.dataset) wrapper.dataset.activeMode = newMode;
+                        const labelEl = wrapper.querySelector?.(`#${id}-label`);
+                        if (labelEl) labelEl.textContent = opt.textContent?.trim?.() || opt.textContent;
+                        options.forEach(o => o.classList?.toggle('selected', o.dataset?.value === newMode));
+                        onSelect(newMode);
+                    }
+                });
+            });
+        }
 
         return wrapper;
     }
@@ -773,18 +828,26 @@ export function createMonitorController({ engine }) {
             chart,
             (newMode) => {
                 expandedChartYAxisModes[index] = newMode;
+                if (entry.component instanceof TrocadorCalorLogico) {
+                    entry.component.setTipoPerfilGrafico?.(newMode);
+                    const propSelect = document.getElementById('input-hx-chart-mode');
+                    if (propSelect) propSelect.value = newMode;
+                }
                 if (expandedMonitorCharts[index]) {
                     expandedMonitorCharts[index].destroy();
                     expandedMonitorCharts[index] = null;
                 }
                 refreshExpandedMonitorCharts();
+                if (entry.component instanceof TrocadorCalorLogico) {
+                    refreshHeatExchangerCompactChart(entry.component);
+                }
             },
             entry.component
         );
     }
 
     function refreshPresentation() {
-        if (!compactChart) return;
+        if (typeof document === 'undefined' || !compactChart) return;
 
         if (monitorChartMode === 'pump') {
             const bomba = engine.componentes.find((component) => component.id === chartedPumpId);
@@ -842,6 +905,7 @@ export function createMonitorController({ engine }) {
     }
 
     function getExpandedChartElements(index) {
+        if (typeof document === 'undefined') return {};
         const slot = index + 1;
         const card = document.getElementById(`chart-compare-card-${slot}`);
         return {
@@ -982,7 +1046,8 @@ export function createMonitorController({ engine }) {
         }
     }
 
-    function getExpandedChartSubtitle(entry) {
+    function getExpandedChartSubtitle(entry, index = -1) {
+        if (!entry) return '';
         if (entry.kind === 'tank') {
             return `${t('chart.volume')} (${getUnitSymbol('volume')})`;
         }
@@ -993,8 +1058,16 @@ export function createMonitorController({ engine }) {
             return t('chart.valveSubtitle');
         }
         if (entry.kind === 'heatExchanger') {
+            const chartEntries = getMonitorChartEntries();
+            const activeIndex = index >= 0 ? index : chartEntries.indexOf(entry);
+            const chart = activeIndex >= 0 ? expandedMonitorCharts[activeIndex] : null;
+            const mode = entry.component?.tipoPerfilGrafico
+                || (activeIndex >= 0 ? expandedChartYAxisModes[activeIndex] : null)
+                || chart?.chartMode
+                || 'position';
             return t('chart.heatExchangerSubtitle', {
-                tempUnit: getUnitSymbol('temperature')
+                tempUnit: getUnitSymbol('temperature'),
+                mode
             });
         }
         if (entry.kind === 'pipe') {
@@ -1053,7 +1126,7 @@ export function createMonitorController({ engine }) {
         }
 
         if (component instanceof TrocadorCalorLogico) {
-            return createHeatExchangerMonitorChartInstance(ctx, component);
+            return createHeatExchangerMonitorChartInstance(ctx, component, { yAxisMode });
         }
 
         if (component instanceof ConnectionModel) {
@@ -1131,7 +1204,7 @@ export function createMonitorController({ engine }) {
             if (dismissButton) dismissButton.hidden = false;
             setPumpExportButtonState(exportButton, entry.component);
             if (elements.title) elements.title.textContent = getMonitorChartTitle(entry);
-            if (elements.subtitle) elements.subtitle.textContent = getExpandedChartSubtitle(entry);
+            if (elements.subtitle) elements.subtitle.textContent = getExpandedChartSubtitle(entry, index);
             if (elements.canvasWrap) elements.canvasWrap.hidden = false;
             if (elements.empty) elements.empty.hidden = true;
             if (elements.canvas) {
@@ -1139,7 +1212,7 @@ export function createMonitorController({ engine }) {
                 elements.canvas.dataset.monitorEntryKind = entry.kind;
             }
 
-            const activeMode = getValidDefaultYAxisMode(entry.kind, expandedChartYAxisModes[index]);
+            const activeMode = getValidDefaultYAxisMode(entry.kind, expandedChartYAxisModes[index], entry.component);
             expandedChartYAxisModes[index] = activeMode;
 
             expandedMonitorCharts[index] = createExpandedMonitorChart(elements.canvas, entry.component, { yAxisMode: activeMode });
@@ -1163,9 +1236,14 @@ export function createMonitorController({ engine }) {
         const shouldRebuild = activeEntryCount !== activeChartCount || entries.some((entry, index) => {
             const elements = getExpandedChartElements(index);
             if (!entry) return Boolean(expandedMonitorCharts[index]);
-            return !expandedMonitorCharts[index]
+            const chart = expandedMonitorCharts[index];
+            const expectedMode = entry.kind === 'heatExchanger'
+                ? (entry.component?.tipoPerfilGrafico || expandedChartYAxisModes[index] || 'position')
+                : expandedChartYAxisModes[index];
+            return !chart
                 || elements.canvas?.dataset.monitorEntryId !== String(entry.id)
-                || elements.canvas?.dataset.monitorEntryKind !== entry.kind;
+                || elements.canvas?.dataset.monitorEntryKind !== entry.kind
+                || (chart.chartMode && chart.chartMode !== expectedMode);
         });
 
         if (shouldRebuild) {
@@ -1186,7 +1264,7 @@ export function createMonitorController({ engine }) {
             if (dismissButton) dismissButton.hidden = false;
             setPumpExportButtonState(exportButton, entry.component);
             if (elements.title) elements.title.textContent = getMonitorChartTitle(entry);
-            if (elements.subtitle) elements.subtitle.textContent = getExpandedChartSubtitle(entry);
+            if (elements.subtitle) elements.subtitle.textContent = getExpandedChartSubtitle(entry, index);
 
             ensureExpandedChartAxisSelector(elements, index, entry);
 
@@ -1197,7 +1275,9 @@ export function createMonitorController({ engine }) {
             } else if (entry.component instanceof ValvulaLogica) {
                 refreshValveMonitorChartInstance(chart, entry.component);
             } else if (entry.component instanceof TrocadorCalorLogico) {
-                refreshHeatExchangerMonitorChartInstance(chart, entry.component);
+                const activeMode = entry.component.tipoPerfilGrafico || expandedChartYAxisModes[index] || 'position';
+                expandedChartYAxisModes[index] = activeMode;
+                refreshHeatExchangerMonitorChartInstance(chart, entry.component, { yAxisMode: activeMode });
             } else if (entry.component instanceof ConnectionModel) {
                 refreshPipeMonitorChartInstance(chart, entry.component);
             } else if (Array.isArray(entry.component)) {
@@ -1365,8 +1445,22 @@ export function createMonitorController({ engine }) {
         if (isExpanded()) refreshExpandedMonitorCharts();
     });
 
+    function setup() {
+        createEmptyCompactChart();
+        if (typeof document !== 'undefined' && typeof document.addEventListener === 'function' && typeof window !== 'undefined' && !window.__globalChartAxisCustomSelectListenerAdded) {
+            document.addEventListener('click', (e) => {
+                if (!e.target?.closest?.('.chart-axis-custom-select')) {
+                    document.querySelectorAll?.('.chart-axis-custom-select.open')?.forEach(w => {
+                        w.classList.remove('open');
+                    });
+                }
+            });
+            window.__globalChartAxisCustomSelectListenerAdded = true;
+        }
+    }
+
     return {
-        setup: createEmptyCompactChart,
+        setup,
         updateLayout,
         refreshSelection,
         refreshPresentation,
