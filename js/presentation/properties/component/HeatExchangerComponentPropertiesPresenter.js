@@ -112,18 +112,6 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
                 <input type="text" id="disp-hx-effectiveness" ${hintAttr(TOOLTIP.heatExchangerEffectiveness)} value="${(comp.efetividadeAtual * 100).toFixed(1)}%" disabled>
             </div>
             <div class="prop-group">
-                ${makeLabel('LMTD (Diferença Média Logarítmica)', 'Diferença Média Logarítmica de Temperatura entre as correntes.')}
-                <input type="text" id="disp-hx-lmtd" value="${(comp.lmtdC || 0).toFixed(2)} °C" disabled>
-            </div>
-            <div class="prop-group">
-                ${makeLabel('Fator de correção LMTD', 'Fator FT de correção geométrica shell-and-tube.')}
-                <input type="text" id="disp-hx-ft" value="${(comp.fatorCorrecaoLmtd || 1.0).toFixed(2)}" disabled>
-            </div>
-            <div class="prop-group">
-                ${makeLabel('Pinch Point (ΔT mín)', 'Menor diferença pontual de temperatura entre os dois fluidos.')}
-                <input type="text" id="disp-hx-pinch" value="${(comp.pinchPointMinDeltaTC || 0).toFixed(2)} °C" disabled>
-            </div>
-            <div class="prop-group">
                 ${makeLabel('Arranjo térmico')}
                 <input type="text" id="disp-hx-flow-mode" value="${comp.getModoEscoamento?.(engine) === 'paralelo' ? 'Corrente Paralela (Co-corrente)' : 'Contracorrente'}" disabled>
             </div>
@@ -174,6 +162,20 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
         `;
 
         const advancedContent = `
+            <div style="font-weight: bold; margin-bottom: 8px; color: ${isDark ? '#d8e4ec' : '#2c3e50'}; border-bottom: 1px solid ${isDark ? '#2d3748' : '#e2e8f0'}; padding-bottom: 4px;">Análise Térmica Rigorosa</div>
+            <div class="prop-group">
+                ${makeLabel('LMTD (Média Logarítmica)', 'Diferença Média Logarítmica de Temperatura entre as correntes: força motriz térmica média ao longo do trocador.')}
+                <input type="text" id="disp-hx-lmtd" value="${(comp.lmtdC || 0).toFixed(2)} °C" disabled>
+            </div>
+            <div class="prop-group">
+                ${makeLabel('Fator de correção FT', 'Fator FT de correção geométrica shell-and-tube aplicado ao LMTD em arranjos multipasse/misto.')}
+                <input type="text" id="disp-hx-ft" value="${(comp.fatorCorrecaoLmtd || 1.0).toFixed(2)}" disabled>
+            </div>
+            <div class="prop-group">
+                ${makeLabel('Pinch Point (ΔT mín)', 'Menor diferença pontual de temperatura entre os dois fluidos ao longo do trocador (ponto de estrangulamento térmico).')}
+                <input type="text" id="disp-hx-pinch" value="${(comp.pinchPointMinDeltaTC || 0).toFixed(2)} °C" disabled>
+            </div>
+            <div style="font-weight: bold; margin: 12px 0 8px 0; color: ${isDark ? '#d8e4ec' : '#2c3e50'}; border-bottom: 1px solid ${isDark ? '#2d3748' : '#e2e8f0'}; padding-bottom: 4px;">Parâmetros Hidráulicos e de Limite</div>
             <div class="prop-group">
                 ${makeLabel('Perda local K', TOOLTIP.heatExchangerK)}
                 <input type="number" id="input-hx-loss-k" ${hintAttr(TOOLTIP.heatExchangerK)} value="${comp.perdaLocalK}" step="0.1" min="0" max="100">
@@ -187,7 +189,7 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
         return renderPropertyTabs({
             basicContent,
             advancedContent,
-            advancedDescription: 'O trocador calcula a troca de calor entre a Corrente 1 e a Corrente 2 usando o método NTU em contracorrente. Se apenas uma corrente estiver conectada, ela troca calor com o meio de serviço configurado.'
+            advancedDescription: 'Parâmetros de análise térmica rigorosa (LMTD, fator FT, pinch point), limites de efetividade e perda de carga do trocador.'
         });
     },
     bind: (comp) => {
