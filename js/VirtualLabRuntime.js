@@ -82,6 +82,7 @@ function setupLanguageRuntime(engine) {
 export function setupVirtualLabRuntime({ engine } = {}) {
     const connectionService = createConnectionServiceRuntime(engine);
     const monitorController = createMonitorController({ engine });
+    if (engine) engine.monitorController = monitorController;
     const undoManager = setupUndoController({ engine });
 
     setupLanguageRuntime(engine);

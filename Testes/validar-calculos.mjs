@@ -4,13 +4,15 @@ import test from 'node:test';
 import { FLUID_PRESETS, SistemaSimulacao } from '../js/application/engine/SimulationEngine.js';
 import { BombaLogica } from '../js/domain/components/BombaLogica.js';
 import { DrenoLogico } from '../js/domain/components/DrenoLogico.js';
-import { mixFluidos } from '../js/domain/components/Fluido.js';
+import { createFluidoFromProperties, mixFluidos } from '../js/domain/components/Fluido.js';
 import { FonteLogica } from '../js/domain/components/FonteLogica.js';
 import { TanqueLogico } from '../js/domain/components/TanqueLogico.js';
 import {
     TrocadorCalorLogico,
+    calcularLmtd,
     calcularSaidaTrocadorCalor
 } from '../js/domain/components/TrocadorCalorLogico.js';
+import { translateDwsimToWorkspace } from '../js/presentation/import/DwsimImporter.js';
 import {
     VALVE_FLOW_COEFFICIENT_UNITS,
     VALVE_PROFILE_DEFINITIONS,
@@ -41,6 +43,16 @@ import {
     createLevelControllerState
 } from '../js/domain/services/LevelController.js';
 import { buildPumpCurveDatasets } from '../js/infrastructure/charts/PumpChartAdapter.js';
+import { buildHeatExchangerCurveDatasets } from '../js/infrastructure/charts/HeatExchangerChartAdapter.js';
+import {
+    formatUnitValue,
+    getUnitOptions,
+    getUnitSymbol,
+    setUnitPreference,
+    toBaseValue,
+    toDisplayValue
+} from '../js/presentation/units/DisplayUnits.js';
+import { buildExportHtml } from '../js/presentation/export/SimulationDataExporter.js';
 import {
     DEFAULT_ATMOSPHERIC_PRESSURE_BAR,
     DEFAULT_PIPE_EXTRA_LENGTH_M,
@@ -1196,4 +1208,319 @@ test('controle de nivel fecha entrada e saida dentro da banda do set point', () 
     assert.equal(valvulaEntrada.grauAbertura, 0);
     assert.ok(valvulaSaida.grauAbertura > valvulaSaida.aberturaEfetiva, 'Nível mais alto deve comandar maior abertura de saída');
     assert.ok(valvulaSaida.grauAbertura > 20 && valvulaSaida.grauAbertura < 25, 'Erro moderado deve gerar abertura parcial');
+});
+
+test('exportacao de dados inclui temperatura do fluido nas conexoes', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-EXP', 'Fonte-01', 0, 0);
+    const dreno = new DrenoLogico('D-EXP', 'Dreno-01', 100, 0);
+    fonte.atualizarFluidoEntrada({
+        ...FLUID_PRESETS.agua,
+        temperatura: 37.5
+    }, { presetId: 'agua' });
+
+    fonte.conectarSaida(dreno);
+    const conn = new ConnectionModel({ sourceId: fonte.id, targetId: dreno.id });
+    engine.add(fonte);
+    engine.add(dreno);
+    engine.addConnection(conn);
+
+    engine.resolveHydraulicNetwork(0.1);
+
+    const html = buildExportHtml(engine);
+    assert.ok(html.includes('Temperatura do fluido (°C)'), 'Cabeçalho da coluna de temperatura deve existir');
+    assert.ok(html.includes('37.5'), 'Valor da temperatura do fluido deve ser exportado');
+});
+
+test('exportacao de dados inclui colunas de ambas as correntes do trocador de calor', () => {
+    const engine = createEngine();
+    const trocador = new TrocadorCalorLogico('HX-EXP', 'TC-01', 0, 0);
+    trocador.temperaturaEntradaC = 25.5;
+    trocador.temperaturaSaidaC = 38.2;
+    trocador.temperaturaEntrada2C = 80.0;
+    trocador.temperaturaSaida2C = 67.3;
+    trocador.vazao1Lps = 12.5;
+    trocador.vazao2Lps = 8.4;
+    trocador.fluxoReal = 20.9;
+    trocador.cargaTermicaW = 4500;
+
+    engine.add(trocador);
+
+    const html = buildExportHtml(engine);
+    assert.ok(html.includes('Temperatura de entrada 2 do trocador'), 'Coluna de temperatura entrada 2 deve existir');
+    assert.ok(html.includes('Temperatura de saída 2 do trocador'), 'Coluna de temperatura saída 2 deve existir');
+    assert.ok(html.includes('Vazão na Corrente 1'), 'Coluna de vazão na corrente 1 deve existir');
+    assert.ok(html.includes('Vazão na Corrente 2'), 'Coluna de vazão na corrente 2 deve existir');
+    assert.ok(html.includes('38.2'), 'Temperatura de saída 1 deve ser exportada');
+    assert.ok(html.includes('67.3'), 'Temperatura de saída 2 deve ser exportada');
+});
+
+test('unidade Kelvin converte corretamente e integra com preferências de exibição', () => {
+    const options = getUnitOptions('temperature');
+    const kelvinOption = options.find((opt) => opt.id === 'k');
+    assert.ok(kelvinOption, 'Opção de Kelvin deve estar disponível nas unidades');
+    assert.equal(kelvinOption.label, 'K');
+    assert.equal(kelvinOption.symbol, 'K');
+
+    // Estado original
+    const prevPref = getUnitSymbol('temperature');
+
+    try {
+        setUnitPreference('temperature', 'k');
+        assert.equal(getUnitSymbol('temperature'), 'K');
+
+        // Conversões de base (Celsius) para exibição (Kelvin)
+        approx(toDisplayValue('temperature', 25), 298.15, 0.001, '25 °C em Kelvin');
+        approx(toDisplayValue('temperature', 0), 273.15, 0.001, '0 °C em Kelvin');
+        approx(toDisplayValue('temperature', -273.15), 0, 0.001, 'Zero absoluto em Kelvin');
+        approx(toDisplayValue('temperature', 100), 373.15, 0.001, '100 °C em Kelvin');
+
+        // Conversões de exibição (Kelvin) para base (Celsius)
+        approx(toBaseValue('temperature', 298.15), 25, 0.001, '298.15 K em Celsius');
+        approx(toBaseValue('temperature', 0), -273.15, 0.001, '0 K em Celsius');
+
+        // Formatação
+        const formatted = formatUnitValue('temperature', 25);
+        assert.ok(formatted.includes('298'), 'Formatação deve conter valor convertido');
+        const symbol = getUnitSymbol('temperature');
+        assert.equal(symbol, 'K', 'Símbolo deve ser K');
+    } finally {
+        setUnitPreference('temperature', prevPref === 'K' ? 'c' : (prevPref === '°F' ? 'f' : 'c'));
+    }
+});
+
+test('trocador de calor gera curvas de temperatura para monitoramento nos modos utilidade e duas correntes', () => {
+    const trocador = new TrocadorCalorLogico('tc-test', 'TC-01', 0, 0);
+    trocador.temperaturaEntradaC = 20;
+    trocador.temperaturaSaidaC = 60;
+    trocador.temperaturaServicoC = 90;
+    trocador.uaWPorK = 3000;
+    trocador.vazao1Lps = 2.0;
+
+    // Modo 1: Utilidade térmica (corrente única)
+    const datasetsUtilidade = buildHeatExchangerCurveDatasets(trocador);
+    assert.equal(datasetsUtilidade.duasCorrentes, false);
+    assert.equal(datasetsUtilidade.stream1Points.length, 41);
+    assert.equal(datasetsUtilidade.stream2Points.length, 41);
+    assert.equal(datasetsUtilidade.operationPoints.length, 4);
+
+    // Entrada em x = 0%, saída em x = 100%
+    approx(datasetsUtilidade.stream1Points[0].x, 0, 0.001, 'Posição inicial da corrente 1');
+    approx(datasetsUtilidade.stream1Points[0].y, 20, 0.001, 'Temperatura inicial da corrente 1');
+    approx(datasetsUtilidade.stream1Points[40].x, 100, 0.001, 'Posição final da corrente 1');
+    approx(datasetsUtilidade.stream1Points[40].y, 60, 0.001, 'Temperatura final da corrente 1');
+
+    // Corrente de utilidade constante
+    datasetsUtilidade.stream2Points.forEach((pt) => {
+        approx(pt.y, 90, 0.001, 'Temperatura da utilidade constante');
+    });
+
+    // Modo 2: Duas correntes em contracorrente
+    trocador.temDuasCorrentesConectadas = () => true;
+    trocador.getModoEscoamento = () => 'contracorrente';
+    trocador.temperaturaEntrada2C = 85;
+    trocador.temperaturaSaida2C = 45;
+    trocador.vazao2Lps = 2.0;
+
+    const datasetsContra = buildHeatExchangerCurveDatasets(trocador);
+    assert.equal(datasetsContra.duasCorrentes, true);
+    assert.equal(datasetsContra.modo, 'contracorrente');
+    assert.equal(datasetsContra.stream1Points.length, 41);
+    assert.equal(datasetsContra.stream2Points.length, 41);
+
+    // Corrente 1 escoa de x=0 para x=100
+    approx(datasetsContra.stream1Points[0].y, 20, 0.001, 'Contracorrente T1 in');
+    approx(datasetsContra.stream1Points[40].y, 60, 0.001, 'Contracorrente T1 out');
+
+    // Corrente 2 entra em x=100 e sai em x=0
+    approx(datasetsContra.stream2Points[40].y, 85, 0.001, 'Contracorrente T2 in (x=100%)');
+    approx(datasetsContra.stream2Points[0].y, 45, 0.001, 'Contracorrente T2 out (x=0%)');
+
+    // Modo 3: Com preferência em Kelvin
+    try {
+        setUnitPreference('temperature', 'k');
+        const datasetsKelvin = buildHeatExchangerCurveDatasets(trocador);
+        assert.equal(datasetsKelvin.tempUnit, 'K');
+        approx(datasetsKelvin.stream1Points[0].y, 293.15, 0.01, '20 °C em Kelvin no gráfico');
+        approx(datasetsKelvin.stream1Points[40].y, 333.15, 0.01, '60 °C em Kelvin no gráfico');
+        approx(datasetsKelvin.stream2Points[40].y, 358.15, 0.01, '85 °C em Kelvin no gráfico');
+    } finally {
+        setUnitPreference('temperature', 'c');
+    }
+});
+
+test('trocador de calor respeita a segunda lei da termodinamica e previne extrapolacoes', () => {
+    const trocador = new TrocadorCalorLogico('TC-2ndLaw', 'TC-2ndLaw', 0, 0);
+    trocador.setUA(100000); // UA extremamente alto para forçar o limite térmico máximo
+    trocador.setEfetividadeMaxima(99.9);
+
+    const fQuente = createFluidoFromProperties({ nome: 'Quente', temperatura: 90, densidade: 997, calorEspecificoJkgK: 4184 });
+    const fFrio = createFluidoFromProperties({ nome: 'Frio', temperatura: 20, densidade: 997, calorEspecificoJkgK: 4184 });
+
+    // Caso 1: Escoamento em paralelo (cocorrente)
+    // Na cocorrente, as duas correntes convergem para a temperatura de equilíbrio, mas NUNCA se cruzam
+    const resParalelo = trocador.calcularTrocaTermicaGlobal(fQuente, 2.0, fFrio, 2.0, 'paralelo');
+    assert.ok(resParalelo.t1Out >= 20 && resParalelo.t1Out <= 90, 'T1 out deve estar dentro de [20, 90]');
+    assert.ok(resParalelo.t2Out >= 20 && resParalelo.t2Out <= 90, 'T2 out deve estar dentro de [20, 90]');
+    assert.ok(resParalelo.t1Out >= resParalelo.t2Out, `Na cocorrente T1out (${resParalelo.t1Out}) nao pode ser menor que T2out (${resParalelo.t2Out})`);
+    approx(resParalelo.t1Out, 55, 1.0, 'Para capacidades iguais com efetividade maxima, cocorrente atinge ~55 C');
+
+    // Caso 2: Escoamento em contracorrente
+    // Na contracorrente, T1 pode cruzar T2out, mas NUNCA pode ficar abaixo de T2in (20 C) nem T2out acima de T1in (90 C)
+    const resContra = trocador.calcularTrocaTermicaGlobal(fQuente, 2.0, fFrio, 2.0, 'contracorrente');
+    assert.ok(resContra.t1Out >= 20, `T1 out (${resContra.t1Out}) nao pode violar a 2a Lei caindo abaixo de T2 in (20 C)`);
+    assert.ok(resContra.t2Out <= 90, `T2 out (${resContra.t2Out}) nao pode violar a 2a Lei subindo acima de T1 in (90 C)`);
+    assert.ok(resContra.t1Out < resParalelo.t1Out, 'Contracorrente deve ser termicamente mais eficiente que paralelo');
+});
+
+test('correlacoes de temperatura do fluido preservam limites fisicos de liquido e evitam singularidade', () => {
+    // Teste de temperatura extrema negativa (evitando singularidade histórica em -68.12 C)
+    const fluidoCriogenico = createFluidoFromProperties({
+        nome: 'Água Fria',
+        temperatura: -75
+    });
+    assert.ok(Number.isFinite(fluidoCriogenico.densidade), 'Densidade deve ser finita');
+    assert.ok(fluidoCriogenico.densidade >= 100, `Densidade de líquido não pode ser de gás (< 100): ${fluidoCriogenico.densidade}`);
+
+    // Teste de temperatura alta
+    const fluidoQuente = createFluidoFromProperties({
+        nome: 'Água Alta Temp',
+        temperatura: 250
+    });
+    assert.ok(Number.isFinite(fluidoQuente.densidade) && fluidoQuente.densidade >= 100, 'Densidade em alta temperatura deve ser finita e líquida');
+    assert.ok(fluidoQuente.pressaoVaporBar > 1.0, 'Pressao de vapor a 250 C deve ser bem superior a 1 bar');
+    assert.ok(fluidoQuente.viscosidadeDinamicaPaS < 0.00089, 'Viscosidade da água a 250 C deve ser menor que a 25 C');
+});
+
+test('valvula fechada isola a pressao e mede o diferencial de bloqueio real', () => {
+    const valvula = new ValvulaLogica('V-block', 'V-block', 0, 0);
+    valvula.registrarEntrada(10, 5.0);
+    valvula.setAbertura(0);
+    valvula.aberturaEfetiva = 0;
+
+    valvula.sincronizarMetricasFisicas();
+
+    assert.equal(valvula.pressaoSaidaAtualBar, 0, 'Válvula fechada sem jusante pressurizado deve fornecer 0 bar na saída');
+    assert.equal(valvula.deltaPAtualBar, 5.0, 'Válvula fechada deve sustentar toda a pressão a montante como deltaP de bloqueio');
+
+    // Agora abre a válvula: deve permitir transmissão de pressão
+    valvula.setAbertura(100);
+    valvula.aberturaEfetiva = 100;
+    valvula.estadoHidraulico.saidaVazaoLps = 10.0;
+    valvula.sincronizarMetricasFisicas();
+
+    assert.ok(valvula.pressaoSaidaAtualBar > 0, 'Válvula aberta deve transmitir pressão para a saída');
+    assert.ok(valvula.deltaPAtualBar < 5.0, 'Perda de carga em válvula aberta de alto Cv deve ser pequena');
+});
+
+test('bomba calcula potencia hidraulica e potencia de eixo coerentes com o ponto operacional', () => {
+    const bomba = new BombaLogica('P-power', 'P-power', 0, 0);
+    bomba.vazaoNominal = 50;
+    bomba.pressaoMaxima = 6.0;
+    bomba.eficienciaHidraulica = 0.80;
+
+    // A 20 L/s e 4.0 bar: Potencia hidraulica = (4.0 bar * 20 L/s) / 10 = 8.0 kW
+    const phid = bomba.getPotenciaHidraulicaKw(20, 4.0);
+    approx(phid, 8.0, 1e-9, 'Potência hidráulica = DeltaP * Q');
+
+    // Potência de eixo (BHP) = 8.0 kW / 0.80 = 10.0 kW
+    const peixo = bomba.getPotenciaEixoKw(20, 4.0, 0.80);
+    approx(peixo, 10.0, 1e-9, 'Potência de eixo = Potência hidráulica / Eficiência');
+});
+
+test('importador DWSIM preserva conexoes com multiplas correntes no trocador de calor', () => {
+    const graphicObjects = new Map([
+        ['HX-01', {
+            name: 'HX-01',
+            objectType: 'HeatExchanger',
+            x: 200,
+            y: 200,
+            tag: 'TC-DWSIM',
+            inputs: [
+                { sourceName: 'StrIn1', connIndex: 0 },
+                { sourceName: 'StrIn2', connIndex: 1 }
+            ],
+            outputs: [
+                { targetName: 'StrOut1', connIndex: 0 },
+                { targetName: 'StrOut2', connIndex: 1 }
+            ]
+        }],
+        ['StrIn1', { name: 'StrIn1', objectType: 'MaterialStream', inputs: [], outputs: [{ targetName: 'HX-01', connIndex: 0 }] }],
+        ['StrIn2', { name: 'StrIn2', objectType: 'MaterialStream', inputs: [], outputs: [{ targetName: 'HX-01', connIndex: 1 }] }],
+        ['StrOut1', { name: 'StrOut1', objectType: 'MaterialStream', inputs: [{ sourceName: 'HX-01', connIndex: 0 }], outputs: [] }],
+        ['StrOut2', { name: 'StrOut2', objectType: 'MaterialStream', inputs: [{ sourceName: 'HX-01', connIndex: 1 }], outputs: [] }]
+    ]);
+
+    const simObjects = new Map();
+    const { workspace } = translateDwsimToWorkspace({ graphicObjects, simObjects });
+
+    assert.equal(workspace.connections.length, 4, 'Devem ser geradas 4 conexões para as 2 correntes');
+
+    const hxComponent = workspace.components.find(c => c.snapshot?.type === 'heat_exchanger');
+    assert.ok(hxComponent, 'Trocador de calor deve ter sido criado no workspace');
+
+    const inConns = workspace.connections.filter(c => c.targetId === hxComponent.id);
+    const outConns = workspace.connections.filter(c => c.sourceId === hxComponent.id);
+
+    const inPortIds = inConns.map(c => c.targetEndpoint.portId).sort();
+    const outPortIds = outConns.map(c => c.sourceEndpoint.portId).sort();
+
+    assert.deepEqual(inPortIds, ['in1', 'in2'], 'Correntes de entrada no trocador devem ser mapeadas para in1 e in2');
+    assert.deepEqual(outPortIds, ['out1', 'out2'], 'Correntes de saída do trocador devem ser mapeadas para out1 e out2');
+});
+
+test('trocador de calor calcula LMTD, Qmax e gera perfil termico com exatidao', () => {
+    // 1. Validar cálculo do LMTD com os dados de referência:
+    // T1in = 25 °C, T1out = 51.5008 °C
+    // T2in = 80 °C, T2out = 51.9556 °C
+    // Escoamento paralelo (cocorrente)
+    const lmtdDWSIM = calcularLmtd({
+        t1In: 25.0,
+        t1Out: 51.5008,
+        t2In: 80.0,
+        t2Out: 51.9556,
+        modo: 'paralelo'
+    });
+    // No DWSIM: LMTD = 11.3754 °C
+    approx(lmtdDWSIM.lmtd, 11.3754, 0.01, 'LMTD deve bater com o DWSIM (11.375 °C)');
+    approx(lmtdDWSIM.minDt, 0.4548, 0.01, 'Pinch point minDt');
+
+    // 2. Validar dimensionamento com Área e U
+    const trocador = new TrocadorCalorLogico('tc-dwsim', 'TC-DWSIM', 0, 0);
+    trocador.setArea(1.0);
+    trocador.setU(2500);
+    assert.equal(trocador.uaWPorK, 2500, 'UA = A * U deve ser 2500');
+    assert.equal(trocador.uWPorM2K, 2500, 'U = UA / A');
+
+    trocador.setArea(2.0);
+    assert.equal(trocador.uaWPorK, 5000, 'Ao dobrar a área mantendo U, UA dobra');
+
+    trocador.setUA(2500);
+    approx(trocador.uWPorM2K, 1250, 0.01, 'Ao ajustar UA com A=2, U vira 1250');
+
+    // Reset para 1 m² e 2500 W/m²K
+    trocador.setArea(1.0);
+    trocador.setU(2500);
+    trocador.temperaturaEntradaC = 25;
+    trocador.temperaturaSaidaC = 51.5;
+    trocador.temperaturaEntrada2C = 80;
+    trocador.temperaturaSaida2C = 51.95;
+    trocador.cargaTermicaW = 28438;
+    trocador.cargaTermicaMaximaW = 55132;
+    trocador.temDuasCorrentesConectadas = () => true;
+    trocador.getModoEscoamento = () => 'paralelo';
+
+    // 3. Validar geração do Perfil Térmico (T x Q)
+    const datasetsThermal = buildHeatExchangerCurveDatasets(trocador, { mode: 'thermal' });
+    assert.equal(datasetsThermal.isThermalMode, true);
+    assert.equal(datasetsThermal.chartMode, 'thermal');
+    assert.ok(datasetsThermal.xAxisTitle.includes('kW'), 'Eixo X deve indicar kW');
+    assert.equal(datasetsThermal.operatingLinePoints.length, 2, 'Linha vertical de Operating Point');
+    approx(datasetsThermal.operatingLinePoints[0].x, 28.438, 0.01, 'Linha vertical do Operating Point em 28.438 kW');
+
+    // As curvas T x Q partem de Q=0 em T_in
+    approx(datasetsThermal.stream1Points[0].x, 0, 0.001, 'Curva fria Q=0');
+    approx(datasetsThermal.stream1Points[0].y, 25, 0.001, 'Curva fria T=25 em Q=0');
+    approx(datasetsThermal.stream2Points[0].x, 0, 0.001, 'Curva quente Q=0');
+    approx(datasetsThermal.stream2Points[0].y, 80, 0.001, 'Curva quente T=80 em Q=0');
 });

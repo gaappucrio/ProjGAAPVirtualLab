@@ -6,28 +6,175 @@ Este documento apresenta o relatório de requisitos funcionais, não funcionais 
 
 O GAAP Virtual Lab é uma aplicação web educacional em JavaScript/ES Modules para montagem e simulação de redes hidráulicas simples. O objetivo principal é permitir que usuários criem plantas com fontes, bombas, válvulas, tanques, drenos e trocadores de calor, simulem o comportamento hidráulico, monitorem o sistema e exportem dados para análise.
 
-## 2. Arquitetura Modular
+## 2. Arquitetura Modular, Princípios (DDD & SOLID) e Padrões de Projeto
 
-A aplicação é organizada em camadas separadas para garantir coesão, baixo acoplamento e respeito aos princípios DDD e SOLID.
+O projeto GAAP Virtual Lab foi estruturado com foco em modularidade, separação de conceitos e manutenibilidade, mantendo o núcleo de cálculo e as rotinas de simulação desacoplados de bibliotecas visuais, frameworks ou do DOM.
 
-### 2.1 Camada de Domínio (`js/domain/`)
+### 2.1 Aderência ao Domain-Driven Design (DDD)
 
+A organização do código segue conceitos fundamentais do DDD:
+
+1. **Linguagem Ubíqua (Ubiquitous Language):**
+   Os termos adotados em classes, métodos e variáveis correspondem aos conceitos da Engenharia Química e Hidráulica: `BombaLogica`, `ValvulaLogica`, `TanqueLogico`, `TrocadorCalorLogico`, `FonteLogica`, `DrenoLogico`, `NPSH`, `Cv`, `Kv`, `PerdaDeCarga`, `EfetividadeNTU`, `NumeroDeReynolds`, `FatorDeAtritoDarcy`, `CargaHidraulica`. Essa semântica é mantida no domínio, na aplicação, na apresentação e nas rotinas de exportação.
+
+2. **Entidades (Entities):**
+   Classes que possuem identidade e ciclo de vida: `ComponenteFisico` (em `BaseComponente.js`), suas especializações (`BombaLogica`, `ValvulaLogica`, etc.) e `ConnectionModel.js`. Cada equipamento e tubulação possui um identificador (`id`) persistente.
+
+3. **Objetos de Valor (Value Objects):**
+   Representam propriedades mensuráveis ou conceitos sem identidade própria, definidos por seus atributos:
+   - `Fluido` (em `Fluido.js`): imutável em suas operações; alterações de propriedades como densidade, viscosidade ou temperatura produzem novas instâncias por meio de `cloneFluido` ou `mixFluidos`.
+   - Grandezas e limites em `HydraulicUnits.js` e geometrias calculadas em `ConnectionGeometryService.js`.
+
+4. **Serviços de Domínio (Domain Services):**
+   Operações físicas que envolvem múltiplos elementos da rede:
+   - `HydraulicNetworkSolver.js`: método sequencial push-based para propagação de vazão e pressão em redes abertas.
+   - `NodalHydraulicSolver.js`: solucionador simultâneo não linear por bisseção para circuitos fechados (anéis), com suporte a anéis flutuantes em série e resolução topológica de ramos internos para equipamentos multi-corrente (`TrocadorCalorLogico`).
+   - `HydraulicBranchModel.js`: modelagem de capacidade de ramos, perdas de carga singulares, conservação de massa desacoplada por corrente e reconciliação de pressões.
+   - `HydraulicNetworkAnalyzer.js`: análise topológica de grafos, detecção de ciclos e particionamento em ilhas hidráulicas.
+   - `PipeHydraulics.js`: equações de Darcy-Weisbach, Colebrook/Swamee-Jain, regimes de Reynolds e diâmetro sugerido.
+   - `ResidenceTime.js`: cálculo de tempo de residência hidráulico de tanques e trechos de tubulação.
+   - `ValveSizingDiagnostics.js`: diagnóstico e recomendação de abertura/dimensionamento de válvulas.
+   - `LevelController.js`: implementação discreta do controlador PID de nível com proteção anti-windup.
+
+5. **Agregados e Limites de Contexto (Aggregates & Bounded Contexts):**
+   `TopologyGraph.js` e `HydraulicNetworkContext.js` funcionam como agregados e contextos delimitadores para o motor, organizando relacionamentos de vizinhança, conexões ativas e escopo de cálculo para os solvers.
+
+6. **Isolamento da Camada de Domínio (Layer Purity):**
+   A camada `js/domain/` não possui dependências de `js/presentation/`, `js/infrastructure/`, elementos de tela (`document`, `window`, SVG) ou bibliotecas de terceiros (`Chart.js`). Essa separação é verificada continuamente por testes automatizados (`Testes/topologia-e-solver.test.mjs`).
+
+---
+
+### 2.2 Aderência aos Princípios SOLID
+
+1. **S — Single Responsibility Principle (Princípio da Responsabilidade Única):**
+   Cada módulo possui uma finalidade definida:
+   - Componentes lógicos (`domain/components/`) tratam exclusivamente de leis físicas e balanços de massa/energia.
+   - Elementos visuais residem na infraestrutura (`infrastructure/dom/ComponentVisualFactory.js` e `ComponentVisualSpecs.js`).
+   - Geração de gráficos reside em adaptadores específicos (`infrastructure/charts/*Adapter.js`).
+   - Painel de propriedades é particionado em presenters especializados por tipo de componente (`presentation/properties/component/`).
+   - O ciclo de simulação por frame é orquestrado em etapas modulares pelo `SimulationTickPipeline.js`.
+
+2. **O — Open/Closed Principle (Princípio Aberto/Fechado):**
+   A inclusão de novos equipamentos ou comportamentos ocorre sem necessidade de alteração nas classes existentes:
+   - Novos componentes derivam de `ComponenteFisico` e registram seus metadados em `ComponentDefinitionRegistry.js`, seus presenters em `ComponentPropertyPresenterRegistry.js` e sua renderização em `ComponentVisualSpecs.js`.
+   - As características de vazão das válvulas (`VALVE_PROFILE_DEFINITIONS`: linear, equal percentage, quick opening) são estratégias configuráveis.
+
+3. **L — Liskov Substitution Principle (Princípio da Substituição de Liskov):**
+   Todos os equipamentos (`BombaLogica`, `ValvulaLogica`, `TanqueLogico`, `TrocadorCalorLogico`, `FonteLogica`, `DrenoLogico`) herdam da classe base abstrata `ComponenteFisico`. O motor de simulação e os analisadores de rede manipulam qualquer componente polimorficamente por meio dos métodos padrão (`atualizarDinamica`, `sincronizarMetricasFisicas`, `getAreaConexaoM2`, `registrarEntrada`, `registrarSaida`).
+
+4. **I — Interface Segregation Principle (Princípio da Segregação de Interfaces):**
+   Interfaces e contratos focados evitam dependências desnecessárias:
+   - `Observable` em `BaseComponente.js` provê apenas a interface de subscrição (`subscribe`, `notify`).
+   - `HydraulicScopedNetworkContext` disponibiliza apenas os métodos necessários para a execução do solver.
+   - Presenters expõem somente os métodos `render` e `bind`.
+
+5. **D — Dependency Inversion Principle (Princípio da Inversão de Dependência):**
+   Módulos de alto nível (domínio e aplicação) não dependem de detalhes de baixo nível (DOM, SVG, Chart.js, localStorage).
+   - O ponto de conexão das dependências concretas é centralizado no **Composition Root** (`VirtualLabRuntime.js`).
+   - O contexto de apresentação (`PresentationEngineContext.js`) provê injeção de dependência do motor para os presenters, eliminando acoplamentos estáticos globais.
+
+---
+
+### 2.3 Catálogo de Padrões de Projeto (Design Patterns) Utilizados
+
+A arquitetura do GAAP Virtual Lab emprega os seguintes padrões de projeto:
+
+#### A. Padrões Criacionais (Creational Patterns)
+
+*   **Factory Method:**
+    *   `FabricaDeEquipamentos.criarElementoEquipamento` em `ComponentVisualFactory.js`: instancia elementos visuais DOM/SVG com base no tipo de componente solicitado.
+    *   `createFluidoFromProperties` em `Fluido.js`: fábrica para construção de instâncias imutáveis de fluidos a partir de conjuntos de propriedades físicas.
+    *   `createSimulationContext` em `SimulationContext.js` e `createLevelControllerState` em `LevelController.js`.
+*   **Registry Pattern (Registro):**
+    *   `ComponentDefinitionRegistry.js`: repositório central das definições de componentes (tags padrão, rótulos, propriedades iniciais e limites físicos).
+    *   `ComponentPropertyPresenterRegistry.js`: mapeia tipos de componentes para seus presenters de painel correspondentes.
+    *   `ComponentVisualRegistry.js` e `ConnectionVisualRegistry.js`: registram e rastreiam instâncias visuais ativas no workspace.
+*   **Builder / Snapshot:**
+    *   `createWorkspaceSnapshot` em `UndoController.js`: constrói uma representação serializável da planta (componentes, conexões, estado hidráulico e seleção).
+    *   `buildPumpDwsimJsonData` em `PumpDwsimJsonExporter.js`: constrói a estrutura hierárquica padronizada do formato DWSIM CurveSet.
+    *   `buildExportHtml` em `SimulationDataExporter.js`: constrói o relatório tabular em HTML/XLS para exportação de dados.
+
+#### B. Padrões Estruturais (Structural Patterns)
+
+*   **Adapter Pattern (Adaptador):**
+    *   `infrastructure/charts/*Adapter.js` (`PumpChartAdapter`, `HeatExchangerChartAdapter`, `ValveChartAdapter`, `TankChartAdapter`, `PipePressureChartAdapter`): adaptam a API e estrutura de dados do Chart.js para consumir modelos de domínio (`BombaLogica`, `TrocadorCalorLogico`, etc.).
+    *   `PropertyDomAdapter.js`: padroniza leituras, escritas e vinculações de eventos de inputs HTML para presenters sem acoplamento a métodos diretos de DOM.
+    *   `ConnectionServiceRuntimeAdapter.js`: adapta o serviço de conexões lógico para manipular elementos SVG interativos.
+*   **Facade Pattern (Fachada):**
+    *   `SimulationEngine.js`: fornece uma interface de alto nível (`start()`, `stop()`, `step()`, `add()`, `removeComponent()`) para o subsistema que integra o pipeline de ticks, stores, analisador topológico e solucionadores hidráulicos.
+    *   `PipeHydraulics.js` (`getPipeHydraulics`): fachada que calcula Reynolds, rugosidade relativa, fator de atrito e perdas distribuídas em uma única chamada.
+*   **Composite / Aggregation (Agregação):**
+    *   `TopologyGraph.js`: compõe componentes e conexões em uma estrutura unificada de grafo bidirecional, permitindo navegação de adjacência, travessia de fluxo e identificação de sub-redes.
+    *   `PipeMonitorGrouping.js`: agrega múltiplos trechos de tubulação contíguos (`pipeGroup`) para visualização de perfis contínuos de pressão.
+
+#### C. Padrões Comportamentais (Behavioral Patterns)
+
+*   **Observer / Publish-Subscribe (Observador / Publicador-Assinante):**
+    *   `Observable` em `BaseComponente.js`: provê notificação desacoplada de mudanças de estado (`_notificarEstado()`) para painéis e monitores visuais.
+    *   `LanguageManager.js` (`subscribeLanguageChanges`): notifica controladores e elementos reativos sempre que o idioma é alternado.
+    *   `DisplayUnits.js` (`subscribeUnitPreferences`): notifica presenters para reexibir valores convertidos instantaneamente ao alterar unidades de medida.
+*   **Strategy Pattern (Estratégia):**
+    *   Seleção de Solvers em `HydraulicNetworkAnalyzer.js`: a topologia da malha determina dinamicamente se uma ilha hidráulica é resolvida pela estratégia push-based sequencial (`HydraulicNetworkSolver.js`) ou pela estratégia de bisseção nodal simultânea (`NodalHydraulicSolver.js`).
+    *   Perfis de Válvulas em `ValvulaLogica.js` (`VALVE_PROFILE_DEFINITIONS`): estratégias matemáticas intercambiáveis para a relação abertura vs vazão (linear, igual porcentagem, abertura rápida).
+    *   Presenters de Painel: a estratégia de renderização e bind é selecionada em tempo de execução com base no tipo do equipamento selecionado.
+*   **Pipeline Pattern (Tubo e Filtros):**
+    *   `SimulationTickPipeline.js`: coordena o fluxo de execução contínuo do frame em uma sequência ordenada de etapas:
+      `calculateDeltaTime` $\to$ `updateHighLevelControls` $\to$ `updateComponentDynamics` $\to$ `resolveHydraulicNetwork` $\to$ `syncComponentMetrics` $\to$ `updateVisuals` $\to$ `publishUpdates` $\to$ `updateSolverMetrics`.
+*   **Command & Memento:**
+    *   `UndoController.js`: captura o estado da aplicação através de snapshots (Memento) e gerencia uma pilha de histórico bidirecional de desfazer/refazer (Command) acionada por atalhos (`Ctrl+Z` / `Ctrl+Y`).
+    *   `ClipboardController.js`: utiliza os snapshots para duplicar e colar blocos de componentes e conexões no workspace.
+*   **State Pattern (Estado):**
+    *   `ConnectionStateStore.js`: isola o estado hidrodinâmico transiente e de equilíbrio de cada conexão (vazão, pressão de entrada/saída, velocidade, perdas) da definição estática do modelo de conexão.
+    *   `SelectionStore.js`: encapsula as regras de transição de seleção simples, múltipla e desseleção.
+
+#### D. Padrões Arquiteturais
+
+*   **Layered Architecture (Arquitetura em Camadas com DDD):**
+    *   Separação em 4 camadas (`domain` $\leftarrow$ `application` $\leftarrow$ `presentation` $\leftarrow$ `infrastructure`), com dependências direcionadas para o centro (domínio), sem vazamento de detalhes de infraestrutura para o núcleo físico.
+*   **Composition Root (Raiz de Composição):**
+    *   `VirtualLabRuntime.js` e `App.js`: ponto único de entrada onde adaptadores, serviços, stores, motores e controladores são instanciados e interconectados via injeção de dependências.
+
+---
+
+### 2.4 Semântica e Coerência dos Nomes e Responsabilidades de Arquivos
+
+A nomenclatura dos arquivos segue convenções que refletem sua camada e responsabilidade:
+
+| Sufixo / Padrão de Nome | Camada | Responsabilidade do Arquivo | Exemplos no Código |
+|---|---|---|---|
+| `*Logico.js` | Domínio | Entidade de equipamento com leis físicas e balanços | `BombaLogica.js`, `TrocadorCalorLogico.js`, `ValvulaLogica.js` |
+| `*Solver.js` | Domínio | Algoritmos de solução de escoamento e pressões | `HydraulicNetworkSolver.js`, `NodalHydraulicSolver.js` |
+| `*Controller.js` | Apresentação | Orquestração de eventos de interface do usuário | `ToolbarController.js`, `MonitorController.js`, `PipeController.js` |
+| `*Presenter.js` | Apresentação | Geração e vinculação de conteúdo de painéis | `PumpComponentPropertiesPresenter.js`, `PropertyUnitsPresenter.js` |
+| `*Adapter.js` | Infraestrutura | Ponte de comunicação com bibliotecas ou APIs externas | `HeatExchangerChartAdapter.js`, `PropertyDomAdapter.js` |
+| `*Store.js` | Aplicação | Armazenamento e transição de estados de aplicação | `ConnectionStateStore.js`, `SelectionStore.js`, `TopologyGraph.js` |
+| `*Service.js` | Aplicação/Domínio | Serviços de orquestração de lógica de negócio | `ConnectionService.js`, `ConnectionGeometryService.js` |
+| `*Exporter.js` / `*Importer.js` | Apresentação | Tradutores de entrada e saída de dados | `SimulationDataExporter.js`, `DwsimImporter.js` |
+| `*Specs.js` | Apresentação/Infra | Especificações visuais e cadastrais estáticas | `ComponentVisualSpecs.js`, `BoundaryComponentSpecs.js` |
+| `*Profile.js` | Apresentação | Transformação de dados para visualização de perfis | `PipePressureProfile.js`, `SinkPressureProfile.js` |
+
+Essa padronização permite identificar a camada, o propósito funcional e o escopo de atuação de cada arquivo a partir de seu nome e localização.
+
+---
+
+### 2.5 Camadas da Arquitetura Modular
+
+A aplicação é organizada em camadas para assegurar coesão e baixo acoplamento:
+
+#### A. Camada de Domínio (`js/domain/`)
 Responsabilidade: conter a regra física, modelos de componentes e serviços hidráulicos puramente lógicos.
-
 Principais módulos:
-- `domain/components/` — classes lógicas de componentes, como bomba, tanque, válvula, fonte e dreno.
+- `domain/components/` — classes lógicas de componentes, como bomba, tanque, válvula, trocador de calor, fonte e dreno.
 - `domain/models/ConnectionModel.js` — definição de conexão lógica entre componentes.
 - `domain/services/` — solver hidráulico, cálculo de perdas, análise de rede, hidráulica de tubulação, tempo de residência e controle de nível PID.
 - `domain/context/SimulationContext.js` — contexto de simulação com parâmetros físicos e unidades.
 
 Interface com outros módulos:
-- Não deve importar DOM, Chart.js ou controllers.
+- Não possui dependência de DOM, Chart.js ou controllers.
 - Exporta entidades, serviços e eventos lógicos para a camada de aplicação.
 
-### 2.2 Camada de Aplicação (`js/application/`)
-
+#### B. Camada de Aplicação (`js/application/`)
 Responsabilidade: orquestrar estado, eventos e fluxo da simulação, fazendo a ponte entre domínio e apresentação.
-
 Principais módulos:
 - `application/engine/SimulationEngine.js` — estado da simulação, ciclo de vida e injeção de backend.
 - `application/engine/SimulationTickPipeline.js` — pipeline de atualização do tick de simulação.
@@ -37,12 +184,10 @@ Principais módulos:
 
 Interface com outros módulos:
 - Recebe entidades de domínio e expõe estado e eventos para a apresentação.
-- Deve permanecer livre de dependência de DOM e visualização.
+- Não possui dependência de DOM ou visualização.
 
-### 2.3 Camada de Apresentação (`js/presentation/`)
-
+#### C. Camada de Apresentação (`js/presentation/`)
 Responsabilidade: lidar com UI, controller de eventos, conversão de estado para visual e exportação.
-
 Principais módulos:
 - `presentation/controllers/` — controladores de toolbar, fluxo, monitor, drag/drop, undo, câmera, propriedades e validações.
 - `presentation/export/SimulationDataExporter.js` — geração de relatórios de dados e tabelas exportáveis.
@@ -52,25 +197,21 @@ Principais módulos:
 
 Interface com outros módulos:
 - Consome `application` e `domain` para exibir estado e gerar interações.
-- Acesso direto ao DOM deve ser centralizado em adaptadores ou controllers específicos.
+- Acesso direto ao DOM é centralizado em adaptadores ou controllers específicos.
 
-### 2.4 Camada de Infraestrutura (`js/infrastructure/`)
-
+#### D. Camada de Infraestrutura (`js/infrastructure/`)
 Responsabilidade: implementar adaptadores visuais, renderização SVG, estilos e integrações com o ambiente.
-
 Principais módulos:
 - `infrastructure/dom/` — gerenciamento de elementos visuais de componentes, posições e estado de portas.
 - `infrastructure/rendering/` — adaptadores de desenho de conexões e integração com Chart.js.
-- `infrastructure/charts/` — adaptadores especiais para gráficos de bomba, válvula, tanque e pressão de Canos.
+- `infrastructure/charts/` — adaptadores especiais para gráficos de bomba, válvula, trocador de calor, tanque e pressão de Canos.
 
 Interface com outros módulos:
-- Fornece serviços para a camada de apresentação sem trazer lógica de domínio.
-- Trata apenas renderização, estilo e posicionamento.
+- Fornece serviços para a camada de apresentação sem conter lógica de domínio.
+- Trata renderização, estilo e posicionamento.
 
-### 2.5 Runtime de Composição (`js/VirtualLabRuntime.js`)
-
+#### E. Runtime de Composição (`js/VirtualLabRuntime.js`)
 Responsabilidade: montar a aplicação no browser em tempo de execução.
-
 Este módulo instancia o engine, conecta serviços de visual, cria controladores e aplica lógica de idioma, layout e apresentação. Ele expõe a borda do sistema e é o único ponto onde as camadas se encontram.
 
 ## 3. Requisitos Funcionais
@@ -101,12 +242,14 @@ Este módulo instancia o engine, conecta serviços de visual, cria controladores
 - Tanques e tubulações devem exibir tempo de residência atual quando houver vazão suficiente.
 - Fontes devem definir fluido, pressão de alimentação e vazão máxima; a pressão dirige a vazão resolvida e a vazão máxima limita a capacidade entregue quando a fonte satura. A vazão máxima padrão da entrada é `32 m³/h`.
 - Drenos devem manter contrapressão de saída, exibir a pressão final da rede antes da perda de entrada e explicitar a queda causada pelo `K` de entrada.
+- Trocadores de calor devem suportar operação com utilidade térmica (temperatura de serviço fixa para escoamento monostream tanto na Corrente 1 quanto na Corrente 2) ou com duas correntes hidraulicamente independentes conectadas em portas dedicadas (Corrente 1: in1/out1; Corrente 2: in2/out2). Quando duas correntes estão conectadas, a edição da temperatura de serviço é desabilitada, o modo de escoamento (contracorrente ou paralelo) é inferido pela topologia das portas via `isContracorrente(engine)` e a troca térmica é calculada pelo método $\varepsilon$-NTU com conservação de energia sensível. Caso uma das correntes conectadas tenha vazão nula, a taxa de calor é estritamente zerada para impedir troca com fluido estagnado. Cada corrente preserva pressões de entrada e saída independentes ($P_{1,\text{in}}, P_{1,\text{out}}$ e $P_{2,\text{in}}, P_{2,\text{out}}$), balanço de massa individual ($Q_{1,\text{in}} = Q_{1,\text{out}}$ e $Q_{2,\text{in}} = Q_{2,\text{out}}$) com convergência residual desacoplada ($\Delta Q_{\text{residual}} = \max(|Q_{1,\text{in}} - Q_{1,\text{out}}|, |Q_{2,\text{in}} - Q_{2,\text{out}}|)$), e rastreamento explícito de vazões mássicas (`vazaoMassaKgS` e `vazaoMassa2KgS`). O trocador conta com perfil gráfico longitudinal de temperatura em tempo real e integração plena com o solucionador nodal para circuitos fechados em série flutuantes.
 
 ### 3.4 Exportação e persistência
 
 - O usuário deve exportar dados de simulação em formato tabular compatível com planilhas.
 - O usuário deve exportar o fluxograma completo em JSON.
 - O usuário deve importar o fluxograma salvo em JSON.
+- O usuário deve poder importar simulações do software DWSIM (formatos `.dwxmz` e `.dwxm`), traduzindo equipamentos (bombas, válvulas, tanques, trocadores de calor `HeatExchanger`, aquecedores `Heater`, resfriadores `Cooler`, fontes, drenos e tubulações) automaticamente para o workspace do GAAP.
 - A exportação deve preservar unidades de exibição selecionadas.
 
 ### 3.5 Interface de usuário
@@ -115,9 +258,13 @@ Este módulo instancia o engine, conecta serviços de visual, cria controladores
 - O sistema deve suportar modo claro e modo escuro com preferência persistente.
 - O sistema deve exibir tutorial de uso em modal.
 - O sistema deve mostrar notificações de diagnóstico de rede e avisos de saturação.
+- O sistema deve permitir configurar unidades de exibição para pressão, vazão, comprimento, volume e temperatura (com opções em Celsius `°C`, Fahrenheit `°F` e Kelvin `K`).
 - O monitoramento, o painel de propriedades e a exportação de Canos devem exibir pressão ao longo da distância usando a pressão física de entrada do trecho e a queda real própria do Cano, sem somar novamente perdas próprias de componentes passantes, como a queda de pressão de válvulas.
 - Canos a jusante de válvulas, bombas ou trocadores devem ancorar a pressão inicial na saída física do componente passante; a pressão da saída/dreno não deve retropropagar esse ponto quando a vazão for limitada.
 - O monitoramento deve permitir selecionar válvulas e visualizar curva por abertura baseada no perfil selecionado, com `Cv` efetivo, `Delta P` estimado na vazão atual, `K` equivalente e ponto operacional.
+- O monitoramento deve permitir selecionar trocadores de calor e visualizar curvas de temperatura das Correntes 1 e 2 (ou utilidade de serviço) ao longo da posição do trocador (0% a 100%), refletindo escoamento contracorrente, paralelo ou utilidade e destacando os pontos operacionais de entrada e saída.
+- O monitoramento deve permitir a visualização comparativa em até 2 slots simultâneos; ao fechar qualquer um dos slots, o card restante deve se expandir para 100% da largura útil sem exibição de cartões ou canvas fantasmas.
+- O monitoramento deve suportar agrupamento contíguo de tubulações (`pipeGroup`) para visualização contínua do perfil de pressão em múltiplos canos em série.
 - Componentes com perda própria calculada devem mostrar essa queda no painel de propriedades: válvula, trocador de calor e saída/dreno.
 
 ## 4. Requisitos Não Funcionais
@@ -509,8 +656,9 @@ A seguir estão as funções/chaves de alto valor do sistema, com seus objetivos
 - Saída: nenhuma função retornada explicitamente.
 - Pós-condições:
   - O layout é recalculado em resposta a mudanças de painel ou janela.
+  - O gráfico de monitoramento é desacoplado para a `.sandbox-container` em modo expandido e restaurado à barra de propriedades em modo compacto, persistindo visível mesmo com as barras colapsadas.
   - O callback de gráfico é invocado quando necessário.
-- Interface com o usuário: mantém o layout fluido e evita sobreposição de painéis.
+- Interface com o usuário: mantém o layout fluido, desacopla o monitoramento expandido dos painéis laterais e evita sobreposição de painéis.
 
 ### 5.28 `restoreFlowchartDocument(engine, payload, { undoManager } = {})`
 
@@ -835,6 +983,81 @@ A seguir estão as funções/chaves de alto valor do sistema, com seus objetivos
   - A apresentação de tubulações é atualizada durante o arraste.
 - Interface com o usuário: permite reposicionar componentes existentes no canvas.
 
+### 5.57 `setupDwsimImportController({ engine, undoManager } = {})`
+
+- Módulo: `js/presentation/controllers/DwsimImportController.js`
+- Objetivo: configurar a importação de arquivos de simulação DWSIM (`.dwxmz` e `.dwxm`) a partir da toolbar.
+- Pré-condições: `engine` instanciado e os elementos `#btn-import-dwsim` e `#input-import-dwsim` presentes no DOM.
+- Entrada:
+  - `engine`: instância do motor de simulação.
+  - `undoManager`: gerenciador de histórico opcional.
+- Saída: nenhuma.
+- Pós-condições:
+  - O botão de importação abre o seletor de arquivos DWSIM.
+  - A seleção de arquivo invoca `importDwsimDocument` e atualiza a planta no workspace com suporte a undo.
+- Interface com o usuário: botão `Importar DWSIM` na toolbar e input oculto de arquivo.
+
+### 5.58 `importDwsimDocument(engine, file, { undoManager } = {})`
+
+- Módulo: `js/presentation/import/DwsimImporter.js`
+- Objetivo: traduzir um arquivo DWSIM (.dwxmz ou .dwxm) e carregar a topologia equivalente no motor e no canvas.
+- Pré-condições: `engine` válido e `file` do tipo `File`.
+- Entrada:
+  - `engine`: motor da simulação.
+  - `file`: arquivo DWSIM selecionado.
+  - `undoManager`: gerenciador de histórico para registrar o snapshot de importação.
+- Saída: `Promise` que resolve para o snapshot restaurado ou objeto de status da importação.
+- Pós-condições:
+  - Descompacta o ZIP ou lê o XML puro.
+  - Mapeia bombas, válvulas, tanques, trocadores de calor (`HeatExchanger`, `Cooler`, `Heater`), fontes, drenos e canos.
+  - Reconstrói a planta visual e hidráulica no workspace.
+- Interface com o usuário: alimenta o fluxo de importação da toolbar.
+
+### 5.59 `createHeatExchangerChart(ctx, component, { expanded = false, mode = 'position' } = {})`
+
+- Módulo: `js/infrastructure/charts/HeatExchangerChartAdapter.js`
+- Objetivo: criar o gráfico de perfis de temperatura do trocador de calor (suportando os modos Perfil Espacial $T \times \text{Comprimento}$ e Perfil Térmico $T \times Q$).
+- Pré-condições: contexto canvas 2D válido e componente `TrocadorCalorLogico`.
+- Entrada:
+  - `ctx`: contexto de renderização do canvas.
+  - `component`: instância de `TrocadorCalorLogico`.
+  - `options`: opções de exibição (`expanded`, `mode`: `'position'` ou `'thermal'`).
+- Saída: instância do Chart.js configurada.
+- Pós-condições:
+  - No modo `'position'`: plota as curvas contínuas ao longo de 40 pontos no comprimento relativo ($0\%$ a $100\%$).
+  - No modo `'thermal'`: plota as curvas de aquecimento e resfriamento em função de $Q$ ($\text{kW}$), com marcadores pontuais nas temperaturas reais e linha indicadora vertical no ponto operacional.
+- Interface com o usuário: renderiza o gráfico dinâmico no painel de monitoramento com seletor de modo do perfil.
+
+### 5.59b `calcularLmtd({ t1In, t1Out, t2In, t2Out, modo })`
+
+- Módulo: `js/domain/components/TrocadorCalorLogico.js`
+- Objetivo: calcular a Diferença Média Logarítmica de Temperatura ($\text{LMTD}$) e o $\Delta T_{\min}$ (Pinch Point) a partir das temperaturas das correntes e da topologia de escoamento.
+- Fundamento Físico:
+  - **LMTD (*Log Mean Temperature Difference*):** Força motriz térmica média ao longo de toda a superfície de troca $A$. Por ser baseada no perfil exponencial de temperatura, evita o erro de superestimação decorrente da média aritmética e rege a equação fundamental de projeto $\dot{Q} = U \cdot A \cdot F_T \cdot \text{LMTD}$.
+  - **Pinch Point ($\Delta T_{\min}$):** Ponto de maior aproximação térmica entre as correntes ($\min(\Delta T_a, \Delta T_b)$), atuando como indicador de gargalo termodinâmico.
+- Pré-condições: temperaturas numéricas finitas e modo de escoamento válido (`'contracorrente'`, `'paralelo'` ou `'utilidade'`).
+- Entrada:
+  - `t1In`, `t1Out`: temperaturas da Corrente 1 (°C).
+  - `t2In`, `t2Out`: temperaturas da Corrente 2 ou utilidade (°C).
+  - `modo`: modo de escoamento.
+- Saída: objeto `{ lmtd, minDt, dtA, dtB }`.
+- Pós-condições:
+  - Calcula analiticamente $\Delta T_a$, $\Delta T_b$, LMTD com proteções contra divisão por zero e logaritmo negativo, e o Pinch Point $\Delta T_{\min} = \min(\Delta T_a, \Delta T_b)$.
+- Interface com o usuário: alimenta em tempo de execução a seção **Análise Térmica Rigorosa** na aba **Avançado** do painel de propriedades do trocador (`disp-hx-lmtd`, `disp-hx-pinch`, `disp-hx-ft`, `disp-hx-max-duty`).
+
+### 5.60 `canMergePipeMonitorEntries(sourceEntry, targetEntry, connections = [])`
+
+- Módulo: `js/presentation/monitoring/PipeMonitorGrouping.js`
+- Objetivo: verificar se duas entradas de canos no monitoramento podem ser agrupadas em uma linha contínua.
+- Pré-condições: entradas válidas de canos ou grupos de canos e lista de conexões ativas.
+- Entrada:
+  - `sourceEntry`: entrada de monitoramento de origem.
+  - `targetEntry`: entrada de monitoramento de destino.
+  - `connections`: lista de conexões da malha.
+- Saída: `true` se os canos forem contíguos na topologia de rede; caso contrário, `false`.
+- Pós-condições: nenhuma alteração de estado (consulta pura).
+- Interface com o usuário: possibilita combinar cards de canos em série no monitoramento.
+
 ## 6. Fluxo de Uso do Usuário
 
 1. Abrir `index.html` em um navegador compatível com ES Modules.
@@ -894,10 +1117,10 @@ A seguir, a lista completa de módulos e símbolos exportados.
 - `js/domain/components/BaseComponente.js`: ComponenteFisico, Observable, clamp, flowFromBernoulli, pressureLossFromFlow, rampToTarget, smoothFirstOrder
 - `js/domain/components/BombaLogica.js`: BombaLogica
 - `js/domain/components/DrenoLogico.js`: DrenoLogico
-- `js/domain/components/Fluido.js`: Fluido, cloneFluido, createFluidoFromProperties, mixFluidos, updateFluidoProperties
+- `js/domain/components/Fluido.js`: cloneFluido, createFluidoFromProperties, mixFluidos, updateFluidoProperties
 - `js/domain/components/FonteLogica.js`: FonteLogica
 - `js/domain/components/TanqueLogico.js`: TanqueLogico
-- `js/domain/components/TrocadorCalorLogico.js`: TrocadorCalorLogico, calcularSaidaTrocadorCalor
+- `js/domain/components/TrocadorCalorLogico.js`: TrocadorCalorLogico, calcularLmtd, calcularSaidaTrocadorCalor
 - `js/domain/components/ValvulaLogica.js`: VALVE_PROFILE_DEFINITIONS, ValvulaLogica
 - `js/domain/context/SimulationContext.js`: createSimulationContext, mergeSimulationContext
 - `js/domain/events/ComponentEventPayloads.js`: ComponentEventPayloads
@@ -912,8 +1135,9 @@ A seguir, a lista completa de módulos e símbolos exportados.
 - `js/domain/services/ResidenceTime.js`: calculateConnectionResidenceTimeS, calculateResidenceTimeS, calculateTankResidenceTimeS, getTankResidenceFlowBasis
 - `js/domain/services/ValveSizingDiagnostics.js`: aplicarAjusteDimensionamentoValvula, diagnosticarDimensionamentoValvula
 - `js/domain/units/HydraulicUnits.js`: BAR_TO_PA, CONSTANTES_CONVERSAO, DEFAULT_ATMOSPHERIC_PRESSURE_BAR, DEFAULT_DESIGN_VELOCITY_MPS, DEFAULT_ENTRY_LOSS, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK, DEFAULT_FLUID_VAPOR_PRESSURE_BAR, DEFAULT_FLUID_VISCOSITY_PA_S, DEFAULT_PIPE_DIAMETER_M, DEFAULT_PIPE_EXTRA_LENGTH_M, DEFAULT_PIPE_FRICTION, DEFAULT_PIPE_MINOR_LOSS, DEFAULT_PIPE_ROUGHNESS_MM, DEFAULT_PIPE_SCHEMATIC_LENGTH_M, DEFAULT_SOURCE_MAX_FLOW_LPS, DEFAULT_SOURCE_PRESSURE_BAR, EPSILON_FLOW, GRAVITY, MAX_NETWORK_FLOW_LPS, PADROES_HIDRAULICOS, areaFromDiameter, lpsToM3s, m3sToLps, pressureFromHeadBar
-- `js/infrastructure/charts/PumpChartAdapter.js`: applyPumpChartPresentation, buildPumpCurveDatasets, createPumpChart, refreshPumpChart
+- `js/infrastructure/charts/HeatExchangerChartAdapter.js`: applyHeatExchangerChartPresentation, buildHeatExchangerCurveDatasets, createHeatExchangerChart, refreshHeatExchangerChart
 - `js/infrastructure/charts/PipePressureChartAdapter.js`: buildPipePressureProfile, createPipePressureChart, refreshPipePressureChart
+- `js/infrastructure/charts/PumpChartAdapter.js`: applyPumpChartPresentation, buildPumpCurveDatasets, createPumpChart, refreshPumpChart
 - `js/infrastructure/charts/TankChartAdapter.js`: createEmptyMonitorChart, createTankVolumeChart, refreshEmptyMonitorChartPresentation, refreshTankVolumeChart, resolveTankChartColors
 - `js/infrastructure/charts/ValveChartAdapter.js`: applyValveChartPresentation, buildValveCurveDatasets, createValveChart, refreshValveChart
 - `js/infrastructure/dom/ComponentVisualConfig.js`: GRID_SIZE, colorPort, labelStyle
@@ -933,6 +1157,7 @@ A seguir, a lista completa de módulos e símbolos exportados.
 - `js/presentation/controllers/ComponentRotationController.js`: rotateComponentsByWheelSteps, setupComponentRotationController
 - `js/presentation/controllers/DeleteSelectionController.js`: setupDeleteSelectionController
 - `js/presentation/controllers/DragDropController.js`: makeComponentDraggable, setupDragDrop
+- `js/presentation/controllers/DwsimImportController.js`: setupDwsimImportController
 - `js/presentation/controllers/FlowchartController.js`: setupFlowchartController
 - `js/presentation/controllers/HelpController.js`: setupHelpController
 - `js/presentation/controllers/LayoutController.js`: setupLayoutController
@@ -948,9 +1173,11 @@ A seguir, a lista completa de módulos e símbolos exportados.
 - `js/presentation/controllers/WorkspaceSelectionController.js`: setupWorkspaceSelectionController
 - `js/presentation/export/PumpDwsimJsonExporter.js`: buildPumpDwsimJsonData, exportPumpDwsimJson
 - `js/presentation/export/SimulationDataExporter.js`: buildExportHtml, exportSimulationData
-- `js/presentation/flowchart/FlowchartPersistence.js`: FLOWCHART_DOCUMENT_TYPE, FLOWCHART_DOCUMENT_VERSION, createFlowchartDocument, downloadFlowchartDocument, getFlowchartFileName, parseFlowchartDocument, readFlowchartFile, restoreFlowchartDocument
+- `js/presentation/flowchart/FlowchartPersistence.js`: FLOWCHART_DOCUMENT_TYPE, FLOWCHART_DOCUMENT_VERSION, createFlowchartDocument, downloadFlowchartDocument, getFlowchartFileName, loadWorkspaceIntoEngine, parseFlowchartDocument, readFlowchartFile, restoreFlowchartDocument
 - `js/presentation/i18n/LanguageManager.js`: TEXTS, applyLanguageToDocument, createTranslationProxy, getComponentTagPrefix, getFluidNameVariants, getLanguage, isEnglishLanguage, localizeElement, setLanguage, subscribeLanguageChanges, t, translateDefaultComponentTag, translateFluidName, translateLiteral
+- `js/presentation/import/DwsimImporter.js`: importDwsimDocument, parseDwsimXml, readDwsimFile, translateDwsimToWorkspace
 - `js/presentation/monitoring/MonitorSlotHistory.js`: createMonitorSlotHistory
+- `js/presentation/monitoring/PipeMonitorGrouping.js`: canMergePipeMonitorEntries, getPipeMonitorEntryIds, isPipeMonitorEntry
 - `js/presentation/monitoring/PipePressureProfile.js`: resolvePipePressureProfile, resolvePipePressureProfileOptions
 - `js/presentation/monitoring/SinkPressureProfile.js`: resolveSinkPressureProfile
 - `js/presentation/properties/ComponentPropertiesPresenter.js`: disposeComponentPropertyBindings, getComponentTypeKey, renderComponentProperties

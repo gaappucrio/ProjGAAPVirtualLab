@@ -131,8 +131,8 @@ function bindConnectionVisual(connection) {
 function getConnectionRenderPoints(connection) {
     const source = getEngine().getComponentById(connection.sourceId);
     const target = getEngine().getComponentById(connection.targetId);
-    const sourcePort = getComponentPortElement(connection.sourceId, connection.sourceEndpoint?.portType || 'out');
-    const targetPort = getComponentPortElement(connection.targetId, connection.targetEndpoint?.portType || 'in');
+    const sourcePort = getComponentPortElement(connection.sourceId, connection.sourceEndpoint?.portId || connection.sourceEndpoint?.portType || 'out');
+    const targetPort = getComponentPortElement(connection.targetId, connection.targetEndpoint?.portId || connection.targetEndpoint?.portType || 'in');
 
     if (!sourcePort || !targetPort) return null;
 
@@ -182,10 +182,15 @@ function getPortOutwardDirection(component, endpoint, fallbackPortType) {
         return rotateVector(fallback, component?.rotacaoVisualGraus || 0);
     }
 
-    const baseDirection = normalizeVector({
-        x: Number(endpoint.offsetX) - (width / 2),
-        y: Number(endpoint.offsetY) - (height / 2)
-    }, fallback);
+    const dx = Number(endpoint.offsetX) - (width / 2);
+    const dy = Number(endpoint.offsetY) - (height / 2);
+
+    let baseDirection;
+    if (Math.abs(dx) >= Math.abs(dy)) {
+        baseDirection = { x: dx < 0 ? -1 : 1, y: 0 };
+    } else {
+        baseDirection = { x: 0, y: dy < 0 ? -1 : 1 };
+    }
 
     return rotateVector(baseDirection, component?.rotacaoVisualGraus || 0);
 }
@@ -294,17 +299,19 @@ export function setupPipeControl({ engine: injectedEngine, connectionService: in
     workspaceContainer.addEventListener('mousedown', (event) => {
         const target = event.target;
         if (!(target instanceof Element)) return;
-        if (!target.classList.contains('port-node') || target.dataset.type !== 'out') return;
+        if (!target.classList.contains('port-node')) return;
+        const isOutPort = target.dataset.type === 'out' || target.dataset.type === 'inout';
+        if (!isOutPort) return;
 
         const sourceComponent = getEngine().getComponentById(target.dataset.compId);
         if (!sourceComponent) return;
 
         const sourcePoint = getPortCoords(target);
-        const sourceEndpoint = createConnectionEndpointDefinition(sourceComponent, target);
+        const sourceEndpoint = createConnectionEndpointDefinition(sourceComponent, target, 'out');
 
         transientConnection.begin({
             sourceComponentId: sourceComponent.id,
-            sourcePortType: 'out',
+            sourcePortType: target.dataset.portId || target.dataset.type || 'out',
             sourceEndpoint,
             sourcePoint
         });
@@ -342,7 +349,8 @@ export function setupPipeControl({ engine: injectedEngine, connectionService: in
         if (!draft.active) return;
 
         const dropTarget = event.target instanceof Element ? event.target : null;
-        const isInputPort = dropTarget?.classList.contains('port-node') && dropTarget.dataset.type === 'in';
+        const isInputPort = dropTarget?.classList.contains('port-node') &&
+            (dropTarget.dataset.type === 'in' || dropTarget.dataset.type === 'inout');
 
         if (!isInputPort) {
             cancelTransientConnection();
@@ -351,7 +359,7 @@ export function setupPipeControl({ engine: injectedEngine, connectionService: in
 
         const sourceComponent = getEngine().getComponentById(draft.sourceComponentId);
         const targetComponent = getEngine().getComponentById(dropTarget.dataset.compId);
-        const sourcePort = getComponentPortElement(draft.sourceComponentId, draft.sourcePortType || 'out');
+        const sourcePort = getComponentPortElement(draft.sourceComponentId, draft.sourceEndpoint?.portId || draft.sourcePortType || 'out');
 
         if (!sourceComponent || !targetComponent || !sourcePort || sourceComponent === targetComponent) {
             cancelTransientConnection();

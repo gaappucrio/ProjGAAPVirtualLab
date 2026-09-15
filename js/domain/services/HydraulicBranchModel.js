@@ -5,6 +5,7 @@ import { TanqueLogico } from '../components/TanqueLogico.js';
 import { TrocadorCalorLogico } from '../components/TrocadorCalorLogico.js';
 import { ValvulaLogica } from '../components/ValvulaLogica.js';
 import { clamp, pressureLossFromFlow, smoothFirstOrder } from '../components/BaseComponente.js';
+import { cloneFluido } from '../components/Fluido.js';
 import {
     BAR_TO_PA,
     DEFAULT_ENTRY_LOSS,
@@ -227,7 +228,23 @@ export class HydraulicBranchModel {
     }
 
     rebuildComponentHydraulicStateFromConnections() {
-        this.context.componentes.forEach((component) => component.resetEstadoHidraulico());
+        this.context.componentes.forEach((component) => {
+            if (component instanceof TrocadorCalorLogico && typeof component.resetEstadoHidraulicoStream === 'function') {
+                const conns = this.context.conexoes;
+                const isStream2 = (portId) => portId === 'in2' || portId === 'out2' || portId === '2';
+                const hasStream1 = conns.some((c) => !isStream2(c.targetEndpoint?.portId) && !isStream2(c.sourceEndpoint?.portId));
+                const hasStream2 = conns.some((c) => isStream2(c.targetEndpoint?.portId) || isStream2(c.sourceEndpoint?.portId));
+                if (hasStream1 && !hasStream2) {
+                    component.resetEstadoHidraulicoStream(1);
+                    return;
+                }
+                if (hasStream2 && !hasStream1) {
+                    component.resetEstadoHidraulicoStream(2);
+                    return;
+                }
+            }
+            component.resetEstadoHidraulico();
+        });
 
         this.context.conexoes.forEach((conn) => {
             const state = this.context.getConnectionState(conn);
@@ -238,8 +255,8 @@ export class HydraulicBranchModel {
             if (!source || !target) return;
 
             const fluid = state.fluid || this.context.getConnectionFluid(conn);
-            source.registrarSaida(state.flowLps, finiteNumber(state.sourcePressureBar, finiteNumber(state.pressureBar, 0)), fluid);
-            target.registrarEntrada(state.flowLps, finiteNumber(state.outletPressureBar, finiteNumber(state.pressureBar, 0)), fluid);
+            source.registrarSaida(state.flowLps, finiteNumber(state.sourcePressureBar, finiteNumber(state.pressureBar, 0)), fluid, conn.sourceEndpoint?.portId);
+            target.registrarEntrada(state.flowLps, finiteNumber(state.outletPressureBar, finiteNumber(state.pressureBar, 0)), fluid, conn.targetEndpoint?.portId);
         });
 
         this.context.componentes.forEach((component) => {
@@ -385,8 +402,28 @@ export class HydraulicBranchModel {
         return component instanceof ValvulaLogica || component instanceof BombaLogica || component instanceof TrocadorCalorLogico;
     }
 
-    getPhysicalOutletPressureBar(component) {
+    getPhysicalOutletPressureBar(component, portId = null) {
         if (!this.isPassThroughComponent(component)) return null;
+
+        if (component instanceof TrocadorCalorLogico) {
+            const isStream2 = portId === 'out2' || portId === 'in2' || portId === '2';
+            const outletPressureBar = finiteNumber(
+                isStream2 ? component?.pressaoSaida2AtualBar : component?.pressaoSaidaAtualBar,
+                null
+            );
+            if (outletPressureBar !== null) return Math.max(0, outletPressureBar);
+
+            const inletPressureBar = finiteNumber(
+                isStream2 ? component?.pressaoEntrada2AtualBar : component?.pressaoEntrada1AtualBar,
+                null
+            );
+            const dropBar = finiteNumber(
+                isStream2 ? component?.deltaP2AtualBar : component?.deltaPAtualBar,
+                null
+            );
+            if (inletPressureBar === null || dropBar === null) return null;
+            return Math.max(0, inletPressureBar - Math.max(0, dropBar));
+        }
 
         const outletPressureBar = finiteNumber(component?.pressaoSaidaAtualBar, null);
         if (outletPressureBar !== null) return Math.max(0, outletPressureBar);
@@ -429,7 +466,8 @@ export class HydraulicBranchModel {
                 if ((state.flowLps || 0) <= EPSILON_FLOW) return;
 
                 const source = this.context.getComponentById(conn.sourceId);
-                const sourceOutletPressureBar = resolveSourcePressureBar(source);
+                const sourcePortId = conn.sourceEndpoint?.portId || null;
+                const sourceOutletPressureBar = resolveSourcePressureBar(source, sourcePortId);
                 if (sourceOutletPressureBar === null) return;
 
                 const geometry = this.context.getConnectionGeometry(conn);
@@ -454,10 +492,19 @@ export class HydraulicBranchModel {
                 state.outletPressureBar = arrivalPressureBar;
                 state.deltaPBar = Math.max(0, sourceOutletPressureBar + staticHeadBar - pipeOutletPressureBar);
                 state.totalLossBar = pipePressureDropBar + targetLossBar;
+
+                if (source instanceof TrocadorCalorLogico) {
+                    const portId = conn.sourceEndpoint?.portId;
+                    const isStream2 = portId === 'out2' || portId === 'in2' || portId === '2';
+                    const targetTemp = isStream2 ? source.temperaturaSaida2C : source.temperaturaSaidaC;
+                    if (Number.isFinite(targetTemp) && state.fluid) {
+                        state.fluid = cloneFluido(state.fluid, { temperatura: targetTemp });
+                    }
+                }
             });
         };
 
-        reconcileWithSourcePressure((source) => this.getPhysicalOutletPressureBar(source));
+        reconcileWithSourcePressure((source, portId) => this.getPhysicalOutletPressureBar(source, portId));
         reconcileWithSourcePressure((source) => {
             const pressureBar = this.getPressurizedTankOutletPressureBar(source);
             if (pressureBar !== null && source instanceof TanqueLogico) {
@@ -479,6 +526,42 @@ export class HydraulicBranchModel {
 
                 const inputConnections = this.context.getInputConnections(component);
                 const outputConnections = this.context.getOutputConnections(component);
+
+                if (component instanceof TrocadorCalorLogico) {
+                    const isStream2 = (portId) => portId === 'in2' || portId === 'out2' || portId === '2';
+                    
+                    // Balanceamento Corrente 1
+                    const in1 = inputConnections.filter(c => !isStream2(c.targetEndpoint?.portId));
+                    const out1 = outputConnections.filter(c => !isStream2(c.sourceEndpoint?.portId));
+                    const in1Flow = in1.reduce((sum, c) => sum + this.context.getConnectionState(c).flowLps, 0);
+                    const out1Flow = out1.reduce((sum, c) => sum + this.context.getConnectionState(c).flowLps, 0);
+                    if (in1Flow > out1Flow + EPSILON_FLOW) {
+                        const ratio = out1Flow > EPSILON_FLOW ? out1Flow / in1Flow : 0;
+                        in1.forEach(c => this.scaleConnectionState(c, ratio));
+                        adjusted = true;
+                    } else if (out1Flow > in1Flow + EPSILON_FLOW) {
+                        const ratio = in1Flow > EPSILON_FLOW ? in1Flow / out1Flow : 0;
+                        out1.forEach(c => this.scaleConnectionState(c, ratio));
+                        adjusted = true;
+                    }
+
+                    // Balanceamento Corrente 2
+                    const in2 = inputConnections.filter(c => isStream2(c.targetEndpoint?.portId));
+                    const out2 = outputConnections.filter(c => isStream2(c.sourceEndpoint?.portId));
+                    const in2Flow = in2.reduce((sum, c) => sum + this.context.getConnectionState(c).flowLps, 0);
+                    const out2Flow = out2.reduce((sum, c) => sum + this.context.getConnectionState(c).flowLps, 0);
+                    if (in2Flow > out2Flow + EPSILON_FLOW) {
+                        const ratio = out2Flow > EPSILON_FLOW ? out2Flow / in2Flow : 0;
+                        in2.forEach(c => this.scaleConnectionState(c, ratio));
+                        adjusted = true;
+                    } else if (out2Flow > in2Flow + EPSILON_FLOW) {
+                        const ratio = in2Flow > EPSILON_FLOW ? in2Flow / out2Flow : 0;
+                        out2.forEach(c => this.scaleConnectionState(c, ratio));
+                        adjusted = true;
+                    }
+                    return;
+                }
+
                 const inputFlowLps = inputConnections.reduce((sum, conn) => sum + this.context.getConnectionState(conn).flowLps, 0);
                 const outputFlowLps = outputConnections.reduce((sum, conn) => sum + this.context.getConnectionState(conn).flowLps, 0);
                 const imbalanceLps = Math.max(0, inputFlowLps - outputFlowLps);
@@ -504,6 +587,22 @@ export class HydraulicBranchModel {
         const residualImbalanceLps = componentsFromDownstream.reduce((maxImbalance, component) => {
             if (!this.isPassThroughComponent(component)) return maxImbalance;
 
+            if (component instanceof TrocadorCalorLogico) {
+                const isStream2 = (portId) => portId === 'in2' || portId === 'out2' || portId === '2';
+                const inputConns = this.context.getInputConnections(component);
+                const outputConns = this.context.getOutputConnections(component);
+                const in1 = inputConns.filter(c => !isStream2(c.targetEndpoint?.portId))
+                    .reduce((sum, c) => sum + this.context.getConnectionState(c).flowLps, 0);
+                const out1 = outputConns.filter(c => !isStream2(c.sourceEndpoint?.portId))
+                    .reduce((sum, c) => sum + this.context.getConnectionState(c).flowLps, 0);
+                const in2 = inputConns.filter(c => isStream2(c.targetEndpoint?.portId))
+                    .reduce((sum, c) => sum + this.context.getConnectionState(c).flowLps, 0);
+                const out2 = outputConns.filter(c => isStream2(c.sourceEndpoint?.portId))
+                    .reduce((sum, c) => sum + this.context.getConnectionState(c).flowLps, 0);
+                const streamImbalance = Math.max(Math.abs(in1 - out1), Math.abs(in2 - out2));
+                return Math.max(maxImbalance, streamImbalance);
+            }
+
             const inputFlowLps = this.context.getInputConnections(component)
                 .reduce((sum, conn) => sum + this.context.getConnectionState(conn).flowLps, 0);
             const outputFlowLps = this.context.getOutputConnections(component)
@@ -519,15 +618,19 @@ export class HydraulicBranchModel {
     combineSerialFlowLimits(upstreamLimitLps, downstreamLimitLps) {
         if (upstreamLimitLps <= EPSILON_FLOW || downstreamLimitLps <= EPSILON_FLOW) return 0;
 
-        const upstreamResistance = 1 / (upstreamLimitLps * upstreamLimitLps);
+            const upstreamResistance = 1 / (upstreamLimitLps * upstreamLimitLps);
         const downstreamResistance = 1 / (downstreamLimitLps * downstreamLimitLps);
         return 1 / Math.sqrt(upstreamResistance + downstreamResistance);
     }
 
-    hasPendingEmission(comp) {
-        if (comp instanceof FonteLogica) return !comp.jaEmitiuIntrinseco();
+    hasPendingEmission(comp, dt, streamId = null) {
+        if (!comp) return false;
+
+        if (comp instanceof FonteLogica) {
+            return comp.vazaoMaxima > 0;
+        }
         if (comp instanceof TanqueLogico) {
-            return !comp.jaEmitiuIntrinseco() && comp.volumeAtual > EPSILON_FLOW && comp.capacidadeMaxima > 0;
+            return comp.volumeAtual > 0;
         }
         if (comp instanceof BombaLogica) {
             const drive = comp.getDriveAtual();
@@ -536,7 +639,16 @@ export class HydraulicBranchModel {
         if (comp instanceof ValvulaLogica) {
             return comp.getAberturaNormalizadaAtual() > 0 && comp.getFluxoPendenteLps() > EPSILON_FLOW;
         }
-        if (comp instanceof TrocadorCalorLogico) return comp.getFluxoPendenteLps() > EPSILON_FLOW;
+        if (comp instanceof TrocadorCalorLogico) {
+            if (streamId === 1) {
+                return (comp.getFluxoPendentePorStream?.(1) || 0) > EPSILON_FLOW;
+            }
+            if (streamId === 2) {
+                return (comp.getFluxoPendentePorStream?.(2) || 0) > EPSILON_FLOW;
+            }
+            return (comp.getFluxoPendentePorStream?.(1) || 0) > EPSILON_FLOW
+                || (comp.getFluxoPendentePorStream?.(2) || 0) > EPSILON_FLOW;
+        }
         return false;
     }
 
@@ -606,10 +718,10 @@ export class HydraulicBranchModel {
             );
             const suctionVelocityMps = areaM2 > 0 ? lpsToM3s(suctionFlowReference) / areaM2 : 0;
             const suctionVelocityHeadM = (suctionVelocityMps * suctionVelocityMps) / (2 * GRAVITY);
-            const absSuctionBar = fluid.pressaoAtmosfericaBar + inletPressure;
+            const absSuctionBar = (fluid.pressaoAtmosfericaBar || 1.01325) + inletPressure;
             const npshAvailableM = Math.max(
                 0,
-                (((absSuctionBar - fluid.pressaoVaporBar) * BAR_TO_PA) / (fluid.densidade * GRAVITY))
+                (((absSuctionBar - (fluid.pressaoVaporBar || 0)) * BAR_TO_PA) / ((fluid.densidade || 997) * GRAVITY))
                 + suctionVelocityHeadM
             );
             const npshRequiredM = comp.getCurvaNpshRequeridoM(suctionFlowReference, drive);
@@ -654,16 +766,21 @@ export class HydraulicBranchModel {
         }
 
         if (comp instanceof TrocadorCalorLogico) {
+            const streamId = options.streamId || 1;
             const parametros = comp.getParametrosHidraulicos();
-            const availableFlow = estimating ? MAX_NETWORK_FLOW_LPS : comp.getFluxoPendenteLps();
+            const availableFlow = estimating
+                ? limitedFlow(MAX_NETWORK_FLOW_LPS)
+                : (comp.getFluxoPendentePorStream?.(streamId) ?? comp.getFluxoPendenteLps());
             if (availableFlow <= EPSILON_FLOW) return null;
 
-            const fluidInlet = inletFluid || comp.getFluidoEntradaMisturado?.(this.context.fluidoOperante) || this.context.fluidoOperante;
-            const outletFluid = comp.getFluidoSaidaPara(fluidInlet, availableFlow);
+            const fluidInlet = inletFluid
+                || comp.getFluidoEntradaMisturadoPorPorta(streamId === 2 ? 'in2' : 'in1', this.context.fluidoOperante)
+                || this.context.fluidoOperante;
+            const outletFluid = comp.getFluidoSaidaPara(fluidInlet, availableFlow, streamId);
 
             return {
                 availableFlowLps: availableFlow,
-                pressureBar: inletPressureBar ?? comp.getPressaoEntradaBar(),
+                pressureBar: inletPressureBar ?? comp.getPressaoEntradaPortaBar(streamId === 2 ? 'in2' : 'in1'),
                 hydraulicAreaM2: Math.min(areaM2, parametros.hydraulicAreaM2),
                 connectionBaseLossCoeff: 0,
                 localLossCoeff: parametros.localLossCoeff,
@@ -674,7 +791,7 @@ export class HydraulicBranchModel {
         return null;
     }
 
-    estimateComponentPotential(comp, inletPressureBar, dt, visited = new Set(), flowLimitLps = null, inletFluid = null) {
+    estimateComponentPotential(comp, inletPressureBar, dt, visited = new Set(), flowLimitLps = null, inletFluid = null, targetPortId = null) {
         if (!comp || visited.has(comp.id)) return 0;
 
         if (comp instanceof DrenoLogico) return MAX_NETWORK_FLOW_LPS;
@@ -683,6 +800,35 @@ export class HydraulicBranchModel {
             const inflowAccepted = comp.estadoHidraulico.entradaVazaoLps * dt;
             const freeVolume = Math.max(0, comp.capacidadeMaxima - comp.volumeAtual - inflowAccepted);
             return dt > 0 ? freeVolume / dt : MAX_NETWORK_FLOW_LPS;
+        }
+
+        if (comp instanceof TrocadorCalorLogico) {
+            const streamId = (targetPortId === 'in2' || targetPortId === 'out2' || targetPortId === '2') ? 2 : 1;
+            const isStream2 = (portId) => portId === 'in2' || portId === 'out2' || portId === '2';
+            const outputs = this.context.getOutputConnections(comp).filter(conn => {
+                return isStream2(conn.sourceEndpoint?.portId) === (streamId === 2);
+            });
+            if (outputs.length === 0) return 0;
+
+            const supply = this.buildSupplyState(comp, dt, {
+                inletPressureBar,
+                estimating: true,
+                flowLimitLps,
+                inletFluid,
+                streamId
+            });
+            if (!supply || supply.availableFlowLps <= EPSILON_FLOW) return 0;
+
+            const nextVisited = new Set(visited);
+            nextVisited.add(comp.id);
+
+            const totalPotential = outputs.reduce((sum, conn) => {
+                const estimate = this.estimateBranch(comp, conn, supply, dt, nextVisited);
+                return sum + estimate.capacityLps;
+            }, 0);
+
+            const alreadyAccepted = comp.getVazaoEntradaPorPorta(streamId === 2 ? 'in2' : 'in1');
+            return Math.max(0, Math.min(supply.availableFlowLps, totalPotential) - alreadyAccepted);
         }
 
         const outputs = this.context.getOutputConnections(comp);
@@ -847,7 +993,8 @@ export class HydraulicBranchModel {
                     dt,
                     new Set(visited),
                     capacityLps,
-                    fluid
+                    fluid,
+                    conn.targetEndpoint?.portId
                 );
 
                 if (Number.isFinite(downstreamLimit) && downstreamLimit + EPSILON_FLOW >= capacityLps) {
@@ -870,7 +1017,8 @@ export class HydraulicBranchModel {
                 dt,
                 new Set(visited),
                 capacityLps,
-                fluid
+                fluid,
+                conn.targetEndpoint?.portId
             );
 
             if (Number.isFinite(downstreamLimit)) {
@@ -962,8 +1110,8 @@ export class HydraulicBranchModel {
         const pipeOutletPressureBar = inletPressureBar;
         const totalLossBar = lossBreakdown.totalLossBar;
 
-        comp.registrarSaida(actualFlowLps, pipeInletPressureBar, fluid);
-        target.registrarEntrada(actualFlowLps, arrivalPressureBar, fluid);
+        comp.registrarSaida(actualFlowLps, pipeInletPressureBar, fluid, conn.sourceEndpoint?.portId);
+        target.registrarEntrada(actualFlowLps, arrivalPressureBar, fluid, conn.targetEndpoint?.portId);
 
         const flowBefore = state.flowLps;
         state.flowLps += actualFlowLps;

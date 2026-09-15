@@ -27,13 +27,13 @@ Onde:
 
 O simulador avalia o regime em três faixas (`PipeHydraulics.js`):
 
-1. **Regime Laminar ($Re \le 2000$):**
+1. **Regime Laminar ($Re \le 2300$):**
    Aplica-se a solução exata da equação de Hagen-Poiseuille:
 
    $$f = \frac{64}{Re}$$
 
-2. **Regime Transiente ($2000 < Re < 4000$):**
-   Utiliza-se uma interpolação cúbica para suavizar a transição numérica entre o regime laminar e turbulento, garantindo estabilidade no solucionador nodal.
+2. **Regime Transiente ($2300 < Re < 4000$):**
+   Utiliza-se uma interpolação linear suave dos fatores de atrito calculados nos extremos da faixa ($f_{\text{laminar}}(2300)$ e $f_{\text{turbulento}}(4000)$), garantindo transição contínua e estabilidade no solucionador nodal.
 
 3. **Regime Turbulento ($Re \ge 4000$):**
     Para regimes turbulentos, a rugosidade relativa da parede do tubo ($\varepsilon / D$) torna-se relevante. Para mitigar o custo computacional de iterações em malhas em tempo real, o simulador dispensa a formulação iterativa de Colebrook-White e aplica diretamente a **Correlação de Swamee-Jain**, uma aproximação explícita de alta precisão:
@@ -43,7 +43,13 @@ O simulador avalia o regime em três faixas (`PipeHydraulics.js`):
 ### Perdas de Carga Localizadas
 Válvulas, curvas e trocadores de calor adicionam perdas singulares, modeladas pelo coeficiente constante de perda de carga ($K$):
 
-\$$Delta P_{local} = K \cdot \frac{\rho \cdot v^2}{2}$$
+$$\Delta P_{local} = K \cdot \frac{\rho \cdot v^2}{2}$$
+
+Onde:
+- $\Delta P_{local}$: Perda de pressão localizada ou singular (Pa, convertida internamente para bar via divisão por $10^5$)
+- $K$: Coeficiente adimensional de perda de carga localizada da singularidade ($-$)
+- $\rho$: Densidade do fluido em escoamento ($kg/m^3$)
+- $v$: Velocidade média de escoamento do fluido na seção transversal da conexão ($m/s$)
 
 O simulador soma o coeficiente $K$ de todos os componentes da malha à parcela distribuída calculada por Darcy-Weisbach.
 
@@ -99,24 +105,65 @@ Onde:
 
 Caso $NPSH_a < NPSH_r$, o sistema impõe uma penalidade logística que afunda a eficiência volumétrica e a carga da bomba, mitigando sua capacidade propulsora e replicando as bolhas de cavitação bloqueando o rotor (`fatorCavitacao`).
 
+### Potência Hidráulica e Potência de Eixo (BHP)
+A energia mecânica transmitida ao escoamento e a potência absorvida pelo eixo da bomba são quantificadas analiticamente por:
+
+$$P_{\text{hid}} = \frac{\Delta P_{\text{bar}} \cdot Q_{\text{L/s}}}{10} \quad [\text{kW}] \qquad \left(\equiv \frac{\Delta P_{\text{Pa}} \cdot Q_{\text{m}^3\text{/s}}}{1000}\right)$$
+
+$$P_{\text{eixo}} = \frac{P_{\text{hid}}}{\eta(Q)} \quad [\text{kW}]$$
+
+Onde:
+- $P_{\text{hid}}$: Potência hidráulica líquida entregue ao fluido ($kW$)
+- $\Delta P_{\text{bar}}$: Ganho de pressão efetivo gerado pela bomba ($bar$)
+- $Q_{\text{L/s}}$: Vazão volumétrica operacional da bomba ($L/s$)
+- $\eta(Q)$: Eficiência total instantânea da bomba no ponto de operação ($0 < \eta \le 1$)
+- $P_{\text{eixo}}$: Potência mecânica consumida no eixo acionador (BHP - *Brake Horsepower*, em $kW$)
+
 ## 3. Dinâmica das Válvulas de Controle
 
 A válvula de controle age como um estrangulamento de seção transversal variável.
 
 ### Conversão $C_v / K_v$
-As válvulas operam através da premissa comercial de Fator de Vazão ($C_v$ em GPM/psi ou $K_v$ em m³/h/bar). O laboratório modela a resistência estrita convertendo o Fator de Vazão para o Coeficiente de Perda Local ($K$) através de relações métricas padronizadas, utilizando o diâmtero da tubulação:
+As válvulas operam através da premissa comercial de Fator de Vazão ($C_v$ em GPM/psi ou $K_v$ em m³/h/bar). O simulador modela a resistência convertendo o Fator de Vazão para o Coeficiente de Perda Local ($K$) através de relações métricas padronizadas, utilizando o diâmetro da tubulação:
 
 $$K \approx 0.00214 \cdot \frac{D^4}{K_v^2}$$
 
+Onde:
+- $K$: Coeficiente adimensional de perda de carga localizada equivalente da válvula ($-$)
+- $D$: Diâmetro interno nominal da conexão ou flange da válvula (mm)
+- $K_v$: Coeficiente de vazão em unidades métricas ($m^3/h$ de água a $20^\circ\text{C}$ sob $\Delta P = 1\text{ bar}$)
+- $C_v$: Coeficiente de vazão em unidades imperiais ($\text{GPM}/\text{psi}^{0{,}5}$), relacionado por $K_v \approx 0{,}865 \cdot C_v$ ou $C_v \approx 1{,}156 \cdot K_v$
+
 ### Característica Inerente
-A resposta entre a porcentagem de abertura do atuador e a abertura efetiva ($K_v$ resultante) é descrita por duas equações de curva selecionáveis (`ValvulaLogica.js`):
+A resposta entre a porcentagem de abertura do atuador e a abertura efetiva ($K_v$ resultante) é descrita por equações de curva selecionáveis (`ValvulaLogica.js`):
 
-1. **Linear:** $\text{Fluxo} = \text{Abertura}$
-2. **Igual Porcentagem (Equal Percentage):** Modelada via decaimento exponencial, onde passos iguais no curso resultam em frações iguais de aumento de vazão, crucial para compensar quedas de pressão severas ao longo das linhas:
+1. **Linear:**
+   $$f(x) = x$$
 
-$$f(x) = R^{x - 1}$$
+2. **Igual Porcentagem (Equal Percentage):** Modelada via decaimento exponencial, onde passos iguais no curso resultam em frações iguais de aumento percentual de vazão, crucial para compensar perdas de carga dinâmicas ao longo da tubulação:
+   $$f(x) = R^{x - 1}$$
 
-*(Onde $R$ é o rangeability factor, e $x$ o curso da válvula)*
+3. **Abertura Rápida (Quick Opening):**
+   $$f(x) = \sqrt{x}$$
+
+Onde:
+- $f(x)$: Fração de capacidade efetiva da válvula ($0 \le f(x) \le 1$, tal que $K_{v,\text{efetivo}} = K_{v,\max} \cdot f(x)$)
+- $R$: Rangeabilidade inerente da válvula (razão entre vazão máxima e mínima controlável, padrão $50{,}0$)
+- $x$: Curso normalizado da haste/obturador da válvula ($0 \le x \le 1$, correspondente a $0\%$ a $100\%$ de abertura)
+
+### Isolamento de Pressão e Bloqueio em Válvula Fechada
+Quando a válvula atinge o fechamento estanque ($x \le 0$), a continuidade de escoamento é interrompida e o acoplamento de pressão entre montante e jusante é desacoplado:
+
+$$P_{\text{saída}} = P_{\text{jusante}}$$
+$$\Delta P_{\text{bloqueio}} = P_{\text{in}} - P_{\text{jusante}}$$
+
+Onde:
+- $P_{\text{saída}}$: Pressão física transmitida pela válvula para a conexão de saída ($bar$)
+- $P_{\text{jusante}}$: Nível de pressão presente na rede conectada a jusante da válvula ($bar$)
+- $P_{\text{in}}$: Pressão fornecida pela rede a montante ($bar$)
+- $\Delta P_{\text{bloqueio}}$: Queda de pressão estática retida pela sede fechada da válvula ($bar$)
+
+Essa modelagem impede que tubulações despressurizadas a jusante de válvulas de bloqueio recebam artificialmente a pressão de montante quando a válvula está fechada.
 
 ## 4. Tanques e Conservação de Massa
 
@@ -131,47 +178,160 @@ A integração computada usa o método de Euler explícito:
 $$V_{t+1} = V_t + (\Sigma Q_{in} - \Sigma Q_{out}) \cdot \Delta t$$
 
 Onde:
-- $V$: Volume de líquido no tanque (m³)
-- $Q_{in}, Q_{out}$: Somatório das vazões volumétricas de entrada e saída (m³/s)
-- $\Delta t$: Passo de tempo da simulação (s)
+- $V$: Volume de líquido no tanque ($m^3$, internamente convertido para litros no motor: $1\text{ m}^3 = 1000\text{ L}$)
+- $Q_{in}, Q_{out}$: Somatório das vazões volumétricas de entrada e saída ($m^3/s$)
+- $\Delta t$: Passo de tempo da simulação ($s$)
 
 ### Carga Hidrostática (Fundo de Tanque)
 
 $$P_{hid} = \rho \cdot g \cdot h $$
 
-Onde $h$ é obtido pela geometria do vaso (cilindros perfeitamente modelados com bases).
+Onde:
+- $P_{hid}$: Pressão hidrostática no bocal de fundo do tanque (Pa, convertida para bar no motor: $P_{\text{bar}} = P_{hid} / 10^5$)
+- $\rho$: Densidade do líquido contido no tanque ($kg/m^3$)
+- $g$: Aceleração da gravidade ($9{,}81\text{ m/s}^2$)
+- $h$: Altura do nível de líquido no interior do tanque ($m$, obtida por $h = (V_{\text{atual}} / V_{\max}) \cdot H_{\text{útil}}$)
 
 ### Mistura de Fases e Balanceamento
 No caso de confluência de fluidos distintos, a densidade da mistura é apurada volumetricamente:
 
 $$\rho_{mix} = \frac{\rho_1 V_1 + \rho_2 V_2}{V_1 + V_2}$$
 
+Onde:
+- $\rho_{mix}$: Densidade volumétrica da mistura resultante ($kg/m^3$)
+- $\rho_1, \rho_2$: Densidades dos fluidos 1 e 2 ($kg/m^3$)
+- $V_1, V_2$: Volumes dos fluidos 1 e 2 adicionados ao volume total ($m^3$ ou $L$)
+
 ## 5. Termodinâmica e Transferência de Calor
 
 Diferente de modelos puramente isotérmicos, o motor integra dependências térmicas para propriedades físicas em tempo real.
 
 ### 5.1 Propriedades Termo-Físicas Dependentes da Temperatura
-As propriedades fundamentais do fluido (Densidade $\rho$, Viscosidade $\mu$ e Pressão de Vapor $P_{vap}$) são ativamente recalculadas em função da temperatura da mistura. No caso da água, o simulador aplica curvas polinomiais complexas que capturam até mesmo a anomalia térmica da água próxima aos $4^\circ\text{C}$:
+As propriedades fundamentais do fluido (Densidade $\rho$, Viscosidade $\mu$ e Pressão de Vapor $P_{vap}$) são ativamente recalculadas em função da temperatura da mistura. No caso da água, o simulador aplica curvas polinomiais complexas que capturam a anomalia térmica da água próxima aos $4^\circ\text{C}$:
 
-$$\rho(T) = \rho_{ref} \cdot f_{anomalia}(T)$$
+$$\rho(T) = \rho_{ref} \cdot f_{\text{dens}}(T)$$
+
+Onde a função racional de densidade é dada por:
+
+$$f_{\text{dens}}(T) = \max\left(0.1, \; 1 - \frac{(T - 3.98)^2 \cdot (T + 286.9)}{508929.2 \cdot (T + 68.12)}\right)$$
+
+Para evitar a singularidade numérica do denominador em $T = -68.12^\circ\text{C}$, a temperatura é limitada no intervalo seguro $[-30^\circ\text{C}, 350^\circ\text{C}]$, e impõe-se a cota física inferior $\rho \ge 100\text{ kg/m}^3$ para prevenir o colapso numérico da fase líquida.
+
+A viscosidade dinâmica utiliza a correlação de Andrade, com salvaguarda estrita contra temperaturas absolutas inválidas ($T_K \ge 1\text{ K}$).
+
+A pressão de vapor da água é regida pela formulação de Antoine ancorada ao ponto padrão ($T_{\text{ref}} = 25^\circ\text{C}, P_{\text{vap,ref}} = 0.0317\text{ bar}$):
+
+$$\log_{10}\left(\frac{P_{\text{vap}}(T)}{P_{\text{vap,ref}}}\right) = \frac{1730.63}{T_{\text{ref}} + 233.426} - \frac{1730.63}{T + 233.426}$$
+
+Essa formulação garante que, sob aquecimento intenso (ex: $250^\circ\text{C}$), a pressão de vapor aumente realisticamente para $\approx 41.5\text{ bar}$, detectando prontamente cavitação em bombas na jusante.
 
 ### 5.2 Trocadores de Calor (Método $\epsilon$-NTU)
-Os trocadores de calor do laboratório não operam apenas como perdas de carga singulares, mas integram o **Método Efetividade-NTU ($\epsilon$-NTU)** para calcular a taxa real de transferência térmica:
+Os trocadores de calor do laboratório integram o **Método Efetividade-NTU ($\epsilon$-NTU)** para calcular a taxa real de transferência térmica, suportando operação com utilidade térmica ($T_{\text{serviço}}$ constante) ou com duas correntes de processo hidraulicamente independentes conectadas em portas dedicadas (Corrente 1: `in1`/`out1`; Corrente 2: `in2`/`out2`).
 
-1. **Taxa de Capacidade Térmica ($C_{min}$):** $C_{min} = \dot{m} \cdot c_p$
-2. **Número de Unidades de Transferência (NTU):** $NTU = \frac{UA}{C_{min}}$
-3. **Efetividade ($\epsilon$):** $\epsilon = 1 - e^{-NTU}$
+1. **Taxas de Capacidade Térmica e Vazões Mássicas:**
+   As vazões mássicas são obtidas a partir das vazões volumétricas $Q_i$ e densidades $\rho_i$ das correntes:
+   $$\dot{m}_1 = Q_1 \cdot \rho_1, \qquad \dot{m}_2 = Q_2 \cdot \rho_2 \quad [\text{kg/s}]$$
+   $$C_1 = \dot{m}_1 \cdot c_{p,1}, \qquad C_2 = \dot{m}_2 \cdot c_{p,2} \quad [\text{W/K}]$$
 
-A temperatura de saída do fluido principal é então rigorosamente determinada pela equação calorimétrica atrelada ao fluido de serviço:
+   - **Modo Duas Correntes Ativas ($Q_1 > 0$ e $Q_2 > 0$):**
+     $$C_{\min} = \min(C_1, C_2), \qquad C_{\max} = \max(C_1, C_2), \qquad C_r = \frac{C_{\min}}{C_{\max}}$$
+   - **Modo Utilidade Térmica Monostream (1 corrente conectada):**
+     Se apenas a Corrente 1 estiver ativa ($Q_2 = 0$): $C_{\min} = C_1$ e $C_r = 0$.
+     Se apenas a Corrente 2 estiver ativa ($Q_1 = 0$): $C_{\min} = C_2$ e $C_r = 0$.
+   - **Regra de Estagnação Acoplada:**
+     Quando ambas as correntes estão conectadas fisicamente à rede, caso qualquer uma das correntes tenha vazão nula ($Q_1 \le \epsilon_{\text{vazão}}$ ou $Q_2 \le \epsilon_{\text{vazão}}$), a carga térmica é estritamente anulada ($\dot{Q} = 0$), impedindo troca térmica irreal com fluido parado.
 
-$$T_{out} = T_{in} + \epsilon \cdot (T_{serviço} - T_{in})$$
+2. **Número de Unidades de Transferência (NTU):**
+   $$NTU = \frac{UA}{C_{\min}}$$
+
+   *(Com proteções numéricas $c_p \ge 1\text{ J/(kg}\cdot\text{K)}$ e $\rho \ge 1\text{ kg/m}^3$ para mitigar divisão por zero).*
+
+3. **Efetividade Térmica ($\epsilon$) por Modo de Escoamento:**
+   - **Contracorrente** (detectado pela topologia quando a Corrente 2 entra por `out2` e sai por `in2`, via `isContracorrente(engine)`):
+     $$\epsilon_{\text{contra}} = \begin{cases} \dfrac{1 - e^{-NTU (1 - C_r)}}{1 - C_r e^{-NTU (1 - C_r)}}, & C_r < 1 \\[6pt] \dfrac{NTU}{1 + NTU}, & C_r = 1 \end{cases}$$
+   - **Corrente Paralela / Co-corrente** (detectado quando a Corrente 2 entra por `in2` e sai por `out2`):
+     $$\epsilon_{\text{paralelo}} = \frac{1 - e^{-NTU (1 + C_r)}}{1 + C_r}$$
+   - **Utilidade Térmica** ($C_r = 0$):
+     $$\epsilon = 1 - e^{-NTU}$$
+
+   A efetividade é limitada à efetividade máxima física ($\epsilon \le \epsilon_{\max}$, padrão $0{,}95$).
+
+4. **Taxa de Transferência Térmica e Segunda Lei da Termodinâmica:**
+   A taxa real de calor transferido é:
+   $$\dot{Q} = \epsilon \cdot C_{\min} \cdot |T_{1,\text{in}} - T_{2,\text{in}}|$$
+
+   E as temperaturas de saída acopladas resultam do balanço entálpico:
+   $$T_{1,\text{out}} = T_{1,\text{in}} \pm \frac{\dot{Q}}{C_1}, \qquad T_{2,\text{out}} = T_{2,\text{in}} \mp \frac{\dot{Q}}{C_2}$$
+   *(Onde o fluido de maior temperatura de entrada cede calor e o de menor temperatura recebe calor; no modo utilidade, a corrente ausente é substituída por $T_{\text{serviço}}$).*
+
+   **Restrições Rígidas da 2ª Lei da Termodinâmica:**
+   - **Envoltória de Temperatura:** Nenhuma temperatura de descarga pode violar os extremos de admissão:
+     $$T_{\text{out}, i} \in \left[\min(T_{1,\text{in}}, T_{2,\text{in}}), \; \max(T_{1,\text{in}}, T_{2,\text{in}})\right], \quad \forall i \in \{1, 2\}$$
+   - **Não-Cruzamento em Co-corrente:** Em escoamento paralelo, as correntes convergem para uma temperatura de equilíbrio comum $T_{\text{eq}} = (C_1 T_{1,\text{in}} + C_2 T_{2,\text{in}})/(C_1 + C_2)$, sendo proibido o cruzamento térmico ($T_{1,\text{out}} \ge T_{2,\text{out}}$ se $T_{1,\text{in}} \ge T_{2,\text{in}}$).
+
+5. **Perda de Carga Hidráulica Individual:**
+   Cada corrente calcula sua própria perda por acessório singular:
+   $$\Delta P_i = K_{\text{local}} \cdot \frac{\rho_i v_i^2}{2} = K_{\text{local}} \cdot \frac{\rho_i}{2} \left(\frac{Q_i}{A_{\text{hid}}}\right)^2 \quad (i \in \{1, 2\})$$
+
+6. **Perfis Espaciais de Temperatura para Monitoramento Gráfico:**
+   A distribuição contínua da temperatura ao longo da coordenada longitudinal $z \in [0, 1]$ (onde $z = 0$ é a entrada da Corrente 1 e $z = 1$ é a saída da Corrente 1) é calculada analiticamente por:
+   - **Utilidade Térmica ($T_2(z) = T_{\text{serviço}}$):**
+     $$T_1(z) = T_{1,\text{in}} + (T_{1,\text{out}} - T_{1,\text{in}}) \cdot \frac{1 - e^{-NTU \cdot z}}{1 - e^{-NTU}}$$
+   - **Corrente Paralela ($\alpha = UA(1/C_1 + 1/C_2)$):**
+     $$T_1(z) = T_{1,\text{in}} + (T_{1,\text{out}} - T_{1,\text{in}}) \cdot \frac{1 - e^{-\alpha z}}{1 - e^{-\alpha}}, \quad T_2(z) = T_{2,\text{in}} + (T_{2,\text{out}} - T_{2,\text{in}}) \cdot \frac{1 - e^{-\alpha z}}{1 - e^{-\alpha}}$$
+   - **Contracorrente ($\beta = UA(1/C_1 - 1/C_2)$):**
+     $$T_1(z) = T_{1,\text{in}} + (T_{1,\text{out}} - T_{1,\text{in}}) \cdot \frac{1 - e^{-\beta z}}{1 - e^{-\beta}}, \quad T_2(z) = T_{2,\text{out}} + \frac{C_1}{C_2}(T_1(z) - T_{1,\text{in}})$$
+     *(Para $C_1 \approx C_2$, as curvas assumem perfil linear).*
+
+   As grandezas de temperatura podem ser exibidas em Celsius (°C), Fahrenheit (°F) ou Kelvin (K, com $T_{\text{K}} = T_{^\circ\text{C}} + 273{,}15$).
+
+7. **Diferença Média Logarítmica de Temperatura (LMTD) e Fator de Correção $F_T$:**
+
+   - **Conceito Físico da LMTD:**
+     A **LMTD** (*Log Mean Temperature Difference*, ou Diferença Média Logarítmica de Temperatura) representa a **força motriz térmica efetiva média** para a transferência de calor ao longo de todo o trocador. Em cada ponto infinitesimal da área de troca superficial $dA$, a taxa local de calor trocado obedece à Lei do Resfriamento de Newton:
+     $$dQ = U \cdot (T_{\text{quente}} - T_{\text{frio}}) \cdot dA = U \cdot \Delta T(z) \cdot dA$$
+     Como as temperaturas dos dois fluidos mudam continuamente à medida que eles percorrem o equipamento, o gradiente $\Delta T(z)$ não é constante. A LMTD é a diferença média de temperatura equivalente que, se aplicada uniformemente sobre toda a área $A$, resultaria exatamente na mesma taxa total de transferência de calor observada $\dot{Q}$.
+
+   - **Por que utilizar a Média Logarítmica e não a Média Aritmética simples?**
+     A variação de temperatura dos fluidos ao longo do trocador **não é linear**, mas sim **exponencial** (resultado da integração das equações diferenciais de balanço de energia). 
+     A média aritmética simples entre as diferenças de temperatura nos extremos, $\Delta T_{\text{am}} = \frac{\Delta T_a + \Delta T_b}{2}$, é matematicamente sempre maior ou igual à média logarítmica ($\Delta T_{\text{am}} \ge \text{LMTD}$).
+     Portanto, se utilizássemos a média aritmética simples, estaríamos **superestimando a força motriz real**, o que levaria a subdimensionar a área $A$ do equipamento, projetando trocadores incapazes de fornecer a carga térmica necessária na prática. A média aritmética só coincide com a LMTD na condição particular em que $\Delta T_a = \Delta T_b$.
+
+   - **Fórmula Analítica da LMTD:**
+     $$\text{LMTD} = \frac{\Delta T_a - \Delta T_b}{\ln\left(\dfrac{\Delta T_a}{\Delta T_b}\right)}$$
+     - **Contracorrente:** $\Delta T_a = T_{1,\text{in}} - T_{2,\text{out}}$, $\Delta T_b = T_{1,\text{out}} - T_{2,\text{in}}$
+     - **Co-corrente (Paralelo):** $\Delta T_a = T_{1,\text{in}} - T_{2,\text{in}}$, $\Delta T_b = T_{1,\text{out}} - T_{2,\text{out}}$
+     - **Utilidade:** $\Delta T_a = |T_{\text{in}} - T_{\text{serviço}}|$, $\Delta T_b = |T_{\text{out}} - T_{\text{serviço}}|$
+
+   - **Relação com a Carga Térmica Global:**
+     $$\dot{Q} = U \cdot A \cdot F_T \cdot \text{LMTD} = UA \cdot F_T \cdot \text{LMTD}$$
+     Onde $F_T$ é o fator de correção adimensional que compensa arranjos que se desviam do contracorrente puro (em trocadores de passe único contracorrente ou paralelo puro, $F_T = 1{,}0$).
+
+8. **Dimensionamento por Área ($A$) e Coeficiente Global ($U$):**
+   O produto de condutância térmica é desacoplado entre área superficial e convecção/condução global:
+   $$UA = U \cdot A \quad [\text{W/K}], \qquad U = \frac{UA}{A} \quad [\text{W/m}^2\cdot\text{K}]$$
+   Isolando a área necessária para uma dada carga térmica $\dot{Q}$:
+   $$A = \frac{\dot{Q}}{U \cdot F_T \cdot \text{LMTD}}$$
+   Evidenciando que, quanto maior a LMTD (maior força motriz térmica), menor a área superficial $A$ exigida para transferir a mesma quantidade de calor (trocador mais compacto e econômico).
+
+9. **Diferença Mínima de Temperatura (Pinch Point):**
+   $$\Delta T_{\min} = \min(\Delta T_a, \Delta T_b) \quad [^\circ\text{C}]$$
+   O **Pinch Point** (ponto de estrangulamento térmico) indica a menor aproximação pontual de temperatura entre os dois fluidos dentro do trocador. É um parâmetro crítico de síntese e integração térmica: se $\Delta T_{\min} \to 0$, a força motriz residual diminui drasticamente, a LMTD cai e a área de troca necessária tenderia ao infinito ($A \to \infty$). No GAAP Virtual Lab, tanto a **LMTD** quanto o **Pinch Point** são computados em tempo de execução e disponibilizados na aba **Avançado** do painel de propriedades do trocador.
+
+10. **Perfil Térmico ($T \times Q$):**
+    Curvas de temperatura em função da carga térmica transferida $Q$ ($\text{kW}$), variando de $0$ até $Q_{\max} = C_{\min} \cdot |T_{1,\text{in}} - T_{2,\text{in}}| / 1000$:
+    $$T_c(Q) = T_{c,\text{in}} + \frac{Q \cdot 1000}{C_c} \quad [^\circ\text{C}]$$
+    $$T_h(Q) = T_{h,\text{in}} - \frac{Q \cdot 1000}{C_h} \quad [^\circ\text{C}]$$
+    Apresentando linha vertical tracejada na carga operacional $\dot{Q} / 1000\text{ kW}$ e marcadores pontuais nas saídas reais.
 
 Onde:
-- $\dot{m}$: Vazão mássica do fluido atravessando o trocador (kg/s)
-- $c_p$: Calor específico do fluido (J/kg·K)
+- $\dot{m}_i$: Vazão mássica da corrente $i$ (kg/s)
+- $c_{p,i}$: Calor específico do fluido da corrente $i$ (J/kg·K)
 - $UA$: Coeficiente global de transferência de calor multiplicado pela área de troca (W/K)
-- $T_{in}, T_{out}$: Temperaturas de entrada e saída do fluido principal (°C ou K)
-- $T_{serviço}$: Temperatura constante da utilidade quente/fria do trocador (°C ou K)
+- $T_{i,\text{in}}, T_{i,\text{out}}$: Temperaturas de entrada e saída da corrente $i$ (°C, °F ou K)
+- $T_{\text{serviço}}$: Temperatura da utilidade quando há apenas 1 corrente ativa (°C, °F ou K)
+- $K_{\text{local}}$: Coeficiente de perda singular do trocador
+- $A_{\text{hid}}$: Área de escoamento da conexão ($m^2$)
 
 ## 6. Automação e Malhas de Controle (PID)
 
@@ -204,15 +364,33 @@ Quando um fluxo encontra múltiplos caminhos (paralelos), a vazão disponível �
 
 $$Q_{\text{ramo } i} = Q_{\text{total disponível}} \cdot \left( \frac{\text{Capacidade}_i}{\sum \text{Capacidade}_{\text{todos os ramos}}} \right)$$
 
+Onde:
+- $Q_{\text{ramo } i}$: Vazão volumétrica alocada para o ramo $i$ ($L/s$ ou $m^3/s$)
+- $Q_{\text{total disponível}}$: Vazão volumétrica total suprida pelo nó de montante ($L/s$ ou $m^3/s$)
+- $\text{Capacidade}_i$: Capacidade de condução estimada do ramo $i$ ($L/s$), função da pressão motriz disponível e perdas acumuladas
+
 **B. Relaxamento Dinâmico de Transientes:**
 Para evitar descontinuidades e saltos instantâneos (que gerariam instabilidade visual e numérica), os fluxos calculados ($Q_{\text{estacionária}}$) não são aplicados abruptamente. Eles sofrem uma suavização de primeira ordem baseada na inércia da tubulação ($\tau_{\text{resposta}}$):
 
 $$Q_{\text{transiente}}^{t + \Delta t} = Q_{\text{transiente}}^{t} + (Q_{\text{estacionária}} - Q_{\text{transiente}}^{t}) \cdot \left(1 - e^{-\Delta t / \tau_{\text{resposta}}}\right)$$
 
+Onde:
+- $Q_{\text{transiente}}^{t + \Delta t}$: Vazão transiente do trecho no instante atual ($L/s$)
+- $Q_{\text{transiente}}^{t}$: Vazão transiente do trecho no instante anterior ($L/s$)
+- $Q_{\text{estacionária}}$: Vazão estacionária calculada pelo solucionador hidráulico ($L/s$)
+- $\Delta t$: Passo temporal de integração ($s$)
+- $\tau_{\text{resposta}}$: Constante de tempo de resposta inercial do trecho ($s$, calculada em função do comprimento $L$, densidade $\rho$ e viscosidade $\mu$)
+
 **C. Conservação de Massa Retroativa (Back-propagation):**
-Componentes *pass-through* (Válvulas, Bombas e Trocadores) não podem acumular líquido. Se após a propagação a vazão que conseguiu sair for menor do que a que entrou ($Q_{\text{out}} < Q_{\text{in}}$), o *solver* aciona a rotina `balancePassThroughMass()`, que retropropaga o bloqueio matemático reduzindo as vazões de entrada a montante estritamente até que:
+Componentes *pass-through* (Válvulas, Bombas e Trocadores) não podem acumular líquido. Se após a propagação a vazão que conseguiu sair for menor do que a que entrou ($Q_{\text{out}} < Q_{\text{in}}$), o *solver* aciona a rotina `balancePassThroughMass()`, que retropropaga o bloqueio matemático reduzindo as vazões de entrada a montante até satisfazer:
 
 $$\sum Q_{\text{in}} = \sum Q_{\text{out}}$$
+
+Para equipamentos multi-via como o **Trocador de Calor de Duas Correntes** (`TrocadorCalorLogico`), o balanço de massa é executado de forma estritamente independente para cada corrente ($Q_{1,\text{in}} = Q_{1,\text{out}}$ e $Q_{2,\text{in}} = Q_{2,\text{out}}$), e o resíduo de convergência do componente é avaliado sem acoplamento mútuo:
+
+$$\Delta Q_{\text{residual}} = \max\left(|Q_{1,\text{in}} - Q_{1,\text{out}}|, \; |Q_{2,\text{in}} - Q_{2,\text{out}}|\right)$$
+
+Isso impede que uma restrição hidráulica em uma corrente mascare o balanço de massa da outra por compensação algébrica global.
 
 ### 7.2 Ilhas Cíclicas (Loops): Solver Nodal Simultâneo
 Se a ilha contém um ciclo fechado de tubulações (ex: uma tubulação que retorna para a própria sucção da bomba ou forma um anel), a propagação linear falha. Para esses casos, o sistema delega o cálculo ao `NodalHydraulicSolver.js`.
@@ -220,10 +398,28 @@ A malha é tratada como um circuito fechado e o motor aplica um esquema de busca
 
 $$\varepsilon(Q) = P_{in} + P_{Bomba}(Q) - \Delta P_{Perdas}(Q) - P_{out}$$
 
+Onde:
+- $\varepsilon(Q)$: Resíduo de fechamento de pressão na malha (bar ou Pa), com convergência para $\varepsilon(Q) \approx 0$
+- $Q$: Vazão iterativa avaliada no loop fechado ($L/s$)
+- $P_{in}$: Pressão de contorno na entrada da linha (bar)
+- $P_{Bomba}(Q)$: Carga manométrica ativa adicionada pela bomba na vazão $Q$ (bar)
+- $\Delta P_{Perdas}(Q)$: Somatório das perdas de carga contínuas e localizadas em todo o anel na vazão $Q$ (bar)
+- $P_{out}$: Pressão de contorno no ponto de fechamento do nó (bar)
+
+#### Representação Nodal de Componentes Passantes e Loops em Série
+Para componentes multi-corrente (`TrocadorCalorLogico`), a rede nodal instancia 4 nós lógicos (`in1`, `out1`, `in2`, `out2`) e ramos internos direcionados:
+$$\text{Ramo Interno Corrente 1: } \text{in1} \to \text{out1}$$
+$$\text{Ramo Interno Corrente 2: } \begin{cases} \text{out2} \to \text{in2} & (\text{contracorrente, } \text{isContracorrente} = \text{true}) \\ \text{in2} \to \text{out2} & (\text{co-corrente / paralelo}) \end{cases}$$
+
+Na resolução de anéis fechados em série (`buildFloatingSeriesLoop`):
+1. Os ramos internos são indexados pela tupla `${component.id}:${streamId}`, permitindo que correntes distintas do mesmo equipamento componham circuitos fechados independentes simultâneos.
+2. A validação dos graus de nó (`inDegree === 1 && outDegree === 1`) filtra estritamente as conexões associadas à ilha cíclica em resolução (`island.connectionIds`), isolando o circuito fechado de nós de processo adjacentes.
+3. A integração da função de resíduo $\varepsilon(Q)$ utiliza os nós de fronteira exatos dos ramos (`internalBranch.fromNodeId` e `internalBranch.toNodeId`), garantindo convergência robusta para qualquer orientação de montagem.
+
 O fluxo da malha cíclica converge iterativamente garantindo que a diferença entre a carga provida e as perdas seja $\varepsilon(Q) \approx 0$ em toda a volta do circuito.
 
 ### 7.3 Restrições Físicas e Balanceamento de Massa
-Ambos os motores interagem sob limites estritos. Limites físicos absolutos e restrições de massa (ex. *Over/Underflow* dos tanques) são impostos via matrizes de corte topológicas, forçando uma etapa de balanceamento a jusante caso os componentes não suportem escoar a vazão transiente, garantindo estabilidade do modelo em qualquer um dos *solvers*.
+Ambos os motores operam sob limites físicos definidos. Limites de conservação de massa e restrições de nível (ex. *Over/Underflow* dos tanques) são impostos via matrizes de corte topológicas, acionando uma etapa de balanceamento a jusante caso os componentes não suportem escoar a vazão transiente, garantindo estabilidade do modelo em qualquer um dos *solvers*.
 
 ---
 *Documento gerado e revisado para atestar a termodinâmica, automação e arquitetura híbrida de escoamento fluido do GAAP Virtual Lab.*

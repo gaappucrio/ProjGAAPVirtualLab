@@ -1,11 +1,31 @@
 export function renderUnitsPanel({ getUnitOptions, getUnitPreferences, tooltips }) {
     const prefs = getUnitPreferences();
     const categories = [
-        { id: 'pressure', label: 'Pressão', hint: 'Unidade usada para exibir e editar pressão.' },
-        { id: 'flow', label: 'Vazão', hint: 'Unidade usada para exibir e editar vazão.' },
-        { id: 'length', label: 'Comprimento', hint: 'Unidade usada para exibir e editar comprimentos e cotas.' },
-        { id: 'volume', label: 'Volume', hint: 'Unidade usada para exibir e editar volumes e capacidades.' },
-        { id: 'temperature', label: 'Temperatura', hint: 'Unidade usada para exibir e editar temperatura.' }
+        {
+            id: 'pressure',
+            label: tooltips?.unidades?.categorias?.pressure?.label || 'Pressão',
+            hint: tooltips?.unidades?.categorias?.pressure?.hint || 'Unidade usada para exibir e editar pressão.'
+        },
+        {
+            id: 'flow',
+            label: tooltips?.unidades?.categorias?.flow?.label || 'Vazão',
+            hint: tooltips?.unidades?.categorias?.flow?.hint || 'Unidade usada para exibir e editar vazão.'
+        },
+        {
+            id: 'length',
+            label: tooltips?.unidades?.categorias?.length?.label || 'Comprimento',
+            hint: tooltips?.unidades?.categorias?.length?.hint || 'Unidade usada para exibir e editar comprimentos e cotas.'
+        },
+        {
+            id: 'volume',
+            label: tooltips?.unidades?.categorias?.volume?.label || 'Volume',
+            hint: tooltips?.unidades?.categorias?.volume?.hint || 'Unidade usada para exibir e editar volumes e capacidades.'
+        },
+        {
+            id: 'temperature',
+            label: tooltips?.unidades?.categorias?.temperature?.label || 'Temperatura',
+            hint: tooltips?.unidades?.categorias?.temperature?.hint || 'Unidade usada para exibir e editar temperatura.'
+        }
     ];
 
     const selectors = categories.map(({ id, label, hint }) => {

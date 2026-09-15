@@ -33,7 +33,8 @@ function getComponentTypeKey(component) {
 
 export function renderComponentProperties({
     propContent,
-    component
+    component,
+    onRerender
 }) {
     disposeComponentPropertyBindings();
 
@@ -50,7 +51,7 @@ export function renderComponentProperties({
     `;
     localizeElement(propContent);
 
-    bindUnitControls();
+    bindUnitControls({ onChange: onRerender });
     bindPropertyTabs(propContent);
     bind('input-tag', 'input', (event) => {
         component.tag = event.target.value;

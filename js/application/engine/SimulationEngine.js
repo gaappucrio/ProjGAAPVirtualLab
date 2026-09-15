@@ -158,6 +158,9 @@ export class SistemaSimulacao extends Observable {
             queries: {
                 isBombaBloqueadaPorSetpoint: (bomba) => this.isBombaBloqueadaPorSetpoint(bomba),
                 isValvulaBloqueadaPorSetpoint: (valvula) => this.isValvulaBloqueadaPorSetpoint(valvula),
+                isTrocadorComDuasCorrentes: (trocador) => this.isTrocadorComDuasCorrentes(trocador),
+                getInputConnections: (comp) => this.getInputConnections(comp),
+                getOutputConnections: (comp) => this.getOutputConnections(comp),
                 getComponentFluid: (component) => this.hydraulicContext.getComponentFluid(component)
             },
             ...overrides
@@ -400,6 +403,20 @@ export class SistemaSimulacao extends Observable {
         );
     }
 
+    isTrocadorComDuasCorrentes(trocador) {
+        if (!trocador) return false;
+        const isStream2 = (portId) => portId === 'in2' || portId === 'out2' || portId === '2';
+        const inConns = this.getInputConnections(trocador);
+        const outConns = this.getOutputConnections(trocador);
+
+        const hasStream1 = inConns.some(c => !isStream2(c.targetEndpoint?.portId)) ||
+                           outConns.some(c => !isStream2(c.sourceEndpoint?.portId));
+        const hasStream2 = inConns.some(c => isStream2(c.targetEndpoint?.portId)) ||
+                           outConns.some(c => isStream2(c.sourceEndpoint?.portId));
+
+        return hasStream1 && hasStream2;
+    }
+
     ensureConnectionProperties(conn) {
         return ensurePipeConnectionProperties(conn);
     }
@@ -469,6 +486,11 @@ export class SistemaSimulacao extends Observable {
             lastDiagnostics: islandMetrics.flatMap((metrics) => metrics.lastDiagnostics || []),
             islandMetrics
         };
+
+        if (hasNodalIsland) {
+            this.hydraulicBranchModel.rebuildComponentHydraulicStateFromConnections();
+            this.hydraulicBranchModel.reconcileConnectionPressureStatesFromComponentDrops();
+        }
     }
 
     resolveHydraulicNetwork(dt) {

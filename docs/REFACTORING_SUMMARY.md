@@ -19,6 +19,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
   - Bomba.
   - Válvula.
   - Tanque.
+  - Trocador de calor.
 - Conexão entre componentes por portas de entrada e saída.
 - Seleção de componentes e conexões para edição.
 - Seleção múltipla de componentes por retângulo azul no workspace ou `Ctrl+clique`.
@@ -96,7 +97,27 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Ajuste automático recomendado para pressão das fontes de entrada e dimensionamento didático de bombas a montante quando o set point não pode ser mantido.
 - Fluido de conteúdo persistente, atualizado por mistura volumétrica das entradas.
 
-### 2.6 Conexões e Tubulações
+### 2.6 Trocador de Calor
+
+- Operação em dois modos físicos:
+  - **Utilidade térmica:** uma corrente de processo com troca térmica contra um fluido de serviço com temperatura constante ($T_{\text{serviço}}$). Suporta operação em monostream tanto na Corrente 1 quanto na Corrente 2 ($C_{\min} = C_i, C_r = 0$).
+  - **Duas correntes acopladas:** duas correntes de processo hidraulicamente independentes (Corrente 1 em `in1`/`out1` e Corrente 2 em `in2`/`out2`), com troca térmica acoplada governada pelas vazões e temperaturas de ambas as correntes.
+  - **Regra de Estagnação:** caso ambas as correntes estejam conectadas e uma delas tenha escoamento interrompido ($Q = 0$), a taxa de calor é estritamente zerada ($\dot{Q} = 0$), impedindo troca térmica espúria com fluido parado.
+- Identificação automática do modo de escoamento a partir da topologia das conexões da Corrente 2:
+  - **Contracorrente:** Corrente 2 entra pela porta `out2` e sai por `in2` (sentido oposto ao da Corrente 1). O método `isContracorrente(engine)` valida dinamicamente essa orientação para o solver nodal e cálculo térmico.
+  - **Corrente Paralela / Co-corrente:** Corrente 2 entra pela porta `in2` e sai por `out2` (mesmo sentido da Corrente 1).
+- Transferência de calor via método $\varepsilon$-NTU com balanço de energia sensível:
+  - Cálculo de capacidades térmicas $C_1 = \dot{m}_1 c_{p,1}$ e $C_2 = \dot{m}_2 c_{p,2}$, determinando $C_{\min}$, $C_{\max}$ e $C_r = C_{\min}/C_{\max}$.
+  - Rastreamento explícito das grandezas de vazão mássica `vazaoMassaKgS` ($\dot{m}_1$) e `vazaoMassa2KgS` ($\dot{m}_2$) no estado de domínio.
+  - Efetividade calculada pela fórmula analítica correspondente ao modo de escoamento e limitada à efetividade máxima física (padrão 95%, configurável até 99,9%).
+  - Cálculo de temperaturas de saída acopladas ($T_{1,\text{out}}, T_{2,\text{out}}$) e carga térmica transferida ($\dot{Q}$ em Watts).
+- Independência hidráulica e integração nodal:
+  - Vazões, velocidades e perdas de carga singulares ($\Delta P_1, \Delta P_2$) são resolvidas separadamente para cada corrente com base nas áreas hidráulicas e coeficientes $K$ locais.
+  - Suporte completo no solucionador nodal simultâneo (`NodalHydraulicSolver.js`), com modelagem de 4 nós (`in1`, `out1`, `in2`, `out2`) e 2 ramos internos indexados por stream (`internal:${id}:1` e `internal:${id}:2`), viabilizando malhas fechadas e loops em série flutuantes em uma ou ambas as correntes.
+- Diagnóstico operacional: quando duas correntes estão conectadas, a edição da temperatura de serviço é bloqueada (`temperaturaServicoEditavel: false`) e o painel exibe aviso de que a Corrente 2 governa a dinâmica; desconectar qualquer conexão da Corrente 2 reverte automaticamente o trocador ao modo utilidade com temperatura de serviço editável.
+- Exportação de dados tabulares incluindo vazões volumétricas e mássicas, temperaturas de entrada e saída e perdas de pressão de ambas as correntes.
+
+### 2.7 Conexões e Tubulações
 
 - Diâmetro interno do Cano como propriedade física direta: o valor editado sempre altera área, velocidade, Reynolds, perda distribuída e tempo de residência.
 - Comprimento hidráulico total.
@@ -112,7 +133,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Diâmetro sugerido por continuidade, usando vazão de referência e velocidade desejada.
 - Vazão de referência editável no painel avançado do Cano, com botão para capturar a vazão atual/alvo como base estável do cálculo de diâmetro sugerido. Essa vazão não força nem limita a vazão real da rede.
 
-### 2.7 Monitoramento
+### 2.8 Monitoramento
 
 - Monitor compacto ligado à seleção atual.
 - Monitor detalhado redimensionável.
@@ -128,13 +149,18 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
   - Bomba: permite alternar entre Carga (Head), Eficiência (%) e NPSHr. O ponto de operação é reposicionado automaticamente na curva e no eixo corretos.
   - Válvula: permite alternar entre Delta P estimado, Coeficiente de vazão (Cv ou Kv efetivo) e K equivalente.
 - Gráficos de bomba exibem um botão `JSON` no canto superior direito para baixar os dados da bomba sem exportar a planta inteira.
+- Gráfico de perfil de temperatura para trocador de calor (`HeatExchangerChartAdapter.js`):
+  - Traçado contínuo das curvas de temperatura da Corrente 1 e da Corrente 2 (ou utilidade de serviço) ao longo da extensão interna (0% a 100%).
+  - Representação fidedigna dos perfis térmicos conforme o modo de escoamento (contracorrente, paralelo ou utilidade).
+  - Pontos operacionais discretos de entrada e saída plotados sobre as curvas com tooltips informando a função de cada corrente e ponto de operação.
+  - Suporte completo tanto no monitor compacto quanto no monitor expandido para comparação com outros componentes.
 - Gráfico de pressão por distância para Canos, usando a pressão física de entrada do trecho como ponto inicial e a perda real do próprio Cano como queda exibida.
 - Quando o Cano sai de um componente passante com perda própria, como válvula ou trocador, a queda do componente fica separada da queda do Cano; a queda da válvula continua aparecendo no painel da válvula, e o gráfico do Cano mostra apenas a queda do trecho.
 - Quando a origem do Cano é um componente passante, a pressão inicial do trecho permanece ancorada na saída física desse componente; tanques pressurizados usam a pressão recebida na entrada como pressão de saída, sem queda interna atribuída ao tanque.
 - Painel da saída separa contrapressão imposta, pressão final da rede antes da perda de entrada do dreno, queda na entrada da saída e `K` de entrada.
 - Redimensionamento e atualização dos gráficos por adaptadores de Chart.js.
 
-### 2.8 Painel de Propriedades
+### 2.9 Painel de Propriedades
 
 - Separação entre aba Geral e aba Avançado.
 - Propriedades complexas ficam escondidas até o usuário abrir a aba Avançado.
@@ -142,7 +168,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
   - Aba ativa.
   - Posição de rolagem.
 - Tooltips em propriedades não triviais.
-- Conversão de unidades para pressão, vazão, comprimento, volume e temperatura.
+- Conversão de unidades para pressão, vazão, comprimento, volume e temperatura (com suporte completo a Celsius `°C`, Fahrenheit `°F` e Kelvin `K` nas preferências de unidades, refletido de forma reativa no canvas SVG, gráficos de monitoramento e relatórios).
 - Bindings de propriedades de bomba, válvula e tanque possuem limpeza explícita ao trocar seleção ou re-renderizar o painel, evitando acúmulo de listeners em componentes ainda vivos.
 - Presets e propriedades de fluido ficam nas propriedades da entrada selecionada.
 - Não existe mais edição de fluido global quando nenhum componente de entrada está selecionado.
@@ -150,7 +176,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Fluido personalizado permite escolher uma cor visual entre opções pré-definidas, incluindo cinza, roxo, rosa, vermelho, azul claro, laranja, verde escuro, magenta, ciano e verde.
 - Estados visuais de alertas, abas, inputs, botões auxiliares e cartões do painel foram ajustados para preservar contraste no modo escuro.
 
-### 2.9 Exportação de Dados
+### 2.10 Exportação de Dados
 
 - Exportação dos dados atuais da simulação em arquivo `.xls` compatível com planilhas.
 - Tabela de resumo com data da exportação e estado de altura relativa.
@@ -161,7 +187,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - A exportação foi mantida focada em dados tabulares para comparação com DWSIM, sem anexar gráficos ao arquivo.
 - A exportação pontual de bomba gera um `.json` separado no formato de CurveSet esperado pelo DWSIM, com `Name`, `Description`, `ImpellerDiameter`, `ImpellerSpeed`, `ImpellerDiameterUnit`, `CurveHead`, `CurvePower`, `CurveEfficiency` e `CurveNPSHr`. As curvas usam arrays `X/Y` com vazão em `m3/s`; carga e NPSHr em `m`, potência estimada em `kW` e eficiência em `%`.
 
-### 2.10 Aparência e Acessibilidade
+### 2.11 Aparência e Acessibilidade
 
 - Modo escuro aplicado à estrutura principal da interface, incluindo canvas, painéis laterais, toolbar, propriedades, monitoramento, modal de tutorial e controles fixos.
 - Paleta de cores do modo escuro ampliada com tokens de alerta para perigo, aviso, cautela, sucesso e estados neutros.
@@ -1054,3 +1080,39 @@ O sistema já possui suporte funcional para montagem visual, seleção múltipla
 - Resolvido em 2026-06-17: corrigida a ausência de indicações de unidades nos eixos Y e legendas dos gráficos dinâmicos de bomba e válvula. Adicionadas as unidades entre parênteses para todas as opções de eixos e nas legendas de curvas (`Carga (bar)`, `Eficiência (%)`, `NPSHr (m)`, `Delta P estimado (bar)`, etc.) no dropdown de seleção e nas curvas. Configurada a exibição simétrica e automática dos títulos dos eixos secundários apenas no modo expandido (`showSecondaryTitles: expanded`), mantendo a interface limpa e compacta quando minimizada e com clareza técnica total quando expandida. O coeficiente adimensional `K equivalente` foi retirado da exibição gráfica e do seletor da válvula, permanecendo em uso interno exclusivo pelo backend/solver.
 - Resolvido em 2026-06-17: realizada revisão de código e debloat em `Fluido.js`. Simplificado o mapeamento de propriedades de referência dos presets (`getComponentRefState`) e eliminados condicionais aninhados redundantes em `updateFluidoProperties`. Toda a suíte de 79 testes unitários e de integração mantém 100% de aprovação após as limpezas.
 - Resolvido em 2026-06-17: concluído debloat completo da suíte de testes do repositório, com a remoção física de 3 arquivos redundantes/inúteis de testes de mock de interface e compatibilidade visual de DOM (`camadas-compat.test.mjs`, `monitor-slot-history.test.mjs`, `presentation-imports.test.mjs`), diminuindo a suíte para 79 testes essenciais focados exclusivamente no domínio químico-físico e na integridade do solver.
+- Resolvido em 2026-09-02: implementado suporte a trocador de calor de duas correntes acopladas (`TrocadorCalorLogico.js`). O componente suporta portas dedicadas (`in1`/`out1` e `in2`/`out2`), desacoplamento hidráulico com cálculo independente de vazão e perda de carga para cada corrente, e cálculo térmico pelo método $\varepsilon$-NTU com balanço de energia sensível acoplado.
+- Resolvido em 2026-09-02: detecção automática de modo de escoamento no trocador a partir da topologia de conexões. Conexões entrando por `out2` e saindo por `in2` configuram modo contracorrente, enquanto conexões entrando por `in2` e saindo por `out2` configuram modo paralelo (co-corrente). O motor desabilita a edição da temperatura de serviço quando duas correntes estão ativas e reverte dinamicamente ao modo de utilidade ao desconectar qualquer conexão da Corrente 2.
+- Resolvido em 2026-09-02: expansão da suíte de testes de aplicação em `cenarios-aplicacao.test.mjs` com novos cenários para o trocador de calor de duas correntes no `SistemaSimulacao`, validando a independência hidráulica das correntes, a transição de diagnóstico operacional e a superioridade térmica do arranjo em contracorrente ($\varepsilon_{\text{contra}} > \varepsilon_{\text{paralelo}}$).
+- Resolvido em 2026-09-02: adicionada a tradução dinâmica das tags padrão do trocador de calor (`translateDefaultComponentTag`) entre `TC-XX` (português) e `HX-XX` (inglês) ao alternar o idioma no `LanguageManager.js`. A suíte de testes conta agora com 85 testes automatizados e 100% de aprovação.
+- Resolvido em 2026-09-04: corrigido bug de inversão de portas no solucionador nodal (`NodalHydraulicSolver.js`) para trocadores de calor em contracorrente. A verificação interna invocava `component.isContracorrente()` sem parâmetros, mas a função não existia na classe `TrocadorCalorLogico.js` (que fornecia apenas `getModoEscoamento(engine)`), avaliando falsamente como `false`. Com isso, o ramo interno da Corrente 2 era montado de `in2 -> out2`, gerando nó fonte/dreno incompatível com a tubulação externa conectada em contracorrente (`out2 -> in2`) e travando permanentemente a vazão em 0 L/s em malhas fechadas. Foi implementado o método `isContracorrente(engine)` na classe de domínio e repassado o contexto do solver (`this.context`), restabelecendo a continuidade topológica e a convergência nodal de malhas fechadas com trocador de calor.
+- Resolvido em 2026-09-04: corrigido bug na resolução de anéis fechados em série flutuantes (`buildFloatingSeriesLoop` em `NodalHydraulicSolver.js`). O mapa interno de componentes indexava apenas pelo ID do componente (`branch.component.id`), fazendo com que o ramo da Corrente 2 sobrescrevesse o da Corrente 1 em trocadores de calor de duas vias. Adicionalmente, conexões fora da ilha fechada faziam a validação de grau falhar (`inDegree === 1 && outDegree === 1`), e `evaluateSeriesLoopAtFlow` utilizava nós codificados rigidamente como `${id}:in` e `${id}:out`. A resolução foi refatorada para indexar por stream (`${branch.component.id}:${streamId}`), restringir a contagem de adjacências estritamente às conexões da ilha (`island.connectionIds`), e referenciar os nós exatos `internalBranch.fromNodeId` e `internalBranch.toNodeId`, viabilizando circuitos fechados em série isolados e múltiplos loops simultâneos nas duas correntes.
+- Resolvido em 2026-09-04: corrigido mascaramento numérico na conservação de massa pass-through (`balancePassThroughMass` em `HydraulicBranchModel.js`). O resíduo de desbalanceamento $\Delta Q$ acumulava a diferença total de entrada e saída global do componente ($|\sum Q_{\text{in}} - \sum Q_{\text{out}}|$), o que permitia que um desvio positivo na Corrente 1 compensasse aritmeticamente um desvio negativo na Corrente 2. A lógica foi atualizada para apurar o resíduo individualmente por corrente ($\max(|Q_{1,\text{in}} - Q_{1,\text{out}}|, |Q_{2,\text{in}} - Q_{2,\text{out}}|)$), assegurando a conservação estrita de massa e desacoplamento dinâmico.
+- Resolvido em 2026-09-04: adicionado suporte a escoamento monostream na Corrente 2 com utilidade térmica e incorporada a métrica `vazaoMassa2KgS` no `TrocadorCalorLogico.js`. Anteriormente, se apenas a Corrente 2 estivesse conectada, o cálculo térmico exigia `vazao1 > EPSILON_FLOW` e abortava com calor zero; o modelo agora opera no modo utilidade para qualquer uma das correntes isoladas ($C_{\min} = C_2$ se apenas Corrente 2 ativa). Quando ambas as correntes estão conectadas, a interrupção de fluxo em qualquer uma delas zera imediatamente a taxa de calor ($Q_{\text{térmico}} = 0$). A métrica de vazão mássica da Corrente 2 (`vazaoMassa2KgS`) foi inicializada no construtor, sincronizada nas métricas físicas, limpa em `onSimulationStop` e exportada nas notificações de estado.
+- Resolvido em 2026-09-04: expandido o importador de arquivos DWSIM (`DwsimImporter.js`) para suportar equipamentos térmicos. Adicionado o mapeamento dos tipos `HeatExchanger`, `Cooler` e `Heater` para o tipo `heat_exchanger` (`TrocadorCalorLogico`), extraindo coeficiente global de troca $UA$ ($\text{W/K}$), temperatura de serviço/utilidade ($T_{\text{serviço}}$) e coeficiente de perda de carga localizado $K$. Adicionada a tag padrão `TC` para o tipo importado.
+- Registrado em 2026-09-04: suíte de testes de aplicação (`Testes/cenarios-aplicacao.test.mjs`) expandida com testes de regressão para malha fechada com bomba na Corrente 2 em contracorrente, operação monostream na Corrente 2 com utilidade e operação simultânea de anéis fechados nas Correntes 1 e 2.
+- Resolvido em 2026-09-04: realizada limpeza e otimização da suíte de testes do laboratório (debloat). Foram removidos 6 testes redundantes e mocks visuais de interface (testes de renderização de strings HTML de painel em `validar-calculos.mjs`, testes de histórico de slots de monitoramento e de tradução de tags i18n em `cenarios-aplicacao.test.mjs`, e teste duplicado de função pura de contracorrente em `topologia-e-solver.test.mjs`), consolidando as asserções de domínio físico diretamente nos testes de aplicação. A suíte geral conta agora com 88 testes automatizados essenciais focados estritamente no domínio físico-químico e no solver, com 100% de aprovação (88/88).
+- Resolvido em 2026-09-04: varredura e auditoria extensiva de integridade físico-química e correção de comportamentos irreais em todo o backend:
+  1. **Trocador de Calor e 2ª Lei da Termodinâmica (`TrocadorCalorLogico.js`):** delimitadas as temperaturas de saída acopladas estritamente no intervalo termodinâmico $[T_{\min,\text{in}}, T_{\max,\text{in}}]$, prevenindo extrapolações em trocadores com $UA$ elevado; implementado o princípio físico de não-cruzamento de correntes em escoamento paralelo (co-corrente), assegurando que correntes em paralelo convirjam assintoticamente para a temperatura de equilíbrio $T_{\text{eq}}$ sem jamais inverterem o fluxo térmico ($T_{1,\text{out}} \ge T_{2,\text{out}}$ se $T_{1,\text{in}} \ge T_{2,\text{in}}$); adicionadas salvaguardas de capacidade térmica mínima ($c_p \ge 1\text{ J/(kg}\cdot\text{K)}$ e $\rho \ge 1\text{ kg/m}^3$) prevenindo divisão por zero em $NTU$.
+  2. **Regularização Termodinâmica de Fluidos (`Fluido.js`):** eliminada a singularidade assintótica em $-68{,}12^\circ\text{C}$ na função racional de densidade da água (onde o denominador se anulava), limitando o argumento numérico na faixa segura $[-30^\circ\text{C}, 350^\circ\text{C}]$; imposta cota inferior de densidade líquida ($\rho \ge 100\text{ kg/m}^3$), impedindo colapso de fases líquidas sob temperaturas anômalas; garantido que a temperatura absoluta nunca caia abaixo do zero absoluto ($T_K \ge 1\text{ K}$) nas correlações de Andrade; e preservada a temperatura de referência de calibração padrão ($25^\circ\text{C}$) para fluidos puros quando criados com temperatura de processo diferente, permitindo que a equação de Antoine calcule a pressão de vapor real em altas temperaturas ($P_{\text{vap}} \approx 41{,}5\text{ bar}$ a $250^\circ\text{C}$).
+  3. **Isolamento de Pressão e Bloqueio Estático em Válvulas (`ValvulaLogica.js`):** corrigido o acoplamento de pressão em válvula fechada. Quando $x \le 0$, a válvula desacopla a saída e adota a pressão da rede a jusante ($P_{\text{saída}} = P_{\text{jusante}}$), sustentando toda a pressão de montante como queda diferencial estática ($\Delta P = P_{\text{in}} - P_{\text{jusante}}$) e eliminando a transmissão espúria de pressão para tubos a jusante despressurizados.
+  4. **Potência Hidráulica e Potência de Eixo (`BombaLogica.js`):** implementados no modelo de domínio os métodos canônicos `getPotenciaHidraulicaKw(flowLps, boostBar)` ($P_{\text{hid}} = \frac{\Delta P \cdot Q}{10}$) e `getPotenciaEixoKw(flowLps, boostBar, efficiency)` ($P_{\text{eixo}} = P_{\text{hid}} / \eta$), integrando cálculos energéticos com rastreamento físico de processo.
+  5. **Proteção de NPSH em Ramos (`HydraulicBranchModel.js`):** adicionados fallbacks físicos consistentes para pressão atmosférica, densidade e pressão de vapor intermediárias, evitando que estados em formação propaguem `NaN` para o cálculo de cavitação da bomba.
+  6. **Mapeamento Multi-Stream no Importador DWSIM (`DwsimImporter.js`):** implementado o rastreamento dos índices de conexão (`sourceConnIndex`, `targetConnIndex`) durante a busca de conectividade em grafos (BFS) e mapeamento determinístico de correntes de processo para trocadores de calor com duas correntes (`in1`/`in2` e `out1`/`out2`), preenchendo as propriedades dos endpoints de conexão.
+  7. **Ampliação da Validação Automatizada (`Testes/validar-calculos.mjs`):** adicionados 5 novos testes de validação cobrindo cumprimento da 2ª Lei no trocador, limites físicos de fluidos e mitigação de singularidades, estanqueidade estática de válvulas, potências de bomba e mapeamento de portas do DWSIM, elevando a suíte para 93 testes com 100% de aprovação (93/93).
+- Resolvido em 2026-09-04: corrigido bug de layout e qualidade de vida no monitoramento detalhado (`LayoutController.js` e `css/style.css`). Anteriormente, o contêiner do gráfico (`#chart-wrapper`) residia permanentemente dentro do DOM da barra lateral de propriedades (`#properties .side-panel-content`). Ao colapsar o painel da direita, a classe `.side-panel.collapsed` aplicava `width: 0 !important` e `opacity: 0` ao conteúdo do painel, fazendo com que o gráfico expandido desaparecesse junto com a barra lateral, enquanto fechar a barra esquerda apenas aumentava o gráfico. O ciclo de vida do monitor foi desacoplado: ao maximizar (`openDetailedMonitor`), o elemento `#chart-wrapper` cria um placeholder marcador em `#properties .side-panel-content` e é transferido diretamente para o `.sandbox-container`, herdando `--chart-max-left` e `--chart-max-right` diretamente do contêiner do workspace. Quando a barra de propriedades é colapsada, `--chart-max-right` é recalculado para 16px e o gráfico se expande suavemente até a borda direita, permanecendo 100% visível e interativo mesmo com ambas as barras laterais ocultas. Ao fechar o monitor detalhado (`closeDetailedMonitor`), o contêiner é restaurado no ponto exato do placeholder na barra lateral de propriedades e o placeholder é removido. Adicionado teste automatizado de layout em `Testes/cenarios-aplicacao.test.mjs`, elevando a suíte geral para 94 testes com 100% de aprovação (94/94).
+- Resolvido em 2026-09-08: padronização e estruturação do módulo de importação de plantas e expansão do banco de cenários de teste em `Testes/plantas teste/`:
+  1. **Persistência Headless (`FlowchartPersistence.js`):** implementada a função `loadWorkspaceIntoEngine(engine, workspace)` e atualizada `restoreFlowchartDocument(engine, payload)` para operar com fallback transparente entre ambientes DOM (interface visual do navegador) e headless (suíte automatizada em Node.js), permitindo instanciar, conectar e simular qualquer fluxograma JSON sem dependência de browser ou elementos visuais.
+  2. **Cenários Canônicos Criados (`Testes/plantas teste/`):**
+     * `cenario_01_bombeamento_e_controle_nivel.json`: captação, recalque centrífugo, tanque pulmão e controle ativo de nível em malha fechada via válvula modulante de saída.
+     * `cenario_02_trocador_contracorrente.json`: trocador de calor em contracorrente com recuperação avançada ($UA = 5000\text{ W/K}$), demonstrando cruzamento térmico estrito ($T_{1,\text{out}} = 66{,}8^\circ\text{C} > T_{2,\text{out}} = 38{,}2^\circ\text{C}$) e efetividade $> 70\%$, em contraste didático com o teto de co-corrente ($\approx 51{,}3\%$).
+     * `cenario_03_recirculacao_anel_fechado.json`: anel fechado cíclico com bomba de circulação, válvula de balanceamento e rejeição de calor em trocador de utilidade, resolvido pelo `NodalHydraulicSolver` com conservação uniforme de vazão em todos os ramos ($Q = 26{,}09\text{ L/s}$).
+  3. **Validação Automatizada de Plantas (`Testes/cenarios-aplicacao.test.mjs`):** adicionados 5 testes de integração que carregam, inicializam e rodam cada uma das 5 plantas de `Testes/plantas teste/` (`cenario_01`, `cenario_02`, `cenario_03`, `teste planta.json` com 17 conexões e 6 ilhas, e `teste_trocatroca.json` com 15 conexões e convergência no equilíbrio em co-corrente), elevando a suíte geral do laboratório para 99 testes automatizados com 100% de aprovação (99/99).
+  4. **Documentação Técnica Completa (`docs/CENARIOS_DE_PLANTAS_TESTE.md`):** criado documento dedicado explicando exaustivamente cada equipamento, conexão, variáveis de contorno, fundamentação física dos valores nominais e pontos de convergência esperados para servir de base e confirmação em momentos de releitura.
+- Resolvido em 2026-09-10: implementação de métricas térmicas avançadas e modo Perfil Térmico ($T \times Q$) no trocador de calor (`TrocadorCalorLogico.js`, `HeatExchangerChartAdapter.js`, `MonitorController.js`):
+  1. **Diferença Média Logarítmica de Temperatura (LMTD) e Fator $F_T$:** Adicionada a função de domínio `calcularLmtd({ t1In, t1Out, t2In, t2Out, modo })` e sua sincronização nas métricas físicas do trocador (`lmtdC`, `fatorCorrecaoLmtd`), com formulações exatas para contracorrente, paralelo (co-corrente) e utilidade, e proteções numéricas contra desvios assintóticos.
+  2. **Diferença Mínima de Temperatura (Pinch Point) e Carga Máxima:** Implementadas as métricas `pinchPointMinDeltaTC` ($\Delta T_{\min} = \min(\Delta T_a, \Delta T_b)$) e `cargaTermicaMaximaW` ($Q_{\max} = C_{\min} \cdot |T_{1,\text{in}} - T_{2,\text{in}}|$), refletindo no painel de propriedades do componente com sincronização contínua via `PropertyLiveUpdater.js`.
+  3. **Relação de Dimensionamento $UA = U \cdot A$:** Introduzidos os parâmetros de Área de Troca ($A$, $\text{m}^2$) e Coeficiente Global de Transferência Térmica ($U$, $\text{W/m}^2\cdot\text{K}$), preservando a condutância $UA$ existente e relacionando-as bidirecionalmente ($UA = U \cdot A$, $U = UA / A$) sem redundância de variáveis.
+  4. **Modos de Visualização no Monitor (Perfil Espacial e Perfil Térmico $T \times Q$):** Adicionado suporte para alternar o monitor detalhado e compacto entre `Perfil Espacial (T × Comprimento)` e `Perfil Térmico (T × Q)`. No modo Perfil Térmico, o gráfico renderiza curvas térmicas em função da carga $Q$ ($\text{kW}$), com linha indicadora vertical no ponto de operação real ($Q_{\text{real}}$) e marcadores pontuais nas saídas.
+  5. **Validação Automatizada:** Adicionado teste em `Testes/validar-calculos.mjs` cobrindo o cálculo do LMTD ($11{,}375^\circ\text{C}$), dimensionamento por área/U e geração correta dos datasets do perfil térmico. A suíte geral totaliza 97 testes com 100% de aprovação.
+
+

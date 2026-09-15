@@ -144,28 +144,28 @@ export class ComponenteFisico extends Observable {
         return Math.max(0, this.estadoHidraulico.entradaVazaoLps - this.estadoHidraulico.entradaConsumidaLps);
     }
 
-    registrarEntrada(flowLps, pressureBar, fluido = null) {
+    registrarEntrada(flowLps, pressureBar, fluido = null, portId = null) {
         if (flowLps <= EPSILON_FLOW) return;
         this.estadoHidraulico.entradaVazaoLps += flowLps;
         this.estadoHidraulico.entradaPressaoPonderadaBar += pressureBar * flowLps;
-        if (fluido) {
-            this.estadoHidraulico.entradaFluidoContribuicoes.push({
-                flowLps,
-                fluido
-            });
-        }
+        this.estadoHidraulico.entradaFluidoContribuicoes.push({
+            flowLps,
+            pressureBar,
+            fluido,
+            portId
+        });
     }
 
-    registrarSaida(flowLps, pressureBar, fluido = null) {
+    registrarSaida(flowLps, pressureBar, fluido = null, portId = null) {
         if (flowLps <= EPSILON_FLOW) return;
         this.estadoHidraulico.saidaVazaoLps += flowLps;
         this.estadoHidraulico.saidaPressaoPonderadaBar += pressureBar * flowLps;
-        if (fluido) {
-            this.estadoHidraulico.saidaFluidoContribuicoes.push({
-                flowLps,
-                fluido
-            });
-        }
+        this.estadoHidraulico.saidaFluidoContribuicoes.push({
+            flowLps,
+            pressureBar,
+            fluido,
+            portId
+        });
     }
 
     consumirEntrada(flowLps) {
@@ -177,8 +177,100 @@ export class ComponenteFisico extends Observable {
         return mixFluidos(this.estadoHidraulico.entradaFluidoContribuicoes, fallback);
     }
 
+    getFluidoEntradaMisturadoPorPorta(portId, fallback = null) {
+        if (!portId) return this.getFluidoEntradaMisturado(fallback);
+        const targetStream = (portId === 'in2' || portId === 'out2' || portId === '2') ? 2 : 1;
+        const isMatch = (c) => {
+            const cStream = (c.portId === 'in2' || c.portId === 'out2' || c.portId === '2') ? 2 : 1;
+            return cStream === targetStream;
+        };
+        const contribuicoes = this.estadoHidraulico.entradaFluidoContribuicoes.filter(isMatch);
+        if (contribuicoes.length === 0) return fallback;
+        return mixFluidos(contribuicoes, fallback);
+    }
+
+    getVazaoEntradaPorPorta(portId) {
+        if (!portId) return this.estadoHidraulico.entradaVazaoLps;
+        const targetStream = (portId === 'in2' || portId === 'out2' || portId === '2') ? 2 : 1;
+        const isMatch = (c) => {
+            const cStream = (c.portId === 'in2' || c.portId === 'out2' || c.portId === '2') ? 2 : 1;
+            return cStream === targetStream;
+        };
+        return this.estadoHidraulico.entradaFluidoContribuicoes
+            .filter(isMatch)
+            .reduce((acc, c) => acc + c.flowLps, 0);
+    }
+
+    getVazaoSaidaPorPorta(portId) {
+        if (!portId) return this.estadoHidraulico.saidaVazaoLps;
+        const targetStream = (portId === 'in2' || portId === 'out2' || portId === '2') ? 2 : 1;
+        const isMatch = (c) => {
+            const cStream = (c.portId === 'in2' || c.portId === 'out2' || c.portId === '2') ? 2 : 1;
+            return cStream === targetStream;
+        };
+        return this.estadoHidraulico.saidaFluidoContribuicoes
+            .filter(isMatch)
+            .reduce((acc, c) => acc + c.flowLps, 0);
+    }
+
+    getPressaoEntradaPortaBar(portId) {
+        if (!portId) return this.getPressaoEntradaBar();
+        const targetStream = (portId === 'in2' || portId === 'out2' || portId === '2') ? 2 : 1;
+        const isMatch = (c) => {
+            const cStream = (c.portId === 'in2' || c.portId === 'out2' || c.portId === '2') ? 2 : 1;
+            return cStream === targetStream;
+        };
+        const matches = this.estadoHidraulico.entradaFluidoContribuicoes.filter(isMatch);
+        const totalFlow = matches.reduce((acc, c) => acc + c.flowLps, 0);
+        if (totalFlow <= EPSILON_FLOW) return 0;
+        const weightedPressure = matches.reduce((acc, c) => acc + (Number(c.pressureBar) || 0) * c.flowLps, 0) / totalFlow;
+        return Number.isFinite(weightedPressure) && weightedPressure > 0 ? weightedPressure : 0;
+    }
+
+    getPressaoSaidaPortaBar(portId) {
+        if (!portId) return this.getPressaoSaidaBar();
+        const targetStream = (portId === 'in2' || portId === 'out2' || portId === '2') ? 2 : 1;
+        const isMatch = (c) => {
+            const cStream = (c.portId === 'in2' || c.portId === 'out2' || c.portId === '2') ? 2 : 1;
+            return cStream === targetStream;
+        };
+        const matches = this.estadoHidraulico.saidaFluidoContribuicoes.filter(isMatch);
+        const totalFlow = matches.reduce((acc, c) => acc + c.flowLps, 0);
+        if (totalFlow <= EPSILON_FLOW) return 0;
+        const weightedPressure = matches.reduce((acc, c) => acc + (Number(c.pressureBar) || 0) * c.flowLps, 0) / totalFlow;
+        return Number.isFinite(weightedPressure) && weightedPressure > 0 ? weightedPressure : 0;
+    }
+
+    resetEstadoHidraulicoStream(streamId = 1) {
+        const targetStream = Number(streamId) === 2 ? 2 : 1;
+        const isMatch = (c) => {
+            const cStream = (c.portId === 'in2' || c.portId === 'out2' || c.portId === '2') ? 2 : 1;
+            return cStream === targetStream;
+        };
+
+        this.estadoHidraulico.entradaFluidoContribuicoes = this.estadoHidraulico.entradaFluidoContribuicoes.filter((c) => !isMatch(c));
+        this.estadoHidraulico.saidaFluidoContribuicoes = this.estadoHidraulico.saidaFluidoContribuicoes.filter((c) => !isMatch(c));
+
+        this.estadoHidraulico.entradaVazaoLps = this.estadoHidraulico.entradaFluidoContribuicoes.reduce((acc, c) => acc + c.flowLps, 0);
+        this.estadoHidraulico.entradaPressaoPonderadaBar = this.estadoHidraulico.entradaFluidoContribuicoes.reduce((acc, c) => acc + (Number(c.pressureBar) || 0) * c.flowLps, 0);
+        this.estadoHidraulico.saidaVazaoLps = this.estadoHidraulico.saidaFluidoContribuicoes.reduce((acc, c) => acc + c.flowLps, 0);
+        this.estadoHidraulico.saidaPressaoPonderadaBar = this.estadoHidraulico.saidaFluidoContribuicoes.reduce((acc, c) => acc + (Number(c.pressureBar) || 0) * c.flowLps, 0);
+    }
+
     getFluidoSaidaMisturado(fallback = null) {
         return mixFluidos(this.estadoHidraulico.saidaFluidoContribuicoes, fallback);
+    }
+
+    getFluidoSaidaMisturadoPorPorta(portId, fallback = null) {
+        if (!portId) return this.getFluidoSaidaMisturado(fallback);
+        const targetStream = (portId === 'in2' || portId === 'out2' || portId === '2') ? 2 : 1;
+        const isMatch = (c) => {
+            const cStream = (c.portId === 'in2' || c.portId === 'out2' || c.portId === '2') ? 2 : 1;
+            return cStream === targetStream;
+        };
+        const contribuicoes = this.estadoHidraulico.saidaFluidoContribuicoes.filter(isMatch);
+        if (contribuicoes.length === 0) return fallback;
+        return mixFluidos(contribuicoes, fallback);
     }
 
     marcarEmissaoIntrinseca() {

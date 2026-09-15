@@ -110,6 +110,10 @@ export const TANK_PROPERTIES_PRESENTER = {
                 <label title="Densidade do fluido ou mistura armazenado no tanque.">Densidade do Fluido (kg/m³)</label>
                 <input type="text" id="disp-tank-fluid-density" title="Densidade do fluido ou mistura armazenado no tanque." value="${(fluidoConteudo?.densidade || 0).toFixed(1)}" disabled>
             </div>
+            <div class="prop-group">
+                ${makeUnitLabel('Temperatura do Fluido', 'temperature', 'Temperatura do fluido ou mistura atualmente armazenado no tanque.')}
+                <input type="text" id="disp-tank-fluid-temp" title="Temperatura do fluido ou mistura atualmente armazenado no tanque." value="${displayUnitValue('temperature', fluidoConteudo?.temperatura ?? 25, 2)}" disabled>
+            </div>
             <div class="prop-group tank-control-panel is-${estadoVisualControle}" id="grp-sp-main" data-control-state="${estadoVisualControle}" style="border-color:${corBordaControle}; background:${fundoControle};">
                 <label class="tank-control-title" ${hintAttr(TOOLTIP.tankPiController)} style="color:#c0392b; font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">
                     Controlador de nível (PID)

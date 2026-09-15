@@ -5,7 +5,7 @@ import {
     DEFAULT_FLUID_VISCOSITY_PA_S
 } from '../units/HydraulicUnits.js';
 
-const DEFAULT_FLUID_NAME = '\u00c1gua';
+const DEFAULT_FLUID_NAME = '\u00c1gua'; // Nome deafault do fluido com código Unicode para o caractere "Á" para evitar problemas de codificação em diferentes ambientes.
 const DEFAULT_FLUID_DENSITY = 997.0;
 const DEFAULT_FLUID_TEMPERATURE = 25.0;
 const DEFAULT_FLUID_VISUAL_COLOR = '#3498db';
@@ -21,21 +21,37 @@ function isMixture(fluido) {
     return Object.keys(fluido.composicao).length > 1;
 }
 
-function getComponentRefState(name, fluido) {
-    const normName = name.toLowerCase();
-    let isPure = false;
-    let preset = { temp: 25, density: 997, vaporPressure: 0.0317, viscosity: 0.00089 };
+export const FLUID_FAMILY = Object.freeze({
+    WATER: 'water',
+    OIL: 'oil',
+    GLYCOL: 'glycol',
+    CUSTOM: 'custom'
+});
 
-    if (normName.includes('água') || normName.includes('agua')) {
-        isPure = fluido && (fluido.nome || '').toLowerCase().includes('água') && !isMixture(fluido);
-        preset = { temp: 25, density: 997, vaporPressure: 0.0317, viscosity: 0.00089 };
-    } else if (normName.includes('óleo') || normName.includes('oleo') || normName.includes('oil')) {
-        isPure = fluido && ((fluido.nome || '').toLowerCase().includes('óleo') || (fluido.nome || '').toLowerCase().includes('oil')) && !isMixture(fluido);
-        preset = { temp: 25, density: 860, vaporPressure: 0.003, viscosity: 0.035 };
-    } else if (normName.includes('glicol') || normName.includes('glycol')) {
-        isPure = fluido && ((fluido.nome || '').toLowerCase().includes('glicol') || (fluido.nome || '').toLowerCase().includes('glycol')) && !isMixture(fluido);
-        preset = { temp: 25, density: 1045, vaporPressure: 0.02, viscosity: 0.0035 };
-    } else {
+/**
+ * Classifica o nome de um fluido/componente em sua família físico-química padronizada.
+ * Centraliza em uma única fonte da verdade o mapeamento de sinônimos e termos em português e inglês.
+ */
+export function getFluidFamily(name) {
+    const norm = (name || '').toLowerCase();
+    if (norm.includes('água') || norm.includes('agua') || norm.includes('water')) return FLUID_FAMILY.WATER;
+    if (norm.includes('óleo') || norm.includes('oleo') || norm.includes('oil')) return FLUID_FAMILY.OIL;
+    if (norm.includes('glicol') || norm.includes('glycol')) return FLUID_FAMILY.GLYCOL;
+    return FLUID_FAMILY.CUSTOM;
+}
+
+const PRESET_REFERENCE_STATES = Object.freeze({
+    [FLUID_FAMILY.WATER]: Object.freeze({ temp: 25, density: 997, vaporPressure: 0.0317, viscosity: 0.00089 }),
+    [FLUID_FAMILY.OIL]: Object.freeze({ temp: 25, density: 860, vaporPressure: 0.003, viscosity: 0.035 }),
+    [FLUID_FAMILY.GLYCOL]: Object.freeze({ temp: 25, density: 1045, vaporPressure: 0.02, viscosity: 0.0035 })
+});
+
+function getComponentRefState(name, fluido) {
+    const family = getFluidFamily(name);
+    const fluidFamily = getFluidFamily(fluido?.nome);
+    const isPure = !isMixture(fluido) && fluidFamily === family && family !== FLUID_FAMILY.CUSTOM;
+
+    if (family === FLUID_FAMILY.CUSTOM) {
         return {
             temp: fluido && fluido.refTemperatura !== undefined ? fluido.refTemperatura : DEFAULT_FLUID_TEMPERATURE,
             density: fluido && fluido.refDensidade !== undefined ? fluido.refDensidade : DEFAULT_FLUID_DENSITY,
@@ -43,6 +59,8 @@ function getComponentRefState(name, fluido) {
             viscosity: fluido && fluido.refViscosidadeDinamicaPaS !== undefined ? fluido.refViscosidadeDinamicaPaS : DEFAULT_FLUID_VISCOSITY_PA_S
         };
     }
+
+    const preset = PRESET_REFERENCE_STATES[family] || PRESET_REFERENCE_STATES[FLUID_FAMILY.WATER];
 
     return {
         temp: isPure && fluido.refTemperatura !== undefined ? fluido.refTemperatura : preset.temp,
@@ -53,9 +71,10 @@ function getComponentRefState(name, fluido) {
 }
 
 function getWaterDensityFactor(T) {
-    const term1 = Math.pow(T - 3.98, 2) * (T + 286.9);
-    const term2 = 508929.2 * (T + 68.12);
-    return 1 - (term1 / term2);
+    const safeT = Math.max(-30, Math.min(350, Number(T) || 0));
+    const term1 = Math.pow(safeT - 3.98, 2) * (safeT + 286.9);
+    const term2 = 508929.2 * (safeT + 68.12);
+    return Math.max(0.1, 1 - (term1 / term2));
 }
 
 function calculateDensityAtTemp(fluido, T) {
@@ -68,21 +87,28 @@ function calculateDensityAtTemp(fluido, T) {
         const ref = getComponentRefState(name, fluido);
         const refDensity = ref.density;
         const refT = ref.temp;
-        const normName = name.toLowerCase();
+        const family = getFluidFamily(name);
 
         let compDensity = refDensity;
-        if (normName.includes('água') || normName.includes('agua')) {
-            const factorRef = getWaterDensityFactor(refT);
-            const factorT = getWaterDensityFactor(T);
-            compDensity = refDensity * (factorT / Math.max(0.1, factorRef));
-        } else if (normName.includes('óleo') || normName.includes('oleo') || normName.includes('oil')) {
-            compDensity = refDensity * (1 - 0.00086 * (T - refT));
-        } else if (normName.includes('glicol') || normName.includes('glycol')) {
-            compDensity = refDensity * (1 - 0.00045 * (T - refT));
-        } else {
-            compDensity = refDensity * (1 - 0.0005 * (T - refT));
+        switch (family) {
+            case FLUID_FAMILY.WATER: {
+                const factorRef = getWaterDensityFactor(refT);
+                const factorT = getWaterDensityFactor(T);
+                compDensity = refDensity * (factorT / Math.max(0.1, factorRef));
+                break;
+            }
+            case FLUID_FAMILY.OIL:
+                compDensity = refDensity * (1 - 0.00086 * (T - refT));
+                break;
+            case FLUID_FAMILY.GLYCOL:
+                compDensity = refDensity * (1 - 0.00045 * (T - refT));
+                break;
+            default:
+                compDensity = refDensity * (1 - 0.0005 * (T - refT));
+                break;
         }
-        densitySum += fraction * Math.max(1.0, compDensity);
+
+        densitySum += fraction * Math.max(100.0, compDensity);
     });
 
     return totalFraction > 0 ? (densitySum / totalFraction) : DEFAULT_FLUID_DENSITY;
@@ -93,66 +119,108 @@ function calculateViscosityAtTemp(fluido, T) {
     let logViscSum = 0;
     let totalFraction = 0;
 
-    const Tk = T + 273.15;
+    const Tk = Math.max(1, (Number(T) || 0) + 273.15);
 
     Object.entries(composition).forEach(([name, fraction]) => {
         totalFraction += fraction;
         const ref = getComponentRefState(name, fluido);
         const refVisc = ref.viscosity;
         const refT = ref.temp;
-        const refTk = refT + 273.15;
-        const normName = name.toLowerCase();
+        const refTk = Math.max(1, (Number(refT) || 0) + 273.15);
+        const family = getFluidFamily(name);
 
         let compVisc = refVisc;
-        if (normName.includes('água') || normName.includes('agua')) {
-            const expRef = 247.8 / Math.max(10, refTk - 140);
-            const expT = 247.8 / Math.max(10, Tk - 140);
-            compVisc = refVisc * Math.pow(10, expT - expRef);
-        } else if (normName.includes('óleo') || normName.includes('oleo') || normName.includes('oil')) {
-            compVisc = refVisc * Math.exp(3645.4 * ((1 / Tk) - (1 / refTk)));
-        } else if (normName.includes('glicol') || normName.includes('glycol')) {
-            compVisc = refVisc * Math.exp(2190 * ((1 / Tk) - (1 / refTk)));
-        } else {
-            compVisc = refVisc * Math.exp(2500 * ((1 / Tk) - (1 / refTk)));
+        switch (family) {
+            case FLUID_FAMILY.WATER: {
+                const expRef = 247.8 / Math.max(10, refTk - 140);
+                const expT = 247.8 / Math.max(10, Tk - 140);
+                compVisc = refVisc * Math.pow(10, expT - expRef);
+                break;
+            }
+            case FLUID_FAMILY.OIL:
+                compVisc = refVisc * Math.exp(3645.4 * ((1 / Tk) - (1 / refTk)));
+                break;
+            case FLUID_FAMILY.GLYCOL:
+                compVisc = refVisc * Math.exp(2190 * ((1 / Tk) - (1 / refTk)));
+                break;
+            default:
+                compVisc = refVisc * Math.exp(2500 * ((1 / Tk) - (1 / refTk)));
+                break;
         }
+
         logViscSum += fraction * Math.log(Math.max(0.00001, compVisc));
     });
 
     return totalFraction > 0 ? Math.exp(logViscSum / totalFraction) : DEFAULT_FLUID_VISCOSITY_PA_S;
 }
 
+/**
+ * Calcula a pressão de vapor saturado (Pvap) do fluido na temperatura T (°C), retornando o valor em bar.
+ * Essa grandeza é essencial para o cálculo de NPSHa e previsão de cavitação em bombas centrífugas.
+ *
+ * Modelos empregados:
+ * 1. Misturas: aproximação linear pela Lei de Raoult (Pvap = Σ xi * Pvap,i).
+ * 2. Água: Equação de Antoine diferencial com constantes canônicas (B = 1730.63, C = 233.426).
+ * 3. Óleos: Relação empírica tipo Clausius-Clapeyron base 10 (ΔHvap/R*ln(10) ≈ 2033.7, baixa volatilidade).
+ * 4. Glicol: Modelo substituto com constantes de Antoine adaptadas ao Pvap de referência.
+ * 5. Outros fluidos: Equação de Clausius-Clapeyron integrada com -ΔHvap/R ≈ -4000 K (padrão Trouton).
+ */
 function calculateVaporPressureAtTemp(fluido, T) {
+    // Obtém a composição da mistura ou cria um componente único para fluidos puros
     const composition = fluido.composicao || { [fluido.nome || DEFAULT_FLUID_NAME]: 1 };
     let vaporPressureSum = 0;
     let totalFraction = 0;
 
-    const Tk = T + 273.15;
+    // Higienização de temperatura: evita valores criogênicos extremos e divergências numéricas
+    const safeT = Math.max(-50, Number(T) || 0);
+    const Tk = Math.max(1, safeT + 273.15); // Temperatura absoluta em Kelvin (mínimo de 1 K contra divisão por zero)
 
+    // Avalia a contribuição de cada componente segundo sua fração
     Object.entries(composition).forEach(([name, fraction]) => {
         totalFraction += fraction;
+
+        // Recupera o estado de referência do componente (Tref, Pref de vapor)
         const ref = getComponentRefState(name, fluido);
         const refVap = ref.vaporPressure;
-        const refT = ref.temp;
-        const refTk = refT + 273.15;
-        const normName = name.toLowerCase();
+        const refT = Math.max(-50, Number(ref.temp) || 0);
+        const refTk = Math.max(1, refT + 273.15);
+        const family = getFluidFamily(name);
 
         let compVap = refVap;
-        if (normName.includes('água') || normName.includes('agua')) {
-            const expRef = 1730.63 / Math.max(10, refT + 233.426);
-            const expT = 1730.63 / Math.max(10, T + 233.426);
-            compVap = refVap * Math.pow(10, expRef - expT);
-        } else if (normName.includes('óleo') || normName.includes('oleo') || normName.includes('oil')) {
-            compVap = refVap * Math.pow(10, 2033.7 * ((1 / refTk) - (1 / Tk)));
-        } else if (normName.includes('glicol') || normName.includes('glycol')) {
-            const expRef = 1730.63 / Math.max(10, refT + 233.426);
-            const expT = 1730.63 / Math.max(10, T + 233.426);
-            compVap = refVap * Math.pow(10, expRef - expT);
-        } else {
-            compVap = refVap * Math.exp(-4000 * ((1 / Tk) - (1 / refTk)));
+        switch (family) {
+            case FLUID_FAMILY.WATER: {
+                // Equação de Antoine diferencial para água (log10(P/Pref) = B/(Tref+C) - B/(T+C)):
+                // B = 1730.63, C = 233.426 válidos para a faixa de 1 °C a 100 °C.
+                const expRef = 1730.63 / Math.max(10, refT + 233.426);
+                const expT = 1730.63 / Math.max(10, safeT + 233.426);
+                compVap = refVap * Math.pow(10, expRef - expT);
+                break;
+            }
+            case FLUID_FAMILY.OIL:
+                // Correlação tipo Clausius-Clapeyron na base 10 para hidrocarbonetos/óleos de baixa volatilidade:
+                // O fator 2033.7 corresponde a ΔHvap / (R * ln(10)), implicando ΔHvap ≈ 39 kJ/mol.
+                compVap = refVap * Math.pow(10, 2033.7 * ((1 / refTk) - (1 / Tk)));
+                break;
+            case FLUID_FAMILY.GLYCOL: {
+                // Modelo substituto simplificado para soluções glicoladas utilizando a inclinação de Antoine
+                // acoplada à pressão de vapor de referência do glicol (Pref = 0.02 bar a 25 °C).
+                const expRef = 1730.63 / Math.max(10, refT + 233.426);
+                const expT = 1730.63 / Math.max(10, safeT + 233.426);
+                compVap = refVap * Math.pow(10, expRef - expT);
+                break;
+            }
+            default:
+                // Clausius-Clapeyron genérico na base e para fluidos não tabelados:
+                // Assume -ΔHvap / R ≈ -4000 K (entalpia de vaporização média de ~33.2 kJ/mol).
+                compVap = refVap * Math.exp(-4000 * ((1 / Tk) - (1 / refTk)));
+                break;
         }
+
+        // Ponderação pela Lei de Raoult com piso mínimo de segurança de 0.0001 bar (10 Pa) contra valores não-físicos
         vaporPressureSum += fraction * Math.max(0.0001, compVap);
     });
 
+    // Normaliza pela fração total da mistura ou retorna a pressão de vapor padrão em caso de fração nula
     return totalFraction > 0 ? (vaporPressureSum / totalFraction) : DEFAULT_FLUID_VAPOR_PRESSURE_BAR;
 }
 
@@ -215,7 +283,7 @@ export function updateFluidoProperties(fluido, dados = {}) {
     fluido.nome = dados.nome ?? fluido.nome ?? DEFAULT_FLUID_NAME;
 
     if (fluido.refTemperatura === undefined) {
-        fluido.refTemperatura = fluido.temperatura !== undefined ? fluido.temperatura : DEFAULT_FLUID_TEMPERATURE;
+        fluido.refTemperatura = dados.refTemperatura !== undefined ? dados.refTemperatura : DEFAULT_FLUID_TEMPERATURE;
         fluido.refDensidade = fluido.densidade !== undefined ? fluido.densidade : DEFAULT_FLUID_DENSITY;
         fluido.refViscosidadeDinamicaPaS = fluido.viscosidadeDinamicaPaS !== undefined ? fluido.viscosidadeDinamicaPaS : DEFAULT_FLUID_VISCOSITY_PA_S;
         fluido.refPressaoVaporBar = fluido.pressaoVaporBar !== undefined ? fluido.pressaoVaporBar : DEFAULT_FLUID_VAPOR_PRESSURE_BAR;
@@ -231,7 +299,7 @@ export function updateFluidoProperties(fluido, dados = {}) {
     const hasExplicitVisc = dados.viscosidadeDinamicaPaS !== undefined;
     const hasExplicitVapor = dados.pressaoVaporBar !== undefined;
 
-    if (hasExplicitDensity || hasExplicitTemp || hasExplicitVisc || hasExplicitVapor) {
+    if (hasExplicitDensity || hasExplicitVisc || hasExplicitVapor) {
         if (hasExplicitDensity && dados.refDensidade === undefined) {
             fluido.refDensidade = positiveNumber(dados.densidade, DEFAULT_FLUID_DENSITY, 1);
         }
@@ -241,8 +309,8 @@ export function updateFluidoProperties(fluido, dados = {}) {
         if (hasExplicitVapor && dados.refPressaoVaporBar === undefined) {
             fluido.refPressaoVaporBar = positiveNumber(dados.pressaoVaporBar, DEFAULT_FLUID_VAPOR_PRESSURE_BAR, 0.0001);
         }
-        if (dados.refTemperatura === undefined) {
-            fluido.refTemperatura = hasExplicitTemp ? Number(dados.temperatura) : fluido.temperatura;
+        if (dados.refTemperatura === undefined && hasExplicitTemp) {
+            fluido.refTemperatura = Number(dados.temperatura);
         }
     }
 

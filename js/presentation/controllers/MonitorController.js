@@ -1,6 +1,7 @@
 import { BombaLogica } from '../../domain/components/BombaLogica.js';
 import { ConnectionModel } from '../../domain/models/ConnectionModel.js';
 import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
+import { TrocadorCalorLogico } from '../../domain/components/TrocadorCalorLogico.js';
 import { ValvulaLogica } from '../../domain/components/ValvulaLogica.js';
 import {
     createCompositePipePressureChart,
@@ -9,6 +10,10 @@ import {
     refreshPipePressureChart
 } from '../../infrastructure/charts/PipePressureChartAdapter.js';
 import { createPumpChart, refreshPumpChart } from '../../infrastructure/charts/PumpChartAdapter.js';
+import {
+    createHeatExchangerChart,
+    refreshHeatExchangerChart
+} from '../../infrastructure/charts/HeatExchangerChartAdapter.js';
 import { createValveChart, refreshValveChart } from '../../infrastructure/charts/ValveChartAdapter.js';
 import {
     createEmptyMonitorChart,
@@ -20,7 +25,7 @@ import { exportPumpDwsimJson } from '../export/PumpDwsimJsonExporter.js';
 import { createMonitorSlotHistory } from '../monitoring/MonitorSlotHistory.js';
 import { canMergePipeMonitorEntries, isPipeMonitorEntry } from '../monitoring/PipeMonitorGrouping.js';
 import { resolvePipePressureProfileOptions } from '../monitoring/PipePressureProfile.js';
-import { getUnitSymbol } from '../units/DisplayUnits.js';
+import { getUnitSymbol, subscribeUnitPreferences } from '../units/DisplayUnits.js';
 import { t } from '../i18n/LanguageManager.js';
 
 const MAX_MONITOR_CHART_HISTORY = 2;
@@ -35,6 +40,7 @@ export function createMonitorController({ engine }) {
     let chartedTankId = null;
     let chartedPumpId = null;
     let chartedValveId = null;
+    let chartedHeatExchangerId = null;
     let chartedConnectionId = null;
     let monitorChartMode = 'empty';
     let expandedMonitorCharts = [null, null];
@@ -50,6 +56,7 @@ export function createMonitorController({ engine }) {
     });
 
     function getCompactChartContext() {
+        if (typeof document === 'undefined') return null;
         const canvas = document.getElementById('gaap-volume-chart');
         return canvas ? canvas.getContext('2d') : null;
     }
@@ -62,12 +69,14 @@ export function createMonitorController({ engine }) {
     }
 
     function isExpanded() {
+        if (typeof document === 'undefined') return false;
         const wrapper = document.getElementById('chart-wrapper');
         return wrapper?.classList.contains('maximized') === true && wrapper?.classList.contains('is-closing') === false;
     }
 
     function setCompactMonitorMode(mode) {
         monitorChartMode = mode;
+        if (typeof document === 'undefined') return;
         const chartWrapper = document.getElementById('chart-wrapper');
         if (chartWrapper) chartWrapper.dataset.monitorMode = mode;
     }
@@ -76,6 +85,7 @@ export function createMonitorController({ engine }) {
         if (component instanceof TanqueLogico) return 'tank';
         if (component instanceof BombaLogica) return 'pump';
         if (component instanceof ValvulaLogica) return 'valve';
+        if (component instanceof TrocadorCalorLogico) return 'heatExchanger';
         if (component instanceof ConnectionModel) return 'pipe';
         return null;
     }
@@ -84,6 +94,7 @@ export function createMonitorController({ engine }) {
         if (kind === 'tank') return t('chart.tank');
         if (kind === 'pump') return t('chart.pump');
         if (kind === 'valve') return t('chart.valve');
+        if (kind === 'heatExchanger') return t('chart.heatExchanger');
         if (kind === 'pipe') return t('chart.pipe');
         if (kind === 'pipeGroup') return t('chart.pipeGroup');
         return t('chart.component');
@@ -315,6 +326,7 @@ export function createMonitorController({ engine }) {
         chartedTankId = null;
         chartedPumpId = null;
         chartedValveId = null;
+        chartedHeatExchangerId = null;
         chartedConnectionId = null;
         refreshCompactPumpExportButton(null);
     }
@@ -338,6 +350,7 @@ export function createMonitorController({ engine }) {
         chartedTankId = component.id;
         chartedPumpId = null;
         chartedValveId = null;
+        chartedHeatExchangerId = null;
         chartedConnectionId = null;
         refreshCompactPumpExportButton(null);
     }
@@ -396,7 +409,7 @@ export function createMonitorController({ engine }) {
     }
 
     function ensurePumpExportButton(container, id) {
-        if (!container) return null;
+        if (!container || typeof document === 'undefined') return null;
 
         let button = document.getElementById(id);
         if (!button) {
@@ -412,11 +425,11 @@ export function createMonitorController({ engine }) {
             container.appendChild(button);
         }
 
-        button.classList.toggle('is-header-action', container.classList.contains('chart-compare-card-header'));
-        button.classList.toggle('is-compact-action', id === 'chart-pump-export-compact');
+        button.classList?.toggle('is-header-action', container.classList?.contains('chart-compare-card-header') === true);
+        button.classList?.toggle('is-compact-action', id === 'chart-pump-export-compact');
         button.textContent = 'JSON';
         button.title = t('chart.exportPumpJsonTitle');
-        button.setAttribute('aria-label', t('chart.exportPumpJson'));
+        button.setAttribute?.('aria-label', t('chart.exportPumpJson'));
         return button;
     }
 
@@ -425,17 +438,18 @@ export function createMonitorController({ engine }) {
 
         if (component instanceof BombaLogica) {
             button.hidden = false;
-            button.dataset.pumpId = component.id;
+            if (button.dataset) button.dataset.pumpId = component.id;
             button.title = t('chart.exportPumpJsonTitle');
-            button.setAttribute('aria-label', t('chart.exportPumpJson'));
+            button.setAttribute?.('aria-label', t('chart.exportPumpJson'));
             return;
         }
 
         button.hidden = true;
-        delete button.dataset.pumpId;
+        if (button.dataset) delete button.dataset.pumpId;
     }
 
     function refreshCompactPumpExportButton(component = null) {
+        if (typeof document === 'undefined') return;
         const button = ensurePumpExportButton(
             document.getElementById('chart-compact-stage'),
             'chart-pump-export-compact'
@@ -455,6 +469,7 @@ export function createMonitorController({ engine }) {
         chartedPumpId = component.id;
         chartedTankId = null;
         chartedValveId = null;
+        chartedHeatExchangerId = null;
         chartedConnectionId = null;
         refreshCompactPumpExportButton(component);
     }
@@ -475,6 +490,7 @@ export function createMonitorController({ engine }) {
         chartedValveId = component.id;
         chartedPumpId = null;
         chartedTankId = null;
+        chartedHeatExchangerId = null;
         chartedConnectionId = null;
         refreshCompactPumpExportButton(null);
     }
@@ -482,6 +498,57 @@ export function createMonitorController({ engine }) {
     function refreshValveMonitorChartInstance(chart, component) {
         if (!(component instanceof ValvulaLogica) || !chart) return;
         refreshValveChart(chart, component, { expanded: isExpanded() });
+    }
+
+    function createHeatExchangerMonitorChartInstance(ctx, component, { yAxisMode = null } = {}) {
+        const mode = yAxisMode || component?.tipoPerfilGrafico || 'position';
+        return createHeatExchangerChart(ctx, component, { expanded: isExpanded(), mode });
+    }
+
+    function createHeatExchangerCompactChart(component) {
+        const ctx = getCompactChartContext();
+        if (!ctx) return;
+
+        destroyCompactChart();
+        compactChart = createHeatExchangerMonitorChartInstance(ctx, component);
+
+        setCompactMonitorMode('heatExchanger');
+        chartedHeatExchangerId = component.id;
+        chartedTankId = null;
+        chartedPumpId = null;
+        chartedValveId = null;
+        chartedConnectionId = null;
+        refreshCompactPumpExportButton(null);
+    }
+
+    function refreshHeatExchangerMonitorChartInstance(chart, component, { yAxisMode = null } = {}) {
+        if (!(component instanceof TrocadorCalorLogico) || !chart) return;
+        const mode = yAxisMode || component?.tipoPerfilGrafico || chart.chartMode || 'position';
+        refreshHeatExchangerChart(chart, component, { expanded: isExpanded(), mode });
+    }
+
+    function refreshHeatExchangerCompactChart(component) {
+        if (!(component instanceof TrocadorCalorLogico) || !compactChart || monitorChartMode !== 'heatExchanger' || chartedHeatExchangerId !== component.id) {
+            return;
+        }
+
+        const expectedMode = component.tipoPerfilGrafico || 'position';
+        if (compactChart.chartMode && compactChart.chartMode !== expectedMode) {
+            createHeatExchangerCompactChart(component);
+            return;
+        }
+
+        refreshHeatExchangerMonitorChartInstance(compactChart, component);
+        refreshCompactPumpExportButton(null);
+    }
+
+    function refreshCompactHeatExchangerMonitorChart() {
+        if (monitorChartMode !== 'heatExchanger' || !chartedHeatExchangerId || !compactChart) return;
+
+        const hx = engine.componentes.find((component) => component.id === chartedHeatExchangerId);
+        if (hx instanceof TrocadorCalorLogico) {
+            refreshHeatExchangerCompactChart(hx);
+        }
     }
 
     function createPipeCompactChart(connection) {
@@ -496,6 +563,7 @@ export function createMonitorController({ engine }) {
         chartedPumpId = null;
         chartedValveId = null;
         chartedTankId = null;
+        chartedHeatExchangerId = null;
         refreshCompactPumpExportButton(null);
     }
 
@@ -581,12 +649,16 @@ export function createMonitorController({ engine }) {
         }
     }
 
-    function getValidDefaultYAxisMode(kind, storedMode) {
+    function getValidDefaultYAxisMode(kind, storedMode, component = null) {
         if (kind === 'pump') {
             return ['yHead', 'yEff', 'yNpsh'].includes(storedMode) ? storedMode : 'yHead';
         }
         if (kind === 'valve') {
             return ['yPressure', 'yCv'].includes(storedMode) ? storedMode : 'yPressure';
+        }
+        if (kind === 'heatExchanger') {
+            const fallback = component?.tipoPerfilGrafico || 'position';
+            return ['position', 'thermal'].includes(storedMode) ? storedMode : fallback;
         }
         return null;
     }
@@ -612,6 +684,12 @@ export function createMonitorController({ engine }) {
                 { value: 'yCv', label: t('chart.effectiveFlowCoefficient', { unit: unitLabel }) }
             ];
         }
+        if (kind === 'heatExchanger') {
+            return [
+                { value: 'position', label: t('chart.heatExchangerModePosition') },
+                { value: 'thermal', label: t('chart.heatExchangerModeThermal') }
+            ];
+        }
         return [];
     }
 
@@ -619,7 +697,7 @@ export function createMonitorController({ engine }) {
         if (!container) return null;
 
         let wrapper = document.getElementById(id);
-        if (kind !== 'pump' && kind !== 'valve') {
+        if (kind !== 'pump' && kind !== 'valve' && kind !== 'heatExchanger') {
             if (wrapper) wrapper.style.display = 'none';
             return null;
         }
@@ -630,7 +708,12 @@ export function createMonitorController({ engine }) {
             return null;
         }
 
-        const activeMode = chart?.yAxisMode || (kind === 'pump' ? 'yHead' : 'yPressure');
+        const fallbackDefault = kind === 'pump'
+            ? 'yHead'
+            : (kind === 'heatExchanger' ? (component?.tipoPerfilGrafico || 'position') : 'yPressure');
+        const activeMode = kind === 'heatExchanger'
+            ? (component?.tipoPerfilGrafico || chart?.yAxisMode || chart?.chartMode || 'position')
+            : (chart?.yAxisMode || chart?.chartMode || fallbackDefault);
         const selectedOption = expectedOptions.find(opt => opt.value === activeMode) || expectedOptions[0];
 
         if (!wrapper) {
@@ -644,19 +727,6 @@ export function createMonitorController({ engine }) {
             } else {
                 container.appendChild(wrapper);
             }
-
-            hiddenInput = wrapper.querySelector(`#${id}`);
-            hiddenInput.value = activeMode;
-            const label = wrapper.querySelector(`#${id}-label`);
-            label.textContent = selectedOption.label;
-            
-            optionsContainer.querySelectorAll('.custom-select-option').forEach(o => {
-                if (o.dataset.value === activeMode) {
-                    o.classList.add('selected');
-                } else {
-                    o.classList.remove('selected');
-                }
-            });
         }
 
         if (wrapper.parentElement !== container) {
@@ -669,6 +739,25 @@ export function createMonitorController({ engine }) {
         }
 
         wrapper.style.display = '';
+
+        const optionsHash = expectedOptions.map(opt => `${opt.value}:${opt.label}`).join('|');
+        if (wrapper.dataset?.optionsHash === optionsHash) {
+            const labelEl = wrapper.querySelector?.(`#${id}-label`);
+            if (labelEl && selectedOption) {
+                labelEl.textContent = selectedOption.label;
+            }
+            const opts = wrapper.querySelectorAll?.('.custom-select-option');
+            opts?.forEach(opt => {
+                opt.classList?.toggle('selected', opt.dataset?.value === activeMode);
+            });
+            if (wrapper.dataset) wrapper.dataset.activeMode = activeMode;
+            return wrapper;
+        }
+
+        if (wrapper.dataset) {
+            wrapper.dataset.optionsHash = optionsHash;
+            wrapper.dataset.activeMode = activeMode;
+        }
 
         const optionsHTML = expectedOptions
             .map(opt => `<li class="custom-select-option ${opt.value === activeMode ? 'selected' : ''}" data-value="${opt.value}">${opt.label}</li>`)
@@ -684,27 +773,36 @@ export function createMonitorController({ engine }) {
             </ul>
         `;
 
-        const trigger = wrapper.querySelector('.custom-select-trigger');
-        const options = wrapper.querySelectorAll('.custom-select-option');
+        const trigger = wrapper.querySelector?.('.custom-select-trigger');
+        const options = wrapper.querySelectorAll?.('.custom-select-option');
 
-        trigger.addEventListener('click', (e) => {
-            e.stopPropagation();
-            document.querySelectorAll('.custom-select-wrapper.open').forEach(w => {
-                if (w !== wrapper) w.classList.remove('open');
-            });
-            wrapper.classList.toggle('open');
-        });
-
-        options.forEach(opt => {
-            opt.addEventListener('click', (e) => {
+        if (trigger) {
+            trigger.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const newMode = opt.dataset.value;
-                wrapper.classList.remove('open');
-                if (newMode !== activeMode) {
-                    onSelect(newMode);
-                }
+                document.querySelectorAll?.('.custom-select-wrapper.open')?.forEach(w => {
+                    if (w !== wrapper) w.classList.remove('open');
+                });
+                wrapper.classList.toggle('open');
             });
-        });
+        }
+
+        if (options) {
+            options.forEach(opt => {
+                opt.addEventListener?.('click', (e) => {
+                    e.stopPropagation();
+                    const newMode = opt.dataset?.value;
+                    wrapper.classList.remove('open');
+                    const currentActive = wrapper.dataset?.activeMode;
+                    if (newMode && newMode !== currentActive) {
+                        if (wrapper.dataset) wrapper.dataset.activeMode = newMode;
+                        const labelEl = wrapper.querySelector?.(`#${id}-label`);
+                        if (labelEl) labelEl.textContent = opt.textContent?.trim?.() || opt.textContent;
+                        options.forEach(o => o.classList?.toggle('selected', o.dataset?.value === newMode));
+                        onSelect(newMode);
+                    }
+                });
+            });
+        }
 
         return wrapper;
     }
@@ -730,18 +828,26 @@ export function createMonitorController({ engine }) {
             chart,
             (newMode) => {
                 expandedChartYAxisModes[index] = newMode;
+                if (entry.component instanceof TrocadorCalorLogico) {
+                    entry.component.setTipoPerfilGrafico?.(newMode);
+                    const propSelect = document.getElementById('input-hx-chart-mode');
+                    if (propSelect) propSelect.value = newMode;
+                }
                 if (expandedMonitorCharts[index]) {
                     expandedMonitorCharts[index].destroy();
                     expandedMonitorCharts[index] = null;
                 }
                 refreshExpandedMonitorCharts();
+                if (entry.component instanceof TrocadorCalorLogico) {
+                    refreshHeatExchangerCompactChart(entry.component);
+                }
             },
             entry.component
         );
     }
 
     function refreshPresentation() {
-        if (!compactChart) return;
+        if (typeof document === 'undefined' || !compactChart) return;
 
         if (monitorChartMode === 'pump') {
             const bomba = engine.componentes.find((component) => component.id === chartedPumpId);
@@ -757,6 +863,16 @@ export function createMonitorController({ engine }) {
             const valve = engine.componentes.find((component) => component.id === chartedValveId);
             if (valve instanceof ValvulaLogica) {
                 refreshValveCompactChart(valve);
+            } else {
+                createEmptyCompactChart();
+            }
+            return;
+        }
+
+        if (monitorChartMode === 'heatExchanger') {
+            const hx = engine.componentes.find((component) => component.id === chartedHeatExchangerId);
+            if (hx instanceof TrocadorCalorLogico) {
+                refreshHeatExchangerCompactChart(hx);
             } else {
                 createEmptyCompactChart();
             }
@@ -789,6 +905,7 @@ export function createMonitorController({ engine }) {
     }
 
     function getExpandedChartElements(index) {
+        if (typeof document === 'undefined') return {};
         const slot = index + 1;
         const card = document.getElementById(`chart-compare-card-${slot}`);
         return {
@@ -929,7 +1046,8 @@ export function createMonitorController({ engine }) {
         }
     }
 
-    function getExpandedChartSubtitle(entry) {
+    function getExpandedChartSubtitle(entry, index = -1) {
+        if (!entry) return '';
         if (entry.kind === 'tank') {
             return `${t('chart.volume')} (${getUnitSymbol('volume')})`;
         }
@@ -938,6 +1056,19 @@ export function createMonitorController({ engine }) {
         }
         if (entry.kind === 'valve') {
             return t('chart.valveSubtitle');
+        }
+        if (entry.kind === 'heatExchanger') {
+            const chartEntries = getMonitorChartEntries();
+            const activeIndex = index >= 0 ? index : chartEntries.indexOf(entry);
+            const chart = activeIndex >= 0 ? expandedMonitorCharts[activeIndex] : null;
+            const mode = entry.component?.tipoPerfilGrafico
+                || (activeIndex >= 0 ? expandedChartYAxisModes[activeIndex] : null)
+                || chart?.chartMode
+                || 'position';
+            return t('chart.heatExchangerSubtitle', {
+                tempUnit: getUnitSymbol('temperature'),
+                mode
+            });
         }
         if (entry.kind === 'pipe') {
             return t('chart.pipeSubtitle', {
@@ -994,6 +1125,10 @@ export function createMonitorController({ engine }) {
             return createValveMonitorChartInstance(ctx, component, { yAxisMode });
         }
 
+        if (component instanceof TrocadorCalorLogico) {
+            return createHeatExchangerMonitorChartInstance(ctx, component, { yAxisMode });
+        }
+
         if (component instanceof ConnectionModel) {
             return createPipeMonitorChartInstance(ctx, component);
         }
@@ -1036,12 +1171,25 @@ export function createMonitorController({ engine }) {
 
             if (!entry) {
                 elements.card.hidden = index > 0;
+                if (index > 0) {
+                    elements.card.style.display = 'none';
+                } else {
+                    elements.card.style.removeProperty('display');
+                }
                 if (dismissButton) dismissButton.hidden = true;
                 setPumpExportButtonState(exportButton, null);
                 ensureExpandedChartAxisSelector(elements, index, null);
                 if (elements.title) elements.title.textContent = t('chart.waiting');
                 if (elements.subtitle) elements.subtitle.textContent = '';
                 if (elements.canvasWrap) elements.canvasWrap.hidden = true;
+                if (elements.canvas) {
+                    delete elements.canvas.dataset.monitorEntryId;
+                    delete elements.canvas.dataset.monitorEntryKind;
+                    const ctx = elements.canvas.getContext?.('2d');
+                    if (ctx && elements.canvas.width && elements.canvas.height) {
+                        ctx.clearRect(0, 0, elements.canvas.width, elements.canvas.height);
+                    }
+                }
                 if (elements.empty) {
                     elements.empty.hidden = false;
                     elements.empty.textContent = index === 0
@@ -1052,10 +1200,11 @@ export function createMonitorController({ engine }) {
             }
 
             elements.card.hidden = false;
+            elements.card.style.removeProperty('display');
             if (dismissButton) dismissButton.hidden = false;
             setPumpExportButtonState(exportButton, entry.component);
             if (elements.title) elements.title.textContent = getMonitorChartTitle(entry);
-            if (elements.subtitle) elements.subtitle.textContent = getExpandedChartSubtitle(entry);
+            if (elements.subtitle) elements.subtitle.textContent = getExpandedChartSubtitle(entry, index);
             if (elements.canvasWrap) elements.canvasWrap.hidden = false;
             if (elements.empty) elements.empty.hidden = true;
             if (elements.canvas) {
@@ -1063,7 +1212,7 @@ export function createMonitorController({ engine }) {
                 elements.canvas.dataset.monitorEntryKind = entry.kind;
             }
 
-            const activeMode = getValidDefaultYAxisMode(entry.kind, expandedChartYAxisModes[index]);
+            const activeMode = getValidDefaultYAxisMode(entry.kind, expandedChartYAxisModes[index], entry.component);
             expandedChartYAxisModes[index] = activeMode;
 
             expandedMonitorCharts[index] = createExpandedMonitorChart(elements.canvas, entry.component, { yAxisMode: activeMode });
@@ -1087,9 +1236,14 @@ export function createMonitorController({ engine }) {
         const shouldRebuild = activeEntryCount !== activeChartCount || entries.some((entry, index) => {
             const elements = getExpandedChartElements(index);
             if (!entry) return Boolean(expandedMonitorCharts[index]);
-            return !expandedMonitorCharts[index]
+            const chart = expandedMonitorCharts[index];
+            const expectedMode = entry.kind === 'heatExchanger'
+                ? (entry.component?.tipoPerfilGrafico || expandedChartYAxisModes[index] || 'position')
+                : expandedChartYAxisModes[index];
+            return !chart
                 || elements.canvas?.dataset.monitorEntryId !== String(entry.id)
-                || elements.canvas?.dataset.monitorEntryKind !== entry.kind;
+                || elements.canvas?.dataset.monitorEntryKind !== entry.kind
+                || (chart.chartMode && chart.chartMode !== expectedMode);
         });
 
         if (shouldRebuild) {
@@ -1110,7 +1264,7 @@ export function createMonitorController({ engine }) {
             if (dismissButton) dismissButton.hidden = false;
             setPumpExportButtonState(exportButton, entry.component);
             if (elements.title) elements.title.textContent = getMonitorChartTitle(entry);
-            if (elements.subtitle) elements.subtitle.textContent = getExpandedChartSubtitle(entry);
+            if (elements.subtitle) elements.subtitle.textContent = getExpandedChartSubtitle(entry, index);
 
             ensureExpandedChartAxisSelector(elements, index, entry);
 
@@ -1120,6 +1274,10 @@ export function createMonitorController({ engine }) {
                 refreshPumpMonitorChartInstance(chart, entry.component);
             } else if (entry.component instanceof ValvulaLogica) {
                 refreshValveMonitorChartInstance(chart, entry.component);
+            } else if (entry.component instanceof TrocadorCalorLogico) {
+                const activeMode = entry.component.tipoPerfilGrafico || expandedChartYAxisModes[index] || 'position';
+                expandedChartYAxisModes[index] = activeMode;
+                refreshHeatExchangerMonitorChartInstance(chart, entry.component, { yAxisMode: activeMode });
             } else if (entry.component instanceof ConnectionModel) {
                 refreshPipeMonitorChartInstance(chart, entry.component);
             } else if (Array.isArray(entry.component)) {
@@ -1175,6 +1333,7 @@ export function createMonitorController({ engine }) {
         refreshCompactTankMonitorChart();
         refreshCompactPumpMonitorChart();
         refreshCompactValveMonitorChart();
+        refreshCompactHeatExchangerMonitorChart();
         refreshCompactPipeMonitorChart();
         refreshExpandedMonitorCharts();
     }
@@ -1190,6 +1349,13 @@ export function createMonitorController({ engine }) {
         if (!(component instanceof ValvulaLogica)) return;
 
         refreshValveCompactChart(component);
+        if (isExpanded()) refreshExpandedMonitorCharts();
+    }
+
+    function refreshHeatExchangerMonitorCharts(component) {
+        if (!(component instanceof TrocadorCalorLogico)) return;
+
+        refreshHeatExchangerCompactChart(component);
         if (isExpanded()) refreshExpandedMonitorCharts();
     }
 
@@ -1236,6 +1402,17 @@ export function createMonitorController({ engine }) {
             return;
         }
 
+        if (component instanceof TrocadorCalorLogico) {
+            rememberMonitorChartComponent(component);
+            if (monitorChartMode !== 'heatExchanger' || chartedHeatExchangerId !== component.id) {
+                createHeatExchangerCompactChart(component);
+            } else {
+                refreshHeatExchangerCompactChart(component);
+            }
+            if (isExpanded()) renderExpandedMonitorCharts();
+            return;
+        }
+
         if (connection || !(component instanceof TanqueLogico)) {
             if (monitorChartMode !== 'empty') {
                 createEmptyCompactChart();
@@ -1263,13 +1440,33 @@ export function createMonitorController({ engine }) {
         refreshMonitorCharts({ appendTankSamples });
     }
 
+    subscribeUnitPreferences(() => {
+        refreshPresentation();
+        if (isExpanded()) refreshExpandedMonitorCharts();
+    });
+
+    function setup() {
+        createEmptyCompactChart();
+        if (typeof document !== 'undefined' && typeof document.addEventListener === 'function' && typeof window !== 'undefined' && !window.__globalChartAxisCustomSelectListenerAdded) {
+            document.addEventListener('click', (e) => {
+                if (!e.target?.closest?.('.chart-axis-custom-select')) {
+                    document.querySelectorAll?.('.chart-axis-custom-select.open')?.forEach(w => {
+                        w.classList.remove('open');
+                    });
+                }
+            });
+            window.__globalChartAxisCustomSelectListenerAdded = true;
+        }
+    }
+
     return {
-        setup: createEmptyCompactChart,
+        setup,
         updateLayout,
         refreshSelection,
         refreshPresentation,
         refreshPump: refreshPumpMonitorCharts,
         refreshValve: refreshValveMonitorCharts,
+        refreshHeatExchanger: refreshHeatExchangerMonitorCharts,
         handleSimulationUpdate
     };
 }

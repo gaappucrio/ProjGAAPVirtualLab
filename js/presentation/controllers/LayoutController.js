@@ -95,6 +95,37 @@ export function setupLayoutController({ onChartLayoutChange } = {}) {
     let resizeState = null;
     let resizeFrame = 0;
     let monitorTransitionTimer = 0;
+    let chartPlaceholder = null;
+
+    const reparentChartToSandbox = () => {
+        if (!chartWrapper || !sandboxContainer) return;
+        if (chartWrapper.parentElement === sandboxContainer) return;
+
+        if (!chartPlaceholder) {
+            chartPlaceholder = document.createElement('div');
+            chartPlaceholder.id = 'chart-wrapper-placeholder';
+            chartPlaceholder.style.display = 'none';
+        }
+
+        if (chartWrapper.parentNode) {
+            chartWrapper.parentNode.insertBefore(chartPlaceholder, chartWrapper);
+        }
+        sandboxContainer.appendChild(chartWrapper);
+    };
+
+    const restoreChartToSidebar = () => {
+        if (!chartWrapper) return;
+        if (chartPlaceholder && chartPlaceholder.parentNode) {
+            chartPlaceholder.parentNode.insertBefore(chartWrapper, chartPlaceholder);
+            chartPlaceholder.remove();
+            chartPlaceholder = null;
+        } else if (chartWrapper.parentElement === sandboxContainer) {
+            const propertiesContent = panelRight?.querySelector('.side-panel-content');
+            if (propertiesContent) {
+                propertiesContent.appendChild(chartWrapper);
+            }
+        }
+    };
 
     const getMonitorViewportMargin = () => (
         window.innerWidth <= 960 ? MOBILE_MONITOR_MARGIN_PX : DESKTOP_MONITOR_MARGIN_PX
@@ -195,16 +226,20 @@ export function setupLayoutController({ onChartLayoutChange } = {}) {
     };
 
     const openDetailedMonitor = () => {
-        if (!chartWrapper || chartWrapper.classList.contains('maximized')) return;
+        if (!chartWrapper) return;
+        if (chartWrapper.classList.contains('maximized') && !chartWrapper.classList.contains('is-closing')) return;
 
         clearMonitorTransitionTimer();
         ensureResizeHandle();
+        reparentChartToSandbox();
         chartWrapper.classList.remove('is-closing');
         chartWrapper.classList.add('maximized', 'is-opening');
         sandboxContainer?.classList.add('monitor-detailed-open');
         if (chartMaxHeader) chartMaxHeader.style.display = 'flex';
+        updateFloatingLayoutMetrics();
         updateChartButtonLabels();
         clampCurrentMonitorHeight();
+        onChartLayoutChange?.();
 
         monitorTransitionTimer = window.setTimeout(() => {
             chartWrapper.classList.remove('is-opening');
@@ -215,6 +250,7 @@ export function setupLayoutController({ onChartLayoutChange } = {}) {
 
     const closeDetailedMonitor = () => {
         if (!chartWrapper?.classList.contains('maximized')) return;
+        if (chartWrapper.classList.contains('is-closing')) return;
 
         clearMonitorTransitionTimer();
         finishResize();
@@ -227,13 +263,16 @@ export function setupLayoutController({ onChartLayoutChange } = {}) {
             chartWrapper.classList.remove('maximized', 'is-closing');
             sandboxContainer?.classList.remove('monitor-detailed-open');
             if (chartMaxHeader) chartMaxHeader.style.display = 'none';
+            restoreChartToSidebar();
+            updateFloatingLayoutMetrics();
             updateChartButtonLabels();
             onChartLayoutChange?.();
+            monitorTransitionTimer = 0;
         }, MONITOR_TRANSITION_MS);
     };
 
     const toggleChartMaximize = () => {
-        if (chartWrapper?.classList.contains('maximized')) {
+        if (chartWrapper?.classList.contains('maximized') && !chartWrapper?.classList.contains('is-closing')) {
             closeDetailedMonitor();
             return;
         }
@@ -243,6 +282,11 @@ export function setupLayoutController({ onChartLayoutChange } = {}) {
 
     btnMaxChart?.addEventListener('click', toggleChartMaximize);
     btnCloseMaxChart?.addEventListener('click', toggleChartMaximize);
+    chartWrapper?.addEventListener('transitionend', (event) => {
+        if (event.target === chartWrapper && (event.propertyName === 'left' || event.propertyName === 'right' || event.propertyName === 'height')) {
+            onChartLayoutChange?.();
+        }
+    });
     window.addEventListener('resize', () => {
         updateFloatingLayoutMetrics();
         clampCurrentMonitorHeight();

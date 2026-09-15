@@ -45,7 +45,10 @@ const POSITION_ORIGIN_Y = 120;
 const DWSIM_EQUIPMENT_MAP = {
     Pump: 'pump',
     Valve: 'valve',
-    Tank: 'tank'
+    Tank: 'tank',
+    HeatExchanger: 'heat_exchanger',
+    Cooler: 'heat_exchanger',
+    Heater: 'heat_exchanger'
 };
 
 const SOURCE_COMPONENT_TYPE = 'source';
@@ -460,6 +463,23 @@ function sinkParameters() {
     };
 }
 
+function heatExchangerParameters(simEl) {
+    const ua = queryNumeric(simEl, 'UA', 0)
+        || queryNumeric(simEl, 'OverallHTC_Area', 0)
+        || 5000;
+    const tempServico = queryNumeric(simEl, 'ServiceTemperature', 0)
+        || queryNumeric(simEl, 'UtilityTemperature', 0)
+        || 80;
+    const perdaK = queryNumeric(simEl, 'MinorLoss', 0) || 1.2;
+
+    return {
+        temperaturaServicoC: tempServico,
+        uaWPorK: Math.max(10, ua),
+        perdaLocalK: perdaK,
+        efetividadeMaxima: 0.95
+    };
+}
+
 function pipeParameters(simEl) {
     // DWSIM Pipe: seções serializadas dentro de <Sections>.
     // Campos: <Comprimento> (m), <DI> (pol), <DE> (pol), <PipeWallRugosity> (m).
@@ -583,14 +603,19 @@ function defaultEndpointFor(componentType, portType) {
             out: { offsetX: 80, offsetY: 200, floorOffsetY: 200, dynamicHeight: 'tank_outlet' }
         },
         heat_exchanger: {
-            in: { offsetX: -10, offsetY: 30, floorOffsetY: 0, dynamicHeight: null },
-            out: { offsetX: 90, offsetY: 30, floorOffsetY: 0, dynamicHeight: null }
+            in: { offsetX: -10, offsetY: 15, floorOffsetY: 0, dynamicHeight: null },
+            out: { offsetX: 90, offsetY: 15, floorOffsetY: 0, dynamicHeight: null },
+            in1: { offsetX: -10, offsetY: 15, floorOffsetY: 0, dynamicHeight: null },
+            out1: { offsetX: 90, offsetY: 15, floorOffsetY: 0, dynamicHeight: null },
+            in2: { offsetX: -10, offsetY: 45, floorOffsetY: 0, dynamicHeight: null },
+            out2: { offsetX: 90, offsetY: 45, floorOffsetY: 0, dynamicHeight: null }
         }
     };
 
     const defaults = map[componentType]?.[portType] || { offsetX: 0, offsetY: 0, floorOffsetY: 0, dynamicHeight: null };
     return {
-        portType,
+        portId: portType,
+        portType: (portType === 'in1' || portType === 'in2') ? 'in' : ((portType === 'out1' || portType === 'out2') ? 'out' : portType),
         offsetX: defaults.offsetX,
         offsetY: defaults.offsetY,
         floorOffsetY: defaults.floorOffsetY,
@@ -609,6 +634,7 @@ function defaultTagFor(gaapType) {
         case 'pump': return 'P';
         case 'valve': return 'V';
         case 'tank': return 'T';
+        case 'heat_exchanger': return 'TC';
         case 'source': return 'Entrada';
         case 'sink': return 'Saída';
         default: return 'Cmp';
@@ -620,6 +646,7 @@ function extractPropertiesFor(gaapType, simObj) {
     if (gaapType === 'pump') return pumpParameters(element);
     if (gaapType === 'valve') return valveParameters(element);
     if (gaapType === 'tank') return tankParameters(element);
+    if (gaapType === 'heat_exchanger') return heatExchangerParameters(element);
     if (gaapType === 'source') return sourceParameters(element);
     if (gaapType === 'sink') return sinkParameters();
     return null;
@@ -726,35 +753,46 @@ export function translateDwsimToWorkspace(parsed) {
 
     const findReachableEquipment = (startName) => {
         const results = [];
-        const queue = [{ current: startName, pipes: [] }];
-        const localVisited = new Set([startName]);
+        const startGObj = graphicObjects.get(startName);
+        if (!startGObj) return results;
 
-        while (queue.length > 0) {
-            const { current, pipes } = queue.shift();
-            const gObj = graphicObjects.get(current);
-            if (!gObj) continue;
+        startGObj.outputs.forEach((initialOutput) => {
+            const sourceConnIndex = initialOutput.connIndex || 0;
+            const queue = [{ current: initialOutput.targetName, previous: startName, pipes: [] }];
+            const localVisited = new Set([startName, initialOutput.targetName]);
 
-            for (const output of gObj.outputs) {
-                const next = output.targetName;
-                if (localVisited.has(next)) continue;
-                localVisited.add(next);
-
-                const nextGObj = graphicObjects.get(next);
+            while (queue.length > 0) {
+                const { current, previous, pipes } = queue.shift();
+                const nextGObj = graphicObjects.get(current);
                 if (!nextGObj) continue;
 
-                if (equipmentNames.has(next) && next !== startName) {
-                    results.push({ target: next, pipes: [...pipes] });
+                if (equipmentNames.has(current) && current !== startName) {
+                    const targetConn = nextGObj.inputs.find((inp) => inp.sourceName === previous);
+                    const targetConnIndex = targetConn ? (targetConn.connIndex || 0) : 0;
+                    results.push({
+                        target: current,
+                        pipes: [...pipes],
+                        sourceConnIndex,
+                        targetConnIndex
+                    });
                     continue; // não atravessa o equipamento
                 }
 
                 const newPipes = [...pipes];
                 if (nextGObj.objectType === 'Pipe') {
-                    const simObj = simObjects.get(next);
+                    const simObj = simObjects.get(current);
                     if (simObj) newPipes.push(simObj);
                 }
-                queue.push({ current: next, pipes: newPipes });
+
+                for (const output of nextGObj.outputs) {
+                    const next = output.targetName;
+                    if (localVisited.has(next)) continue;
+                    localVisited.add(next);
+                    queue.push({ current: next, previous: current, pipes: newPipes });
+                }
             }
-        }
+        });
+
         return results;
     };
 
@@ -764,12 +802,12 @@ export function translateDwsimToWorkspace(parsed) {
         const sourceType = componentTypeByDwsimName.get(startName);
         if (!sourceId) return;
 
-        reachable.forEach(({ target, pipes }) => {
+        reachable.forEach(({ target, pipes, sourceConnIndex = 0, targetConnIndex = 0 }) => {
             const targetId = componentByDwsimName.get(target);
             const targetType = componentTypeByDwsimName.get(target);
             if (!targetId) return;
 
-            const pairKey = `${sourceId}->${targetId}`;
+            const pairKey = `${sourceId}:${sourceConnIndex}->${targetId}:${targetConnIndex}`;
             if (visitedPairs.has(pairKey)) return;
             visitedPairs.add(pairKey);
 
@@ -777,11 +815,18 @@ export function translateDwsimToWorkspace(parsed) {
                 ? pipeParameters(pipes[0].element)
                 : defaultPipeParams();
 
+            const sourcePort = sourceType === 'heat_exchanger'
+                ? (sourceConnIndex === 1 ? 'out2' : 'out1')
+                : 'out';
+            const targetPort = targetType === 'heat_exchanger'
+                ? (targetConnIndex === 1 ? 'in2' : 'in1')
+                : 'in';
+
             connections.push({
                 sourceId,
                 targetId,
-                sourceEndpoint: defaultSourceEndpoint(sourceType),
-                targetEndpoint: defaultTargetEndpoint(targetType),
+                sourceEndpoint: defaultEndpointFor(sourceType, sourcePort),
+                targetEndpoint: defaultEndpointFor(targetType, targetPort),
                 diameterM: pipeParams.diameterM,
                 roughnessMm: pipeParams.roughnessMm,
                 extraLengthM: pipeParams.extraLengthM,

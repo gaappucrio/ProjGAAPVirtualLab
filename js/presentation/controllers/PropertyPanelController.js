@@ -73,7 +73,8 @@ export function setupPropertyPanelController({ engine, monitorController } = {})
     function renderComponentProperties(component) {
         renderComponentPropertiesPresenter({
             propContent: getPropContent(),
-            component
+            component,
+            onRerender: renderCurrentProperties
         });
     }
 

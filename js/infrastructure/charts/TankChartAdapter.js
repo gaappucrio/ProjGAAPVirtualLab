@@ -5,7 +5,7 @@ import { getFluidVisualStyle } from '../rendering/FluidVisualStyle.js';
 const DEFAULT_TANK_CHART_LINE_COLOR = '#3498db';
 
 function getGridColors() {
-    const isDark = document.body.classList.contains('theme-dark');
+    const isDark = typeof document !== 'undefined' && document.body?.classList?.contains('theme-dark');
     return {
         grid: isDark ? '#3a4a5c' : '#e1e8ed',
         tick: isDark ? '#93a8b8' : '#6c8392'
