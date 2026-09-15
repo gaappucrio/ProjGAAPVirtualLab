@@ -286,21 +286,37 @@ Os trocadores de calor do laboratório integram o **Método Efetividade-NTU ($\e
    As grandezas de temperatura podem ser exibidas em Celsius (°C), Fahrenheit (°F) ou Kelvin (K, com $T_{\text{K}} = T_{^\circ\text{C}} + 273{,}15$).
 
 7. **Diferença Média Logarítmica de Temperatura (LMTD) e Fator de Correção $F_T$:**
-   $$\text{LMTD} = \frac{\Delta T_a - \Delta T_b}{\ln(\Delta T_a / \Delta T_b)}$$
-   - **Contracorrente:** $\Delta T_a = T_{1,\text{in}} - T_{2,\text{out}}$, $\Delta T_b = T_{1,\text{out}} - T_{2,\text{in}}$
-   - **Co-corrente (Paralelo):** $\Delta T_a = T_{1,\text{in}} - T_{2,\text{in}}$, $\Delta T_b = T_{1,\text{out}} - T_{2,\text{out}}$
-   - **Utilidade:** $\Delta T_a = |T_{\text{in}} - T_{\text{serviço}}|$, $\Delta T_b = |T_{\text{out}} - T_{\text{serviço}}|$
 
-   A taxa de transferência global relaciona-se com o LMTD por:
-   $$\dot{Q} = U \cdot A \cdot F_T \cdot \text{LMTD} = UA \cdot F_T \cdot \text{LMTD}$$
-   *(Para escoamento puro de passe único em contracorrente ou paralelo, $F_T = 1{,}0$)*.
+   - **Conceito Físico da LMTD:**
+     A **LMTD** (*Log Mean Temperature Difference*, ou Diferença Média Logarítmica de Temperatura) representa a **força motriz térmica efetiva média** para a transferência de calor ao longo de todo o trocador. Em cada ponto infinitesimal da área de troca superficial $dA$, a taxa local de calor trocado obedece à Lei do Resfriamento de Newton:
+     $$dQ = U \cdot (T_{\text{quente}} - T_{\text{frio}}) \cdot dA = U \cdot \Delta T(z) \cdot dA$$
+     Como as temperaturas dos dois fluidos mudam continuamente à medida que eles percorrem o equipamento, o gradiente $\Delta T(z)$ não é constante. A LMTD é a diferença média de temperatura equivalente que, se aplicada uniformemente sobre toda a área $A$, resultaria exatamente na mesma taxa total de transferência de calor observada $\dot{Q}$.
+
+   - **Por que utilizar a Média Logarítmica e não a Média Aritmética simples?**
+     A variação de temperatura dos fluidos ao longo do trocador **não é linear**, mas sim **exponencial** (resultado da integração das equações diferenciais de balanço de energia). 
+     A média aritmética simples entre as diferenças de temperatura nos extremos, $\Delta T_{\text{am}} = \frac{\Delta T_a + \Delta T_b}{2}$, é matematicamente sempre maior ou igual à média logarítmica ($\Delta T_{\text{am}} \ge \text{LMTD}$).
+     Portanto, se utilizássemos a média aritmética simples, estaríamos **superestimando a força motriz real**, o que levaria a subdimensionar a área $A$ do equipamento, projetando trocadores incapazes de fornecer a carga térmica necessária na prática. A média aritmética só coincide com a LMTD na condição particular em que $\Delta T_a = \Delta T_b$.
+
+   - **Fórmula Analítica da LMTD:**
+     $$\text{LMTD} = \frac{\Delta T_a - \Delta T_b}{\ln\left(\dfrac{\Delta T_a}{\Delta T_b}\right)}$$
+     - **Contracorrente:** $\Delta T_a = T_{1,\text{in}} - T_{2,\text{out}}$, $\Delta T_b = T_{1,\text{out}} - T_{2,\text{in}}$
+     - **Co-corrente (Paralelo):** $\Delta T_a = T_{1,\text{in}} - T_{2,\text{in}}$, $\Delta T_b = T_{1,\text{out}} - T_{2,\text{out}}$
+     - **Utilidade:** $\Delta T_a = |T_{\text{in}} - T_{\text{serviço}}|$, $\Delta T_b = |T_{\text{out}} - T_{\text{serviço}}|$
+
+   - **Relação com a Carga Térmica Global:**
+     $$\dot{Q} = U \cdot A \cdot F_T \cdot \text{LMTD} = UA \cdot F_T \cdot \text{LMTD}$$
+     Onde $F_T$ é o fator de correção adimensional que compensa arranjos que se desviam do contracorrente puro (em trocadores de passe único contracorrente ou paralelo puro, $F_T = 1{,}0$).
 
 8. **Dimensionamento por Área ($A$) e Coeficiente Global ($U$):**
    O produto de condutância térmica é desacoplado entre área superficial e convecção/condução global:
    $$UA = U \cdot A \quad [\text{W/K}], \qquad U = \frac{UA}{A} \quad [\text{W/m}^2\cdot\text{K}]$$
+   Isolando a área necessária para uma dada carga térmica $\dot{Q}$:
+   $$A = \frac{\dot{Q}}{U \cdot F_T \cdot \text{LMTD}}$$
+   Evidenciando que, quanto maior a LMTD (maior força motriz térmica), menor a área superficial $A$ exigida para transferir a mesma quantidade de calor (trocador mais compacto e econômico).
 
 9. **Diferença Mínima de Temperatura (Pinch Point):**
    $$\Delta T_{\min} = \min(\Delta T_a, \Delta T_b) \quad [^\circ\text{C}]$$
+   O **Pinch Point** (ponto de estrangulamento térmico) indica a menor aproximação pontual de temperatura entre os dois fluidos dentro do trocador. É um parâmetro crítico de síntese e integração térmica: se $\Delta T_{\min} \to 0$, a força motriz residual diminui drasticamente, a LMTD cai e a área de troca necessária tenderia ao infinito ($A \to \infty$). No GAAP Virtual Lab, tanto a **LMTD** quanto o **Pinch Point** são computados em tempo de execução e disponibilizados na aba **Avançado** do painel de propriedades do trocador.
 
 10. **Perfil Térmico ($T \times Q$):**
     Curvas de temperatura em função da carga térmica transferida $Q$ ($\text{kW}$), variando de $0$ até $Q_{\max} = C_{\min} \cdot |T_{1,\text{in}} - T_{2,\text{in}}| / 1000$:

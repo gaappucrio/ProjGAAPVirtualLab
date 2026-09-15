@@ -392,7 +392,18 @@ $$UA = U \cdot A \quad [\text{W/K}]$$
 - **$UA$ (Condutância Térmica Global, $\text{W/K}$):** Produto usado diretamente nas equações de $NTU$. Quando o usuário ajusta a área $A$ mantendo $U$, o $UA$ é reescalonado proporcionalmente ($UA = U \cdot A$); se o usuário altera o $UA$ diretamente, o coeficiente $U$ correspondente é recalculado ($U = UA / A$).
 
 #### Diferença Média Logarítmica de Temperatura (LMTD) e Pinch Point
-Para análise clássica de projeto e verificação de convergência térmica com simuladores de processos, o modelo calcula a Diferença Média Logarítmica de Temperatura ($\text{LMTD}$ ou $\Delta T_{lm}$):
+
+##### O que é a LMTD (Conceito e Fundamentação Física):
+A **Diferença Média Logarítmica de Temperatura** ($\text{LMTD}$ ou $\Delta T_{lm}$) é a **força motriz térmica efetiva média** atuante entre duas correntes de fluido ao longo de toda a extensão do trocador de calor.
+Em qualquer ponto infinitesimal da área de transferência de calor $dA$, a taxa local de troca térmica segue a Lei de Newton:
+$$dQ = U \cdot (T_{\text{quente}} - T_{\text{frio}}) \cdot dA = U \cdot \Delta T(z) \cdot dA$$
+
+Como os fluidos aquecem e resfriam ao longo do percurso, o diferencial de temperatura $\Delta T$ varia ponto a ponto. A LMTD representa o valor médio exato desse diferencial de temperatura que, multiplicado pelo coeficiente global $U$ e pela área total $A$, produz a carga térmica total transferida $Q_{\text{térmico}}$.
+
+##### Por que a média é Logarítmica e não Aritmética?
+A variação das temperaturas dos fluidos ao longo da trajetória é governada por equações diferenciais lineares de conservação de energia cuja solução analítica é **exponencial**, e não linear.
+Se calculássemos a média aritmética simples entre os extremos, $\Delta T_{\text{am}} = \frac{\Delta T_a + \Delta T_b}{2}$, obteríamos invariavelmente $\Delta T_{\text{am}} \ge \text{LMTD}$.
+Utilizar a média aritmética superestimaria a capacidade térmica do trocador e levaria ao subdimensionamento da área necessária em projetos industriais. A integração analítica de $dQ / \Delta T = U \, dA$ ao longo do comprimento resulta na formulação logarítmica rigorosa:
 
 $$\text{LMTD} = \begin{cases} \dfrac{\Delta T_a - \Delta T_b}{\ln\left(\dfrac{\Delta T_a}{\Delta T_b}\right)}, & \Delta T_a \ne \Delta T_b \text{ e } \Delta T_a, \Delta T_b > 0 \\[10pt] \Delta T_a, & |\Delta T_a - \Delta T_b| < 10^{-6} \\[10pt] \max(\Delta T_a, \Delta T_b), & \Delta T_a \le 0 \text{ ou } \Delta T_b \le 0 \end{cases}$$
 
@@ -407,11 +418,12 @@ Onde as diferenças de temperatura nos extremos ($\Delta T_a$ e $\Delta T_b$) de
 ##### Relação com a Carga Térmica Global e Fator de Correção $F_T$:
 $$Q_{\text{térmico}} = U \cdot A \cdot F_T \cdot \text{LMTD} = UA \cdot F_T \cdot \text{LMTD}$$
 
-Em trocadores de passe único contracorrente e co-corrente puros sem cruzamento multipasse de carcaça e tubos, o fator de correção é $F_T = 1{,}0$.
+Em trocadores de passe único contracorrente e co-corrente puros sem cruzamento multipasse de carcaça e tubos, o fator de correção é $F_T = 1{,}0$. Para arranjos multipasse (ex.: casco e tubo com múltiplos passes nos tubos), $F_T < 1{,}0$ quantifica a penalidade térmica imposta pelas regiões onde os fluidos co-escoam paralelamente.
 
 ##### Diferença Mínima de Temperatura (Pinch Point):
 O ponto de aproximação térmico mais crítico entre as duas correntes ao longo do trocador é medido pelo $\Delta T_{\min}$:
 $$\Delta T_{\min} = \min(\Delta T_a, \Delta T_b) \quad [^\circ\text{C}]$$
+O **Pinch Point** representa o gargalo termodinâmico do trocador: quanto menor o Pinch Point, mais próximas as temperaturas das correntes se encontram em um dos extremos, exigindo áreas de troca cada vez maiores ($A \propto 1/\text{LMTD}$) para transferir o calor. No painel de propriedades, tanto a LMTD quanto o Pinch Point são atualizados continuamente na aba **Avançado**.
 
 #### Perfis de Temperatura no Monitoramento (Espacial e Térmico)
 O monitor detalhado e o gráfico compacto oferecem dois modos visuais de diagnóstico térmico:

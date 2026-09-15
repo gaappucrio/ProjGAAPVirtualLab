@@ -1032,6 +1032,9 @@ A seguir estão as funções/chaves de alto valor do sistema, com seus objetivos
 
 - Módulo: `js/domain/components/TrocadorCalorLogico.js`
 - Objetivo: calcular a Diferença Média Logarítmica de Temperatura ($\text{LMTD}$) e o $\Delta T_{\min}$ (Pinch Point) a partir das temperaturas das correntes e da topologia de escoamento.
+- Fundamento Físico:
+  - **LMTD (*Log Mean Temperature Difference*):** Força motriz térmica média ao longo de toda a superfície de troca $A$. Por ser baseada no perfil exponencial de temperatura, evita o erro de superestimação decorrente da média aritmética e rege a equação fundamental de projeto $\dot{Q} = U \cdot A \cdot F_T \cdot \text{LMTD}$.
+  - **Pinch Point ($\Delta T_{\min}$):** Ponto de maior aproximação térmica entre as correntes ($\min(\Delta T_a, \Delta T_b)$), atuando como indicador de gargalo termodinâmico.
 - Pré-condições: temperaturas numéricas finitas e modo de escoamento válido (`'contracorrente'`, `'paralelo'` ou `'utilidade'`).
 - Entrada:
   - `t1In`, `t1Out`: temperaturas da Corrente 1 (°C).
@@ -1040,7 +1043,7 @@ A seguir estão as funções/chaves de alto valor do sistema, com seus objetivos
 - Saída: objeto `{ lmtd, minDt, dtA, dtB }`.
 - Pós-condições:
   - Calcula analiticamente $\Delta T_a$, $\Delta T_b$, LMTD com proteções contra divisão por zero e logaritmo negativo, e o Pinch Point $\Delta T_{\min} = \min(\Delta T_a, \Delta T_b)$.
-- Interface com o usuário: alimenta as métricas do painel de propriedades (`disp-hx-lmtd`, `disp-hx-pinch`, `disp-hx-ft`, `disp-hx-max-duty`).
+- Interface com o usuário: alimenta em tempo de execução a seção **Análise Térmica Rigorosa** na aba **Avançado** do painel de propriedades do trocador (`disp-hx-lmtd`, `disp-hx-pinch`, `disp-hx-ft`, `disp-hx-max-duty`).
 
 ### 5.60 `canMergePipeMonitorEntries(sourceEntry, targetEntry, connections = [])`
 
