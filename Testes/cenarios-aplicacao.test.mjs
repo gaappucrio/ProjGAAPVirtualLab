@@ -874,6 +874,310 @@ test('monitorController gerencia trocador de calor sem erro de referencia em mod
     }
 });
 
+test('ao abrir 2 gráficos na versão expandida e fechar um deles, o seletor de modo do gráfico restante permanece funcional e interativo', async () => {
+    const prevDoc = global.document;
+    const prevWin = global.window;
+    const prevRaf = global.requestAnimationFrame;
+    const prevChart = global.Chart;
+
+    try {
+        class MockChart {
+            constructor(ctx, config) {
+                this.ctx = ctx;
+                this.config = config;
+                this.data = config.data || { datasets: [] };
+                this.options = config.options || { scales: { x: { ticks: {} }, y: { ticks: {} } }, plugins: { tooltip: { callbacks: {} } } };
+                this.destroyed = false;
+            }
+            update() {}
+            destroy() { this.destroyed = true; }
+            resize() {}
+        }
+        global.Chart = MockChart;
+
+        const elements = {};
+        const createMockEl = (tag, id = '') => {
+            let _id = id;
+            const el = {
+                tagName: tag.toUpperCase(),
+                get id() { return _id; },
+                set id(val) {
+                    if (_id && elements[_id] === this) delete elements[_id];
+                    _id = String(val || '');
+                    if (_id) elements[_id] = this;
+                },
+                attributes: {},
+                textContent: '',
+                _innerHTML: '',
+                setAttribute(name, val) { this.attributes[name] = String(val); },
+                getAttribute(name) { return this.attributes[name] || null; },
+                classList: {
+                    _s: new Set(),
+                    add(...c) { c.forEach(x => this._s.add(x)); },
+                    remove(...c) { c.forEach(x => this._s.delete(x)); },
+                    contains(x) { return this._s.has(x); },
+                    toggle(x) { if (this._s.has(x)) { this._s.delete(x); return false; } this._s.add(x); return true; }
+                },
+                get className() { return Array.from(this.classList._s).join(' '); },
+                set className(val) {
+                    this.classList._s.clear();
+                    String(val || '').split(/\s+/).filter(Boolean).forEach(c => this.classList.add(c));
+                },
+                style: {
+                    removeProperty() {}
+                },
+                children: [],
+                parentElement: null,
+                parentNode: null,
+                dataset: {},
+                listeners: {},
+                addEventListener(evt, fn) {
+                    if (!this.listeners[evt]) this.listeners[evt] = [];
+                    this.listeners[evt].push(fn);
+                },
+                removeEventListener(evt, fn) {
+                    if (this.listeners[evt]) {
+                        this.listeners[evt] = this.listeners[evt].filter(f => f !== fn);
+                    }
+                },
+                click() {
+                    const fns = this.listeners['click'] || [];
+                    const ev = { stopPropagation() {}, preventDefault() {} };
+                    fns.forEach(fn => fn(ev));
+                },
+                getContext() {
+                    return {
+                        clearRect() {},
+                        fillRect() {},
+                        beginPath() {},
+                        moveTo() {},
+                        lineTo() {},
+                        stroke() {}
+                    };
+                },
+                appendChild(c) {
+                    this.children.push(c);
+                    c.parentElement = this;
+                    c.parentNode = this;
+                    return c;
+                },
+                insertBefore(n, ref) {
+                    const idx = this.children.indexOf(ref);
+                    if (idx >= 0) this.children.splice(idx, 0, n);
+                    else this.children.push(n);
+                    n.parentElement = this;
+                    n.parentNode = this;
+                    return n;
+                },
+                querySelector(sel) {
+                    if (sel.startsWith('#')) {
+                        const targetId = sel.slice(1);
+                        return this._findDescendant(c => c.id === targetId);
+                    }
+                    if (sel.startsWith('.')) {
+                        const targetClass = sel.slice(1);
+                        return this._findDescendant(c => c.classList?.contains?.(targetClass));
+                    }
+                    return null;
+                },
+                querySelectorAll(sel) {
+                    const res = [];
+                    this._collectDescendants(sel, res);
+                    return res;
+                },
+                _findDescendant(pred) {
+                    for (const c of this.children) {
+                        if (pred(c)) return c;
+                        const found = c._findDescendant?.(pred);
+                        if (found) return found;
+                    }
+                    return null;
+                },
+                _collectDescendants(sel, res) {
+                    for (const c of this.children) {
+                        if (sel.startsWith('.')) {
+                            if (c.classList?.contains?.(sel.slice(1))) res.push(c);
+                        } else if (sel.startsWith('#')) {
+                            if (c.id === sel.slice(1)) res.push(c);
+                        }
+                        c._collectDescendants?.(sel, res);
+                    }
+                },
+                remove() {
+                    if (this.parentElement) {
+                        this.parentElement.children = this.parentElement.children.filter(x => x !== this);
+                        this.parentElement = null;
+                        this.parentNode = null;
+                    }
+                    if (this.id) delete elements[this.id];
+                }
+            };
+            Object.defineProperty(el, 'innerHTML', {
+                get() { return this._innerHTML; },
+                set(html) {
+                    this._innerHTML = html;
+                    this.children = [];
+                    if (html.includes('custom-select-trigger')) {
+                        const trig = createMockEl('div', `${this.id}-trigger`);
+                        trig.classList.add('custom-select-trigger');
+                        const lbl = createMockEl('span', `${this.id}-label`);
+                        trig.appendChild(lbl);
+                        this.appendChild(trig);
+                    }
+                    if (html.includes('custom-select-options')) {
+                        const ul = createMockEl('ul', `${this.id}-options`);
+                        ul.classList.add('custom-select-options');
+                        const regex = /class="custom-select-option([^"]*)" data-value="([^"]+)">([^<]+)<\/li>/g;
+                        let match;
+                        while ((match = regex.exec(html)) !== null) {
+                            const li = createMockEl('li');
+                            li.classList.add('custom-select-option');
+                            if (match[1].includes('selected')) li.classList.add('selected');
+                            li.dataset.value = match[2];
+                            li.textContent = match[3];
+                            ul.appendChild(li);
+                        }
+                        this.appendChild(ul);
+                    }
+                }
+            });
+            if (id) elements[id] = el;
+            return el;
+        };
+
+        const chartWrapper = createMockEl('div', 'chart-wrapper');
+        const compactStage = createMockEl('div', 'chart-compact-stage');
+        const compareGrid = createMockEl('div', 'chart-compare-grid');
+        const compactCanvas = createMockEl('canvas', 'gaap-volume-chart');
+        chartWrapper.appendChild(compactStage);
+        compactStage.appendChild(compactCanvas);
+        chartWrapper.appendChild(compareGrid);
+
+        const card1 = createMockEl('div', 'chart-compare-card-1');
+        card1.classList.add('chart-compare-card');
+        const header1 = createMockEl('div');
+        header1.classList.add('chart-compare-card-header');
+        card1.appendChild(header1);
+        const body1 = createMockEl('div');
+        body1.classList.add('chart-compare-card-body');
+        const wrap1 = createMockEl('div', 'chart-compare-wrap-1');
+        const canvas1 = createMockEl('canvas', 'gaap-compare-chart-1');
+        wrap1.appendChild(canvas1);
+        body1.appendChild(wrap1);
+        const empty1 = createMockEl('div', 'chart-compare-empty-1');
+        body1.appendChild(empty1);
+        card1.appendChild(body1);
+
+        const card2 = createMockEl('div', 'chart-compare-card-2');
+        card2.classList.add('chart-compare-card');
+        const header2 = createMockEl('div');
+        header2.classList.add('chart-compare-card-header');
+        card2.appendChild(header2);
+        const body2 = createMockEl('div');
+        body2.classList.add('chart-compare-card-body');
+        const wrap2 = createMockEl('div', 'chart-compare-wrap-2');
+        const canvas2 = createMockEl('canvas', 'gaap-compare-chart-2');
+        wrap2.appendChild(canvas2);
+        body2.appendChild(wrap2);
+        const empty2 = createMockEl('div', 'chart-compare-empty-2');
+        body2.appendChild(empty2);
+        card2.appendChild(body2);
+
+        compareGrid.appendChild(card1);
+        compareGrid.appendChild(card2);
+
+        createMockEl('span', 'chart-max-badge');
+        createMockEl('p', 'chart-max-status');
+        createMockEl('h4', 'chart-compare-title-1');
+        createMockEl('p', 'chart-compare-subtitle-1');
+        createMockEl('h4', 'chart-compare-title-2');
+        createMockEl('p', 'chart-compare-subtitle-2');
+
+        global.document = {
+            getElementById(id) { return elements[id] || null; },
+            querySelector(sel) {
+                if (sel === '#chart-compact-stage') return compactStage;
+                if (sel === '#chart-compare-grid') return compareGrid;
+                return chartWrapper.querySelector(sel);
+            },
+            querySelectorAll(sel) {
+                return chartWrapper.querySelectorAll(sel);
+            },
+            createElement(tag) { return createMockEl(tag); },
+            addEventListener() {},
+            removeEventListener() {}
+        };
+
+        global.window = {
+            addEventListener() {},
+            removeEventListener() {}
+        };
+        global.requestAnimationFrame = (fn) => fn();
+
+        const { createMonitorController } = await import('../js/presentation/controllers/MonitorController.js');
+        const engine = createEngine();
+        const p1 = new BombaLogica('p-mon-1', 'B-1', 0, 0);
+        const p2 = new BombaLogica('p-mon-2', 'B-2', 0, 0);
+        engine.add(p1);
+        engine.add(p2);
+
+        const monitor = createMonitorController({ engine });
+        monitor.setup();
+
+        chartWrapper.classList.add('maximized');
+
+        // Cenário A: Abrir 2 bombas, fechar Card 1 (índice 0). A bomba 2 passa para o Card 1.
+        monitor.refreshSelection(p1);
+        monitor.refreshSelection(p2);
+
+        const dismiss1 = document.getElementById('chart-compare-dismiss-1');
+        assert.ok(dismiss1, 'Botão fechar do Card 1 deve existir');
+        dismiss1.click();
+
+        // O seletor no Card 1 deve continuar existindo e ser interativo
+        const selAfterDismiss1 = document.getElementById('chart-compare-axis-select-1');
+        assert.ok(selAfterDismiss1, 'Seletor de modo do Card 1 deve existir após fechar o primeiro gráfico');
+
+        // Abrir dropdown
+        const trigger1 = selAfterDismiss1.querySelector('.custom-select-trigger');
+        assert.ok(trigger1, 'Gatilho do dropdown deve existir');
+        trigger1.click();
+        assert.strictEqual(selAfterDismiss1.classList.contains('open'), true, 'Dropdown deve abrir ao clicar no gatilho');
+
+        // Selecionar rendimento ('yEff')
+        const optEff = selAfterDismiss1.querySelectorAll('.custom-select-option').find(o => o.dataset.value === 'yEff');
+        assert.ok(optEff, 'Opção yEff deve estar presente');
+        optEff.click();
+
+        const updatedSel1 = document.getElementById('chart-compare-axis-select-1');
+        assert.strictEqual(updatedSel1?.dataset.activeMode, 'yEff', 'activeMode deve ter sido atualizado para yEff');
+
+        // Cenário B: Abrir novamente 2 gráficos e fechar o Card 2 (índice 1).
+        monitor.refreshSelection(p1);
+        const dismiss2 = document.getElementById('chart-compare-dismiss-2');
+        assert.ok(dismiss2, 'Botão fechar do Card 2 deve existir');
+        dismiss2.click();
+
+        const selAfterDismiss2 = document.getElementById('chart-compare-axis-select-1');
+        assert.ok(selAfterDismiss2, 'Seletor do Card 1 deve permanecer funcional após fechar Card 2');
+        const trigger2 = selAfterDismiss2.querySelector('.custom-select-trigger');
+        trigger2.click();
+        assert.strictEqual(selAfterDismiss2.classList.contains('open'), true, 'Dropdown deve abrir após fechar Card 2');
+
+        const optNpsh = selAfterDismiss2.querySelectorAll('.custom-select-option').find(o => o.dataset.value === 'yNpsh');
+        assert.ok(optNpsh, 'Opção yNpsh deve estar presente');
+        optNpsh.click();
+
+        const updatedSel2 = document.getElementById('chart-compare-axis-select-1');
+        assert.strictEqual(updatedSel2?.dataset.activeMode, 'yNpsh', 'activeMode deve ter sido atualizado para yNpsh');
+    } finally {
+        global.document = prevDoc;
+        global.window = prevWin;
+        global.requestAnimationFrame = prevRaf;
+        global.Chart = prevChart;
+    }
+});
+
 const PLANTAS_TESTE_DIR = path.resolve('Testes/plantas teste');
 
 function simulateTicks(engine, ticks = 30, dt = 0.1) {

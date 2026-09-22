@@ -1904,6 +1904,8 @@
   }
 
   .chart-compare-card-header {
+      position: relative;
+      z-index: 20;
       display: flex;
       justify-content: flex-start;
       align-items: flex-start;

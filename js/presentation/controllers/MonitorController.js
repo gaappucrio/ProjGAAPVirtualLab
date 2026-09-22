@@ -46,11 +46,13 @@ export function createMonitorController({ engine }) {
     let draggedMonitorIndex = null;
     let blockedMonitorSelectionLabel = '';
     let expandedChartYAxisModes = ['yHead', 'yHead'];
+    const componentYAxisModes = new Map();
     const monitorTankSeries = new Map();
     const monitorChartHistory = createMonitorSlotHistory({
         maxEntries: MAX_MONITOR_CHART_HISTORY,
         onRemove: (entry) => {
             if (entry?.kind === 'tank') monitorTankSeries.delete(entry.id);
+            if (entry?.id) componentYAxisModes.delete(entry.id);
         }
     });
 
@@ -573,6 +575,23 @@ export function createMonitorController({ engine }) {
         return null;
     }
 
+    function getEntryYAxisMode(entry) {
+        if (!entry) return null;
+        if (entry.kind === 'heatExchanger') {
+            return entry.component?.tipoPerfilGrafico || componentYAxisModes.get(entry.id) || 'position';
+        }
+        const stored = componentYAxisModes.get(entry.id);
+        return getValidDefaultYAxisMode(entry.kind, stored, entry.component);
+    }
+
+    function setEntryYAxisMode(entry, mode) {
+        if (!entry) return;
+        componentYAxisModes.set(entry.id, mode);
+        if (entry.component instanceof TrocadorCalorLogico) {
+            entry.component.setTipoPerfilGrafico?.(mode);
+        }
+    }
+
     function getAxisOptions(kind, component) {
         const pressureUnit = getUnitSymbol('pressure');
         const lengthUnit = getUnitSymbol('length');
@@ -649,6 +668,8 @@ export function createMonitorController({ engine }) {
         }
 
         wrapper.style.display = '';
+        wrapper._onSelect = onSelect;
+        ensureMonitorDropdownOutsideListener();
 
         const optionsHash = expectedOptions.map(opt => `${opt.value}:${opt.label}`).join('|');
         if (wrapper.dataset?.optionsHash === optionsHash) {
@@ -708,13 +729,26 @@ export function createMonitorController({ engine }) {
                         const labelEl = wrapper.querySelector?.(`#${id}-label`);
                         if (labelEl) labelEl.textContent = opt.textContent?.trim?.() || opt.textContent;
                         options.forEach(o => o.classList?.toggle('selected', o.dataset?.value === newMode));
-                        onSelect(newMode);
+                        wrapper._onSelect?.(newMode);
                     }
                 });
             });
         }
 
         return wrapper;
+    }
+
+    let monitorOutsideClickListenerBound = false;
+    function ensureMonitorDropdownOutsideListener() {
+        if (monitorOutsideClickListenerBound || typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
+        document.addEventListener('click', (event) => {
+            document.querySelectorAll?.('.chart-axis-custom-select.open')?.forEach((wrapper) => {
+                if (!wrapper.contains?.(event.target)) {
+                    wrapper.classList?.remove('open');
+                }
+            });
+        });
+        monitorOutsideClickListenerBound = true;
     }
 
     function ensureExpandedChartAxisSelector(elements, index, entry) {
@@ -737,21 +771,23 @@ export function createMonitorController({ engine }) {
             kind,
             chart,
             (newMode) => {
+                setEntryYAxisMode(entry, newMode);
                 expandedChartYAxisModes[index] = newMode;
                 if (entry.component instanceof TrocadorCalorLogico) {
-                    entry.component.setTipoPerfilGrafico?.(newMode);
-                    const propSelect = document.getElementById('input-hx-chart-mode');
-                    if (propSelect) {
-                        propSelect.value = newMode;
-                        const labelEl = document.getElementById('input-hx-chart-mode-label');
-                        if (labelEl) {
-                            labelEl.textContent = newMode === 'thermal'
-                                ? t('chart.heatExchangerModeThermal')
-                                : t('chart.heatExchangerModePosition');
+                    if (engine.selectedComponent?.id === entry.component.id) {
+                        const propSelect = document.getElementById('input-hx-chart-mode');
+                        if (propSelect) {
+                            propSelect.value = newMode;
+                            const labelEl = document.getElementById('input-hx-chart-mode-label');
+                            if (labelEl) {
+                                labelEl.textContent = newMode === 'thermal'
+                                    ? t('chart.heatExchangerModeThermal')
+                                    : t('chart.heatExchangerModePosition');
+                            }
+                            document.querySelectorAll('#input-hx-chart-mode-options .custom-select-option').forEach(opt => {
+                                opt.classList.toggle('selected', opt.dataset.value === newMode);
+                            });
                         }
-                        document.querySelectorAll('#input-hx-chart-mode-options .custom-select-option').forEach(opt => {
-                            opt.classList.toggle('selected', opt.dataset.value === newMode);
-                        });
                     }
                 }
                 if (expandedMonitorCharts[index]) {
@@ -846,6 +882,13 @@ export function createMonitorController({ engine }) {
         const result = monitorChartHistory.removeAt(index);
         if (!result.changed) return;
 
+        if (index === 0) {
+            expandedChartYAxisModes[0] = expandedChartYAxisModes[1];
+            expandedChartYAxisModes[1] = 'yHead';
+        } else {
+            expandedChartYAxisModes[1] = 'yHead';
+        }
+
         blockedMonitorSelectionLabel = '';
         renderExpandedMonitorCharts();
     }
@@ -867,6 +910,9 @@ export function createMonitorController({ engine }) {
             : monitorChartHistory.swapAt(sourceIndex, targetIndex);
 
         if (result.changed) {
+            const temp = expandedChartYAxisModes[sourceIndex];
+            expandedChartYAxisModes[sourceIndex] = expandedChartYAxisModes[targetIndex];
+            expandedChartYAxisModes[targetIndex] = temp;
             blockedMonitorSelectionLabel = '';
             renderExpandedMonitorCharts();
         }
@@ -940,11 +986,12 @@ export function createMonitorController({ engine }) {
             button.addEventListener('click', (event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                removeMonitorChartAt(index);
+                button._onDismiss?.();
             });
             elements.header.appendChild(button);
         }
 
+        button._onDismiss = () => removeMonitorChartAt(index);
         button.textContent = 'x';
         button.title = t('chart.removeChart');
         button.setAttribute('aria-label', t('chart.removeChart'));
@@ -982,7 +1029,7 @@ export function createMonitorController({ engine }) {
             const chartEntries = getMonitorChartEntries();
             const activeIndex = index >= 0 ? index : chartEntries.indexOf(entry);
             const chart = activeIndex >= 0 ? expandedMonitorCharts[activeIndex] : null;
-            const mode = entry.component?.tipoPerfilGrafico
+            const mode = getEntryYAxisMode(entry)
                 || (activeIndex >= 0 ? expandedChartYAxisModes[activeIndex] : null)
                 || chart?.chartMode
                 || 'position';
@@ -1133,7 +1180,7 @@ export function createMonitorController({ engine }) {
                 elements.canvas.dataset.monitorEntryKind = entry.kind;
             }
 
-            const activeMode = getValidDefaultYAxisMode(entry.kind, expandedChartYAxisModes[index], entry.component);
+            const activeMode = getEntryYAxisMode(entry);
             expandedChartYAxisModes[index] = activeMode;
 
             expandedMonitorCharts[index] = createExpandedMonitorChart(elements.canvas, entry.component, { yAxisMode: activeMode });
@@ -1158,13 +1205,12 @@ export function createMonitorController({ engine }) {
             const elements = getExpandedChartElements(index);
             if (!entry) return Boolean(expandedMonitorCharts[index]);
             const chart = expandedMonitorCharts[index];
-            const expectedMode = entry.kind === 'heatExchanger'
-                ? (entry.component?.tipoPerfilGrafico || expandedChartYAxisModes[index] || 'position')
-                : expandedChartYAxisModes[index];
+            const expectedMode = getEntryYAxisMode(entry);
+            const currentMode = chart?.chartMode || chart?.yAxisMode;
             return !chart
                 || elements.canvas?.dataset.monitorEntryId !== String(entry.id)
                 || elements.canvas?.dataset.monitorEntryKind !== entry.kind
-                || (chart.chartMode && chart.chartMode !== expectedMode);
+                || (currentMode && currentMode !== expectedMode);
         });
 
         if (shouldRebuild) {
@@ -1192,11 +1238,17 @@ export function createMonitorController({ engine }) {
             if (entry.component instanceof TanqueLogico) {
                 syncTankMonitorChart(chart, entry.component);
             } else if (entry.component instanceof BombaLogica) {
+                const activeMode = getEntryYAxisMode(entry);
+                expandedChartYAxisModes[index] = activeMode;
+                if (chart) chart.yAxisMode = activeMode;
                 refreshPumpMonitorChartInstance(chart, entry.component);
             } else if (entry.component instanceof ValvulaLogica) {
+                const activeMode = getEntryYAxisMode(entry);
+                expandedChartYAxisModes[index] = activeMode;
+                if (chart) chart.yAxisMode = activeMode;
                 refreshValveMonitorChartInstance(chart, entry.component);
             } else if (entry.component instanceof TrocadorCalorLogico) {
-                const activeMode = entry.component.tipoPerfilGrafico || expandedChartYAxisModes[index] || 'position';
+                const activeMode = getEntryYAxisMode(entry);
                 expandedChartYAxisModes[index] = activeMode;
                 refreshHeatExchangerMonitorChartInstance(chart, entry.component, { yAxisMode: activeMode });
             } else if (entry.component instanceof ConnectionModel) {
