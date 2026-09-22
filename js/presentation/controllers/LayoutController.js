@@ -29,6 +29,7 @@ export function setupLayoutController({ onChartLayoutChange } = {}) {
     };
 
     const updateFloatingLayoutMetrics = () => {
+        if (typeof window === 'undefined' || typeof document === 'undefined') return;
         const isDesktop = window.innerWidth > DESKTOP_LAYOUT_BREAKPOINT_PX;
         const paletteWidth = isDesktop ? getOpenPanelWidth(panelLeft, DEFAULT_PALETTE_WIDTH_PX) : 0;
         const propertiesWidth = isDesktop ? getOpenPanelWidth(panelRight, DEFAULT_PROPERTIES_WIDTH_PX) : 0;

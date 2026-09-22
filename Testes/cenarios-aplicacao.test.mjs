@@ -19,6 +19,9 @@ import {
     parseFlowchartDocument,
     restoreFlowchartDocument
 } from '../js/presentation/flowchart/FlowchartPersistence.js';
+import { HEAT_EXCHANGER_PROPERTIES_PRESENTER } from '../js/presentation/properties/component/HeatExchangerComponentPropertiesPresenter.js';
+import { buildHeatExchangerCurveDatasets } from '../js/infrastructure/charts/HeatExchangerChartAdapter.js';
+import { setLanguage, translateLiteral } from '../js/presentation/i18n/LanguageManager.js';
 
 function approx(actual, expected, tolerance = 1e-4, message = '') {
     assert.ok(
@@ -982,9 +985,71 @@ test('importacao de planta teste: teste_trocatroca.json (3 cenarios termicos: ut
     );
 });
 
+test('painel do trocador de calor renderiza seletor de perfil com custom-select suave', () => {
+    const tc = new TrocadorCalorLogico('tc-custom-select', 'TC-CS', 0, 0);
+    const html = HEAT_EXCHANGER_PROPERTIES_PRESENTER.render(tc);
 
+    assert.ok(html.includes('id="input-hx-chart-mode-wrapper"'), 'Deve conter o wrapper custom-select');
+    assert.ok(html.includes('class="custom-select-wrapper"'), 'Deve utilizar a classe custom-select-wrapper');
+    assert.ok(html.includes('id="input-hx-chart-mode-trigger"'), 'Deve conter o trigger');
+    assert.ok(html.includes('class="custom-select-arrow"'), 'Deve conter a seta customizada com rotação suave');
+    assert.ok(html.includes('id="input-hx-chart-mode-options"'), 'Deve conter as opções com transição de abertura');
+    assert.ok(html.includes('data-value="position"'), 'Deve conter a opção Perfil Espacial');
+    assert.ok(html.includes('data-value="thermal"'), 'Deve conter a opção Perfil Térmico');
+    assert.ok(!html.includes('<select id="input-hx-chart-mode"'), 'Não deve conter select HTML padrão');
+});
 
+test('trocador operado com apenas uma corrente adota modo contracorrente por padrao', () => {
+    const engine = createEngine();
+    const tc = new TrocadorCalorLogico('tc-monostream', 'TC-Mono', 0, 0);
+    tc.temperaturaEntradaC = 20;
+    tc.temperaturaServicoC = 80;
+    tc.uaWPorK = 3000;
+    engine.add(tc);
 
+    // Sem conexões ou com apenas 1 corrente, modo deve ser contracorrente
+    assert.equal(tc.temDuasCorrentesConectadas(engine), false);
+    assert.equal(tc.getModoEscoamento(engine), 'contracorrente', 'Modo padrão deve ser o termicamente mais eficiente: contracorrente');
 
+    // Dataset gráfico deve orientar a utilidade/segunda corrente em contracorrente (in2 em 100%, out2 em 0%)
+    const datasets = buildHeatExchangerCurveDatasets(tc);
+    const ptIn2 = datasets.operationPoints.find((pt) => pt.pointRole === 'in2');
+    const ptOut2 = datasets.operationPoints.find((pt) => pt.pointRole === 'out2');
+    assert.equal(ptIn2?.x, 100, 'Ponto de entrada da Corrente 2 deve estar em x=100% no modo contracorrente');
+    assert.equal(ptOut2?.x, 0, 'Ponto de saída da Corrente 2 deve estar em x=0% no modo contracorrente');
+});
+
+test('traduções em inglês para o trocador de calor e seletor estão completas', () => {
+    try {
+        setLanguage('en');
+        const tc = new TrocadorCalorLogico('tc-i18n', 'TC-I18N', 0, 0);
+        const html = HEAT_EXCHANGER_PROPERTIES_PRESENTER.render(tc);
+
+        // Seletor de gráfico e modos em inglês
+        assert.equal(translateLiteral('Modo do gráfico'), 'Chart profile mode');
+        assert.equal(translateLiteral('Perfil Espacial (T × Comprimento)'), 'Spatial Profile (T × Length)');
+        assert.equal(translateLiteral('Perfil Térmico (T × Q)'), 'Thermal Profile (T × Q)');
+
+        // Arranjo e modos de escoamento
+        assert.equal(translateLiteral('Arranjo térmico'), 'Flow arrangement');
+        assert.equal(translateLiteral('Contracorrente'), 'Countercurrent');
+        assert.equal(translateLiteral('Corrente Paralela (Co-corrente)'), 'Parallel Flow (Co-current)');
+
+        // Seções e métricas térmicas
+        assert.equal(translateLiteral('Troca Térmica Global'), 'Global Heat Transfer');
+        assert.equal(translateLiteral('Análise Térmica Rigorosa'), 'Rigorous Thermal Analysis');
+        assert.equal(translateLiteral('Corrente 1 (Processo - in1 / out1)'), 'Stream 1 (Process - in1 / out1)');
+        assert.equal(translateLiteral('Corrente 2 (Serviço - in2 / out2)'), 'Stream 2 (Service - in2 / out2)');
+        assert.equal(translateLiteral('LMTD (Média Logarítmica)'), 'Log Mean Temperature Difference (LMTD)');
+        assert.equal(translateLiteral('Fator de correção FT'), 'FT correction factor');
+
+        // Renderização do HTML deve conter as strings traduzidas
+        assert.ok(html.includes('Spatial Profile (T × Length)'), 'HTML do painel deve conter opções do seletor em inglês');
+        assert.ok(html.includes('Thermal Profile (T × Q)'), 'HTML do painel deve conter opção Perfil Térmico em inglês');
+        assert.ok(html.includes('Countercurrent'), 'Valor inicial do arranjo térmico deve ser Countercurrent em inglês');
+    } finally {
+        setLanguage('pt');
+    }
+});
 
 

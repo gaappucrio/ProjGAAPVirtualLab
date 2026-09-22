@@ -156,6 +156,12 @@ export class TrocadorCalorLogico extends ComponenteFisico {
     }
 
     getModoEscoamento(engine = null) {
+        // Ao operar com apenas uma corrente (modo utilidade), o padrão físico
+        // é o arranjo termicamente mais eficiente: contracorrente.
+        if (!this.temDuasCorrentesConectadas(engine)) {
+            return 'contracorrente';
+        }
+
         const context = this.getSimulationContext();
         let inputConnections = [];
         let outputConnections = [];
@@ -227,18 +233,20 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         const t2 = (fluido2 && vazao2 > EPSILON_FLOW) ? numeroSeguro(fluido2.temperatura, 25) : this.temperaturaServicoC;
         const ua = this.uaWPorK;
 
+        const isDual = this.temDuasCorrentesConectadas();
+        const modoEfetivo = !isDual ? 'contracorrente' : modo;
+
         if (ua <= 0) {
-            return { t1Out: t1, t2Out: t2, duty: 0, ef: 0, dt1: 0, dt2: 0, modo, maxHeat: 0, lmtd: 0, ft: 1.0, minDt: 0 };
+            return { t1Out: t1, t2Out: t2, duty: 0, ef: 0, dt1: 0, dt2: 0, modo: modoEfetivo, maxHeat: 0, lmtd: 0, ft: 1.0, minDt: 0 };
         }
 
-        const isDual = this.temDuasCorrentesConectadas();
         if (isDual) {
             if (vazao1 <= EPSILON_FLOW || vazao2 <= EPSILON_FLOW) {
-                return { t1Out: t1, t2Out: t2, duty: 0, ef: 0, dt1: 0, dt2: 0, modo, maxHeat: 0, lmtd: 0, ft: 1.0, minDt: 0 };
+                return { t1Out: t1, t2Out: t2, duty: 0, ef: 0, dt1: 0, dt2: 0, modo: modoEfetivo, maxHeat: 0, lmtd: 0, ft: 1.0, minDt: 0 };
             }
         } else {
             if (vazao1 <= EPSILON_FLOW && vazao2 <= EPSILON_FLOW) {
-                return { t1Out: t1, t2Out: t2, duty: 0, ef: 0, dt1: 0, dt2: 0, modo, maxHeat: 0, lmtd: 0, ft: 1.0, minDt: 0 };
+                return { t1Out: t1, t2Out: t2, duty: 0, ef: 0, dt1: 0, dt2: 0, modo: modoEfetivo, maxHeat: 0, lmtd: 0, ft: 1.0, minDt: 0 };
             }
             if (vazao1 <= EPSILON_FLOW && vazao2 > EPSILON_FLOW) {
                 const cp2 = Math.max(1, numeroSeguro(fluido2?.calorEspecificoJkgK, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK));
@@ -246,7 +254,7 @@ export class TrocadorCalorLogico extends ComponenteFisico {
                 const m2 = lpsToM3s(vazao2) * den2;
                 const c2 = m2 * cp2;
                 if (c2 <= 0) {
-                    return { t1Out: t1, t2Out: t2, duty: 0, ef: 0, dt1: 0, dt2: 0, modo, maxHeat: 0, lmtd: 0, ft: 1.0, minDt: 0 };
+                    return { t1Out: t1, t2Out: t2, duty: 0, ef: 0, dt1: 0, dt2: 0, modo: modoEfetivo, maxHeat: 0, lmtd: 0, ft: 1.0, minDt: 0 };
                 }
                 const ntu = ua / c2;
                 const efetividade = clamp(1 - Math.exp(-ntu), 0, this.efetividadeMaxima);
@@ -261,7 +269,7 @@ export class TrocadorCalorLogico extends ComponenteFisico {
                     t1Out: t2Out,
                     t2In: this.temperaturaServicoC,
                     t2Out: this.temperaturaServicoC,
-                    modo: 'utilidade'
+                    modo: 'contracorrente'
                 });
                 return {
                     t1Out: t1,
@@ -270,7 +278,7 @@ export class TrocadorCalorLogico extends ComponenteFisico {
                     ef: efetividade,
                     dt1: 0,
                     dt2: t2Out - t2,
-                    modo,
+                    modo: 'contracorrente',
                     maxHeat,
                     lmtd: lmtdCalc.lmtd,
                     ft: lmtdCalc.ft,
@@ -355,7 +363,7 @@ export class TrocadorCalorLogico extends ComponenteFisico {
             t1Out,
             t2In: c2 > 0 ? t2 : this.temperaturaServicoC,
             t2Out: c2 > 0 ? t2Out : this.temperaturaServicoC,
-            modo
+            modo: modoEfetivo
         });
 
         return {
@@ -365,7 +373,7 @@ export class TrocadorCalorLogico extends ComponenteFisico {
             ef: efetividade,
             dt1: t1Out - t1,
             dt2: t2Out - t2,
-            modo,
+            modo: modoEfetivo,
             maxHeat,
             lmtd: lmtdCalc.lmtd,
             ft: lmtdCalc.ft,
@@ -432,7 +440,9 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         if (this.vazao2Lps > EPSILON_FLOW && (this.vazao1Lps > EPSILON_FLOW || this.fluxoReal > EPSILON_FLOW)) {
             return true;
         }
-        if (this.getVazaoEntradaPorPorta('in2') > EPSILON_FLOW) {
+        const temEntrada1 = (this.getVazaoEntradaPorPorta('in1') || 0) > EPSILON_FLOW;
+        const temEntrada2 = (this.getVazaoEntradaPorPorta('in2') || 0) > EPSILON_FLOW;
+        if (temEntrada1 && temEntrada2) {
             return true;
         }
         return false;

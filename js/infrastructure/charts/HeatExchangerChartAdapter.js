@@ -74,12 +74,16 @@ export function buildHeatExchangerCurveDatasets(component, options = {}) {
     const t1Out = finiteNumber(component?.temperaturaSaidaC, t1In);
     const duasCorrentes = component?.temDuasCorrentesConectadas?.() === true;
     const modo = component?.getModoEscoamento?.() || 'contracorrente';
-    const tServico = finiteNumber(component?.temperaturaServicoC, 80);
-    const t2In = duasCorrentes ? finiteNumber(component?.temperaturaEntrada2C, tServico) : tServico;
-    const t2Out = duasCorrentes ? finiteNumber(component?.temperaturaSaida2C, tServico) : tServico;
     const ua = Math.max(0, finiteNumber(component?.uaWPorK, 2500));
     const v1 = Math.max(0, finiteNumber(component?.vazao1Lps ?? component?.fluxoReal, 0));
     const v2 = Math.max(0, finiteNumber(component?.vazao2Lps, 0));
+    const tServico = finiteNumber(component?.temperaturaServicoC, 80);
+    const t2In = duasCorrentes
+        ? finiteNumber(component?.temperaturaEntrada2C, tServico)
+        : (v2 > EPSILON_FLOW ? finiteNumber(component?.temperaturaEntrada2C, tServico) : tServico);
+    const t2Out = duasCorrentes
+        ? finiteNumber(component?.temperaturaSaida2C, tServico)
+        : (v2 > EPSILON_FLOW ? finiteNumber(component?.temperaturaSaida2C, tServico) : tServico);
 
     const context = component?.getSimulationContext?.() || {};
     const f1 = component?.getFluidoEntradaMisturadoPorPorta?.('in1')
@@ -94,7 +98,7 @@ export function buildHeatExchangerCurveDatasets(component, options = {}) {
     const cp2 = Math.max(1, finiteNumber(f2?.calorEspecificoJkgK, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK));
     const den2 = Math.max(1, finiteNumber(f2?.densidade, DEFAULT_WATER_DENSITY_KG_M3));
     const m2 = lpsToM3s(v2) * den2;
-    const c2 = (duasCorrentes && v2 > EPSILON_FLOW) ? (m2 * cp2) : 0;
+    const c2 = v2 > EPSILON_FLOW ? (m2 * cp2) : 0;
 
     const stream1Points = [];
     const stream2Points = [];
@@ -116,6 +120,8 @@ export function buildHeatExchangerCurveDatasets(component, options = {}) {
                 maxDutyKW = (Math.min(c1, c2) * Math.abs(t1In - t2In)) / 1000;
             } else if (c1 > 0 && !duasCorrentes) {
                 maxDutyKW = (c1 * Math.abs(t1In - tServico)) / 1000;
+            } else if (c2 > 0 && !duasCorrentes) {
+                maxDutyKW = (c2 * Math.abs(t2In - tServico)) / 1000;
             } else {
                 maxDutyKW = Math.max(1, dutyKW * 1.5);
             }
@@ -132,9 +138,11 @@ export function buildHeatExchangerCurveDatasets(component, options = {}) {
             if (c1 > 0) {
                 const dt1Sign = t2In > t1In ? 1 : -1;
                 t1 = t1In + dt1Sign * ((qKW * 1000) / c1);
+            } else if (!duasCorrentes) {
+                t1 = tServico;
             }
 
-            if (duasCorrentes && c2 > 0) {
+            if (c2 > 0) {
                 const dt2Sign = t1In > t2In ? 1 : -1;
                 t2 = t2In + dt2Sign * ((qKW * 1000) / c2);
             } else {
@@ -169,17 +177,33 @@ export function buildHeatExchangerCurveDatasets(component, options = {}) {
             let t1 = t1In;
             let t2 = t2In;
 
-            if (v1 <= EPSILON_FLOW || ua <= 0) {
+            if ((v1 <= EPSILON_FLOW && v2 <= EPSILON_FLOW) || ua <= 0) {
                 t1 = t1In;
                 t2 = duasCorrentes ? t2In : tServico;
             } else if (!duasCorrentes || c2 <= 0) {
-                t2 = tServico;
-                const ntu = ua / Math.max(Number.EPSILON, c1);
-                if (ntu > 0.0001) {
-                    const decay = (1 - Math.exp(-ntu * z)) / (1 - Math.exp(-ntu));
-                    t1 = t1In + (t1Out - t1In) * decay;
+                if (v1 > EPSILON_FLOW) {
+                    t2 = tServico;
+                    const ntu = ua / Math.max(Number.EPSILON, c1);
+                    if (ntu > 0.0001) {
+                        const decay = (1 - Math.exp(-ntu * z)) / (1 - Math.exp(-ntu));
+                        t1 = t1In + (t1Out - t1In) * decay;
+                    } else {
+                        t1 = t1In + (t1Out - t1In) * z;
+                    }
+                } else if (v2 > EPSILON_FLOW && c2 > 0) {
+                    t1 = tServico;
+                    const ntu = ua / Math.max(Number.EPSILON, c2);
+                    const isParallel = modo === 'paralelo' || modo === 'cocorrente';
+                    const z2 = isParallel ? z : (1 - z);
+                    if (ntu > 0.0001) {
+                        const decay = (1 - Math.exp(-ntu * z2)) / (1 - Math.exp(-ntu));
+                        t2 = t2In + (t2Out - t2In) * decay;
+                    } else {
+                        t2 = t2In + (t2Out - t2In) * z2;
+                    }
                 } else {
-                    t1 = t1In + (t1Out - t1In) * z;
+                    t1 = t1In;
+                    t2 = tServico;
                 }
             } else if (modo === 'paralelo' || modo === 'cocorrente') {
                 const alpha = ua * ((1 / Math.max(Number.EPSILON, c1)) + (1 / Math.max(Number.EPSILON, c2)));
@@ -214,8 +238,9 @@ export function buildHeatExchangerCurveDatasets(component, options = {}) {
             });
         }
 
-        const in2X = (modo === 'paralelo' || modo === 'cocorrente') ? 0 : (duasCorrentes ? 100 : 0);
-        const out2X = (modo === 'paralelo' || modo === 'cocorrente') ? 100 : (duasCorrentes ? 0 : 100);
+        const isParallel = modo === 'paralelo' || modo === 'cocorrente';
+        const in2X = isParallel ? 0 : 100;
+        const out2X = isParallel ? 100 : 0;
 
         operationPoints = [
             { x: 0, y: toDisplayValue('temperature', t1In), pointRole: 'in1' },

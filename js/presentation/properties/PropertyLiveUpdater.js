@@ -412,7 +412,22 @@ function updateHeatExchangerValues(component, engine = null, { monitorController
     setValue('disp-hx-lmtd', `${(component.lmtdC || 0).toFixed(2)} °C`);
     setValue('disp-hx-pinch', `${(component.pinchPointMinDeltaTC || 0).toFixed(2)} °C`);
     setValue('disp-hx-ft', `${(component.fatorCorrecaoLmtd || 1.0).toFixed(2)}`);
-    setValue('disp-hx-flow-mode', component.getModoEscoamento?.(engine) === 'paralelo' ? 'Corrente Paralela (Co-corrente)' : 'Contracorrente');
+    setValue('disp-hx-flow-mode', translateLiteral(component.getModoEscoamento?.(engine) === 'paralelo' ? 'Corrente Paralela (Co-corrente)' : 'Contracorrente'));
+
+    const chartModeInput = byId('input-hx-chart-mode');
+    const chartModeLabel = byId('input-hx-chart-mode-label');
+    const currentMode = component.tipoPerfilGrafico || 'position';
+    if (chartModeInput && chartModeInput.value !== currentMode) {
+        chartModeInput.value = currentMode;
+        if (chartModeLabel) {
+            chartModeLabel.textContent = currentMode === 'thermal'
+                ? translateLiteral('Perfil Térmico (T × Q)')
+                : translateLiteral('Perfil Espacial (T × Comprimento)');
+        }
+        document.querySelectorAll('#input-hx-chart-mode-options .custom-select-option').forEach(opt => {
+            opt.classList.toggle('selected', opt.dataset.value === currentMode);
+        });
+    }
 
     // Corrente 1
     setFieldValue('disp-hx-flow', component.vazao1Lps ?? component.fluxoReal, 'flow', 2);

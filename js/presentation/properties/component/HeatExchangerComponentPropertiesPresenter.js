@@ -77,10 +77,17 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
             <div style="font-weight: bold; margin-bottom: 8px; color: ${isDark ? '#d8e4ec' : '#2c3e50'}; border-bottom: 1px solid ${isDark ? '#2d3748' : '#e2e8f0'}; padding-bottom: 4px;">Troca Térmica Global</div>
             <div class="prop-group">
                 ${makeLabel('Modo do gráfico', 'Define a exibição do perfil térmico no monitor: Espacial (T vs Comprimento) ou Térmico (T vs Q).')}
-                <select id="input-hx-chart-mode" class="gaap-select" style="width:100%; padding:5px 8px; font-size:12px; border-radius:4px; border:1px solid ${isDark ? '#3b4e5d' : '#cbd5e1'}; background:${isDark ? '#1a2634' : '#ffffff'}; color:${isDark ? '#e2e8f0' : '#1e293b'};">
-                    <option value="position" ${comp.tipoPerfilGrafico === 'position' ? 'selected' : ''}>${translateLiteral('Perfil Espacial (T × Comprimento)')}</option>
-                    <option value="thermal" ${comp.tipoPerfilGrafico === 'thermal' ? 'selected' : ''}>${translateLiteral('Perfil Térmico (T × Q)')}</option>
-                </select>
+                <div class="custom-select-wrapper" id="input-hx-chart-mode-wrapper">
+                    <input type="hidden" id="input-hx-chart-mode" value="${comp.tipoPerfilGrafico || 'position'}">
+                    <div class="custom-select-trigger" id="input-hx-chart-mode-trigger" title="${translateLiteral('Define a exibição do perfil térmico no monitor: Espacial (T vs Comprimento) ou Térmico (T vs Q).')}">
+                        <span id="input-hx-chart-mode-label">${comp.tipoPerfilGrafico === 'thermal' ? translateLiteral('Perfil Térmico (T × Q)') : translateLiteral('Perfil Espacial (T × Comprimento)')}</span>
+                        <span class="custom-select-arrow">▼</span>
+                    </div>
+                    <ul class="custom-select-options" id="input-hx-chart-mode-options">
+                        <li class="custom-select-option ${comp.tipoPerfilGrafico !== 'thermal' ? 'selected' : ''}" data-value="position">${translateLiteral('Perfil Espacial (T × Comprimento)')}</li>
+                        <li class="custom-select-option ${comp.tipoPerfilGrafico === 'thermal' ? 'selected' : ''}" data-value="thermal">${translateLiteral('Perfil Térmico (T × Q)')}</li>
+                    </ul>
+                </div>
             </div>
             <div class="prop-group" id="grp-hx-service-temp">
                 ${makeUnitLabel('Temperatura de serviço', 'temperature', serviceTempTooltip)}
@@ -113,7 +120,7 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
             </div>
             <div class="prop-group">
                 ${makeLabel('Arranjo térmico')}
-                <input type="text" id="disp-hx-flow-mode" value="${comp.getModoEscoamento?.(engine) === 'paralelo' ? 'Corrente Paralela (Co-corrente)' : 'Contracorrente'}" disabled>
+                <input type="text" id="disp-hx-flow-mode" value="${comp.getModoEscoamento?.(engine) === 'paralelo' ? translateLiteral('Corrente Paralela (Co-corrente)') : translateLiteral('Contracorrente')}" disabled>
             </div>
 
             <div style="font-weight: bold; margin: 12px 0 8px 0; color: ${isDark ? '#5dade2' : '#2980b9'}; border-bottom: 1px solid ${isDark ? '#2d3748' : '#e2e8f0'}; padding-bottom: 4px;">Corrente 1 (Processo - in1 / out1)</div>
@@ -235,6 +242,53 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
                 }
             );
         });
+
+        const bindCustomSelect = (id) => {
+            const hiddenInput = byId(id);
+            const trigger = byId(`${id}-trigger`);
+            const wrapper = byId(`${id}-wrapper`);
+            const label = byId(`${id}-label`);
+            const options = document.querySelectorAll(`#${id}-options .custom-select-option`);
+
+            if (!hiddenInput || !trigger || !wrapper) return;
+
+            trigger.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (wrapper.classList.contains('disabled')) return;
+                document.querySelectorAll('.custom-select-wrapper.open').forEach(w => {
+                    if (w !== wrapper) w.classList.remove('open');
+                });
+                wrapper.classList.toggle('open');
+            });
+
+            options.forEach(opt => {
+                opt.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (wrapper.classList.contains('disabled')) return;
+                    const val = opt.dataset.value;
+                    hiddenInput.value = val;
+                    if (label) label.textContent = opt.textContent.trim();
+                    options.forEach(o => o.classList.remove('selected'));
+                    opt.classList.add('selected');
+                    wrapper.classList.remove('open');
+                    hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+            });
+        };
+
+        bindCustomSelect('input-hx-chart-mode');
+
+        const closeDropdown = (e) => {
+            const wrapper = byId('input-hx-chart-mode-wrapper');
+            if (!wrapper) {
+                document.removeEventListener('click', closeDropdown);
+                return;
+            }
+            if (!wrapper.contains(e.target)) {
+                wrapper.classList.remove('open');
+            }
+        };
+        document.addEventListener('click', closeDropdown);
 
         const handleChartModeChange = (event) => {
             const newMode = event.target.value;

@@ -831,7 +831,18 @@ export function createMonitorController({ engine }) {
                 if (entry.component instanceof TrocadorCalorLogico) {
                     entry.component.setTipoPerfilGrafico?.(newMode);
                     const propSelect = document.getElementById('input-hx-chart-mode');
-                    if (propSelect) propSelect.value = newMode;
+                    if (propSelect) {
+                        propSelect.value = newMode;
+                        const labelEl = document.getElementById('input-hx-chart-mode-label');
+                        if (labelEl) {
+                            labelEl.textContent = newMode === 'thermal'
+                                ? t('chart.heatExchangerModeThermal')
+                                : t('chart.heatExchangerModePosition');
+                        }
+                        document.querySelectorAll('#input-hx-chart-mode-options .custom-select-option').forEach(opt => {
+                            opt.classList.toggle('selected', opt.dataset.value === newMode);
+                        });
+                    }
                 }
                 if (expandedMonitorCharts[index]) {
                     expandedMonitorCharts[index].destroy();
