@@ -24,7 +24,9 @@ import {
     toDisplayValue
 } from '../units/DisplayUnits.js';
 
-export { getPresentationEngine, ComponentEventPayloads, EngineEventPayloads, COMPONENT_EVENTS, ENGINE_EVENTS, InputValidator, clearInputError, showInputError, renderPropertyTabs, subscribeUnitPreferences, getUnitSymbol, TOOLTIPS, bind, byId, isActive, setHtml, setValue, valueOf };
+import { bindCustomSelect, renderCustomSelectHtml, syncCustomSelectValue } from './CustomSelect.js';
+
+export { getPresentationEngine, ComponentEventPayloads, EngineEventPayloads, COMPONENT_EVENTS, ENGINE_EVENTS, InputValidator, clearInputError, showInputError, renderPropertyTabs, subscribeUnitPreferences, getUnitSymbol, TOOLTIPS, bind, byId, isActive, setHtml, setValue, valueOf, bindCustomSelect, renderCustomSelectHtml, syncCustomSelectValue };
 
 export const TOOLTIP = TOOLTIPS.componentes;
 

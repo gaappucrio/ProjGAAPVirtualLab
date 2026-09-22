@@ -4,6 +4,7 @@ import {
     InputValidator,
     TOOLTIP,
     bind,
+    bindCustomSelect,
     byId,
     displayUnitValue,
     getPresentationEngine,
@@ -293,38 +294,6 @@ export const VALVE_PROPERTIES_PRESENTER = {
                 textoCaracteristica.textContent = dica;
                 textoCaracteristica.title = dica;
             }
-        };
-        const bindCustomSelect = (id) => {
-            const hiddenInput = byId(id);
-            const trigger = byId(`${id}-trigger`);
-            const wrapper = byId(`${id}-wrapper`);
-            const label = byId(`${id}-label`);
-            const options = document.querySelectorAll(`#${id}-options .custom-select-option`);
-
-            if (!hiddenInput || !trigger || !wrapper) return;
-
-            trigger.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (wrapper.classList.contains('disabled')) return;
-                document.querySelectorAll('.custom-select-wrapper.open').forEach(w => {
-                    if (w !== wrapper) w.classList.remove('open');
-                });
-                wrapper.classList.toggle('open');
-            });
-
-            options.forEach(opt => {
-                opt.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    if (wrapper.classList.contains('disabled')) return;
-                    const val = opt.dataset.value;
-                    hiddenInput.value = val;
-                    if (label) label.textContent = opt.textContent.trim();
-                    options.forEach(o => o.classList.remove('selected'));
-                    opt.classList.add('selected');
-                    wrapper.classList.remove('open');
-                    hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
-                });
-            });
         };
 
         const sincronizarBloqueioSetpoint = () => {

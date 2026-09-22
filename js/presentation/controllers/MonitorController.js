@@ -23,7 +23,7 @@ import {
 } from '../../infrastructure/charts/TankChartAdapter.js';
 import { exportPumpDwsimJson } from '../export/PumpDwsimJsonExporter.js';
 import { createMonitorSlotHistory } from '../monitoring/MonitorSlotHistory.js';
-import { canMergePipeMonitorEntries, isPipeMonitorEntry } from '../monitoring/PipeMonitorGrouping.js';
+import { buildPipeGroupSections, canMergePipeMonitorEntries, isPipeMonitorEntry } from '../monitoring/PipeMonitorGrouping.js';
 import { resolvePipePressureProfileOptions } from '../monitoring/PipePressureProfile.js';
 import { getUnitSymbol, subscribeUnitPreferences } from '../units/DisplayUnits.js';
 import { t } from '../i18n/LanguageManager.js';
@@ -31,7 +31,6 @@ import { t } from '../i18n/LanguageManager.js';
 const MAX_MONITOR_CHART_HISTORY = 2;
 const MONITOR_LIVE_REFRESH_INTERVAL_S = 0.1;
 const MONITOR_TANK_SAMPLE_INTERVAL_S = 0.25;
-const PIXELS_PER_METER_FOR_MONITOR_GAP = 80;
 
 export function createMonitorController({ engine }) {
     let compactChart = null;
@@ -142,100 +141,11 @@ export function createMonitorController({ engine }) {
         return resolvePipePressureProfileOptions({ state, source });
     }
 
-    function getConnectionLengthM(connection) {
-        const geometry = engine.getConnectionGeometry(connection);
-        return Math.max(0, Number(geometry?.lengthM) || 0);
-    }
-
-    function getVisualGapBetweenComponentsM(sourceComponentId, targetComponentId) {
-        const source = engine.getComponentById?.(sourceComponentId);
-        const target = engine.getComponentById?.(targetComponentId);
-        if (!source || !target) return 1;
-
-        const dx = (Number(target.x) || 0) - (Number(source.x) || 0);
-        const dy = (Number(target.y) || 0) - (Number(source.y) || 0);
-        return Math.max(1, Math.sqrt((dx * dx) + (dy * dy)) / PIXELS_PER_METER_FOR_MONITOR_GAP);
-    }
-
-    function getShortestUnselectedPathLengthM(sourceComponentId, targetComponentId, blockedConnectionIds = new Set()) {
-        if (!sourceComponentId || !targetComponentId) return null;
-        if (sourceComponentId === targetComponentId) return 0;
-
-        const distances = new Map([[sourceComponentId, 0]]);
-        const queue = [sourceComponentId];
-
-        while (queue.length > 0) {
-            queue.sort((a, b) => distances.get(a) - distances.get(b));
-            const currentId = queue.shift();
-            const currentDistance = distances.get(currentId);
-
-            if (currentId === targetComponentId) return currentDistance;
-
-            engine.conexoes.forEach((connection) => {
-                if (blockedConnectionIds.has(connection.id) || connection.sourceId !== currentId) return;
-
-                const nextDistance = currentDistance + getConnectionLengthM(connection);
-                const previousDistance = distances.get(connection.targetId);
-                if (previousDistance !== undefined && previousDistance <= nextDistance) return;
-
-                distances.set(connection.targetId, nextDistance);
-                queue.push(connection.targetId);
-            });
-        }
-
-        return null;
-    }
-
-    function isConnectionBefore(a, b, blockedConnectionIds = new Set()) {
-        if (!(a instanceof ConnectionModel) || !(b instanceof ConnectionModel)) return false;
-        if (a.targetId === b.sourceId) return true;
-        return getShortestUnselectedPathLengthM(a.targetId, b.sourceId, blockedConnectionIds) !== null;
-    }
-
-    function orderPipeGroupConnections(connections) {
-        const selectedIds = new Set(connections.map((connection) => connection.id));
-        return [...connections].sort((a, b) => {
-            if (isConnectionBefore(a, b, selectedIds)) return -1;
-            if (isConnectionBefore(b, a, selectedIds)) return 1;
-
-            const sourceA = engine.getComponentById?.(a.sourceId);
-            const sourceB = engine.getComponentById?.(b.sourceId);
-            const xA = Number(sourceA?.x) || 0;
-            const xB = Number(sourceB?.x) || 0;
-            if (xA !== xB) return xA - xB;
-            return (Number(sourceA?.y) || 0) - (Number(sourceB?.y) || 0);
-        });
-    }
-
-    function getPipeGapBeforeSection(previousConnection, currentConnection, blockedConnectionIds) {
-        if (!previousConnection || !currentConnection) return 0;
-        if (previousConnection.targetId === currentConnection.sourceId) return 0;
-
-        const pathLengthM = getShortestUnselectedPathLengthM(
-            previousConnection.targetId,
-            currentConnection.sourceId,
-            blockedConnectionIds
-        );
-        return pathLengthM ?? getVisualGapBetweenComponentsM(previousConnection.targetId, currentConnection.sourceId);
-    }
-
-    function buildPipeGroupSections(connections = []) {
-        const orderedConnections = orderPipeGroupConnections(connections);
-        const selectedIds = new Set(orderedConnections.map((connection) => connection.id));
-
-        return orderedConnections.map((connection, index) => {
-            const state = engine.getConnectionState(connection);
-            const source = engine.getComponentById?.(connection?.sourceId);
-            const previousConnection = index > 0 ? orderedConnections[index - 1] : null;
-
-            return {
-                connection,
-                state,
-                geometry: engine.getConnectionGeometry(connection),
-                label: getConnectionMonitorLabel(connection),
-                gapBeforeM: getPipeGapBeforeSection(previousConnection, connection, selectedIds),
-                ...resolvePipePressureProfileOptions({ state, source })
-            };
+    function getPipeGroupSections(connections = []) {
+        return buildPipeGroupSections(connections, {
+            engine,
+            resolvePipePressureProfileOptions,
+            getConnectionMonitorLabel
         });
     }
 
@@ -389,7 +299,7 @@ export function createMonitorController({ engine }) {
     function createPipeGroupMonitorChartInstance(ctx, connections = []) {
         return createCompositePipePressureChart(
             ctx,
-            buildPipeGroupSections(connections),
+            getPipeGroupSections(connections),
             {
                 expanded: isExpanded(),
                 label: getPipeGroupLabel(connections)
@@ -587,7 +497,7 @@ export function createMonitorController({ engine }) {
 
         refreshCompositePipePressureChart(
             chart,
-            buildPipeGroupSections(connections),
+            getPipeGroupSections(connections),
             {
                 expanded: isExpanded(),
                 label: getPipeGroupLabel(connections)

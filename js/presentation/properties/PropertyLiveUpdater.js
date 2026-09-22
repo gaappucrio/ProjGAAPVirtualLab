@@ -22,6 +22,7 @@ import { resolveSinkPressureProfile } from '../monitoring/SinkPressureProfile.js
 import { byId, isActive, setValue } from './PropertyDomAdapter.js';
 import { formatMeasuredValue, setFieldValue } from './PropertyValueFormatters.js';
 import { updateTankControlAvailabilityUI } from './TankSaturationAlertPresenter.js';
+import { syncCustomSelectValue } from './CustomSelect.js';
 
 function getPumpNpshMargin(component) {
     const npshRequeridoAtualM = component.npshRequeridoAtualM ?? component.npshRequeridoM ?? 0;
@@ -414,20 +415,12 @@ function updateHeatExchangerValues(component, engine = null, { monitorController
     setValue('disp-hx-ft', `${(component.fatorCorrecaoLmtd || 1.0).toFixed(2)}`);
     setValue('disp-hx-flow-mode', translateLiteral(component.getModoEscoamento?.(engine) === 'paralelo' ? 'Corrente Paralela (Co-corrente)' : 'Contracorrente'));
 
-    const chartModeInput = byId('input-hx-chart-mode');
-    const chartModeLabel = byId('input-hx-chart-mode-label');
     const currentMode = component.tipoPerfilGrafico || 'position';
-    if (chartModeInput && chartModeInput.value !== currentMode) {
-        chartModeInput.value = currentMode;
-        if (chartModeLabel) {
-            chartModeLabel.textContent = currentMode === 'thermal'
-                ? translateLiteral('Perfil Térmico (T × Q)')
-                : translateLiteral('Perfil Espacial (T × Comprimento)');
-        }
-        document.querySelectorAll('#input-hx-chart-mode-options .custom-select-option').forEach(opt => {
-            opt.classList.toggle('selected', opt.dataset.value === currentMode);
-        });
-    }
+    syncCustomSelectValue(
+        'input-hx-chart-mode',
+        currentMode,
+        currentMode === 'thermal' ? translateLiteral('Perfil Térmico (T × Q)') : translateLiteral('Perfil Espacial (T × Comprimento)')
+    );
 
     // Corrente 1
     setFieldValue('disp-hx-flow', component.vazao1Lps ?? component.fluxoReal, 'flow', 2);
