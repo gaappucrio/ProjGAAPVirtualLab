@@ -1191,10 +1191,12 @@ export function translateLiteral(value) {
 export function localizeElement(root) {
     if (!root || typeof document === 'undefined') return;
 
-    const textRoot = root.nodeType === Node.ELEMENT_NODE ? root : document.body;
-    if (!textRoot) return;
+    const elementNodeType = typeof Node !== 'undefined' ? Node.ELEMENT_NODE : 1;
+    const textRoot = root.nodeType === elementNodeType ? root : document.body;
+    if (!textRoot || typeof document.createTreeWalker !== 'function') return;
 
-    const walker = document.createTreeWalker(textRoot, NodeFilter.SHOW_TEXT);
+    const filter = typeof NodeFilter !== 'undefined' ? NodeFilter.SHOW_TEXT : 4;
+    const walker = document.createTreeWalker(textRoot, filter);
     const textNodes = [];
     while (walker.nextNode()) textNodes.push(walker.currentNode);
 

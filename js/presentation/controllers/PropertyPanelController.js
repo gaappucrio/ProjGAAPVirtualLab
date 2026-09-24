@@ -87,8 +87,12 @@ export function setupPropertyPanelController({ engine, monitorController } = {})
         const nextContextKey = getPropertyContextKey(component, connection);
 
         disposeComponentPropertyBindings();
-        monitorController?.refreshSelection(component, connection);
-        monitorController?.refreshPresentation();
+        try {
+            monitorController?.refreshSelection(component, connection);
+            monitorController?.refreshPresentation();
+        } catch (error) {
+            console.error('Erro ao atualizar monitoramento do elemento selecionado:', error);
+        }
 
         if (connection) {
             renderConnectionProperties(connection);

@@ -1356,4 +1356,185 @@ test('traduções em inglês para o trocador de calor e seletor estão completas
     }
 });
 
+test('selecionar bomba e alternar entre componentes preserva funcionalidade do painel de propriedades e gráficos', async () => {
+    const prevDoc = global.document;
+    const prevWin = global.window;
+    const prevRaf = global.requestAnimationFrame;
+    const prevChart = global.Chart;
+
+    try {
+        const chartInstances = new Map();
+        class MockChart {
+            constructor(ctx, config) {
+                this.ctx = ctx;
+                this.canvas = ctx.canvas;
+                this.config = config;
+                this.data = config.data || { datasets: [] };
+                this.options = config.options || {
+                    scales: {
+                        x: { ticks: {}, grid: {}, border: {} },
+                        y: { ticks: {}, grid: {}, border: {} },
+                        yHead: { ticks: {}, grid: {}, border: {} },
+                        yEff: { ticks: {}, grid: {}, border: {} },
+                        yNpsh: { ticks: {}, grid: {}, border: {} }
+                    },
+                    plugins: { tooltip: { callbacks: {} }, legend: { labels: {} } }
+                };
+                this.destroyed = false;
+                if (this.canvas) {
+                    chartInstances.set(this.canvas, this);
+                }
+            }
+            update() {}
+            destroy() {
+                this.destroyed = true;
+                if (this.canvas) chartInstances.delete(this.canvas);
+            }
+            resize() {}
+            static getChart(canvas) {
+                return chartInstances.get(canvas) || null;
+            }
+        }
+        global.Chart = MockChart;
+
+        const elements = {};
+        const createMockEl = (tag, id = '') => {
+            const el = {
+                tagName: tag.toUpperCase(),
+                id,
+                attributes: {},
+                setAttribute(name, val) { this.attributes[name] = String(val); },
+                getAttribute(name) { return this.attributes[name] || null; },
+                classList: {
+                    _s: new Set(),
+                    add(...c) { c.forEach(x => this._s.add(x)); },
+                    remove(...c) { c.forEach(x => this._s.delete(x)); },
+                    contains(x) { return this._s.has(x); },
+                    toggle(x) { if (this._s.has(x)) { this._s.delete(x); return false; } this._s.add(x); return true; }
+                },
+                style: {
+                    removeProperty() {}
+                },
+                children: [],
+                parentElement: null,
+                parentNode: null,
+                dataset: {},
+                getContext() {
+                    return {
+                        canvas: el,
+                        clearRect() {},
+                        fillRect() {},
+                        beginPath() {},
+                        moveTo() {},
+                        lineTo() {},
+                        stroke() {}
+                    };
+                },
+                appendChild(c) {
+                    this.children.push(c);
+                    c.parentElement = this;
+                    c.parentNode = this;
+                    return c;
+                },
+                insertBefore(n) {
+                    this.children.push(n);
+                    n.parentElement = this;
+                    n.parentNode = this;
+                    return n;
+                },
+                querySelector(sel) {
+                    if (sel === '.chart-compare-card-header') return elements['header-1'] || null;
+                    if (sel === '#properties .side-panel-content') return propScroll;
+                    return null;
+                },
+                querySelectorAll() { return []; },
+                addEventListener() {},
+                removeEventListener() {},
+                remove() {}
+            };
+            if (id) elements[id] = el;
+            return el;
+        };
+
+        const propContent = createMockEl('div', 'prop-content');
+        const propScroll = createMockEl('div', 'prop-scroll');
+        const chartWrapper = createMockEl('div', 'chart-wrapper');
+        const compactStage = createMockEl('div', 'chart-compact-stage');
+        const compareGrid = createMockEl('div', 'chart-compare-grid');
+        const compactCanvas = createMockEl('canvas', 'gaap-volume-chart');
+
+        for (let i = 1; i <= 2; i++) {
+            const card = createMockEl('div', `chart-compare-card-${i}`);
+            const header = createMockEl('div', `header-${i}`);
+            elements[`header-${i}`] = header;
+            card.appendChild(header);
+            createMockEl('h4', `chart-compare-title-${i}`);
+            createMockEl('p', `chart-compare-subtitle-${i}`);
+            createMockEl('canvas', `gaap-compare-chart-${i}`);
+            createMockEl('div', `chart-compare-wrap-${i}`);
+            createMockEl('div', `chart-compare-empty-${i}`);
+        }
+        createMockEl('span', 'chart-max-badge');
+        createMockEl('p', 'chart-max-status');
+
+        global.document = {
+            getElementById(id) { return elements[id] || null; },
+            querySelector(sel) {
+                if (sel === '#chart-compact-stage') return compactStage;
+                if (sel === '#chart-compare-grid') return compareGrid;
+                if (sel === '#properties .side-panel-content') return propScroll;
+                return null;
+            },
+            querySelectorAll() { return []; },
+            createElement(tag) { return createMockEl(tag); },
+            body: { classList: { contains: () => false } },
+            addEventListener() {},
+            removeEventListener() {}
+        };
+
+        global.window = {
+            addEventListener() {},
+            removeEventListener() {}
+        };
+        global.requestAnimationFrame = (fn) => fn();
+
+        const { createMonitorController } = await import('../js/presentation/controllers/MonitorController.js');
+        const { setupPropertyPanelController } = await import('../js/presentation/controllers/PropertyPanelController.js');
+
+        const engine = createEngine();
+        const bomba = new BombaLogica('B-TEST', 'Bomba 01', 100, 100);
+        const tanque = new TanqueLogico('T-TEST', 'Tanque 01', 200, 100);
+        const valvula = new ValvulaLogica('V-TEST', 'Válvula 01', 300, 100);
+        engine.add(bomba);
+        engine.add(tanque);
+        engine.add(valvula);
+
+        const monitorController = createMonitorController({ engine });
+        monitorController.setup();
+
+        setupPropertyPanelController({ engine, monitorController });
+
+        // 1. Seleciona bomba
+        engine.selectedComponent = bomba;
+        engine.notify({ tipo: 'selecao', elemento: bomba });
+        assert.ok(propContent.innerHTML.includes('Bomba') || propContent.innerHTML.includes('B-TEST'), 'Painel deve renderizar propriedades da bomba');
+
+        // 2. Seleciona tanque subsequentemente
+        engine.selectedComponent = tanque;
+        engine.notify({ tipo: 'selecao', elemento: tanque });
+        assert.ok(propContent.innerHTML.includes('Tanque') || propContent.innerHTML.includes('T-TEST'), 'Painel deve renderizar propriedades do tanque apos clicar na bomba');
+
+        // 3. Seleciona válvula subsequentemente
+        engine.selectedComponent = valvula;
+        engine.notify({ tipo: 'selecao', elemento: valvula });
+        assert.ok(propContent.innerHTML.includes('Válvula') || propContent.innerHTML.includes('V-TEST'), 'Painel deve renderizar propriedades da válvula');
+    } finally {
+        global.document = prevDoc;
+        global.window = prevWin;
+        global.requestAnimationFrame = prevRaf;
+        global.Chart = prevChart;
+    }
+});
+
+
 

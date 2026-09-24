@@ -67,6 +67,15 @@ export function createMonitorController({ engine }) {
             compactChart.destroy();
             compactChart = null;
         }
+        if (typeof document !== 'undefined') {
+            const canvas = document.getElementById('gaap-volume-chart');
+            if (canvas && typeof Chart !== 'undefined' && typeof Chart.getChart === 'function') {
+                const existing = Chart.getChart(canvas);
+                if (existing) {
+                    existing.destroy();
+                }
+            }
+        }
     }
 
     function isExpanded() {
@@ -1008,9 +1017,16 @@ export function createMonitorController({ engine }) {
             if (chart) chart.destroy();
         });
         expandedMonitorCharts = [null, null];
-        for (let i = 1; i <= 2; i++) {
-            const selector = document.getElementById(`chart-compare-axis-select-${i}`);
-            if (selector) selector.remove();
+        if (typeof document !== 'undefined') {
+            for (let i = 1; i <= 2; i++) {
+                const canvas = document.getElementById(`gaap-compare-chart-${i}`);
+                if (canvas && typeof Chart !== 'undefined' && typeof Chart.getChart === 'function') {
+                    const existing = Chart.getChart(canvas);
+                    if (existing) existing.destroy();
+                }
+                const selector = document.getElementById(`chart-compare-axis-select-${i}`);
+                if (selector) selector.remove();
+            }
         }
     }
 

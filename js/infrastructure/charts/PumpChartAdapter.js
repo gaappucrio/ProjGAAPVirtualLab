@@ -142,7 +142,7 @@ function applyPumpChartPresentation(chart, datasets, { expanded = false } = {}) 
     chart.options.scales.yEff.title.color = colors.label;
     chart.options.scales.yEff.ticks.font = { size: profile.secondaryTickFontSize };
     chart.options.scales.yEff.ticks.maxTicksLimit = profile.maxTicksY;
-    chart.options.scales.yEff.border = chart.options.scales.yEff.border || {};
+    chart.options.scales.yEff.ticks.color = colors.tick;
     chart.options.scales.yEff.border.color = colors.border;
     chart.options.scales.yEff.min = 0;
     chart.options.scales.yEff.max = 100;
@@ -156,7 +156,6 @@ function applyPumpChartPresentation(chart, datasets, { expanded = false } = {}) 
     chart.options.scales.yNpsh.suggestedMax = datasets.npshAxisMax;
     chart.options.scales.yNpsh.ticks.color = colors.tick;
     chart.options.scales.yNpsh.ticks.callback = (value) => formatAxisTick(value);
-    chart.options.scales.yNpsh.border = chart.options.scales.yNpsh.border || {};
     chart.options.scales.yNpsh.border.color = colors.border;
 
     if (yAxisMode === 'yHead') {
