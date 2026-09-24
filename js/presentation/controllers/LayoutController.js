@@ -1,18 +1,20 @@
 import { subscribeLanguageChanges, t } from '../i18n/LanguageManager.js';
 
-const MIN_MONITOR_HEIGHT_PX = 260;
-const DESKTOP_MONITOR_MARGIN_PX = 24;
-const MOBILE_MONITOR_MARGIN_PX = 16;
-const DESKTOP_LAYOUT_BREAKPOINT_PX = 960;
-const DEFAULT_PALETTE_WIDTH_PX = 280;
-const DEFAULT_PROPERTIES_WIDTH_PX = 340;
-const EXPANDED_MONITOR_GAP_PX = 10;
-const COLLAPSED_MONITOR_GAP_PX = 16;
-const POPUP_WORKSPACE_INSET_PX = 24;
-const POPUP_MOBILE_INSET_PX = 12;
-const POPUP_TOOLBAR_GAP_PX = 12;
-const POPUP_FALLBACK_TOP_PX = 148;
-const MONITOR_TRANSITION_MS = 240;
+export const MIN_MONITOR_HEIGHT_PX = 320;
+export const DEFAULT_MONITOR_HEIGHT_PX = 380;
+export const MAX_MONITOR_HEIGHT_PX = 900;
+export const DESKTOP_MONITOR_MARGIN_PX = 24;
+export const MOBILE_MONITOR_MARGIN_PX = 16;
+export const DESKTOP_LAYOUT_BREAKPOINT_PX = 960;
+export const DEFAULT_PALETTE_WIDTH_PX = 280;
+export const DEFAULT_PROPERTIES_WIDTH_PX = 340;
+export const EXPANDED_MONITOR_GAP_PX = 10;
+export const COLLAPSED_MONITOR_GAP_PX = 16;
+export const POPUP_WORKSPACE_INSET_PX = 24;
+export const POPUP_MOBILE_INSET_PX = 12;
+export const POPUP_TOOLBAR_GAP_PX = 12;
+export const POPUP_FALLBACK_TOP_PX = 148;
+export const MONITOR_TRANSITION_MS = 240;
 
 export function setupLayoutController({ onChartLayoutChange } = {}) {
     const toggleLeft = document.getElementById('toggle-left');
@@ -42,6 +44,9 @@ export function setupLayoutController({ onChartLayoutChange } = {}) {
 
         sandboxContainer?.style.setProperty('--chart-max-left', `${Math.round(monitorLeft)}px`);
         sandboxContainer?.style.setProperty('--chart-max-right', `${Math.round(monitorRight)}px`);
+        sandboxContainer?.style.setProperty('--chart-min-height', `${MIN_MONITOR_HEIGHT_PX}px`);
+        sandboxContainer?.style.setProperty('--chart-default-height', `${DEFAULT_MONITOR_HEIGHT_PX}px`);
+        sandboxContainer?.style.setProperty('--chart-max-height-limit', `${MAX_MONITOR_HEIGHT_PX}px`);
 
         const rootStyle = document.documentElement.style;
         const toolbarRect = topToolbar?.getBoundingClientRect();
@@ -132,14 +137,17 @@ export function setupLayoutController({ onChartLayoutChange } = {}) {
         window.innerWidth <= 960 ? MOBILE_MONITOR_MARGIN_PX : DESKTOP_MONITOR_MARGIN_PX
     );
 
-    const getMaxMonitorHeight = () => Math.max(
-        MIN_MONITOR_HEIGHT_PX,
-        window.innerHeight - getMonitorViewportMargin()
+    const getMaxMonitorHeight = () => Math.min(
+        MAX_MONITOR_HEIGHT_PX,
+        Math.max(
+            MIN_MONITOR_HEIGHT_PX,
+            window.innerHeight - getMonitorViewportMargin()
+        )
     );
 
     const clampMonitorHeight = (heightPx) => Math.max(
         MIN_MONITOR_HEIGHT_PX,
-        Math.min(getMaxMonitorHeight(), Number(heightPx) || MIN_MONITOR_HEIGHT_PX)
+        Math.min(getMaxMonitorHeight(), Number(heightPx) || DEFAULT_MONITOR_HEIGHT_PX)
     );
 
     const scheduleChartLayout = () => {
@@ -158,7 +166,8 @@ export function setupLayoutController({ onChartLayoutChange } = {}) {
 
     const clampCurrentMonitorHeight = () => {
         if (!chartWrapper?.classList.contains('maximized')) return;
-        setMonitorHeight(chartWrapper.getBoundingClientRect().height);
+        const currentHeight = chartWrapper.getBoundingClientRect().height;
+        setMonitorHeight(currentHeight > 0 ? currentHeight : DEFAULT_MONITOR_HEIGHT_PX);
     };
 
     const finishResize = () => {
@@ -239,7 +248,12 @@ export function setupLayoutController({ onChartLayoutChange } = {}) {
         if (chartMaxHeader) chartMaxHeader.style.display = 'flex';
         updateFloatingLayoutMetrics();
         updateChartButtonLabels();
-        clampCurrentMonitorHeight();
+        const configuredHeight = chartWrapper.style.getPropertyValue('--chart-max-height');
+        if (!configuredHeight) {
+            setMonitorHeight(DEFAULT_MONITOR_HEIGHT_PX);
+        } else {
+            clampCurrentMonitorHeight();
+        }
         onChartLayoutChange?.();
 
         monitorTransitionTimer = window.setTimeout(() => {

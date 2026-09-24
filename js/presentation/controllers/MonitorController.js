@@ -1084,13 +1084,18 @@ export function createMonitorController({ engine }) {
         const activeCount = entries.filter(Boolean).length;
         if (blockedMonitorSelectionLabel) {
             status.textContent = t('chart.statusSlotsFull', { item: blockedMonitorSelectionLabel });
+            if (status.dataset) status.dataset.state = 'warning';
         } else if (activeCount >= 2) {
             status.textContent = t('chart.statusCompare');
+            if (status.dataset) status.dataset.state = 'info';
         } else if (activeCount === 1) {
             status.textContent = t('chart.statusOne');
+            if (status.dataset) status.dataset.state = 'info';
         } else {
             status.textContent = t('chart.statusEmpty');
+            if (status.dataset) status.dataset.state = 'empty';
         }
+        status.title = status.textContent;
     }
 
     function createExpandedMonitorChart(canvas, component, { yAxisMode } = {}) {

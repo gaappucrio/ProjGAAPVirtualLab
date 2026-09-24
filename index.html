@@ -196,12 +196,13 @@
                     <div id="chart-max-header" class="chart-max-header" style="display: none;">
                         <div class="chart-max-header-copy">
                             <div class="chart-max-title-row">
-                                <h3 style="margin: 0; color: #2c3e50; font-size: 16px;">Monitoramento Detalhado</h3>
+                                <h3 class="chart-max-title">Monitoramento Detalhado</h3>
                                 <span id="chart-max-badge" class="chart-max-badge">1 grafico</span>
                             </div>
-                            <p id="chart-max-status" class="chart-max-status">Clique em outro tanque, bomba, válvula, trocador de calor ou Cano para comparar os dois ultimos graficos.</p>
+                            <span class="chart-max-divider" aria-hidden="true"></span>
+                            <p id="chart-max-status" class="chart-max-status" title="Clique em outro componente para comparar os dois ultimos graficos.">Clique em outro componente para comparar os dois ultimos graficos.</p>
                         </div>
-                        <button id="btn-close-max-chart" class="gaap-btn danger" title="Fecha o monitoramento detalhado e retorna ao gráfico compacto da barra de propriedades." style="padding: 5px 15px; font-size: 12px; margin: 0;">&#10006; Fechar Gráfico</button>
+                        <button id="btn-close-max-chart" class="gaap-btn danger chart-max-close-btn" title="Fecha o monitoramento detalhado e retorna ao gráfico compacto da barra de propriedades.">&#10006; Fechar Gráfico</button>
                     </div>
                     <div id="chart-compact-stage" class="chart-compact-stage">
                         <canvas id="gaap-volume-chart"></canvas>
@@ -232,7 +233,7 @@
                                 <div class="chart-compare-canvas-wrap" id="chart-compare-wrap-2">
                                     <canvas id="gaap-compare-chart-2"></canvas>
                                 </div>
-                                <div class="chart-compare-empty" id="chart-compare-empty-2" hidden>Clique em outro tanque, bomba, válvula, trocador de calor ou Cano para comparar.</div>
+                                <div class="chart-compare-empty" id="chart-compare-empty-2" hidden>Clique em outro componente para comparar.</div>
                             </div>
                         </div>
                     </div>

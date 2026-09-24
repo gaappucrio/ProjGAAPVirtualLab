@@ -51,17 +51,17 @@ function formatAxisTick(value) {
 
 function getScaleProfile({ expanded = false } = {}) {
     return {
-        titleFontSize: expanded ? 13 : 10,
-        tickFontSize: expanded ? 12 : 10,
-        legendFontSize: expanded ? 12 : 9,
-        legendPadding: expanded ? 14 : 10,
-        legendBoxSize: expanded ? 10 : 8,
+        titleFontSize: expanded ? 11 : 10,
+        tickFontSize: expanded ? 11 : 10,
+        legendFontSize: expanded ? 10.5 : 9,
+        legendPadding: expanded ? 8 : 6,
+        legendBoxSize: expanded ? 8 : 8,
         maxTicksX: expanded ? 7 : 5,
-        maxTicksY: expanded ? 6 : 5,
-        pointRadius: expanded ? 6 : 5,
-        pointHoverRadius: expanded ? 8 : 7,
+        maxTicksY: expanded ? 5 : 4,
+        pointRadius: expanded ? 5 : 4,
+        pointHoverRadius: expanded ? 7 : 6,
         layoutPadding: expanded
-            ? { top: 10, right: 10, left: 8, bottom: 2 }
+            ? { top: 12, right: 10, left: 8, bottom: 2 }
             : { top: 8, right: 6, left: 4, bottom: 0 }
     };
 }

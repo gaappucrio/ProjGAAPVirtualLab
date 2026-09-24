@@ -671,7 +671,16 @@ test('gráfico detalhado desacopla da barra de propriedades ao expandir e perman
 
         global.requestAnimationFrame = (fn) => setTimeout(fn, 0);
 
-        const { setupLayoutController } = await import('../js/presentation/controllers/LayoutController.js');
+        const {
+            setupLayoutController,
+            MIN_MONITOR_HEIGHT_PX,
+            DEFAULT_MONITOR_HEIGHT_PX,
+            MAX_MONITOR_HEIGHT_PX
+        } = await import('../js/presentation/controllers/LayoutController.js');
+
+        assert.equal(MIN_MONITOR_HEIGHT_PX, 320);
+        assert.equal(DEFAULT_MONITOR_HEIGHT_PX, 380);
+        assert.equal(MAX_MONITOR_HEIGHT_PX, 900);
 
         let layoutUpdates = 0;
         setupLayoutController({ onChartLayoutChange: () => { layoutUpdates++; } });
@@ -685,6 +694,10 @@ test('gráfico detalhado desacopla da barra de propriedades ao expandir e perman
         assert.ok(chartWrapper.classList.contains('maximized'));
         assert.equal(chartWrapper.parentElement, sandbox);
         assert.ok(propertiesContent.querySelector('#chart-wrapper-placeholder'));
+        assert.equal(sandbox.style.getPropertyValue('--chart-min-height'), '320px');
+        assert.equal(sandbox.style.getPropertyValue('--chart-default-height'), '380px');
+        assert.equal(sandbox.style.getPropertyValue('--chart-max-height-limit'), '900px');
+        assert.equal(chartWrapper.style.getPropertyValue('--chart-max-height'), '380px');
 
         // Colapsar a barra da direita: gráfico permanece no sandbox e expande métrica para 16px
         toggleRight.dispatchEvent('click');
