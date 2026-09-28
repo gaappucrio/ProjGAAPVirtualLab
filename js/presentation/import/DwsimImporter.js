@@ -28,6 +28,7 @@ import {
     DEFAULT_SOURCE_MAX_FLOW_LPS,
     DEFAULT_SOURCE_PRESSURE_BAR
 } from '../../domain/units/HydraulicUnits.js';
+import { createFluidoFromProperties } from '../../domain/components/Fluido.js';
 
 // ----- Conversões de unidade DWSIM -> GAAP -----
 const PA_TO_BAR = 1e-5;
@@ -48,8 +49,37 @@ const DWSIM_EQUIPMENT_MAP = {
     Tank: 'tank',
     HeatExchanger: 'heat_exchanger',
     Cooler: 'heat_exchanger',
-    Heater: 'heat_exchanger'
+    Heater: 'heat_exchanger',
+    AirCooler: 'heat_exchanger',
+    ShellAndTubeHeatExchanger: 'heat_exchanger',
+    PlateHeatExchanger: 'heat_exchanger',
+    FiredHeater: 'heat_exchanger'
 };
+
+function resolveDwsimComponentType(objectType, simType = '') {
+    const raw = String(objectType || simType || '').trim();
+    if (!raw) return null;
+    if (DWSIM_EQUIPMENT_MAP[raw]) return DWSIM_EQUIPMENT_MAP[raw];
+    const norm = raw.toLowerCase().replace(/[\s_-]/g, '');
+    if (norm === 'pump' || norm === 'bombahidraulica' || norm === 'bomba') return 'pump';
+    if (norm === 'valve' || norm === 'valvula') return 'valve';
+    if (norm === 'tank' || norm === 'tanque' || norm === 'separatorvessel' || norm === 'vessel') return 'tank';
+    if (
+        norm === 'heatexchanger' ||
+        norm === 'heater' ||
+        norm === 'cooler' ||
+        norm === 'aircooler' ||
+        norm === 'shellandtubeheatexchanger' ||
+        norm === 'plateheatexchanger' ||
+        norm === 'firedheater' ||
+        norm === 'trocadordecalor' ||
+        norm === 'aquecedor' ||
+        norm === 'resfriador'
+    ) {
+        return 'heat_exchanger';
+    }
+    return null;
+}
 
 const SOURCE_COMPONENT_TYPE = 'source';
 const SINK_COMPONENT_TYPE = 'sink';
@@ -228,30 +258,40 @@ function extractGraphicObjects(doc) {
 
         const inputConnectors = el.querySelector(':scope > InputConnectors');
         if (inputConnectors) {
-            inputConnectors.querySelectorAll(':scope > Connector').forEach((conn) => {
+            inputConnectors.querySelectorAll(':scope > Connector').forEach((conn, index) => {
                 if (conn.getAttribute('IsAttached') !== 'true') return;
                 const connType = conn.getAttribute('ConnType') || 'ConIn';
                 if (connType === 'ConEn') return; // ignora energia
                 const sourceName = conn.getAttribute('AttachedFromObjID');
                 if (!sourceName) return;
+                const localIndex = conn.hasAttribute('Index') ? parseInt(conn.getAttribute('Index'), 10) : index;
+                const attachedConnIndex = parseInt(conn.getAttribute('AttachedFromConnIndex') || '0', 10);
                 inputs.push({
                     sourceName,
-                    connIndex: parseInt(conn.getAttribute('AttachedFromConnIndex') || '0', 10)
+                    sourceConnIndex: attachedConnIndex,
+                    targetConnIndex: localIndex,
+                    connIndex: localIndex,
+                    localConnIndex: localIndex
                 });
             });
         }
 
         const outputConnectors = el.querySelector(':scope > OutputConnectors');
         if (outputConnectors) {
-            outputConnectors.querySelectorAll(':scope > Connector').forEach((conn) => {
+            outputConnectors.querySelectorAll(':scope > Connector').forEach((conn, index) => {
                 if (conn.getAttribute('IsAttached') !== 'true') return;
                 const connType = conn.getAttribute('ConnType') || 'ConOut';
                 if (connType === 'ConEn') return; // ignora energia
                 const targetName = conn.getAttribute('AttachedToObjID');
                 if (!targetName) return;
+                const localIndex = conn.hasAttribute('Index') ? parseInt(conn.getAttribute('Index'), 10) : index;
+                const attachedConnIndex = parseInt(conn.getAttribute('AttachedToConnIndex') || '0', 10);
                 outputs.push({
                     targetName,
-                    connIndex: parseInt(conn.getAttribute('AttachedToConnIndex') || '0', 10)
+                    sourceConnIndex: localIndex,
+                    targetConnIndex: attachedConnIndex,
+                    connIndex: localIndex,
+                    localConnIndex: localIndex
                 });
             });
         }
@@ -434,12 +474,25 @@ function tankParameters(simEl) {
     };
 }
 
+function kelvinToCelsius(kelvinOrCelsius, fallbackC = 25) {
+    const val = Number(kelvinOrCelsius);
+    if (!Number.isFinite(val)) return fallbackC;
+    if (val > 150) {
+        return Math.round((val - 273.15) * 100) / 100;
+    }
+    return val;
+}
+
 function sourceParameters(simEl) {
     const pressurePa = findDimensionValue(simEl, 'Pressure')
         || queryNumeric(simEl, 'Pressure', 0)
         || 0;
     const flowM3s = findDimensionValue(simEl, 'Flow')
         || queryNumeric(simEl, 'VolumetricFlow', 0)
+        || queryNumeric(simEl, 'Flow', 0)
+        || 0;
+    const tempK = findDimensionValue(simEl, 'Temperature')
+        || queryNumeric(simEl, 'Temperature', 0)
         || 0;
 
     const pressaoFonteBar = pressurePa > 0
@@ -448,11 +501,15 @@ function sourceParameters(simEl) {
     const vazaoMaximaLps = flowM3s > 0
         ? Math.max(0.1, flowM3s * M3S_TO_LPS)
         : DEFAULT_SOURCE_MAX_FLOW_LPS;
+    const temperaturaC = tempK > 0 ? kelvinToCelsius(tempK, 25) : 25;
 
     return {
         pressaoFonteBar,
         vazaoMaxima: vazaoMaximaLps,
-        fluidoEntradaPresetId: 'agua'
+        fluidoEntradaPresetId: 'agua',
+        fluidoEntrada: createFluidoFromProperties({
+            temperatura: temperaturaC
+        })
     };
 }
 
@@ -463,21 +520,79 @@ function sinkParameters() {
     };
 }
 
-function heatExchangerParameters(simEl) {
-    const ua = queryNumeric(simEl, 'UA', 0)
+function heatExchangerParameters(simEl, dwsimType = '') {
+    const normType = String(dwsimType || '').toLowerCase();
+    const isCooler = normType.includes('cooler') || normType.includes('resfriador');
+    const isHeater = normType.includes('heater') || normType.includes('aquecedor');
+
+    // 1. Área de troca térmica (m²)
+    const areaM2 = queryNumeric(simEl, 'Area', 0)
+        || queryNumeric(simEl, 'ExchangeArea', 0)
+        || queryNumeric(simEl, 'HeatExchangeArea', 0)
+        || queryNumeric(simEl, 'SurfaceArea', 0)
+        || findDimensionValue(simEl, 'Area')
+        || 1.0;
+
+    // 2. Coeficiente global de transferência de calor U (W/(m²·K))
+    const overallU = queryNumeric(simEl, 'OverallHTC', 0)
+        || queryNumeric(simEl, 'OverallHeatTransferCoefficient', 0)
+        || queryNumeric(simEl, 'U', 0)
+        || findDimensionValue(simEl, 'OverallHeatTransferCoefficient')
+        || 0;
+
+    // 3. Capacitância térmica global UA (W/K)
+    let ua = queryNumeric(simEl, 'UA', 0)
         || queryNumeric(simEl, 'OverallHTC_Area', 0)
-        || 5000;
-    const tempServico = queryNumeric(simEl, 'ServiceTemperature', 0)
+        || queryNumeric(simEl, 'OverallHeatTransferCoefficientTimesArea', 0);
+
+    if (!ua || ua <= 0) {
+        if (overallU > 0 && areaM2 > 0) {
+            ua = overallU * areaM2;
+        } else if (isCooler || isHeater) {
+            ua = 5000;
+        } else {
+            ua = 2500;
+        }
+    }
+
+    // 4. Temperatura de serviço (°C)
+    const defaultTemp = isCooler ? 15 : 80;
+    const rawTemp = queryNumeric(simEl, 'OutletTemperature', 0)
+        || queryNumeric(simEl, 'ServiceTemperature', 0)
         || queryNumeric(simEl, 'UtilityTemperature', 0)
-        || 80;
-    const perdaK = queryNumeric(simEl, 'MinorLoss', 0) || 1.2;
+        || queryNumeric(simEl, 'TargetTemperature', 0)
+        || queryNumeric(simEl, 'ColdInletTemperature', 0)
+        || queryNumeric(simEl, 'HotInletTemperature', 0);
+
+    const tempServico = rawTemp > 0 ? kelvinToCelsius(rawTemp, defaultTemp) : defaultTemp;
+
+    // 5. Perda de carga local K
+    const perdaK = queryNumeric(simEl, 'MinorLoss', 0)
+        || queryNumeric(simEl, 'LocalLossK', 0)
+        || 0;
+
+    // 6. Efetividade máxima
+    const rawEff = queryNumeric(simEl, 'MaximumEffectiveness', 0)
+        || queryNumeric(simEl, 'Effectiveness', 0)
+        || 0.95;
+    const efetividadeMaxima = clamp(rawEff > 1 ? rawEff / 100 : rawEff, 0.1, 0.999);
 
     return {
         temperaturaServicoC: tempServico,
+        areaM2: Math.max(0.01, areaM2),
         uaWPorK: Math.max(10, ua),
-        perdaLocalK: perdaK,
-        efetividadeMaxima: 0.95
+        perdaLocalK: Math.max(0, perdaK),
+        efetividadeMaxima,
+        tipoPerfilGrafico: 'position'
     };
+}
+
+function isCounterCurrentExchanger(simObj) {
+    if (!simObj?.element) return false;
+    const flowDirStr = queryString(simObj.element, 'FlowDirection', '');
+    if (!flowDirStr) return false;
+    const norm = flowDirStr.trim().toLowerCase();
+    return norm === '0' || norm === 'countercurrent' || norm === 'counter_current' || norm === 'counter' || norm === 'contracorrente';
 }
 
 function pipeParameters(simEl) {
@@ -585,37 +700,37 @@ function defaultTargetEndpoint(componentType = 'pump') {
 function defaultEndpointFor(componentType, portType) {
     const map = {
         source: {
-            out: { offsetX: 45, offsetY: 20, floorOffsetY: 0, dynamicHeight: null }
+            out: { offsetX: 45, offsetY: 20, floorOffsetY: 0, dynamicHeight: null, portType: 'out' }
         },
         sink: {
-            in: { offsetX: -5, offsetY: 20, floorOffsetY: 0, dynamicHeight: null }
+            in: { offsetX: -5, offsetY: 20, floorOffsetY: 0, dynamicHeight: null, portType: 'in' }
         },
         pump: {
-            in: { offsetX: 0, offsetY: 40, floorOffsetY: 0, dynamicHeight: null },
-            out: { offsetX: 80, offsetY: 40, floorOffsetY: 0, dynamicHeight: null }
+            in: { offsetX: 0, offsetY: 40, floorOffsetY: 0, dynamicHeight: null, portType: 'in' },
+            out: { offsetX: 80, offsetY: 40, floorOffsetY: 0, dynamicHeight: null, portType: 'out' }
         },
         valve: {
-            in: { offsetX: 0, offsetY: 20, floorOffsetY: 0, dynamicHeight: null },
-            out: { offsetX: 40, offsetY: 20, floorOffsetY: 0, dynamicHeight: null }
+            in: { offsetX: 0, offsetY: 20, floorOffsetY: 0, dynamicHeight: null, portType: 'in' },
+            out: { offsetX: 40, offsetY: 20, floorOffsetY: 0, dynamicHeight: null, portType: 'out' }
         },
         tank: {
-            in: { offsetX: 80, offsetY: -40, floorOffsetY: 200, dynamicHeight: 'tank_inlet' },
-            out: { offsetX: 80, offsetY: 200, floorOffsetY: 200, dynamicHeight: 'tank_outlet' }
+            in: { offsetX: 80, offsetY: -40, floorOffsetY: 200, dynamicHeight: 'tank_inlet', portType: 'in' },
+            out: { offsetX: 80, offsetY: 200, floorOffsetY: 200, dynamicHeight: 'tank_outlet', portType: 'out' }
         },
         heat_exchanger: {
-            in: { offsetX: -10, offsetY: 15, floorOffsetY: 0, dynamicHeight: null },
-            out: { offsetX: 90, offsetY: 15, floorOffsetY: 0, dynamicHeight: null },
-            in1: { offsetX: -10, offsetY: 15, floorOffsetY: 0, dynamicHeight: null },
-            out1: { offsetX: 90, offsetY: 15, floorOffsetY: 0, dynamicHeight: null },
-            in2: { offsetX: -10, offsetY: 45, floorOffsetY: 0, dynamicHeight: null },
-            out2: { offsetX: 90, offsetY: 45, floorOffsetY: 0, dynamicHeight: null }
+            in: { offsetX: 0, offsetY: 24, floorOffsetY: 0, dynamicHeight: null, portType: 'in' },
+            out: { offsetX: 200, offsetY: 24, floorOffsetY: 0, dynamicHeight: null, portType: 'out' },
+            in1: { offsetX: 0, offsetY: 24, floorOffsetY: 0, dynamicHeight: null, portType: 'in' },
+            out1: { offsetX: 200, offsetY: 24, floorOffsetY: 0, dynamicHeight: null, portType: 'out' },
+            in2: { offsetX: 0, offsetY: 76, floorOffsetY: 0, dynamicHeight: null, portType: 'inout' },
+            out2: { offsetX: 200, offsetY: 76, floorOffsetY: 0, dynamicHeight: null, portType: 'inout' }
         }
     };
 
-    const defaults = map[componentType]?.[portType] || { offsetX: 0, offsetY: 0, floorOffsetY: 0, dynamicHeight: null };
+    const defaults = map[componentType]?.[portType] || { offsetX: 0, offsetY: 0, floorOffsetY: 0, dynamicHeight: null, portType };
     return {
         portId: portType,
-        portType: (portType === 'in1' || portType === 'in2') ? 'in' : ((portType === 'out1' || portType === 'out2') ? 'out' : portType),
+        portType: defaults.portType || ((portType === 'in1' || portType === 'in') ? 'in' : ((portType === 'out1' || portType === 'out') ? 'out' : ((portType === 'in2' || portType === 'out2') ? 'inout' : portType))),
         offsetX: defaults.offsetX,
         offsetY: defaults.offsetY,
         floorOffsetY: defaults.floorOffsetY,
@@ -629,7 +744,13 @@ function pickDisplayTag(graphicObj, fallbackPrefix) {
     return fallbackPrefix;
 }
 
-function defaultTagFor(gaapType) {
+function defaultTagFor(gaapType, dwsimType = '') {
+    const norm = String(dwsimType || '').toLowerCase();
+    if (gaapType === 'heat_exchanger') {
+        if (norm.includes('cooler') || norm.includes('resfriador')) return 'RF';
+        if (norm.includes('heater') || norm.includes('aquecedor')) return 'AQ';
+        return 'TC';
+    }
     switch (gaapType) {
         case 'pump': return 'P';
         case 'valve': return 'V';
@@ -641,12 +762,13 @@ function defaultTagFor(gaapType) {
     }
 }
 
-function extractPropertiesFor(gaapType, simObj) {
+function extractPropertiesFor(gaapType, simObj, gObj = null) {
     const element = simObj?.element || null;
+    const dwsimType = gObj?.objectType || simObj?.type || '';
     if (gaapType === 'pump') return pumpParameters(element);
     if (gaapType === 'valve') return valveParameters(element);
     if (gaapType === 'tank') return tankParameters(element);
-    if (gaapType === 'heat_exchanger') return heatExchangerParameters(element);
+    if (gaapType === 'heat_exchanger') return heatExchangerParameters(element, dwsimType);
     if (gaapType === 'source') return sourceParameters(element);
     if (gaapType === 'sink') return sinkParameters();
     return null;
@@ -680,18 +802,18 @@ export function translateDwsimToWorkspace(parsed) {
         skippedTypes: new Set()
     };
 
-    // ---- 1. Equipamentos reais (Pump / Valve / Tank) ----
+    // ---- 1. Equipamentos reais (Pump / Valve / Tank / HeatExchanger / Cooler / Heater) ----
     graphicObjects.forEach((gObj) => {
-        const gaapType = DWSIM_EQUIPMENT_MAP[gObj.objectType];
-        if (!gaapType) return;
         const simObj = simObjects.get(gObj.name) || null;
-        const properties = extractPropertiesFor(gaapType, simObj);
+        const gaapType = resolveDwsimComponentType(gObj.objectType, simObj?.type);
+        if (!gaapType) return;
+        const properties = extractPropertiesFor(gaapType, simObj, gObj);
         if (!properties) {
             stats.skipped += 1;
             stats.skippedTypes.add(gObj.objectType);
             return;
         }
-        const tag = pickDisplayTag(gObj, defaultTagFor(gaapType));
+        const tag = pickDisplayTag(gObj, defaultTagFor(gaapType, gObj.objectType));
         const id = nextComponentId();
         components.push({
             id,
@@ -726,8 +848,8 @@ export function translateDwsimToWorkspace(parsed) {
 
         const simObj = simObjects.get(gObj.name) || null;
         const gaapType = hasInput ? SINK_COMPONENT_TYPE : SOURCE_COMPONENT_TYPE;
-        const properties = extractPropertiesFor(gaapType, simObj);
-        const tag = pickDisplayTag(gObj, defaultTagFor(gaapType));
+        const properties = extractPropertiesFor(gaapType, simObj, gObj);
+        const tag = pickDisplayTag(gObj, defaultTagFor(gaapType, gObj.objectType));
         const id = nextComponentId();
         components.push({
             id,
@@ -757,18 +879,29 @@ export function translateDwsimToWorkspace(parsed) {
         if (!startGObj) return results;
 
         startGObj.outputs.forEach((initialOutput) => {
-            const sourceConnIndex = initialOutput.connIndex || 0;
-            const queue = [{ current: initialOutput.targetName, previous: startName, pipes: [] }];
+            const sourceConnIndex = Number.isFinite(initialOutput.sourceConnIndex)
+                ? initialOutput.sourceConnIndex
+                : (Number.isFinite(initialOutput.connIndex) ? initialOutput.connIndex : 0);
+            const queue = [{
+                current: initialOutput.targetName,
+                previous: startName,
+                pipes: [],
+                lastOutput: initialOutput
+            }];
             const localVisited = new Set([startName, initialOutput.targetName]);
 
             while (queue.length > 0) {
-                const { current, previous, pipes } = queue.shift();
+                const { current, previous, pipes, lastOutput } = queue.shift();
                 const nextGObj = graphicObjects.get(current);
                 if (!nextGObj) continue;
 
                 if (equipmentNames.has(current) && current !== startName) {
                     const targetConn = nextGObj.inputs.find((inp) => inp.sourceName === previous);
-                    const targetConnIndex = targetConn ? (targetConn.connIndex || 0) : 0;
+                    const targetConnIndex = targetConn
+                        ? (Number.isFinite(targetConn.targetConnIndex)
+                            ? targetConn.targetConnIndex
+                            : (Number.isFinite(targetConn.connIndex) ? targetConn.connIndex : 0))
+                        : (Number.isFinite(lastOutput?.targetConnIndex) ? lastOutput.targetConnIndex : 0);
                     results.push({
                         target: current,
                         pipes: [...pipes],
@@ -788,7 +921,12 @@ export function translateDwsimToWorkspace(parsed) {
                     const next = output.targetName;
                     if (localVisited.has(next)) continue;
                     localVisited.add(next);
-                    queue.push({ current: next, previous: current, pipes: newPipes });
+                    queue.push({
+                        current: next,
+                        previous: current,
+                        pipes: newPipes,
+                        lastOutput: output
+                    });
                 }
             }
         });
@@ -815,12 +953,27 @@ export function translateDwsimToWorkspace(parsed) {
                 ? pipeParameters(pipes[0].element)
                 : defaultPipeParams();
 
-            const sourcePort = sourceType === 'heat_exchanger'
-                ? (sourceConnIndex === 1 ? 'out2' : 'out1')
-                : 'out';
-            const targetPort = targetType === 'heat_exchanger'
-                ? (targetConnIndex === 1 ? 'in2' : 'in1')
-                : 'in';
+            let sourcePort = 'out';
+            if (sourceType === 'heat_exchanger') {
+                const sourceSimObj = simObjects.get(startName);
+                const isCounter = isCounterCurrentExchanger(sourceSimObj);
+                if (sourceConnIndex === 1) {
+                    sourcePort = isCounter ? 'in2' : 'out2';
+                } else {
+                    sourcePort = 'out1';
+                }
+            }
+
+            let targetPort = 'in';
+            if (targetType === 'heat_exchanger') {
+                const targetSimObj = simObjects.get(target);
+                const isCounter = isCounterCurrentExchanger(targetSimObj);
+                if (targetConnIndex === 1) {
+                    targetPort = isCounter ? 'out2' : 'in2';
+                } else {
+                    targetPort = 'in1';
+                }
+            }
 
             connections.push({
                 sourceId,

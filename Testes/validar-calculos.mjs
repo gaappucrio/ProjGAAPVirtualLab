@@ -1524,3 +1524,266 @@ test('trocador de calor calcula LMTD, Qmax e gera perfil termico com exatidao', 
     approx(datasetsThermal.stream2Points[0].x, 0, 0.001, 'Curva quente Q=0');
     approx(datasetsThermal.stream2Points[0].y, 80, 0.001, 'Curva quente T=80 em Q=0');
 });
+
+test('importador DWSIM traduz trocador de calor em contracorrente e cocorrente com parametros termicos (Area, U, UA, Kelvin)', () => {
+    function createMockSimElement(tags = {}) {
+        return {
+            querySelector(selector) {
+                const tag = selector.replace(':scope > ', '').trim();
+                if (tags[tag] !== undefined) {
+                    return { textContent: String(tags[tag]) };
+                }
+                return null;
+            },
+            querySelectorAll() {
+                return [];
+            }
+        };
+    }
+
+    // 1. Cenário Contracorrente com propriedades DWSIM
+    const graphicObjectsCounter = new Map([
+        ['HX-CC', {
+            name: 'HX-CC',
+            objectType: 'HeatExchanger',
+            x: 100,
+            y: 100,
+            tag: 'TC-101',
+            inputs: [
+                { sourceName: 'StrIn1', connIndex: 0, targetConnIndex: 0 },
+                { sourceName: 'StrIn2', connIndex: 1, targetConnIndex: 1 }
+            ],
+            outputs: [
+                { targetName: 'StrOut1', connIndex: 0, sourceConnIndex: 0 },
+                { targetName: 'StrOut2', connIndex: 1, sourceConnIndex: 1 }
+            ]
+        }],
+        ['StrIn1', { name: 'StrIn1', objectType: 'MaterialStream', inputs: [], outputs: [{ targetName: 'HX-CC', connIndex: 0, targetConnIndex: 0 }] }],
+        ['StrIn2', { name: 'StrIn2', objectType: 'MaterialStream', inputs: [], outputs: [{ targetName: 'HX-CC', connIndex: 1, targetConnIndex: 1 }] }],
+        ['StrOut1', { name: 'StrOut1', objectType: 'MaterialStream', inputs: [{ sourceName: 'HX-CC', connIndex: 0 }], outputs: [] }],
+        ['StrOut2', { name: 'StrOut2', objectType: 'MaterialStream', inputs: [{ sourceName: 'HX-CC', connIndex: 1 }], outputs: [] }]
+    ]);
+
+    const simObjectsCounter = new Map([
+        ['HX-CC', {
+            name: 'HX-CC',
+            type: 'HeatExchanger',
+            element: createMockSimElement({
+                Area: '12.5',
+                OverallHTC: '350',
+                UA: '4375',
+                FlowDirection: 'CounterCurrent',
+                OutletTemperature: '363.15', // 90 °C
+                MinorLoss: '0.4',
+                MaximumEffectiveness: '92'
+            })
+        }]
+    ]);
+
+    const { workspace: wsCounter } = translateDwsimToWorkspace({
+        graphicObjects: graphicObjectsCounter,
+        simObjects: simObjectsCounter
+    });
+
+    const hxCounter = wsCounter.components.find(c => c.snapshot?.tag === 'TC-101');
+    assert.ok(hxCounter, 'Trocador TC-101 deve ser importado');
+    assert.equal(hxCounter.snapshot.type, 'heat_exchanger');
+    assert.equal(hxCounter.snapshot.properties.areaM2, 12.5, 'Área importada = 12.5 m²');
+    assert.equal(hxCounter.snapshot.properties.uaWPorK, 4375, 'UA importado = 4375 W/K');
+    assert.equal(hxCounter.snapshot.properties.temperaturaServicoC, 90, '363.15 K convertido para 90 °C');
+    assert.equal(hxCounter.snapshot.properties.perdaLocalK, 0.4, 'Perda local K = 0.4');
+    assert.equal(hxCounter.snapshot.properties.efetividadeMaxima, 0.92, 'Efetividade máxima = 0.92');
+
+    // Em contracorrente, Corrente 1 entra em in1 e sai em out1;
+    // Corrente 2 entra em out2 e sai em in2 (fluxo inverso).
+    const in1Conn = wsCounter.connections.find(c => c.targetId === hxCounter.id && c.targetEndpoint.portId === 'in1');
+    const in2Conn = wsCounter.connections.find(c => c.targetId === hxCounter.id && c.targetEndpoint.portId === 'out2');
+    const out1Conn = wsCounter.connections.find(c => c.sourceId === hxCounter.id && c.sourceEndpoint.portId === 'out1');
+    const out2Conn = wsCounter.connections.find(c => c.sourceId === hxCounter.id && c.sourceEndpoint.portId === 'in2');
+
+    assert.ok(in1Conn, 'Corrente 1 entra em in1');
+    assert.ok(in2Conn, 'Corrente 2 entra em out2 no arranjo contracorrente');
+    assert.ok(out1Conn, 'Corrente 1 sai em out1');
+    assert.ok(out2Conn, 'Corrente 2 sai em in2 no arranjo contracorrente');
+
+    // 2. Cenário Cocorrente (Paralelo)
+    const graphicObjectsParallel = new Map([
+        ['HX-PAR', {
+            name: 'HX-PAR',
+            objectType: 'HeatExchanger',
+            x: 100,
+            y: 100,
+            tag: 'TC-102',
+            inputs: [
+                { sourceName: 'StrIn1', connIndex: 0, targetConnIndex: 0 },
+                { sourceName: 'StrIn2', connIndex: 1, targetConnIndex: 1 }
+            ],
+            outputs: [
+                { targetName: 'StrOut1', connIndex: 0, sourceConnIndex: 0 },
+                { targetName: 'StrOut2', connIndex: 1, sourceConnIndex: 1 }
+            ]
+        }],
+        ['StrIn1', { name: 'StrIn1', objectType: 'MaterialStream', inputs: [], outputs: [{ targetName: 'HX-PAR', connIndex: 0, targetConnIndex: 0 }] }],
+        ['StrIn2', { name: 'StrIn2', objectType: 'MaterialStream', inputs: [], outputs: [{ targetName: 'HX-PAR', connIndex: 1, targetConnIndex: 1 }] }],
+        ['StrOut1', { name: 'StrOut1', objectType: 'MaterialStream', inputs: [{ sourceName: 'HX-PAR', connIndex: 0 }], outputs: [] }],
+        ['StrOut2', { name: 'StrOut2', objectType: 'MaterialStream', inputs: [{ sourceName: 'HX-PAR', connIndex: 1 }], outputs: [] }]
+    ]);
+
+    const simObjectsParallel = new Map([
+        ['HX-PAR', {
+            name: 'HX-PAR',
+            type: 'HeatExchanger',
+            element: createMockSimElement({
+                Area: '8.0',
+                OverallHTC: '500',
+                FlowDirection: 'CoCurrent',
+                OutletTemperature: '323.15' // 50 °C
+            })
+        }]
+    ]);
+
+    const { workspace: wsParallel } = translateDwsimToWorkspace({
+        graphicObjects: graphicObjectsParallel,
+        simObjects: simObjectsParallel
+    });
+
+    const hxPar = wsParallel.components.find(c => c.snapshot?.tag === 'TC-102');
+    assert.ok(hxPar);
+    assert.equal(hxPar.snapshot.properties.areaM2, 8.0);
+    assert.equal(hxPar.snapshot.properties.uaWPorK, 4000, 'UA calculado de U*A = 500*8 = 4000');
+    assert.equal(hxPar.snapshot.properties.temperaturaServicoC, 50);
+
+    const in2Par = wsParallel.connections.find(c => c.targetId === hxPar.id && c.targetEndpoint.portId === 'in2');
+    const out2Par = wsParallel.connections.find(c => c.sourceId === hxPar.id && c.sourceEndpoint.portId === 'out2');
+    assert.ok(in2Par, 'No modo cocorrente, Corrente 2 entra em in2');
+    assert.ok(out2Par, 'No modo cocorrente, Corrente 2 sai em out2');
+});
+
+test('importador DWSIM traduz aquecedores e resfriadores (Heater, Cooler, AirCooler) com conversao de Kelvin e tags corretas', () => {
+    function createMockSimElement(tags = {}) {
+        return {
+            querySelector(selector) {
+                const tag = selector.replace(':scope > ', '').trim();
+                if (tags[tag] !== undefined) {
+                    return { textContent: String(tags[tag]) };
+                }
+                return null;
+            },
+            querySelectorAll() {
+                return [];
+            }
+        };
+    }
+
+    const graphicObjects = new Map([
+        ['COOL-01', {
+            name: 'COOL-01',
+            objectType: 'Cooler',
+            x: 100,
+            y: 100,
+            inputs: [{ sourceName: 'FeedStr', connIndex: 0 }],
+            outputs: [{ targetName: 'ColdProduct', connIndex: 0 }]
+        }],
+        ['HEAT-01', {
+            name: 'HEAT-01',
+            objectType: 'Heater',
+            x: 350,
+            y: 100,
+            inputs: [{ sourceName: 'ColdProduct', connIndex: 0 }],
+            outputs: [{ targetName: 'HotProduct', connIndex: 0 }]
+        }],
+        ['AIR-01', {
+            name: 'AIR-01',
+            objectType: 'AirCooler',
+            x: 600,
+            y: 100,
+            inputs: [{ sourceName: 'HotProduct', connIndex: 0 }],
+            outputs: [{ targetName: 'FinalProduct', connIndex: 0 }]
+        }],
+        ['FeedStr', {
+            name: 'FeedStr',
+            objectType: 'MaterialStream',
+            inputs: [],
+            outputs: [{ targetName: 'COOL-01', connIndex: 0 }]
+        }],
+        ['ColdProduct', {
+            name: 'ColdProduct',
+            objectType: 'MaterialStream',
+            inputs: [{ sourceName: 'COOL-01', connIndex: 0 }],
+            outputs: [{ targetName: 'HEAT-01', connIndex: 0 }]
+        }],
+        ['HotProduct', {
+            name: 'HotProduct',
+            objectType: 'MaterialStream',
+            inputs: [{ sourceName: 'HEAT-01', connIndex: 0 }],
+            outputs: [{ targetName: 'AIR-01', connIndex: 0 }]
+        }],
+        ['FinalProduct', {
+            name: 'FinalProduct',
+            objectType: 'MaterialStream',
+            inputs: [{ sourceName: 'AIR-01', connIndex: 0 }],
+            outputs: []
+        }]
+    ]);
+
+    const simObjects = new Map([
+        ['COOL-01', {
+            name: 'COOL-01',
+            type: 'Cooler',
+            element: createMockSimElement({
+                OutletTemperature: '288.15' // 15 °C
+            })
+        }],
+        ['HEAT-01', {
+            name: 'HEAT-01',
+            type: 'Heater',
+            element: createMockSimElement({
+                OutletTemperature: '353.15' // 80 °C
+            })
+        }],
+        ['AIR-01', {
+            name: 'AIR-01',
+            type: 'AirCooler',
+            element: createMockSimElement({
+                OutletTemperature: '298.15' // 25 °C
+            })
+        }],
+        ['FeedStr', {
+            name: 'FeedStr',
+            type: 'MaterialStream',
+            element: createMockSimElement({
+                Temperature: '333.15', // 60 °C
+                Pressure: '300000', // 3 bar
+                Flow: '0.005' // 5 L/s
+            })
+        }]
+    ]);
+
+    const { workspace } = translateDwsimToWorkspace({ graphicObjects, simObjects });
+
+    // 1. Validar FeedStr (Source) com temperatura do fluido propagada
+    const sourceComp = workspace.components.find(c => c.snapshot?.type === 'source');
+    assert.ok(sourceComp, 'FeedStr vira source');
+    approx(sourceComp.snapshot.properties.pressaoFonteBar, 3.0, 1e-5, 'Pressão 3 bar');
+    assert.equal(sourceComp.snapshot.properties.vazaoMaxima, 5.0, 'Vazão 5 L/s');
+    assert.equal(sourceComp.snapshot.properties.fluidoEntrada.temperatura, 60, '333.15 K vira 60 °C no fluido da fonte');
+
+    // 2. Validar Cooler -> heat_exchanger com tag RF e 15 °C
+    const coolerComp = workspace.components.find(c => c.snapshot?.tag === 'RF' && c.snapshot?.properties.temperaturaServicoC === 15);
+    assert.ok(coolerComp, 'Cooler vira heat_exchanger com tag RF');
+    assert.equal(coolerComp.snapshot.type, 'heat_exchanger');
+    assert.equal(coolerComp.snapshot.properties.temperaturaServicoC, 15);
+    assert.equal(coolerComp.snapshot.properties.uaWPorK, 5000);
+
+    // 3. Validar Heater -> heat_exchanger com tag AQ e 80 °C
+    const heaterComp = workspace.components.find(c => c.snapshot?.tag === 'AQ' && c.snapshot?.properties.temperaturaServicoC === 80);
+    assert.ok(heaterComp, 'Heater vira heat_exchanger com tag AQ');
+    assert.equal(heaterComp.snapshot.type, 'heat_exchanger');
+    assert.equal(heaterComp.snapshot.properties.temperaturaServicoC, 80);
+
+    // 4. Validar AirCooler -> heat_exchanger com tag RF e 25 °C
+    const airCoolerComp = workspace.components.find(c => c.snapshot?.tag === 'RF' && c.snapshot?.properties.temperaturaServicoC === 25);
+    assert.ok(airCoolerComp, 'AirCooler vira heat_exchanger com tag RF');
+    assert.equal(airCoolerComp.snapshot.type, 'heat_exchanger');
+    assert.equal(airCoolerComp.snapshot.properties.temperaturaServicoC, 25);
+});
