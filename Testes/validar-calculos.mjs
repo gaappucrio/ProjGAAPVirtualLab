@@ -12,7 +12,7 @@ import {
     calcularLmtd,
     calcularSaidaTrocadorCalor
 } from '../js/domain/components/TrocadorCalorLogico.js';
-import { translateDwsimToWorkspace } from '../js/presentation/import/DwsimImporter.js';
+import { readDwsimFile, parseDwsimXml, translateDwsimToWorkspace, arrangeDwsimLayout } from '../js/presentation/import/DwsimImporter.js';
 import {
     VALVE_FLOW_COEFFICIENT_UNITS,
     VALVE_PROFILE_DEFINITIONS,
@@ -1786,4 +1786,302 @@ test('importador DWSIM traduz aquecedores e resfriadores (Heater, Cooler, AirCoo
     assert.ok(airCoolerComp, 'AirCooler vira heat_exchanger com tag RF');
     assert.equal(airCoolerComp.snapshot.type, 'heat_exchanger');
     assert.equal(airCoolerComp.snapshot.properties.temperaturaServicoC, 25);
+});
+
+test('importador DWSIM importa arquivo dwxmz real com temperaturas distintas (25 °C e 80 °C), setpoint ativo no tanque e trocador de calor', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+
+    const filePath = path.resolve('assets/components/entradaBombaTanqueValvulaSPsaidacompipes.dwxmz');
+    assert.ok(fs.existsSync(filePath), 'Arquivo dwxmz deve existir na pasta assets');
+
+    const buffer = fs.readFileSync(filePath);
+    const mockFile = {
+        arrayBuffer: async () => buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
+    };
+
+    const xmlText = await readDwsimFile(mockFile);
+    assert.ok(xmlText && xmlText.length > 1000, 'XML deve ser extraído do arquivo .dwxmz ZIP');
+
+    const parsed = parseDwsimXml(xmlText);
+    assert.ok(parsed.graphicObjects.size > 0, 'GraphicObjects devem ser extraídos');
+    assert.ok(parsed.simObjects.size > 0, 'SimulationObjects devem ser extraídos');
+
+    const { workspace, stats } = translateDwsimToWorkspace(parsed);
+    assert.ok(stats.created >= 9, 'Devem ser criados pelo menos 9 componentes no workspace');
+    assert.ok(workspace.connections.length >= 8, 'Devem ser criadas pelo menos 8 conexões');
+
+    // 1. Validar Correntes de Entrada com Temperaturas Diferentes (25 °C e 80 °C)
+    const stream10 = workspace.components.find(c => c.snapshot?.tag === '10');
+    const stream11 = workspace.components.find(c => c.snapshot?.tag === '11');
+    const stream12 = workspace.components.find(c => c.snapshot?.tag === '12');
+
+    assert.ok(stream10, 'Fonte da corrente 10 deve existir');
+    assert.ok(stream11, 'Fonte da corrente 11 deve existir');
+    assert.ok(stream12, 'Fonte da corrente 12 deve existir');
+
+    // Corrente 10: 25 °C, preset água, 0.5 bar
+    assert.equal(stream10.snapshot.properties.fluidoEntrada.temperatura, 25, 'Corrente 10 está a 25 °C');
+    assert.equal(stream10.snapshot.properties.fluidoEntradaPresetId, 'agua', 'Corrente 10 usa preset água');
+    approx(stream10.snapshot.properties.pressaoFonteBar, 0.5, 1e-4, 'Pressão da fonte 10 = 0.5 bar');
+
+    // Corrente 11: 25 °C (298.15 K), preset água, 1.5 bar
+    assert.equal(stream11.snapshot.properties.fluidoEntrada.temperatura, 25, 'Corrente 11 está a 25 °C');
+    assert.equal(stream11.snapshot.properties.fluidoEntradaPresetId, 'agua', 'Corrente 11 usa preset água');
+    approx(stream11.snapshot.properties.pressaoFonteBar, 1.5, 1e-4, 'Pressão da fonte 11 = 1.5 bar');
+
+    // Corrente 12: 80 °C (353.15 K), preset custom, 1.5 bar
+    assert.equal(stream12.snapshot.properties.fluidoEntrada.temperatura, 80, 'Corrente 12 está a 80 °C (não 25 °C!)');
+    assert.equal(stream12.snapshot.properties.fluidoEntradaPresetId, 'custom', 'Corrente 12 usa preset custom');
+    approx(stream12.snapshot.properties.pressaoFonteBar, 1.5, 1e-4, 'Pressão da fonte 12 = 1.5 bar');
+    approx(stream12.snapshot.properties.fluidoEntrada.densidade, 971.8, 1.0, 'Densidade da água a 80 °C é calculada corretamente (~971.8 kg/m³)');
+
+    // 2. Validar Tanque com Setpoint Ativo (50%) e Ganhos PID do DWSIM
+    const tank = workspace.components.find(c => c.snapshot?.tag === 'TANK-1');
+    assert.ok(tank, 'Tanque TANK-1 deve ser importado');
+    assert.equal(tank.snapshot.properties.capacidadeMaxima, 1000, 'Capacidade máxima do tanque = 1000 L (1 m³)');
+    assert.equal(tank.snapshot.properties.alturaUtilMetros, 2.4, 'Altura útil = 2.4 m');
+    assert.equal(tank.snapshot.properties.setpointAtivo, true, 'setpointAtivo deve ser true devido ao PIDController/LevelGauge associado');
+    assert.equal(tank.snapshot.properties.setpoint, 50, 'Setpoint importado = 50% (1.2 m em tanque de 2.4 m)');
+    assert.equal(tank.snapshot.properties.kp, 250, 'Kp importado do controlador = 250');
+    assert.equal(tank.snapshot.properties.ki, 25, 'Ki importado do controlador = 25');
+    assert.equal(tank.snapshot.properties.kd, 0, 'Kd importado do controlador = 0');
+
+    // 3. Validar Válvula com Coeficiente Cv e característica
+    const valve = workspace.components.find(c => c.snapshot?.tag === 'VALVE-1');
+    assert.ok(valve, 'Válvula VALVE-1 deve ser importada');
+    assert.equal(valve.snapshot.properties.cv, 220, 'Cv da válvula = 220 (unidade Cv indicada no DWSIM)');
+    assert.equal(valve.snapshot.properties.grauAbertura, 50, 'Abertura = 50%');
+    assert.equal(valve.snapshot.properties.aberta, true, 'Válvula aberta');
+    assert.equal(valve.snapshot.properties.tipoCaracteristica, 'linear', 'Característica linear');
+
+    // 4. Validar Bomba com pressão máxima e vazão nominal
+    const pump = workspace.components.find(c => c.snapshot?.tag === 'PUMP-1' || c.snapshot?.tag === 'P-01');
+    assert.ok(pump, 'Bomba deve ser importada');
+    approx(pump.snapshot.properties.pressaoMaxima, 4.83, 0.05, 'Pressão máxima da bomba ~4.83 bar (483 kPa)');
+    approx(pump.snapshot.properties.vazaoNominal, 8.89, 0.05, 'Vazão nominal ~8.89 L/s');
+    approx(pump.snapshot.properties.eficienciaHidraulica, 0.646, 0.01, 'Eficiência hidráulica ~64.6%');
+
+    // 5. Validar Trocador de Calor HX-1
+    const hx = workspace.components.find(c => c.snapshot?.tag === 'HX-1');
+    assert.ok(hx, 'Trocador HX-1 deve ser importado');
+    assert.equal(hx.snapshot.type, 'heat_exchanger');
+    assert.equal(hx.snapshot.properties.areaM2, 1, 'Área = 1 m²');
+    assert.equal(hx.snapshot.properties.uaWPorK, 2500, 'UA = 2500 W/K');
+    approx(hx.snapshot.properties.efetividadeMaxima, 0.516, 0.01, 'Efetividade máxima ~51.6%');
+
+    // 6. Validar Conexões e Roteamento Multicorrente
+    const in1Conn = workspace.connections.find(c => c.targetId === hx.id && c.targetEndpoint.portId === 'in1');
+    const in2Conn = workspace.connections.find(c => c.targetId === hx.id && c.targetEndpoint.portId === 'in2');
+    assert.ok(in1Conn, 'Corrente fria 11 deve entrar em in1');
+    assert.ok(in2Conn, 'Corrente quente 12 deve entrar em in2');
+    assert.equal(in1Conn.sourceId, stream11.id, 'Fonte da corrente 11 entra em in1');
+    assert.equal(in2Conn.sourceId, stream12.id, 'Fonte da corrente 12 entra em in2');
+
+    // 7. Validar Parâmetros dos Canos extraídos de seções reais (DI e Comprimento)
+    const pipeConn = workspace.connections.find(c => c.extraLengthM === 1.0);
+    assert.ok(pipeConn, 'Conexão deve herdar o comprimento de 1 m da seção DWSIM');
+    approx(pipeConn.diameterM, 0.08, 0.001, 'Diâmetro do tubo deve ser 80 mm (3.1496 pol)');
+
+    // 8. Validar Layout Espaçoso, sem Sobreposição e Alinhado à Grade (Melhoria QoL)
+    const COMPONENT_SPECS = {
+        tank: { width: 160, height: 240 },
+        heat_exchanger: { width: 200, height: 160 },
+        pump: { width: 80, height: 80 },
+        valve: { width: 60, height: 60 },
+        source: { width: 60, height: 60 },
+        sink: { width: 60, height: 60 }
+    };
+
+    // Verificar ausência total de sobreposição entre componentes
+    for (let i = 0; i < workspace.components.length; i++) {
+        for (let j = i + 1; j < workspace.components.length; j++) {
+            const a = workspace.components[i];
+            const b = workspace.components[j];
+            const specA = COMPONENT_SPECS[a.snapshot.type] || { width: 80, height: 80 };
+            const specB = COMPONENT_SPECS[b.snapshot.type] || { width: 80, height: 80 };
+
+            const overlapX = (a.snapshot.x < b.snapshot.x + specB.width) && (b.snapshot.x < a.snapshot.x + specA.width);
+            const overlapY = (a.snapshot.y < b.snapshot.y + specB.height) && (b.snapshot.y < a.snapshot.y + specA.height);
+
+            assert.ok(!overlapX || !overlapY, `Componentes ${a.snapshot.tag} e ${b.snapshot.tag} não devem sobrepor no layout`);
+        }
+    }
+
+    // Verificar alinhamento à grade de 40px
+    workspace.components.forEach(c => {
+        assert.equal(c.snapshot.x % 40, 0, `Posição X de ${c.snapshot.tag} deve estar alinhada à grade (múltiplo de 40)`);
+        assert.equal(c.snapshot.y % 40, 0, `Posição Y de ${c.snapshot.tag} deve estar alinhada à grade (múltiplo de 40)`);
+    });
+
+    // Verificar espaçamento positivo nos canos conectados (mínimo 80px de tubo para visualização)
+    const compMap = new Map(workspace.components.map(c => [c.id, c.snapshot]));
+    workspace.connections.forEach(conn => {
+        const src = compMap.get(conn.sourceId);
+        const tgt = compMap.get(conn.targetId);
+        const specSrc = COMPONENT_SPECS[src.type] || { width: 80, height: 80 };
+        if (tgt.x > src.x) {
+            const gapX = tgt.x - (src.x + specSrc.width);
+            assert.ok(gapX >= 80, `Cano de ${src.tag} para ${tgt.tag} deve ter espaço visual suficiente (gapX = ${gapX}px >= 80px)`);
+        }
+    });
+});
+
+test('importador DWSIM normaliza setpoint em porcentagem para controladores diretos e propriedades dinamicas de tanque', () => {
+    function createMockSimElement(tags = {}, dynamicProps = {}) {
+        const dynEl = {
+            querySelectorAll(selector) {
+                if (selector.includes('Item')) {
+                    return Object.entries(dynamicProps).map(([name, data]) => ({
+                        querySelector(sub) {
+                            if (sub.includes('Name')) return { textContent: name };
+                            if (sub.includes('Data')) return { textContent: String(data) };
+                            return null;
+                        }
+                    }));
+                }
+                return [];
+            }
+        };
+
+        return {
+            querySelector(selector) {
+                const tag = selector.replace(':scope > ', '').trim();
+                if (tag === 'DynamicProperties') return dynEl;
+                if (tags[tag] !== undefined) {
+                    return { textContent: String(tags[tag]) };
+                }
+                return null;
+            },
+            querySelectorAll() {
+                return [];
+            }
+        };
+    }
+
+    // Caso 1: Tanque com propriedade dinâmica 'Level Setpoint' direta
+    const graphicObjects = new Map([
+        ['TK-DIRECT', {
+            name: 'TK-DIRECT',
+            objectType: 'Tank',
+            x: 100,
+            y: 100,
+            tag: 'TK-01',
+            inputs: [],
+            outputs: []
+        }],
+        ['TK-PID-DIR', {
+            name: 'TK-PID-DIR',
+            objectType: 'Tank',
+            x: 300,
+            y: 100,
+            tag: 'TK-02',
+            inputs: [],
+            outputs: []
+        }]
+    ]);
+
+    const simObjects = new Map([
+        ['TK-DIRECT', {
+            name: 'TK-DIRECT',
+            type: 'Tank',
+            element: createMockSimElement(
+                { Volume: '5', TankHeight: '4.0' },
+                { 'Level Setpoint': '2.0' } // 2 m em tanque de 4 m = 50%
+            )
+        }],
+        ['TK-PID-DIR', {
+            name: 'TK-PID-DIR',
+            type: 'Tank',
+            element: createMockSimElement({ Volume: '2', TankHeight: '3.0' })
+        }],
+        ['PID-DIRECT-01', {
+            name: 'PID-DIRECT-01',
+            type: 'PIDController',
+            element: {
+                querySelector(selector) {
+                    if (selector.includes('ControlledObjectData')) {
+                        return {
+                            getAttribute(attr) {
+                                if (attr === 'ID') return 'TK-PID-DIR';
+                                return null;
+                            }
+                        };
+                    }
+                    const tag = selector.replace(':scope > ', '').trim();
+                    const map = { SetPoint: '2.25', Kp: '150', Ki: '12', Kd: '1.5', Active: 'true' };
+                    if (map[tag] !== undefined) return { textContent: map[tag] };
+                    return null;
+                },
+                querySelectorAll() { return []; }
+            }
+        }]
+    ]);
+
+    const { workspace } = translateDwsimToWorkspace({ graphicObjects, simObjects });
+
+    const tk1 = workspace.components.find(c => c.snapshot?.tag === 'TK-01');
+    assert.ok(tk1);
+    assert.equal(tk1.snapshot.properties.setpointAtivo, true, 'Tanque com Level Setpoint dinâmico ativa setpoint');
+    assert.equal(tk1.snapshot.properties.setpoint, 50, '2 m em altura de 4 m normaliza para 50%');
+
+    const tk2 = workspace.components.find(c => c.snapshot?.tag === 'TK-02');
+    assert.ok(tk2);
+    assert.equal(tk2.snapshot.properties.setpointAtivo, true, 'Tanque com PIDController direto ativa setpoint');
+    assert.equal(tk2.snapshot.properties.setpoint, 75, '2.25 m em altura de 3 m normaliza para 75%');
+    assert.equal(tk2.snapshot.properties.kp, 150);
+    assert.equal(tk2.snapshot.properties.ki, 12);
+    assert.equal(tk2.snapshot.properties.kd, 1.5);
+});
+
+
+test('importador DWSIM organiza layout dos componentes com espacamento confortavel, sem colisoes e alinhado a grade', () => {
+    // 1. Testa layout em circuito com ramificações
+    const comps = [
+        { id: '1', snapshot: { type: 'pump', tag: 'P-1', x: 0, y: 0 } },
+        { id: '2', snapshot: { type: 'valve', tag: 'V-1', x: 50, y: 0 } },
+        { id: '3', snapshot: { type: 'valve', tag: 'V-2', x: 50, y: 50 } },
+        { id: '4', snapshot: { type: 'tank', tag: 'T-1', x: 100, y: 20 } }
+    ];
+    const conns = [
+        { sourceId: '1', targetId: '2' },
+        { sourceId: '1', targetId: '3' },
+        { sourceId: '2', targetId: '4' },
+        { sourceId: '3', targetId: '4' }
+    ];
+
+    arrangeDwsimLayout(comps, conns);
+
+    // Todas as posições devem ser múltiplos da grade de 40
+    comps.forEach(c => {
+        assert.equal(c.snapshot.x % 40, 0, `X de ${c.snapshot.tag} deve estar na grade de 40`);
+        assert.equal(c.snapshot.y % 40, 0, `Y de ${c.snapshot.tag} deve estar na grade de 40`);
+    });
+
+    // V-1 e V-2 devem estar na mesma coluna X e separadas em Y
+    const v1 = comps.find(c => c.id === '2');
+    const v2 = comps.find(c => c.id === '3');
+    assert.equal(v1.snapshot.x, v2.snapshot.x, 'V-1 e V-2 na mesma coluna');
+    assert.ok(Math.abs(v1.snapshot.y - v2.snapshot.y) >= 60, 'V-1 e V-2 devem ter separação vertical >= 60px');
+
+    // 2. Testa loop de reciclo sem travar nem gerar coordenadas infinitas
+    const loopComps = [
+        { id: 'a', snapshot: { type: 'pump', tag: 'P-A', x: 10, y: 10 } },
+        { id: 'b', snapshot: { type: 'tank', tag: 'T-B', x: 20, y: 10 } },
+        { id: 'c', snapshot: { type: 'valve', tag: 'V-C', x: 30, y: 10 } }
+    ];
+    const loopConns = [
+        { sourceId: 'a', targetId: 'b' },
+        { sourceId: 'b', targetId: 'c' },
+        { sourceId: 'c', targetId: 'a' }
+    ];
+
+    arrangeDwsimLayout(loopComps, loopConns);
+
+    loopComps.forEach(c => {
+        assert.ok(Number.isFinite(c.snapshot.x), `${c.snapshot.tag} X deve ser finito`);
+        assert.ok(Number.isFinite(c.snapshot.y), `${c.snapshot.tag} Y deve ser finito`);
+        assert.ok(c.snapshot.x >= 120, `${c.snapshot.tag} X deve respeitar margem`);
+        assert.ok(c.snapshot.y >= 120, `${c.snapshot.tag} Y deve respeitar margem`);
+    });
 });

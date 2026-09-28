@@ -186,6 +186,120 @@ async function decompressDeflateRaw(compressedData) {
 // PARSE DO XML
 // ============================================================
 
+class SimpleElement {
+    constructor(tagName, textContent = '', rawXml = '') {
+        this.tagName = tagName;
+        this.textContent = textContent;
+        this.rawXml = rawXml;
+        this.children = [];
+        this.attributes = new Map();
+        this.parentElement = null;
+    }
+
+    getAttribute(name) {
+        return this.attributes.get(name) || null;
+    }
+
+    hasAttribute(name) {
+        return this.attributes.has(name);
+    }
+
+    querySelector(selector) {
+        const isScopeDirect = selector.startsWith(':scope > ');
+        const targetTag = (isScopeDirect ? selector.replace(':scope > ', '') : selector).replace(/.*>\s*/, '').trim().toLowerCase();
+
+        if (isScopeDirect) {
+            for (const child of this.children) {
+                if (child.tagName.toLowerCase() === targetTag) return child;
+            }
+            return null;
+        }
+
+        for (const child of this.children) {
+            if (child.tagName.toLowerCase() === targetTag) return child;
+            const found = child.querySelector(targetTag);
+            if (found) return found;
+        }
+        return null;
+    }
+
+    querySelectorAll(selector) {
+        const parts = selector.split(',').map((s) => s.trim());
+        if (parts.length > 1) {
+            const set = new Set();
+            for (const part of parts) {
+                for (const el of this.querySelectorAll(part)) {
+                    set.add(el);
+                }
+            }
+            return Array.from(set);
+        }
+
+        const isScopeDirect = selector.startsWith(':scope > ');
+        const targetTag = (isScopeDirect ? selector.replace(':scope > ', '') : selector).replace(/.*>\s*/, '').trim().toLowerCase();
+        const results = [];
+
+        if (isScopeDirect) {
+            for (const child of this.children) {
+                if (child.tagName.toLowerCase() === targetTag) results.push(child);
+            }
+            return results;
+        }
+
+        function walk(node) {
+            for (const child of node.children) {
+                if (child.tagName.toLowerCase() === targetTag) results.push(child);
+                walk(child);
+            }
+        }
+        walk(this);
+        return results;
+    }
+}
+
+/**
+ * Fallback de parser XML leve para ambientes sem DOMParser (como suites de teste Node.js).
+ */
+export function parseXmlFallback(xmlText) {
+    const root = new SimpleElement('root', '', xmlText);
+    const stack = [root];
+    const re = /<!--[\s\S]*?-->|<([a-zA-Z0-9_:-]+)([^>]*?)(\/?)>|([^<]+)|<\/([a-zA-Z0-9_:-]+)>/g;
+    let m;
+    while ((m = re.exec(xmlText)) !== null) {
+        if (m[0].startsWith('<!--')) continue;
+        if (m[1]) {
+            const tagName = m[1];
+            const attrStr = m[2] || '';
+            const isSelfClosing = m[3] === '/' || attrStr.endsWith('/');
+            const el = new SimpleElement(tagName);
+
+            const attrRe = /([a-zA-Z0-9_:-]+)=(?:"([^"]*)"|'([^']*)')/g;
+            let am;
+            while ((am = attrRe.exec(attrStr)) !== null) {
+                el.attributes.set(am[1], am[2] !== undefined ? am[2] : am[3]);
+            }
+
+            const parent = stack[stack.length - 1];
+            el.parentElement = parent;
+            parent.children.push(el);
+
+            if (!isSelfClosing) {
+                stack.push(el);
+            }
+        } else if (m[4]) {
+            const text = m[4].trim();
+            if (text && stack.length > 0) {
+                stack[stack.length - 1].textContent += (stack[stack.length - 1].textContent ? ' ' : '') + text;
+            }
+        } else if (m[5]) {
+            if (stack.length > 1 && stack[stack.length - 1].tagName.toLowerCase() === m[5].toLowerCase()) {
+                stack.pop();
+            }
+        }
+    }
+    return root;
+}
+
 function queryNumeric(parent, tag, fallback = 0) {
     if (!parent || typeof parent.querySelector !== 'function') return fallback;
     const el = parent.querySelector(`:scope > ${tag}`);
@@ -197,7 +311,78 @@ function queryNumeric(parent, tag, fallback = 0) {
 function queryString(parent, tag, fallback = '') {
     if (!parent || typeof parent.querySelector !== 'function') return fallback;
     const el = parent.querySelector(`:scope > ${tag}`);
-    return el ? String(el.textContent || '') : fallback;
+    return el ? String(el.textContent || '').trim() : fallback;
+}
+
+function queryNumericDeep(parent, tagNames, fallback = 0) {
+    if (!parent) return fallback;
+    const candidates = [];
+    const list = Array.isArray(tagNames) ? tagNames : [tagNames];
+    list.forEach((t) => {
+        candidates.push(t);
+        candidates.push(t.toLowerCase());
+        candidates.push(t.toUpperCase());
+        candidates.push(t.charAt(0).toUpperCase() + t.slice(1));
+    });
+    const uniqueTags = [...new Set(candidates)];
+
+    if (typeof parent.querySelector === 'function') {
+        for (const tag of uniqueTags) {
+            try {
+                const el = parent.querySelector(`:scope > ${tag}`) || parent.querySelector(tag);
+                if (el) {
+                    const val = Number(el.textContent);
+                    if (Number.isFinite(val)) return val;
+                }
+            } catch {}
+        }
+    }
+
+    const xml = serializeXml(parent);
+    if (xml) {
+        for (const tag of list) {
+            const val = matchTag(xml, tag);
+            if (val !== null && Number.isFinite(val)) return val;
+        }
+    }
+
+    return fallback;
+}
+
+function queryStringDeep(parent, tagNames, fallback = '') {
+    if (!parent) return fallback;
+    const candidates = [];
+    const list = Array.isArray(tagNames) ? tagNames : [tagNames];
+    list.forEach((t) => {
+        candidates.push(t);
+        candidates.push(t.toLowerCase());
+        candidates.push(t.toUpperCase());
+        candidates.push(t.charAt(0).toUpperCase() + t.slice(1));
+    });
+    const uniqueTags = [...new Set(candidates)];
+
+    if (typeof parent.querySelector === 'function') {
+        for (const tag of uniqueTags) {
+            try {
+                const el = parent.querySelector(`:scope > ${tag}`) || parent.querySelector(tag);
+                if (el) {
+                    const text = String(el.textContent || '').trim();
+                    if (text) return text;
+                }
+            } catch {}
+        }
+    }
+
+    const xml = serializeXml(parent);
+    if (xml) {
+        for (const tag of list) {
+            const re = new RegExp(`<${tag}[^>]*>([^<]*)</${tag}>`, 'i');
+            const m = xml.match(re);
+            if (m && m[1] && m[1].trim()) return m[1].trim();
+        }
+    }
+
+    return fallback;
 }
 
 function queryAllDirect(parent, tag) {
@@ -213,19 +398,23 @@ function extractSimulationObjects(doc) {
     const map = new Map();
     const blocks = doc.querySelectorAll('SimulationObjects > SimulationObject, SimulationObject');
     blocks.forEach((el) => {
-        const type = queryString(el, 'Type');
-        const componentName = queryString(el, 'ComponentName');
+        const type = queryString(el, 'Type') || queryStringDeep(el, ['Type']);
+        const componentName = queryString(el, 'ComponentName') || queryStringDeep(el, ['ComponentName']);
         const names = queryAllDirect(el, 'Name').map((n) => n.textContent);
         const lastName = names.length ? names[names.length - 1] : '';
         const key = componentName || lastName;
         if (!key) return;
-        if (map.has(key)) return; // mantém a primeira ocorrência (versão base)
-        map.set(key, {
+
+        const entry = {
             element: el,
             type,
             componentName,
             name: lastName
-        });
+        };
+
+        if (!map.has(key)) map.set(key, entry);
+        if (lastName && !map.has(lastName)) map.set(lastName, entry);
+        if (componentName && !map.has(componentName)) map.set(componentName, entry);
     });
     return map;
 }
@@ -242,23 +431,24 @@ function extractGraphicObjects(doc) {
     const map = new Map();
     const blocks = doc.querySelectorAll('GraphicObjects > GraphicObject, GraphicObject');
     blocks.forEach((el) => {
-        const type = queryString(el, 'Type');
-        const name = queryString(el, 'Name');
+        const type = queryString(el, 'Type') || queryStringDeep(el, ['Type']);
+        const name = queryString(el, 'Name') || queryStringDeep(el, ['Name']);
         if (!name) return;
 
-        const objectType = queryString(el, 'ObjectType');
+        const objectType = queryString(el, 'ObjectType') || queryStringDeep(el, ['ObjectType']);
         const x = queryNumeric(el, 'X', 0);
         const y = queryNumeric(el, 'Y', 0);
         const width = queryNumeric(el, 'Width', 20);
         const height = queryNumeric(el, 'Height', 20);
-        const tag = queryString(el, 'Tag');
+        const tag = queryString(el, 'Tag') || queryStringDeep(el, ['Tag']);
 
         const inputs = [];
         const outputs = [];
 
-        const inputConnectors = el.querySelector(':scope > InputConnectors');
+        const inputConnectors = el.querySelector(':scope > InputConnectors') || el.querySelector('InputConnectors');
         if (inputConnectors) {
-            inputConnectors.querySelectorAll(':scope > Connector').forEach((conn, index) => {
+            const connList = inputConnectors.querySelectorAll(':scope > Connector') || inputConnectors.querySelectorAll('Connector');
+            connList.forEach((conn, index) => {
                 if (conn.getAttribute('IsAttached') !== 'true') return;
                 const connType = conn.getAttribute('ConnType') || 'ConIn';
                 if (connType === 'ConEn') return; // ignora energia
@@ -276,9 +466,10 @@ function extractGraphicObjects(doc) {
             });
         }
 
-        const outputConnectors = el.querySelector(':scope > OutputConnectors');
+        const outputConnectors = el.querySelector(':scope > OutputConnectors') || el.querySelector('OutputConnectors');
         if (outputConnectors) {
-            outputConnectors.querySelectorAll(':scope > Connector').forEach((conn, index) => {
+            const connList = outputConnectors.querySelectorAll(':scope > Connector') || outputConnectors.querySelectorAll('Connector');
+            connList.forEach((conn, index) => {
                 if (conn.getAttribute('IsAttached') !== 'true') return;
                 const connType = conn.getAttribute('ConnType') || 'ConOut';
                 if (connType === 'ConEn') return; // ignora energia
@@ -317,15 +508,17 @@ function extractGraphicObjects(doc) {
  * Ponto de entrada para o parse: devolve { graphicObjects, simObjects }.
  */
 export function parseDwsimXml(xmlText) {
-    if (typeof globalThis.DOMParser === 'undefined') {
-        throw new Error('DOMParser não disponível neste ambiente.');
-    }
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(xmlText, 'application/xml');
+    let doc;
+    if (typeof globalThis.DOMParser !== 'undefined') {
+        const parser = new DOMParser();
+        doc = parser.parseFromString(xmlText, 'application/xml');
 
-    const parseError = doc.querySelector('parsererror');
-    if (parseError) {
-        throw new Error('XML DWSIM inválido: ' + parseError.textContent.slice(0, 200));
+        const parseError = doc.querySelector('parsererror');
+        if (parseError) {
+            throw new Error('XML DWSIM inválido: ' + parseError.textContent.slice(0, 200));
+        }
+    } else {
+        doc = parseXmlFallback(xmlText);
     }
 
     const graphicObjects = extractGraphicObjects(doc);
@@ -340,13 +533,13 @@ export function parseDwsimXml(xmlText) {
 
 function findDimensionValue(simEl, dimensionName) {
     if (!simEl) return null;
-    const dimensions = simEl.querySelector(':scope > Dimensions');
+    const dimensions = simEl.querySelector(':scope > Dimensions') || simEl.querySelector('Dimensions');
     if (!dimensions) return null;
-    const dimensionEls = dimensions.querySelectorAll(':scope > Dimension');
+    const dimensionEls = dimensions.querySelectorAll(':scope > Dimension') || dimensions.querySelectorAll('Dimension');
     for (const dim of dimensionEls) {
-        const name = queryString(dim, 'Name');
+        const name = queryString(dim, 'Name') || queryStringDeep(dim, ['Name']);
         if (name === dimensionName) {
-            const value = Number(queryString(dim, 'Value'));
+            const value = Number(queryString(dim, 'Value') || queryStringDeep(dim, ['Value']));
             if (Number.isFinite(value)) return value;
         }
     }
@@ -355,14 +548,13 @@ function findDimensionValue(simEl, dimensionName) {
 
 function findDynamicProperty(simEl, propertyName) {
     if (!simEl) return null;
-    const dyn = simEl.querySelector(':scope > DynamicProperties');
+    const dyn = simEl.querySelector(':scope > DynamicProperties') || simEl.querySelector('DynamicProperties');
     if (!dyn) return null;
-    // Itens podem estar como <Item>...</Item> direto ou dentro de estruturas aninhadas.
     const candidates = dyn.querySelectorAll('Item');
     for (const item of candidates) {
-        const name = queryString(item, 'Name');
+        const name = queryString(item, 'Name') || queryStringDeep(item, ['Name']);
         if (name === propertyName) {
-            const data = queryString(item, 'Data');
+            const data = queryString(item, 'Data') || queryStringDeep(item, ['Data']);
             const numeric = Number(data);
             if (Number.isFinite(numeric)) return numeric;
         }
@@ -374,16 +566,22 @@ function pumpParameters(simEl) {
     // DWSIM: Pressão em Pa, vazão em m³/s.
     // GAAP:  Pressão em bar, vazão em L/s.
     const pressureIncreasePa = queryNumeric(simEl, 'PressureIncrease', 0)
-        || queryNumeric(simEl, 'DeltaP', 0);
+        || queryNumeric(simEl, 'DeltaP', 0)
+        || findDimensionValue(simEl, 'PressureDifference')
+        || queryNumericDeep(simEl, ['PressureIncrease', 'DeltaP', 'PressureDifference'], 0);
     const curveFlowM3s = queryNumeric(simEl, 'CurveFlow', 0)
         || findDimensionValue(simEl, 'Flow')
+        || queryNumericDeep(simEl, ['CurveFlow'], 0)
         || 0;
     const efficiency = queryNumeric(simEl, 'Efficiency', 0)
         || queryNumeric(simEl, 'CurveEff', 0)
+        || queryNumeric(simEl, 'Eficiencia', 0)
         || findDimensionValue(simEl, 'Efficiency')
+        || queryNumericDeep(simEl, ['Efficiency', 'CurveEff', 'Eficiencia'], 0)
         || 0;
     const curveNpshrM = queryNumeric(simEl, 'CurveNPSHr', 0)
         || queryNumeric(simEl, 'NPSH', 0)
+        || queryNumericDeep(simEl, ['CurveNPSHr', 'NPSH'], 0)
         || 0;
 
     const pressaoMaximaBar = Math.max(0.05, pressureIncreasePa * PA_TO_BAR);
@@ -408,13 +606,26 @@ function pumpParameters(simEl) {
 
 function valveParameters(simEl) {
     // DWSIM usa Kv; GAAP usa Cv internamente (Cv = Kv / 0.865).
-    const kv = queryNumeric(simEl, 'Kv', 0) || queryNumeric(simEl, 'ActualKv', 0);
+    const rawCoeff = queryNumeric(simEl, 'Kv', 0)
+        || queryNumeric(simEl, 'ActualKv', 0)
+        || queryNumericDeep(simEl, ['Kv', 'ActualKv', 'Cv'], 0);
     const openingPct = queryNumeric(simEl, 'OpeningPct', 0)
         || queryNumeric(simEl, 'OutputAbs', 0)
-        || 0;
-    const characteristic = queryString(simEl, 'DefinedOpeningKvRelationShipType', 'EqualPercentage');
+        || queryNumericDeep(simEl, ['OpeningPct', 'OutputAbs', 'Opening'], 0);
+    const characteristic = queryString(simEl, 'DefinedOpeningKvRelationShipType', '')
+        || queryStringDeep(simEl, ['DefinedOpeningKvRelationShipType', 'Characteristic'], 'EqualPercentage');
+    const flowCoeffUnit = queryString(simEl, 'FlowCoefficient', '')
+        || queryStringDeep(simEl, ['FlowCoefficient', 'CoeffUnit'], '');
 
-    const cv = kv > 0 ? kv / KV_PER_CV : 160;
+    let cv = 160;
+    if (rawCoeff > 0) {
+        if (flowCoeffUnit.toLowerCase().includes('cv')) {
+            cv = rawCoeff;
+        } else {
+            cv = rawCoeff / KV_PER_CV;
+        }
+    }
+
     const tipoCaracteristica = mapValveCharacteristic(characteristic);
     const grauAbertura = clamp(openingPct, 0, 100);
 
@@ -440,23 +651,143 @@ function mapValveCharacteristic(dwsimCharacteristic) {
     return 'equal_percentage';
 }
 
-function tankParameters(simEl) {
+function normalizeSetpointToPercentage(spValue, maxLevel = 2.4) {
+    const sp = Number(spValue);
+    if (!Number.isFinite(sp) || sp <= 0) return 50;
+    if (maxLevel > 0 && sp <= maxLevel) {
+        return clamp(Math.round((sp / maxLevel) * 1000) / 10, 1, 99);
+    }
+    if (sp <= 1.0) {
+        return clamp(Math.round(sp * 1000) / 10, 1, 99);
+    }
+    return clamp(Math.round(sp * 10) / 10, 1, 99);
+}
+
+function findTankControlInfo(tankName, tankTag, simObjects) {
+    if (!simObjects || simObjects.size === 0) return null;
+
+    let associatedLevelGauge = null;
+    let levelGaugeMax = null;
+
+    for (const obj of simObjects.values()) {
+        const simType = String(obj.type || '').toLowerCase();
+        if (simType.includes('levelgauge')) {
+            const el = obj.element;
+            const selectedObjId = queryString(el, 'SelectedObjectID')
+                || queryString(el, 'SelectedObject')
+                || queryStringDeep(el, ['SelectedObjectID', 'SelectedObject']);
+            if (selectedObjId && (selectedObjId === tankName || (tankTag && selectedObjId === tankTag))) {
+                associatedLevelGauge = obj;
+                const maxVal = queryNumericDeep(el, ['MaximumValue', 'MaxValue']);
+                if (maxVal > 0) levelGaugeMax = maxVal;
+                break;
+            }
+        }
+    }
+
+    for (const obj of simObjects.values()) {
+        const simType = String(obj.type || '').toLowerCase();
+        if (simType.includes('pidcontroller') || simType.includes('controller')) {
+            const el = obj.element;
+            let controlledId = '';
+            let controlledName = '';
+
+            const controlledDataEl = el?.querySelector?.('ControlledObjectData');
+            if (controlledDataEl) {
+                controlledId = controlledDataEl.getAttribute?.('ID') || '';
+                controlledName = controlledDataEl.getAttribute?.('Name') || '';
+            }
+            if (!controlledId && el) {
+                const xmlStr = serializeXml(el);
+                const idMatch = xmlStr.match(/<ControlledObjectData[^>]*\bID="([^"]+)"/i);
+                if (idMatch) controlledId = idMatch[1];
+                const nameMatch = xmlStr.match(/<ControlledObjectData[^>]*\bName="([^"]+)"/i);
+                if (nameMatch) controlledName = nameMatch[1];
+            }
+            if (!controlledId) {
+                controlledId = queryStringDeep(el, ['ControlledObject', 'ControlledObjectID']);
+            }
+
+            const isDirectMatch = (controlledId && (controlledId === tankName || (tankTag && controlledId === tankTag)))
+                || (controlledName && (controlledName === tankName || (tankTag && controlledName === tankTag)));
+
+            const isLevelGaugeMatch = associatedLevelGauge && (
+                (controlledId && (controlledId === associatedLevelGauge.componentName || controlledId === associatedLevelGauge.name))
+                || (controlledName && (controlledName === associatedLevelGauge.componentName || controlledName === associatedLevelGauge.name))
+                || (queryString(associatedLevelGauge.element, 'AttachedAdjustId') === (obj.componentName || obj.name))
+            );
+
+            if (isDirectMatch || isLevelGaugeMatch) {
+                const spValue = queryNumericDeep(el, ['SetPoint', 'SPValue', 'AdjustValue'], 0);
+                const kp = queryNumericDeep(el, ['Kp'], 4);
+                const ki = queryNumericDeep(el, ['Ki'], 0.6);
+                const kd = queryNumericDeep(el, ['Kd'], 0);
+                const activeStr = queryStringDeep(el, ['Active', 'IsActive'], 'true').toLowerCase();
+                const active = activeStr !== 'false' && activeStr !== '0';
+
+                return {
+                    found: true,
+                    active,
+                    setpointRaw: spValue,
+                    maxLevel: levelGaugeMax,
+                    kp,
+                    ki,
+                    kd
+                };
+            }
+        }
+    }
+
+    return null;
+}
+
+function tankParameters(simEl, tankName = '', simObjects = null, tankTag = '') {
     // DWSIM Volume em m³; GAAP capacidadeMaxima em litros.
     const volumeM3 = queryNumeric(simEl, 'Volume', 0)
         || findDimensionValue(simEl, 'Volume')
+        || queryNumericDeep(simEl, ['Volume'], 0)
         || 0;
-    const alturaM = findDynamicProperty(simEl, 'Height')
+    let alturaM = findDynamicProperty(simEl, 'Height')
         || queryNumeric(simEl, 'TankHeight', 0)
-        || 2.4;
+        || queryNumericDeep(simEl, ['TankHeight', 'Height'], 0);
     const liquidLevelM = findDynamicProperty(simEl, 'Liquid Level')
         || queryNumeric(simEl, 'LiquidLevel', 0)
-        || 0;
+        || queryNumericDeep(simEl, ['LiquidLevel', 'Level'], 0);
+
+    const controlInfo = findTankControlInfo(tankName, tankTag, simObjects);
+    if (!alturaM && controlInfo?.maxLevel) {
+        alturaM = controlInfo.maxLevel;
+    }
+    if (!alturaM || alturaM <= 0) {
+        alturaM = 2.4;
+    }
 
     const capacidadeMaximaL = Math.max(10, volumeM3 * M3_TO_L);
     const alturaUtilMetros = Math.max(0.5, alturaM);
     const alturaBocalEntradaM = Math.min(alturaUtilMetros * 0.9, alturaUtilMetros - 0.2);
     const alturaBocalSaidaM = Math.min(0.2, alturaUtilMetros * 0.1);
     const volumeAtualL = (clamp(liquidLevelM, 0, alturaUtilMetros) / alturaUtilMetros) * capacidadeMaximaL;
+
+    let setpointAtivo = false;
+    let setpoint = 50;
+    let kp = 4;
+    let ki = 0.6;
+    let kd = 0;
+
+    if (controlInfo?.found) {
+        setpointAtivo = controlInfo.active;
+        setpoint = normalizeSetpointToPercentage(controlInfo.setpointRaw, alturaUtilMetros);
+        if (Number.isFinite(controlInfo.kp) && controlInfo.kp > 0) kp = controlInfo.kp;
+        if (Number.isFinite(controlInfo.ki) && controlInfo.ki >= 0) ki = controlInfo.ki;
+        if (Number.isFinite(controlInfo.kd) && controlInfo.kd >= 0) kd = controlInfo.kd;
+    } else {
+        const directSp = findDynamicProperty(simEl, 'Level Setpoint')
+            || queryNumericDeep(simEl, ['SetPoint', 'LevelSetPoint', 'SPValue'], 0);
+        if (directSp > 0) {
+            setpointAtivo = true;
+            setpoint = normalizeSetpointToPercentage(directSp, alturaUtilMetros);
+        }
+    }
 
     return {
         capacidadeMaxima: capacidadeMaximaL,
@@ -466,11 +797,11 @@ function tankParameters(simEl) {
         coeficienteSaida: 0.82,
         alturaBocalEntradaM,
         alturaBocalSaidaM,
-        setpointAtivo: false,
-        setpoint: 50,
-        kp: 4,
-        ki: 0.6,
-        kd: 0
+        setpointAtivo,
+        setpoint,
+        kp,
+        ki,
+        kd
     };
 }
 
@@ -486,14 +817,14 @@ function kelvinToCelsius(kelvinOrCelsius, fallbackC = 25) {
 function sourceParameters(simEl) {
     const pressurePa = findDimensionValue(simEl, 'Pressure')
         || queryNumeric(simEl, 'Pressure', 0)
-        || 0;
+        || queryNumericDeep(simEl, ['pressure', 'Pressure'], 0);
     const flowM3s = findDimensionValue(simEl, 'Flow')
         || queryNumeric(simEl, 'VolumetricFlow', 0)
         || queryNumeric(simEl, 'Flow', 0)
-        || 0;
+        || queryNumericDeep(simEl, ['VolumetricFlow', 'volumetric_flow', 'Flow', 'flow'], 0);
     const tempK = findDimensionValue(simEl, 'Temperature')
         || queryNumeric(simEl, 'Temperature', 0)
-        || 0;
+        || queryNumericDeep(simEl, ['temperature', 'Temperature'], 0);
 
     const pressaoFonteBar = pressurePa > 0
         ? Math.max(0.01, pressurePa * PA_TO_BAR)
@@ -502,20 +833,30 @@ function sourceParameters(simEl) {
         ? Math.max(0.1, flowM3s * M3S_TO_LPS)
         : DEFAULT_SOURCE_MAX_FLOW_LPS;
     const temperaturaC = tempK > 0 ? kelvinToCelsius(tempK, 25) : 25;
+    const isCustomTemp = Math.abs(temperaturaC - 25.0) > 0.05;
 
     return {
         pressaoFonteBar,
         vazaoMaxima: vazaoMaximaLps,
-        fluidoEntradaPresetId: 'agua',
+        fluidoEntradaPresetId: isCustomTemp ? 'custom' : 'agua',
         fluidoEntrada: createFluidoFromProperties({
             temperatura: temperaturaC
         })
     };
 }
 
-function sinkParameters() {
+function sinkParameters(simEl = null) {
+    let pressaoSaidaBar = 0;
+    if (simEl) {
+        const pressurePa = findDimensionValue(simEl, 'Pressure')
+            || queryNumeric(simEl, 'Pressure', 0)
+            || queryNumericDeep(simEl, ['pressure', 'Pressure'], 0);
+        if (pressurePa > 101325) {
+            pressaoSaidaBar = Math.max(0, (pressurePa - 101325) * PA_TO_BAR);
+        }
+    }
     return {
-        pressaoSaidaBar: 0,
+        pressaoSaidaBar,
         perdaEntradaK: 0
     };
 }
@@ -531,19 +872,23 @@ function heatExchangerParameters(simEl, dwsimType = '') {
         || queryNumeric(simEl, 'HeatExchangeArea', 0)
         || queryNumeric(simEl, 'SurfaceArea', 0)
         || findDimensionValue(simEl, 'Area')
+        || queryNumericDeep(simEl, ['Area', 'ExchangeArea', 'HeatExchangeArea', 'SurfaceArea'], 0)
         || 1.0;
 
     // 2. Coeficiente global de transferência de calor U (W/(m²·K))
     const overallU = queryNumeric(simEl, 'OverallHTC', 0)
+        || queryNumeric(simEl, 'OverallCoefficient', 0)
         || queryNumeric(simEl, 'OverallHeatTransferCoefficient', 0)
         || queryNumeric(simEl, 'U', 0)
         || findDimensionValue(simEl, 'OverallHeatTransferCoefficient')
+        || queryNumericDeep(simEl, ['OverallHTC', 'OverallCoefficient', 'OverallHeatTransferCoefficient', 'U'], 0)
         || 0;
 
     // 3. Capacitância térmica global UA (W/K)
     let ua = queryNumeric(simEl, 'UA', 0)
         || queryNumeric(simEl, 'OverallHTC_Area', 0)
-        || queryNumeric(simEl, 'OverallHeatTransferCoefficientTimesArea', 0);
+        || queryNumeric(simEl, 'OverallHeatTransferCoefficientTimesArea', 0)
+        || queryNumericDeep(simEl, ['UA', 'OverallHTC_Area'], 0);
 
     if (!ua || ua <= 0) {
         if (overallU > 0 && areaM2 > 0) {
@@ -562,18 +907,23 @@ function heatExchangerParameters(simEl, dwsimType = '') {
         || queryNumeric(simEl, 'UtilityTemperature', 0)
         || queryNumeric(simEl, 'TargetTemperature', 0)
         || queryNumeric(simEl, 'ColdInletTemperature', 0)
-        || queryNumeric(simEl, 'HotInletTemperature', 0);
+        || queryNumeric(simEl, 'HotInletTemperature', 0)
+        || queryNumericDeep(simEl, ['OutletTemperature', 'ServiceTemperature', 'UtilityTemperature', 'TargetTemperature', 'ColdInletTemperature', 'HotInletTemperature'], 0);
 
     const tempServico = rawTemp > 0 ? kelvinToCelsius(rawTemp, defaultTemp) : defaultTemp;
 
     // 5. Perda de carga local K
     const perdaK = queryNumeric(simEl, 'MinorLoss', 0)
         || queryNumeric(simEl, 'LocalLossK', 0)
+        || queryNumericDeep(simEl, ['MinorLoss', 'LocalLossK'], 0)
         || 0;
 
     // 6. Efetividade máxima
     const rawEff = queryNumeric(simEl, 'MaximumEffectiveness', 0)
         || queryNumeric(simEl, 'Effectiveness', 0)
+        || queryNumeric(simEl, 'ThermalEfficiency', 0)
+        || queryNumeric(simEl, 'Efficiency', 0)
+        || queryNumericDeep(simEl, ['MaximumEffectiveness', 'Effectiveness', 'ThermalEfficiency', 'Efficiency'], 0)
         || 0.95;
     const efetividadeMaxima = clamp(rawEff > 1 ? rawEff / 100 : rawEff, 0.1, 0.999);
 
@@ -589,7 +939,9 @@ function heatExchangerParameters(simEl, dwsimType = '') {
 
 function isCounterCurrentExchanger(simObj) {
     if (!simObj?.element) return false;
-    const flowDirStr = queryString(simObj.element, 'FlowDirection', '');
+    const flowDirStr = queryString(simObj.element, 'FlowDirection', '')
+        || queryString(simObj.element, 'FlowDir', '')
+        || queryStringDeep(simObj.element, ['FlowDirection', 'FlowDir'], '');
     if (!flowDirStr) return false;
     const norm = flowDirStr.trim().toLowerCase();
     return norm === '0' || norm === 'countercurrent' || norm === 'counter_current' || norm === 'counter' || norm === 'contracorrente';
@@ -603,24 +955,23 @@ function pipeParameters(simEl) {
     let roughnessM = DEFAULT_PIPE_ROUGHNESS_MM / M_TO_MM;
 
     if (simEl) {
-        const sectionsEl = simEl.querySelector(':scope > Sections');
+        const sectionsEl = simEl.querySelector(':scope > Sections')
+            || simEl.querySelector('Sections');
         if (sectionsEl) {
-            // Tenta primeiro os elementos <Section> como filhos diretos do DOM.
-            const sectionEls = sectionsEl.querySelectorAll(':scope > Section');
-            if (sectionEls.length > 0) {
+            const sectionEls = sectionsEl.querySelectorAll(':scope > Section')
+                || sectionsEl.querySelectorAll('Section');
+            if (sectionEls && sectionEls.length > 0) {
                 sectionEls.forEach((section) => {
-                    const compr = parseFloat(section.querySelector(':scope > Comprimento')?.textContent || '0');
+                    const compr = parseFloat(section.querySelector(':scope > Comprimento')?.textContent || section.querySelector('Comprimento')?.textContent || '0');
                     if (Number.isFinite(compr) && compr > 0) totalLengthM += compr;
 
-                    const di = parseFloat(section.querySelector(':scope > DI')?.textContent || '0');
+                    const di = parseFloat(section.querySelector(':scope > DI')?.textContent || section.querySelector('DI')?.textContent || '0');
                     if (Number.isFinite(di) && di > 0) diM = di * INCH_TO_M;
 
-                    const rug = parseFloat(section.querySelector(':scope > PipeWallRugosity')?.textContent || '0');
+                    const rug = parseFloat(section.querySelector(':scope > PipeWallRugosity')?.textContent || section.querySelector('PipeWallRugosity')?.textContent || '0');
                     if (Number.isFinite(rug) && rug > 0) roughnessM = rug;
                 });
             } else {
-                // Fallback: serializa e aplica regex (para arquivos onde as Sections
-                // vêm como texto inline ao invés de elementos DOM).
                 const sectionsXml = serializeXml(sectionsEl);
                 const sectionMatches = sectionsXml.match(/<Section[\s\S]*?<\/Section>/g) || [];
                 sectionMatches.forEach((sectionXml) => {
@@ -639,11 +990,13 @@ function pipeParameters(simEl) {
     if (totalLengthM === 0) {
         totalLengthM = queryNumeric(simEl, 'TotalLength', 0)
             || queryNumeric(simEl, 'Length', 0)
+            || queryNumericDeep(simEl, ['TotalLength', 'Length'], 0)
             || 1;
     }
     if (diM === DEFAULT_PIPE_DIAMETER_M) {
         const directDi = queryNumeric(simEl, 'InternalDiameter', 0)
-            || queryNumeric(simEl, 'Diameter', 0);
+            || queryNumeric(simEl, 'Diameter', 0)
+            || queryNumericDeep(simEl, ['InternalDiameter', 'Diameter'], 0);
         if (directDi > 0) diM = directDi * INCH_TO_M;
     }
 
@@ -656,8 +1009,14 @@ function pipeParameters(simEl) {
 }
 
 function serializeXml(element) {
-    if (typeof globalThis.XMLSerializer === 'undefined') return '';
-    return new XMLSerializer().serializeToString(element);
+    if (!element) return '';
+    if (element.rawXml) return element.rawXml;
+    if (typeof globalThis.XMLSerializer !== 'undefined') {
+        try {
+            return new XMLSerializer().serializeToString(element);
+        } catch {}
+    }
+    return '';
 }
 
 function matchTag(xml, tag) {
@@ -762,15 +1121,15 @@ function defaultTagFor(gaapType, dwsimType = '') {
     }
 }
 
-function extractPropertiesFor(gaapType, simObj, gObj = null) {
+function extractPropertiesFor(gaapType, simObj, gObj = null, simObjects = null) {
     const element = simObj?.element || null;
     const dwsimType = gObj?.objectType || simObj?.type || '';
     if (gaapType === 'pump') return pumpParameters(element);
     if (gaapType === 'valve') return valveParameters(element);
-    if (gaapType === 'tank') return tankParameters(element);
+    if (gaapType === 'tank') return tankParameters(element, gObj?.name, simObjects, gObj?.tag);
     if (gaapType === 'heat_exchanger') return heatExchangerParameters(element, dwsimType);
     if (gaapType === 'source') return sourceParameters(element);
-    if (gaapType === 'sink') return sinkParameters();
+    if (gaapType === 'sink') return sinkParameters(element);
     return null;
 }
 
@@ -807,7 +1166,7 @@ export function translateDwsimToWorkspace(parsed) {
         const simObj = simObjects.get(gObj.name) || null;
         const gaapType = resolveDwsimComponentType(gObj.objectType, simObj?.type);
         if (!gaapType) return;
-        const properties = extractPropertiesFor(gaapType, simObj, gObj);
+        const properties = extractPropertiesFor(gaapType, simObj, gObj, simObjects);
         if (!properties) {
             stats.skipped += 1;
             stats.skippedTypes.add(gObj.objectType);
@@ -848,7 +1207,7 @@ export function translateDwsimToWorkspace(parsed) {
 
         const simObj = simObjects.get(gObj.name) || null;
         const gaapType = hasInput ? SINK_COMPONENT_TYPE : SOURCE_COMPONENT_TYPE;
-        const properties = extractPropertiesFor(gaapType, simObj, gObj);
+        const properties = extractPropertiesFor(gaapType, simObj, gObj, simObjects);
         const tag = pickDisplayTag(gObj, defaultTagFor(gaapType, gObj.objectType));
         const id = nextComponentId();
         components.push({
@@ -995,7 +1354,7 @@ export function translateDwsimToWorkspace(parsed) {
     // ---- 4. Normalização de posições ----
     // DWSIM usa sistema de coordenadas com Y crescente para cima; o GAAP usa Y
     // crescente para baixo. Aplica-se offset para evitar componentes negativos.
-    normalizePositions(components);
+    arrangeDwsimLayout(components, connections);
 
     const workspace = {
         config: { usarAlturaRelativa: false },
@@ -1007,7 +1366,7 @@ export function translateDwsimToWorkspace(parsed) {
     return { workspace, stats };
 }
 
-function normalizePositions(components) {
+export function normalizePositions(components) {
     if (components.length === 0) return;
 
     let minX = Infinity;
@@ -1026,6 +1385,280 @@ function normalizePositions(components) {
         c.snapshot.x += offsetX;
         c.snapshot.y += offsetY;
     });
+}
+
+
+// Dimensões visuais dos componentes GAAP para cálculo de espaçamento e prevenção de colisões
+const COMPONENT_VISUAL_FOOTPRINT = {
+    source: { width: 60, height: 60 },
+    sink: { width: 60, height: 60 },
+    pump: { width: 80, height: 80 },
+    valve: { width: 60, height: 60 },
+    tank: { width: 160, height: 240 },
+    heat_exchanger: { width: 200, height: 160 }
+};
+
+const MIN_PIPE_GAP_X = 120;
+const MIN_COMPONENT_GAP_Y = 60;
+
+/**
+ * Organiza e distribui os componentes importados do DWSIM no canvas do GAAP:
+ * - Agrupa em circuitos/ilhas conexas e processa de cima para baixo.
+ * - Calcula níveis topológicos (DAG ranks) ao longo do fluxo de processo (esquerda -> direita).
+ * - Detecta e isola ciclos de reciclo/retroalimentação via DFS para garantir aciclicidade no ranking.
+ * - Garante espaçamento confortável entre componentes conectados (mínimo de 120px de tubulação visível).
+ * - Elimina 100% de colisões e sobreposições de caixas delimitadoras (bounding boxes).
+ * - Alinha componentes conectados na vertical (ex: válvula com saída inferior de tanque, correntes de trocador).
+ * - Alinha todas as posições à grade padrão do GAAP (múltiplos de 40px).
+ */
+export function arrangeDwsimLayout(components, connections = []) {
+    if (!components || components.length === 0) return;
+
+    if (!connections || connections.length === 0) {
+        normalizePositions(components);
+        return;
+    }
+
+    // 1. Grafo de adjacência (não-direcionado para ilhas, direcionado para fluxo)
+    const adj = new Map();
+    const outEdges = new Map();
+    const inDegree = new Map();
+    components.forEach((c) => {
+        adj.set(c.id, []);
+        outEdges.set(c.id, []);
+        inDegree.set(c.id, 0);
+    });
+
+    connections.forEach((conn) => {
+        adj.get(conn.sourceId)?.push(conn.targetId);
+        adj.get(conn.targetId)?.push(conn.sourceId);
+        outEdges.get(conn.sourceId)?.push(conn.targetId);
+        inDegree.set(conn.targetId, (inDegree.get(conn.targetId) || 0) + 1);
+    });
+
+    // 2. Particionamento em ilhas conexas
+    const visited = new Set();
+    const rawIslands = [];
+    components.forEach((c) => {
+        if (!visited.has(c.id)) {
+            const island = [];
+            const queue = [c.id];
+            visited.add(c.id);
+            while (queue.length > 0) {
+                const id = queue.shift();
+                const comp = components.find((x) => x.id === id);
+                if (comp) island.push(comp);
+                for (const neighbor of (adj.get(id) || [])) {
+                    if (!visited.has(neighbor)) {
+                        visited.add(neighbor);
+                        queue.push(neighbor);
+                    }
+                }
+            }
+            rawIslands.push(island);
+        }
+    });
+
+    const connectedIslands = [];
+    const isolatedComponents = [];
+    rawIslands.forEach((isl) => {
+        if (isl.length === 1 && (adj.get(isl[0].id) || []).length === 0) {
+            isolatedComponents.push(isl[0]);
+        } else {
+            connectedIslands.push(isl);
+        }
+    });
+
+    // Ordena circuitos conectados pelo Y original mínimo
+    connectedIslands.sort((a, b) => {
+        const minYa = Math.min(...a.map((c) => c.snapshot.y));
+        const minYb = Math.min(...b.map((c) => c.snapshot.y));
+        return minYa - minYb;
+    });
+
+    let currentIslandY = POSITION_ORIGIN_Y;
+
+    // 3. Layout de cada circuito
+    for (const island of connectedIslands) {
+        const islandCompIds = new Set(island.map((c) => c.id));
+        const islandConns = connections.filter((conn) => islandCompIds.has(conn.sourceId) && islandCompIds.has(conn.targetId));
+
+        // Detecção de arestas de reciclo / ciclos via DFS
+        const visitedState = new Map(); // 0: unvisited, 1: visiting, 2: visited
+        const backEdges = new Set();
+
+        function dfs(nodeId) {
+            visitedState.set(nodeId, 1);
+            for (const targetId of (outEdges.get(nodeId) || [])) {
+                if (!islandCompIds.has(targetId)) continue;
+                const state = visitedState.get(targetId) || 0;
+                if (state === 1) {
+                    backEdges.add(`${nodeId}->${targetId}`);
+                } else if (state === 0) {
+                    dfs(targetId);
+                }
+            }
+            visitedState.set(nodeId, 2);
+        }
+
+        let roots = island.filter((c) => (inDegree.get(c.id) || 0) === 0);
+        if (roots.length === 0) {
+            roots = [[...island].sort((a, b) => a.snapshot.x - b.snapshot.x)[0]];
+        }
+        roots.forEach((r) => {
+            if ((visitedState.get(r.id) || 0) === 0) dfs(r.id);
+        });
+        island.forEach((c) => {
+            if ((visitedState.get(c.id) || 0) === 0) dfs(c.id);
+        });
+
+        // Níveis topológicos por caminho mais longo em grafo acíclico
+        const ranks = new Map();
+        roots.forEach((r) => ranks.set(r.id, 0));
+
+        let changed = true;
+        let iter = 0;
+        while (changed && iter < island.length * 2) {
+            changed = false;
+            iter++;
+            for (const conn of islandConns) {
+                if (backEdges.has(`${conn.sourceId}->${conn.targetId}`)) continue;
+                const srcRank = ranks.get(conn.sourceId);
+                if (srcRank !== undefined) {
+                    const tgtRank = ranks.get(conn.targetId);
+                    if (tgtRank === undefined || tgtRank < srcRank + 1) {
+                        ranks.set(conn.targetId, srcRank + 1);
+                        changed = true;
+                    }
+                }
+            }
+        }
+
+        island.forEach((c) => {
+            if (ranks.get(c.id) === undefined) ranks.set(c.id, 0);
+        });
+
+        const minRank = Math.min(...island.map((c) => ranks.get(c.id)));
+        if (minRank > 0) {
+            island.forEach((c) => ranks.set(c.id, ranks.get(c.id) - minRank));
+        }
+
+        const maxRank = Math.max(...island.map((c) => ranks.get(c.id)));
+        const rankColumns = [];
+        for (let r = 0; r <= maxRank; r++) {
+            rankColumns.push(island.filter((c) => ranks.get(c.id) === r));
+        }
+
+        // Ordena cada coluna verticalmente preservando intenção original
+        rankColumns.forEach((col) => {
+            col.sort((a, b) => a.snapshot.y - b.snapshot.y);
+        });
+
+        // Determina a posição X das colunas
+        let currentX = POSITION_ORIGIN_X;
+        const colPositionsX = [];
+        for (let r = 0; r <= maxRank; r++) {
+            colPositionsX.push(currentX);
+            const col = rankColumns[r];
+            const maxColWidth = col.length > 0
+                ? Math.max(...col.map((c) => (COMPONENT_VISUAL_FOOTPRINT[c.snapshot.type] || { width: 80 }).width))
+                : 80;
+            currentX += Math.round((maxColWidth + MIN_PIPE_GAP_X) / 40) * 40;
+        }
+
+        // Posiciona componentes em Y
+        let maxIslandY = currentIslandY;
+
+        for (let r = 0; r <= maxRank; r++) {
+            const col = rankColumns[r];
+            const colX = colPositionsX[r];
+
+            let curY = currentIslandY;
+            col.forEach((c) => {
+                const footprint = COMPONENT_VISUAL_FOOTPRINT[c.snapshot.type] || { width: 80, height: 80 };
+                c.snapshot.x = colX;
+
+                const preds = islandConns.filter((cn) => cn.targetId === c.id);
+                if (preds.length === 1) {
+                    const predComp = island.find((x) => x.id === preds[0].sourceId);
+                    if (predComp && c.snapshot.type !== 'tank') {
+                        if (predComp.snapshot.type === 'tank') {
+                            curY = Math.max(curY, predComp.snapshot.y + 160);
+                        } else {
+                            curY = Math.max(curY, predComp.snapshot.y);
+                        }
+                    }
+                } else if (preds.length === 0) {
+                    const origMinY = Math.min(...col.map((x) => x.snapshot.y));
+                    const relY = c.snapshot.y - origMinY;
+                    curY = Math.max(curY, currentIslandY + relY);
+                }
+
+                c.snapshot.y = Math.round(curY / 40) * 40;
+                curY = c.snapshot.y + footprint.height + MIN_COMPONENT_GAP_Y;
+                maxIslandY = Math.max(maxIslandY, c.snapshot.y + footprint.height);
+            });
+        }
+
+        // Alinhamentos específicos:
+        // 1. Tanque -> Válvula / Tubulação de saída
+        for (const conn of islandConns) {
+            const src = island.find((x) => x.id === conn.sourceId);
+            const tgt = island.find((x) => x.id === conn.targetId);
+            if (src && tgt && src.snapshot.type === 'tank' && tgt.snapshot.type === 'valve') {
+                tgt.snapshot.y = src.snapshot.y + 160;
+                const afterValve = islandConns.filter((cn) => cn.sourceId === tgt.id);
+                afterValve.forEach((cn) => {
+                    const nextComp = island.find((x) => x.id === cn.targetId);
+                    if (nextComp) nextComp.snapshot.y = tgt.snapshot.y;
+                });
+                maxIslandY = Math.max(maxIslandY, tgt.snapshot.y + (COMPONENT_VISUAL_FOOTPRINT[tgt.snapshot.type] || { height: 80 }).height);
+            }
+        }
+
+        // 2. Trocador de calor com duas correntes
+        for (const c of island) {
+            if (c.snapshot.type === 'heat_exchanger') {
+                const inConns = islandConns.filter((cn) => cn.targetId === c.id);
+                const outConns = islandConns.filter((cn) => cn.sourceId === c.id);
+
+                inConns.forEach((cn) => {
+                    const src = island.find((x) => x.id === cn.sourceId);
+                    if (src) {
+                        if (cn.targetEndpoint?.portId === 'in2' || cn.targetConnIndex === 1) {
+                            src.snapshot.y = c.snapshot.y + 80;
+                        } else {
+                            src.snapshot.y = c.snapshot.y;
+                        }
+                    }
+                });
+                outConns.forEach((cn) => {
+                    const tgt = island.find((x) => x.id === cn.targetId);
+                    if (tgt) {
+                        if (cn.sourceEndpoint?.portId === 'out2' || cn.sourceConnIndex === 1) {
+                            tgt.snapshot.y = c.snapshot.y + 80;
+                        } else {
+                            tgt.snapshot.y = c.snapshot.y;
+                        }
+                    }
+                });
+                maxIslandY = Math.max(maxIslandY, c.snapshot.y + 80 + 60);
+            }
+        }
+
+        currentIslandY = Math.round((maxIslandY + 120) / 40) * 40;
+    }
+
+    // 4. Posiciona componentes avulsos (isolados) em linha organizada
+    if (isolatedComponents.length > 0) {
+        let curX = POSITION_ORIGIN_X;
+        isolatedComponents.forEach((comp) => {
+            const footprint = COMPONENT_VISUAL_FOOTPRINT[comp.snapshot.type] || { width: 80, height: 80 };
+            comp.snapshot.x = curX;
+            comp.snapshot.y = currentIslandY;
+            curX += Math.round((footprint.width + MIN_PIPE_GAP_X) / 40) * 40;
+        });
+    }
 }
 
 // ============================================================
