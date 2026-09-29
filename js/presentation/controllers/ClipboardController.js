@@ -75,9 +75,11 @@ const CLONEABLE_PROPERTIES_BY_TYPE = {
     ],
     heat_exchanger: [
         'temperaturaServicoC',
+        'areaM2',
         'uaWPorK',
         'perdaLocalK',
-        'efetividadeMaxima'
+        'efetividadeMaxima',
+        'tipoPerfilGrafico'
     ]
 };
 
