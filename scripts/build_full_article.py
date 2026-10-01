@@ -32,9 +32,9 @@ def create_full_article(output_path):
     except KeyError:
         normal_style = doc.styles['normal']
     normal_style.font.name = 'Times New Roman'
-    normal_style.font.size = Pt(11)
+    normal_style.font.size = Pt(12)
     normal_style.font.color.rgb = RGBColor(0x22, 0x22, 0x22)
-    normal_style.paragraph_format.line_spacing = 1.15
+    normal_style.paragraph_format.line_spacing = 1.5
     normal_style.paragraph_format.space_after = Pt(6)
 
     # Cores padronizadas
@@ -51,7 +51,7 @@ def create_full_article(output_path):
         p.paragraph_format.space_after = Pt(14)
         p.paragraph_format.line_spacing = 1.15
         run = p.add_run(text)
-        run.font.name = 'Arial'
+        run.font.name = 'Times New Roman'
         run.font.size = Pt(16)
         run.font.bold = True
         run.font.color.rgb = COLOR_PRIMARY
@@ -91,7 +91,7 @@ def create_full_article(output_path):
         p_h.paragraph_format.space_before = Pt(8)
         p_h.paragraph_format.space_after = Pt(4)
         r_h = p_h.add_run("Resumo")
-        r_h.font.name = 'Arial'
+        r_h.font.name = 'Times New Roman'
         r_h.font.size = Pt(12)
         r_h.font.bold = True
         r_h.font.color.rgb = COLOR_PRIMARY
@@ -125,7 +125,7 @@ def create_full_article(output_path):
         p.paragraph_format.space_after = Pt(6)
         p.paragraph_format.keep_with_next = True
         run = p.add_run(text)
-        run.font.name = 'Arial'
+        run.font.name = 'Times New Roman'
         run.font.size = Pt(12.5)
         run.font.bold = True
         run.font.color.rgb = COLOR_PRIMARY
