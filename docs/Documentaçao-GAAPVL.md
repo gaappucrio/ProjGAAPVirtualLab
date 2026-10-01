@@ -444,6 +444,7 @@ A seguir estão as funções/chaves de alto valor do sistema, com seus objetivos
   - O engine é limpo e recarregado com componentes e conexões do snapshot.
   - A visualização do workspace é reconstruída e as conexões são redesenhadas.
   - A seleção anterior é restaurada.
+  - O `MonitorController` é sincronizado via `syncWithEngine()`, purgando entradas órfãs/desfeitas do histórico de slots e do gráfico compacto e redefinindo mensagens de bloqueio de slots ocupados.
 - Interface com o usuário: permite desfazer/refazer e retomar estados de edição anteriores.
 
 ### 5.13 `createUndoRedoHistory({ captureSnapshot, restoreSnapshot, signatureFactory, maxHistorySize } = {})`
@@ -565,10 +566,11 @@ A seguir estão as funções/chaves de alto valor do sistema, com seus objetivos
 - Pré-condições: `engine` deve estar disponível com componentes registráveis.
 - Entrada:
   - `engine`: instância do motor de simulação.
-- Saída: controlador de monitor com métodos internos de atualização.
+- Saída: controlador de monitor com métodos internos de atualização (`updateLayout`, `syncWithEngine`, `refreshSelection`, etc.).
 - Pós-condições:
   - O monitor exibe séries de tempo para tanques, curvas de operação para bombas, curvas por abertura para válvulas e pressão ao longo da distância para Canos.
-  - O histórico de slots de gráfico é gerenciado automaticamente.
+  - O histórico de slots de gráfico é gerenciado automaticamente, com purga prévia (`prune`) de entidades inexistentes antes de validar capacidade dos slots e reset automático do aviso de bloqueio.
+  - Disponibiliza o método `syncWithEngine()` para sincronização forçada de estado após restaurações de snapshot (`Ctrl+Z`), limpezas de tela (`engine.clear()`) e remoções de conexões (`conexao_removida`).
   - O botão de exportação de JSON de bomba é habilitado quando aplicável.
   - O gráfico de válvula usa o perfil selecionado e mostra `Cv` efetivo, `Delta P` estimado na vazão atual, `K` equivalente e ponto operacional.
   - O gráfico de Cano ancora o perfil em `pipeInletPressureBar` e aplica `pipePressureDropBar`, evitando dupla contagem de perdas próprias de componentes passantes.

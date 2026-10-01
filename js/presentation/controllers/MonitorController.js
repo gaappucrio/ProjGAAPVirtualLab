@@ -180,7 +180,11 @@ export function createMonitorController({ engine }) {
     }
 
     function pruneMonitorChartHistory() {
-        monitorChartHistory.prune(isMonitorChartEntryValid);
+        const result = monitorChartHistory.prune(isMonitorChartEntryValid);
+        if (result?.changed) {
+            blockedMonitorSelectionLabel = '';
+        }
+        return result;
     }
 
     function getMonitorChartEntries() {
@@ -225,6 +229,8 @@ export function createMonitorController({ engine }) {
     function rememberMonitorChartComponent(component) {
         const kind = getMonitorChartKind(component);
         if (!kind) return false;
+
+        pruneMonitorChartHistory();
 
         const result = monitorChartHistory.remember({ id: component.id, kind });
         const alreadyDisplayed = monitorChartHistory.getEntries()
@@ -1353,6 +1359,39 @@ export function createMonitorController({ engine }) {
         if (isExpanded()) refreshExpandedMonitorCharts();
     }
 
+    function syncWithEngine() {
+        pruneMonitorChartHistory();
+        blockedMonitorSelectionLabel = '';
+
+        if (monitorChartMode === 'tank' && chartedTankId) {
+            if (!engine?.componentes?.some((c) => c.id === chartedTankId)) {
+                createEmptyCompactChart();
+            }
+        } else if (monitorChartMode === 'pump' && chartedPumpId) {
+            if (!engine?.componentes?.some((c) => c.id === chartedPumpId)) {
+                createEmptyCompactChart();
+            }
+        } else if (monitorChartMode === 'valve' && chartedValveId) {
+            if (!engine?.componentes?.some((c) => c.id === chartedValveId)) {
+                createEmptyCompactChart();
+            }
+        } else if (monitorChartMode === 'heatExchanger' && chartedHeatExchangerId) {
+            if (!engine?.componentes?.some((c) => c.id === chartedHeatExchangerId)) {
+                createEmptyCompactChart();
+            }
+        } else if (monitorChartMode === 'pipe' && chartedConnectionId) {
+            if (!engine?.conexoes?.some((c) => c.id === chartedConnectionId)) {
+                createEmptyCompactChart();
+            }
+        }
+
+        if (isExpanded()) {
+            renderExpandedMonitorCharts();
+        } else {
+            refreshPresentation();
+        }
+    }
+
     function refreshSelection(component, connection) {
         if (connection instanceof ConnectionModel) {
             rememberMonitorChartComponent(connection);
@@ -1441,6 +1480,11 @@ export function createMonitorController({ engine }) {
 
     function setup() {
         createEmptyCompactChart();
+        engine?.subscribe?.((event) => {
+            if (event?.tipo === 'conexao_removida') {
+                syncWithEngine();
+            }
+        });
         if (typeof document !== 'undefined' && typeof document.addEventListener === 'function' && typeof window !== 'undefined' && !window.__globalChartAxisCustomSelectListenerAdded) {
             document.addEventListener('click', (e) => {
                 if (!e.target?.closest?.('.chart-axis-custom-select')) {
@@ -1456,6 +1500,7 @@ export function createMonitorController({ engine }) {
     return {
         setup,
         updateLayout,
+        syncWithEngine,
         refreshSelection,
         refreshPresentation,
         refreshPump: refreshPumpMonitorCharts,

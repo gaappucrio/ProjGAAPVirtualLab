@@ -276,6 +276,9 @@ export class SistemaSimulacao extends Observable {
         this.selectionStore.clear();
         this.notify(EngineEventPayloads.selection(null, null));
         if (portStateUpdater) portStateUpdater();
+        if (typeof this.monitorController?.syncWithEngine === 'function') {
+            this.monitorController.syncWithEngine();
+        }
     }
 
     start() {

@@ -1474,5 +1474,69 @@ test('selecionar bomba e alternar entre componentes preserva funcionalidade do p
     }
 });
 
+test('monitorController sincroniza historico de slots e compact chart ao restaurar snapshot ou limpar engine', async () => {
+    const prevDoc = global.document;
+    const prevWin = global.window;
+    const prevRaf = global.requestAnimationFrame;
+    const prevChart = global.Chart;
+
+    try {
+        global.document = {
+            getElementById: () => null,
+            querySelectorAll: () => [],
+            body: { classList: { contains: () => false } }
+        };
+        global.window = {
+            innerWidth: 1024,
+            innerHeight: 768,
+            addEventListener() {},
+            removeEventListener() {}
+        };
+        global.requestAnimationFrame = (fn) => fn();
+
+        const { createMonitorController } = await import('../js/presentation/controllers/MonitorController.js');
+
+        const engine = createEngine();
+        const monitorController = createMonitorController({ engine });
+        engine.monitorController = monitorController;
+        monitorController.setup();
+
+        const t1 = new TanqueLogico('T-01', 'Tanque 01', 100, 100);
+        const t2 = new TanqueLogico('T-02', 'Tanque 02', 200, 100);
+        const conn1 = new ConnectionModel({ id: 'conn-0001', sourceId: t1.id, targetId: t2.id });
+        engine.add(t1);
+        engine.add(t2);
+        engine.addConnection(conn1);
+
+        // Seleciona conn1 e t1 para preencher os dois slots
+        monitorController.refreshSelection(null, conn1);
+        monitorController.refreshSelection(t1, null);
+
+        // Remove conexão e tanque do engine (simulando Ctrl+Z / desfazimento)
+        engine.removeConnection(conn1);
+        engine.removeComponent(t2);
+
+        // syncWithEngine sincroniza o monitor e elimina referências mortas
+        monitorController.syncWithEngine();
+
+        // Adiciona e seleciona nova bomba; deve ser aceita sem falso bloqueio de slots
+        const bomba = new BombaLogica('B-01', 'Bomba 01', 300, 100);
+        engine.add(bomba);
+
+        monitorController.refreshSelection(bomba, null);
+
+        // Ao limpar o engine completamente, o monitor também sincroniza
+        engine.clear();
+        assert.equal(engine.componentes.length, 0);
+        assert.equal(engine.conexoes.length, 0);
+    } finally {
+        global.document = prevDoc;
+        global.window = prevWin;
+        global.requestAnimationFrame = prevRaf;
+        global.Chart = prevChart;
+    }
+});
+
+
 
 

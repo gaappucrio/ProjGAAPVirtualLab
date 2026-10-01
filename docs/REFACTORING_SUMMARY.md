@@ -1130,3 +1130,9 @@ O sistema já possui suporte funcional para montagem visual, seleção múltipla
 
 
 
+- Resolvido em 2026-10-01: correção da sincronização de slots e gráficos de monitoramento após restauração de snapshot (`Ctrl+Z`, `Ctrl+Y`) e limpeza de tela (`MonitorController.js`, `UndoController.js`, `SimulationEngine.js`):
+  1. **Purga Prévia na Seleção de Componentes (`MonitorController.js`):** `rememberMonitorChartComponent` agora invoca `pruneMonitorChartHistory()` antes de verificar a disponibilidade de slots. Isso impede que itens desfeitos/removidos do motor permaneçam ocupando slots fantasmas no histórico e gerando falsos avisos de "Slots ocupados" ao selecionar novos componentes.
+  2. **Limpeza Automática de Mensagens de Bloqueio:** em `pruneMonitorChartHistory`, quando qualquer entrada órfã é descartada, `blockedMonitorSelectionLabel` é resetado para vazio, eliminando avisos estáticos desatualizados do cabeçalho do monitor detalhado.
+  3. **Método `syncWithEngine()` no Monitor:** introduzida rotina dedicada que purga o histórico de slots, limpa alertas de bloqueio e valida se o equipamento/cano do gráfico compacto ainda existe no motor, voltando a `createEmptyCompactChart` caso tenha sido desfeito. Re-renderiza gráficos compactos e detalhados conforme o modo de exibição ativo.
+  4. **Integração com `restoreWorkspaceSnapshot` e `engine.clear()`:** `UndoController.js` agora notifica `engine.monitorController?.syncWithEngine()` ao concluir a restauração do snapshot (`Ctrl+Z`/`Ctrl+Y`), e `SimulationEngine.js` sincroniza o monitor ao limpar a simulação (`clear()`), além de reagir ao evento `conexao_removida`.
+  5. **Validação Automatizada (`Testes/cenarios-aplicacao.test.mjs`):** inclusão de teste unitário verificando a sincronização dos slots e do gráfico compacto após desfazimento e remoção de componentes, mantendo a suíte em 108 testes com 100% de aprovação (108/108).

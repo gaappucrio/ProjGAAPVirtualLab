@@ -18,6 +18,12 @@
       --gaap-input-bg: #ffffff;
       --gaap-input-disabled-bg: #f2f4f4;
       --gaap-input-disabled-text: #7f8c8d;
+      --pipe-stroke: #95a5a6;
+      --pipe-stroke-hover: #bdc3c7;
+      --pipe-stroke-selected: #e74c3c;
+      --pipe-stroke-selected-hover: #ff5252;
+      --pipe-selected-shadow: rgba(231, 76, 60, 0.5);
+      --pipe-selected-hover-shadow: rgba(255, 82, 82, 0.65);
   }
 
   /* DARK MODE */
@@ -279,6 +285,12 @@
       --gaap-neutral-border: #788a99;
       --gaap-neutral-title: #bed0dd;
       --gaap-neutral-text: #d8e4ec;
+      --pipe-stroke: #95a5a6;
+      --pipe-stroke-hover: #cbd5e1;
+      --pipe-stroke-selected: #e74c3c;
+      --pipe-stroke-selected-hover: #ff5252;
+      --pipe-selected-shadow: rgba(231, 76, 60, 0.65);
+      --pipe-selected-hover-shadow: rgba(255, 82, 82, 0.85);
   }
 
   body.theme-dark .palette-item span {
@@ -2493,7 +2505,7 @@
       {
       fill: none;
       /* Remove o preenchimento para as linhas de conexão, garantindo que elas sejam exibidas como linhas finas e limpas, melhorando a legibilidade e a estética geral do design, além de criar um visual mais organizado e profissional para os canos no workspace, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para os canos no workspace */
-      stroke: #95a5a6;
+      stroke: var(--pipe-stroke, #95a5a6);
       /* Define a cor do traçado dos canos */
       stroke-width: 6;
       /* Define a largura do traçado dos canos */
@@ -2503,16 +2515,16 @@
       /* Permite que os eventos do mouse sejam detectados apenas no traçado dos canos */
       cursor: pointer;
       /* Define o cursor do mouse para indicar que o Cano é clicável */
-      transition: stroke 0.5s;
+      transition: stroke 0.5s ease, filter 0.3s ease;
       /* Adiciona uma transição suave para a cor do traçado dos canos, criando um efeito de destaque visual quando os usuários interagem com os canos, melhorando a experiência do usuário e proporcionando um visual mais dinâmico e agradável para os canos no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os canos no workspace */
   }
 
-  .pipe-line:hover,
-  .pipe-hitbox:hover + .pipe-line
+  .pipe-line:not(.selected):hover,
+  .pipe-hitbox:hover + .pipe-line:not(.selected)
 
-  /* ESTILO PARA Cano QUANDO O MOUSE ESTÁ SOBRE ELE OU SOBRE A HITBOX */
+  /* ESTILO PARA Cano QUANDO O MOUSE ESTÁ SOBRE ELE OU SOBRE A HITBOX (NÃO SELECIONADO) */
       {
-      stroke: #bdc3c7;
+      stroke: var(--pipe-stroke-hover, #bdc3c7);
       /* Define a cor do traçado dos canos quando o mouse está sobre eles, criando um efeito de destaque visual que chama a atenção dos usuários para os canos e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para os canos no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os canos no workspace */
   }
 
@@ -2534,14 +2546,26 @@
 
   /* ESTILO PARA Cano SELECIONADO  */
       {
-      stroke: #e74c3c;
+      stroke: var(--pipe-stroke-selected, #e74c3c) !important;
       /* Define a cor do traçado dos canos selecionados, criando um destaque visual que chama a atenção dos usuários para os canos selecionados e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para os canos no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os canos no workspace */
       stroke-width: 6;
       /* Define a largura do traçado dos canos selecionados */
-      filter: drop-shadow(0px 0px 5px rgba(231, 76, 60, 0.5));
+      filter: drop-shadow(0px 0px 5px var(--pipe-selected-shadow, rgba(231, 76, 60, 0.5)));
       /* Adiciona uma sombra ao Cano selecionado */
       cursor: pointer;
       /* Define o cursor do mouse para indicar que o Cano é clicável */
+  }
+
+  .pipe-line.selected:hover,
+  .pipe-hitbox:hover + .pipe-line.selected
+
+  /* ESTILO PARA CANO SELECIONADO SOB HOVER  */
+      {
+      stroke: var(--pipe-stroke-selected-hover, #ff5252) !important;
+      /* Vermelho mais vibrante no hover quando o cano já está selecionado, com transição suave */
+      stroke-width: 6;
+      filter: drop-shadow(0px 0px 7px var(--pipe-selected-hover-shadow, rgba(255, 82, 82, 0.65)));
+      cursor: pointer;
   }
 
   .pipe-flow-label,
@@ -2575,6 +2599,7 @@
 
   /* ESTILO PARA OS MARKERS (SETAS) NOS CANOS - TRANSIÇÃO SUAVE */
       {
+      fill: context-stroke;
       transition: fill 0.5s ease;
       /* Adiciona uma transição suave para a mudança de cor do marker (seta), proporcionando um visual mais dinâmico e agradável quando os usuários interagem com os canos */
   }

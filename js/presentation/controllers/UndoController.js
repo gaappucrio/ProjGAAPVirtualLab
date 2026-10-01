@@ -242,6 +242,10 @@ export function restoreWorkspaceSnapshot(engine, snapshot, { undoManager } = {})
     restoreSelection(engine, snapshot);
     engine.notify(EngineEventPayloads.panelUpdate(0));
 
+    if (typeof engine.monitorController?.syncWithEngine === 'function') {
+        engine.monitorController.syncWithEngine();
+    }
+
     return true;
 }
 
