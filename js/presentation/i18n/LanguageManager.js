@@ -421,7 +421,9 @@ const TEXTS = {
             height: 'Altura',
             elevation: 'Elev.',
             sp: 'PA',
-            spActive: 'PA ativo'
+            spActive: 'PA ativo',
+            counter: 'Contra',
+            parallel: 'Paralelo'
         },
         componentPrefixes: {
             source: 'Entrada',
@@ -561,7 +563,9 @@ const TEXTS = {
             height: 'Height',
             elevation: 'Elev.',
             sp: 'SP',
-            spActive: 'SP active'
+            spActive: 'SP active',
+            counter: 'Counter',
+            parallel: 'Parallel'
         },
         componentPrefixes: {
             source: 'inlet',
@@ -815,6 +819,10 @@ const LEGACY_PT_TO_EN = {
     'Arranjo térmico': 'Flow arrangement',
     'Contracorrente': 'Countercurrent',
     'Corrente Paralela (Co-corrente)': 'Parallel Flow (Co-current)',
+    'Contra': 'Counter',
+    'Paralelo': 'Parallel',
+    'contracorrente': 'countercurrent',
+    'paralelo': 'parallel',
     'Corrente 1 (Processo - in1 / out1)': 'Stream 1 (Process - in1 / out1)',
     'Vazão Corrente 1': 'Stream 1 Flow',
     'Temperatura de entrada 1': 'Stream 1 inlet temperature',
@@ -1092,6 +1100,8 @@ function translatePattern(normalized) {
         if (match) return `${translateLiteral(match[1])} must be greater than 0`;
         match = normalized.match(/^Erro:\s*(.+)$/);
         if (match) return `Error: ${translateLiteral(match[1])}`;
+        match = normalized.match(/^(.+)\s+\((Contra|Paralelo)\)$/);
+        if (match) return `${match[1]} (${match[2] === 'Contra' ? t('visual.counter') : t('visual.parallel')})`;
     } else {
         let match = normalized.match(/^(\d+) chart(s?)$/);
         if (match) return t('chart.badge', { count: Number(match[1]) });
@@ -1125,6 +1135,8 @@ function translatePattern(normalized) {
         if (match) return `${translateLiteral(match[1])} deve ser maior que 0`;
         match = normalized.match(/^Error:\s*(.+)$/);
         if (match) return `Erro: ${translateLiteral(match[1])}`;
+        match = normalized.match(/^(.+)\s+\((Counter|Parallel)\)$/);
+        if (match) return `${match[1]} (${match[2] === 'Counter' ? t('visual.counter') : t('visual.parallel')})`;
     }
 
     return null;

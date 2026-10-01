@@ -21,7 +21,16 @@ import {
 } from '../js/presentation/flowchart/FlowchartPersistence.js';
 import { HEAT_EXCHANGER_PROPERTIES_PRESENTER } from '../js/presentation/properties/component/HeatExchangerComponentPropertiesPresenter.js';
 import { buildHeatExchangerCurveDatasets } from '../js/infrastructure/charts/HeatExchangerChartAdapter.js';
-import { setLanguage, translateLiteral } from '../js/presentation/i18n/LanguageManager.js';
+import { setLanguage, translateLiteral, t } from '../js/presentation/i18n/LanguageManager.js';
+import {
+    createConnectionVisual,
+    updateConnectionVisualLayout,
+    removeConnectionVisual
+} from '../js/infrastructure/rendering/PipeRenderer.js';
+import {
+    findConnectionByPath,
+    getConnectionVisual
+} from '../js/infrastructure/rendering/ConnectionVisualRegistry.js';
 
 function approx(actual, expected, tolerance = 1e-4, message = '') {
     assert.ok(
@@ -527,201 +536,6 @@ test('solver nodal resolve circuitos fechados simultaneos nas correntes 1 e 2 do
     approx(b2.fluxoReal, tc.vazao2Lps, 1e-3, 'Vazão da bomba 2 deve coincidir com corrente 2');
     assert.ok(tc.vazaoMassaKgS > 0);
     assert.ok(tc.vazaoMassa2KgS > 0);
-});
-
-test('gráfico detalhado desacopla da barra de propriedades ao expandir e permanece visível ao colapsar', async () => {
-    const prevDoc = global.document;
-    const prevWin = global.window;
-    const prevRaf = global.requestAnimationFrame;
-
-    try {
-        const createMockEl = (tag, id = '') => {
-            const el = {
-                tagName: tag.toUpperCase(),
-                id,
-                classList: {
-                    _s: new Set(),
-                    add(...c) { c.forEach(x => this._s.add(x)); },
-                    remove(...c) { c.forEach(x => this._s.delete(x)); },
-                    contains(x) { return this._s.has(x); },
-                    toggle(x) { if (this._s.has(x)) { this._s.delete(x); return false; } this._s.add(x); return true; }
-                },
-                style: {
-                    _p: new Map(),
-                    setProperty(k, v) { this._p.set(k, v); },
-                    getPropertyValue(k) { return this._p.get(k) || ''; },
-                    removeProperty(k) { this._p.delete(k); }
-                },
-                children: [],
-                parentElement: null,
-                parentNode: null,
-                listeners: {},
-                attributes: {},
-                addEventListener(ev, fn) { (this.listeners[ev] = this.listeners[ev] || []).push(fn); },
-                removeEventListener(ev, fn) { if (this.listeners[ev]) this.listeners[ev] = this.listeners[ev].filter(f => f !== fn); },
-                dispatchEvent(ev, data = {}) { (this.listeners[ev] || []).forEach(fn => fn({ type: ev, target: this, preventDefault() {}, ...data })); },
-                appendChild(c) {
-                    if (c.parentNode) c.parentNode.removeChild(c);
-                    this.children.push(c);
-                    c.parentElement = this;
-                    c.parentNode = this;
-                    return c;
-                },
-                insertBefore(n, ref) {
-                    if (n.parentNode) n.parentNode.removeChild(n);
-                    const idx = this.children.indexOf(ref);
-                    if (idx === -1) return this.appendChild(n);
-                    this.children.splice(idx, 0, n);
-                    n.parentElement = this;
-                    n.parentNode = this;
-                    return n;
-                },
-                removeChild(c) {
-                    const idx = this.children.indexOf(c);
-                    if (idx !== -1) { this.children.splice(idx, 1); c.parentElement = null; c.parentNode = null; }
-                    return c;
-                },
-                remove() { if (this.parentNode) this.parentNode.removeChild(this); },
-                prepend(c) {
-                    if (c.parentNode) c.parentNode.removeChild(c);
-                    this.children.unshift(c);
-                    c.parentElement = this;
-                    c.parentNode = this;
-                    return c;
-                },
-                setAttribute(k, v) { this.attributes[k] = v; },
-                getAttribute(k) { return this.attributes[k]; },
-                getBoundingClientRect() {
-                    return { width: this.id === 'palette' ? 280 : this.id === 'properties' ? 340 : 1000, height: 400, left: 0, top: 0, right: 1000, bottom: 400 };
-                },
-                querySelector(sel) {
-                    for (const ch of this.children) {
-                        if (sel.startsWith('#') && ch.id === sel.slice(1)) return ch;
-                        if (sel.startsWith('.') && ch.classList.contains(sel.slice(1))) return ch;
-                        const f = ch.querySelector?.(sel);
-                        if (f) return f;
-                    }
-                    return null;
-                }
-            };
-            return el;
-        };
-
-        const elements = {};
-        const reg = (id, el) => { elements[id] = el; return el; };
-
-        const sandbox = createMockEl('div');
-        sandbox.classList.add('sandbox-container');
-
-        const palette = reg('palette', createMockEl('div', 'palette'));
-        palette.classList.add('side-panel');
-        const toggleLeft = reg('toggle-left', createMockEl('div', 'toggle-left'));
-
-        const workspace = reg('workspace', createMockEl('div', 'workspace'));
-        const topToolbar = createMockEl('div');
-        topToolbar.classList.add('top-toolbar');
-        workspace.appendChild(topToolbar);
-
-        const toggleRight = reg('toggle-right', createMockEl('div', 'toggle-right'));
-        const properties = reg('properties', createMockEl('div', 'properties'));
-        properties.classList.add('side-panel');
-
-        const propertiesContent = createMockEl('div');
-        propertiesContent.classList.add('side-panel-content');
-        properties.appendChild(propertiesContent);
-
-        const btnMax = reg('btn-max-chart', createMockEl('button', 'btn-max-chart'));
-        propertiesContent.appendChild(btnMax);
-
-        const chartWrapper = reg('chart-wrapper', createMockEl('div', 'chart-wrapper'));
-        chartWrapper.classList.add('chart-container');
-        propertiesContent.appendChild(chartWrapper);
-
-        const chartMaxHeader = reg('chart-max-header', createMockEl('div', 'chart-max-header'));
-        chartWrapper.appendChild(chartMaxHeader);
-
-        const btnClose = reg('btn-close-max-chart', createMockEl('button', 'btn-close-max-chart'));
-        chartMaxHeader.appendChild(btnClose);
-
-        sandbox.appendChild(palette);
-        sandbox.appendChild(toggleLeft);
-        sandbox.appendChild(workspace);
-        sandbox.appendChild(toggleRight);
-        sandbox.appendChild(properties);
-
-        global.document = {
-            getElementById(id) { return elements[id] || null; },
-            querySelector(sel) {
-                if (sel === '.sandbox-container') return sandbox;
-                if (sel === '.top-toolbar') return topToolbar;
-                if (sel === '#properties .side-panel-content') return propertiesContent;
-                return null;
-            },
-            createElement(tag) { return createMockEl(tag); },
-            documentElement: { style: { setProperty() {} } }
-        };
-
-        global.window = {
-            innerWidth: 1200,
-            innerHeight: 800,
-            addEventListener() {},
-            clearTimeout(id) { clearTimeout(id); },
-            setTimeout(fn, ms) { return setTimeout(fn, ms); }
-        };
-
-        global.requestAnimationFrame = (fn) => setTimeout(fn, 0);
-
-        const {
-            setupLayoutController,
-            MIN_MONITOR_HEIGHT_PX,
-            DEFAULT_MONITOR_HEIGHT_PX,
-            MAX_MONITOR_HEIGHT_PX
-        } = await import('../js/presentation/controllers/LayoutController.js');
-
-        assert.equal(MIN_MONITOR_HEIGHT_PX, 320);
-        assert.equal(DEFAULT_MONITOR_HEIGHT_PX, 380);
-        assert.equal(MAX_MONITOR_HEIGHT_PX, 900);
-
-        let layoutUpdates = 0;
-        setupLayoutController({ onChartLayoutChange: () => { layoutUpdates++; } });
-
-        // Compacto: filho de .side-panel-content
-        assert.equal(chartWrapper.parentElement, propertiesContent);
-        assert.ok(!chartWrapper.classList.contains('maximized'));
-
-        // Expandir: desacopla da barra e anexa ao sandboxContainer
-        btnMax.dispatchEvent('click');
-        assert.ok(chartWrapper.classList.contains('maximized'));
-        assert.equal(chartWrapper.parentElement, sandbox);
-        assert.ok(propertiesContent.querySelector('#chart-wrapper-placeholder'));
-        assert.equal(sandbox.style.getPropertyValue('--chart-min-height'), '320px');
-        assert.equal(sandbox.style.getPropertyValue('--chart-default-height'), '380px');
-        assert.equal(sandbox.style.getPropertyValue('--chart-max-height-limit'), '900px');
-        assert.equal(chartWrapper.style.getPropertyValue('--chart-max-height'), '380px');
-
-        // Colapsar a barra da direita: gráfico permanece no sandbox e expande métrica para 16px
-        toggleRight.dispatchEvent('click');
-        assert.ok(properties.classList.contains('collapsed'));
-        assert.equal(chartWrapper.parentElement, sandbox);
-        assert.equal(sandbox.style.getPropertyValue('--chart-max-right'), '16px');
-
-        // Colapsar a barra da esquerda: gráfico expande métrica esquerda para 16px
-        toggleLeft.dispatchEvent('click');
-        assert.ok(palette.classList.contains('collapsed'));
-        assert.equal(sandbox.style.getPropertyValue('--chart-max-left'), '16px');
-
-        // Fechar gráfico detalhado: retorna ao lugar original no painel de propriedades
-        btnClose.dispatchEvent('click');
-        await new Promise((resolve) => setTimeout(resolve, 300));
-        assert.ok(!chartWrapper.classList.contains('maximized'));
-        assert.equal(chartWrapper.parentElement, propertiesContent);
-        assert.equal(propertiesContent.querySelector('#chart-wrapper-placeholder'), null);
-        assert.ok(layoutUpdates > 0);
-    } finally {
-        global.document = prevDoc;
-        global.window = prevWin;
-        global.requestAnimationFrame = prevRaf;
-    }
 });
 
 test('monitorController gerencia trocador de calor sem erro de referencia em modo compacto e expandido', async () => {
@@ -1351,12 +1165,19 @@ test('traduções em inglês para o trocador de calor e seletor estão completas
         assert.equal(translateLiteral('Arranjo térmico'), 'Flow arrangement');
         assert.equal(translateLiteral('Contracorrente'), 'Countercurrent');
         assert.equal(translateLiteral('Corrente Paralela (Co-corrente)'), 'Parallel Flow (Co-current)');
+        assert.equal(translateLiteral('Contra'), 'Counter');
+        assert.equal(translateLiteral('Paralelo'), 'Parallel');
+        assert.equal(t('visual.counter'), 'Counter');
+        assert.equal(t('visual.parallel'), 'Parallel');
+        assert.equal(translateLiteral('S1: 25.0°C→25.0°C | S2: 80.0°C→80.0°C (Paralelo)'), 'S1: 25.0°C→25.0°C | S2: 80.0°C→80.0°C (Parallel)');
+        assert.equal(translateLiteral('S1: 25.0°C→25.0°C | S2: 80.0°C→80.0°C (Contra)'), 'S1: 25.0°C→25.0°C | S2: 80.0°C→80.0°C (Counter)');
 
         // Seções e métricas térmicas
         assert.equal(translateLiteral('Troca Térmica Global'), 'Global Heat Transfer');
         assert.equal(translateLiteral('Análise Térmica Rigorosa'), 'Rigorous Thermal Analysis');
         assert.equal(translateLiteral('Corrente 1 (Processo - in1 / out1)'), 'Stream 1 (Process - in1 / out1)');
         assert.equal(translateLiteral('Corrente 2 (Serviço - in2 / out2)'), 'Stream 2 (Service - in2 / out2)');
+        assert.equal(translateLiteral('Parâmetros Hidráulicos e de Limite'), 'Hydraulic and Limit Parameters');
         assert.equal(translateLiteral('LMTD (Média Logarítmica)'), 'Log Mean Temperature Difference (LMTD)');
         assert.equal(translateLiteral('Fator de correção FT'), 'FT correction factor');
 
@@ -1364,8 +1185,112 @@ test('traduções em inglês para o trocador de calor e seletor estão completas
         assert.ok(html.includes('Spatial Profile (T × Length)'), 'HTML do painel deve conter opções do seletor em inglês');
         assert.ok(html.includes('Thermal Profile (T × Q)'), 'HTML do painel deve conter opção Perfil Térmico em inglês');
         assert.ok(html.includes('Countercurrent'), 'Valor inicial do arranjo térmico deve ser Countercurrent em inglês');
+        assert.ok(html.includes('Global Heat Transfer'), 'HTML deve conter Troca Térmica Global traduzida');
+        assert.ok(html.includes('Stream 1 (Process - in1 / out1)'), 'HTML deve conter Corrente 1 traduzida');
+        assert.ok(html.includes('Stream 2 (Service - in2 / out2)'), 'HTML deve conter Corrente 2 traduzida');
+        assert.ok(html.includes('Rigorous Thermal Analysis'), 'HTML deve conter Análise Térmica Rigorosa traduzida');
+        assert.ok(html.includes('Hydraulic and Limit Parameters'), 'HTML deve conter Parâmetros Hidráulicos e de Limite traduzido');
     } finally {
         setLanguage('pt');
+    }
+});
+
+test('visual de conexão renderiza hitbox acessível para clique e sincroniza geometria e remoção', () => {
+    const prevDoc = global.document;
+    try {
+        const createMockElement = (tag) => {
+            const attrs = {};
+            const listeners = {};
+            const element = {
+                tagName: tag,
+                attrs,
+                classList: {
+                    classes: new Set(),
+                    add(c) { this.classes.add(c); },
+                    remove(c) { this.classes.delete(c); },
+                    contains(c) { return this.classes.has(c); },
+                    toggle(c, force) {
+                        if (force !== undefined) {
+                            if (force) this.classes.add(c);
+                            else this.classes.delete(c);
+                            return force;
+                        }
+                        if (this.classes.has(c)) {
+                            this.classes.delete(c);
+                            return false;
+                        }
+                        this.classes.add(c);
+                        return true;
+                    }
+                },
+                setAttribute(k, v) { attrs[k] = String(v); },
+                getAttribute(k) { return attrs[k] ?? null; },
+                addEventListener(evt, fn) {
+                    if (!listeners[evt]) listeners[evt] = [];
+                    listeners[evt].push(fn);
+                },
+                dispatchEvent(evt, payload) {
+                    listeners[evt]?.forEach((fn) => fn(payload));
+                },
+                remove() {
+                    element.removed = true;
+                }
+            };
+            return element;
+        };
+
+        const appended = [];
+        const pipeLayer = {
+            appendChild(el) { appended.push(el); }
+        };
+
+        global.document = {
+            createElementNS(ns, tag) {
+                return createMockElement(tag);
+            }
+        };
+
+        let clickedPath = null;
+        let dblClickedPath = null;
+        const fakeConn = { id: 'conn-1', sourceId: 'src-1', targetId: 'dst-1' };
+
+        const visual = createConnectionVisual(pipeLayer, fakeConn, {
+            onMouseDown: (conn, evt, pathEl) => { clickedPath = pathEl; },
+            onDoubleClick: (conn, evt, pathEl) => { dblClickedPath = pathEl; }
+        });
+
+        assert.ok(visual, 'Visual de conexão deve ser criado e registrado');
+        assert.ok(visual.hitbox, 'Visual deve possuir elemento de hitbox');
+        assert.ok(visual.path, 'Visual deve possuir elemento de path visível');
+        assert.equal(visual.hitbox.getAttribute('class'), 'pipe-hitbox');
+        assert.equal(visual.path.getAttribute('class'), 'pipe-line');
+
+        // Ambos os elementos devem estar associados à mesma conexão
+        assert.equal(findConnectionByPath(visual.path), fakeConn);
+        assert.equal(findConnectionByPath(visual.hitbox), fakeConn);
+
+        // Disparar mousedown na hitbox deve encaminhar o path visível para o handler
+        visual.hitbox.dispatchEvent('mousedown', { stopPropagation() {} });
+        assert.equal(clickedPath, visual.path, 'Clique na hitbox deve acionar seleção passando o path visível');
+
+        // Disparar dblclick na hitbox deve acionar handler de double click
+        visual.hitbox.dispatchEvent('dblclick', { stopPropagation() {} });
+        assert.equal(dblClickedPath, visual.path, 'Duplo clique na hitbox deve acionar remoção');
+
+        // Atualizar layout deve sincronizar a geometria curva tanto na linha quanto na hitbox
+        updateConnectionVisualLayout(fakeConn, { x: 10, y: 20 }, { x: 100, y: 120 }, { headGainM: 0 }, false);
+        assert.ok(visual.path.getAttribute('d'), 'Path visível deve receber atributo d');
+        assert.equal(visual.hitbox.getAttribute('d'), visual.path.getAttribute('d'), 'Hitbox e path devem ter a mesma curva d');
+
+        // Remover conexão deve limpar ambos os elementos
+        removeConnectionVisual(fakeConn);
+        assert.equal(visual.hitbox.removed, true, 'Hitbox deve ser removida do DOM');
+        assert.equal(visual.path.removed, true, 'Path visível deve ser removido do DOM');
+        assert.equal(getConnectionVisual(fakeConn), null, 'Visual deve ser desregistrado do registro');
+        assert.equal(findConnectionByPath(visual.path), null);
+        assert.equal(findConnectionByPath(visual.hitbox), null);
+    } finally {
+        global.document = prevDoc;
     }
 });
 

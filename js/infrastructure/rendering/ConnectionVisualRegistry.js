@@ -8,6 +8,9 @@ export function registerConnectionVisual(connection, visualRefs) {
     if (visualRefs?.path) {
         connectionsByPath.set(visualRefs.path, connection);
     }
+    if (visualRefs?.hitbox) {
+        connectionsByPath.set(visualRefs.hitbox, connection);
+    }
 }
 
 export function getConnectionVisual(connection) {
@@ -22,6 +25,9 @@ export function unregisterConnectionVisual(connection) {
     const visualRefs = visualsByConnection.get(connection) || null;
     if (visualRefs?.path) {
         connectionsByPath.delete(visualRefs.path);
+    }
+    if (visualRefs?.hitbox) {
+        connectionsByPath.delete(visualRefs.hitbox);
     }
     visualsByConnection.delete(connection);
     return visualRefs;

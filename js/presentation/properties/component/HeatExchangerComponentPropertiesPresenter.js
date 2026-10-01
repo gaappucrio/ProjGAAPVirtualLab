@@ -76,7 +76,7 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
 
         const basicContent = `
             ${renderHeatExchangerDualStreamAlert(duasCorrentesConectadas)}
-            <div style="font-weight: bold; margin-bottom: 8px; color: ${isDark ? '#d8e4ec' : '#2c3e50'}; border-bottom: 1px solid ${isDark ? '#2d3748' : '#e2e8f0'}; padding-bottom: 4px;">Troca Térmica Global</div>
+            <div style="font-weight: bold; margin-bottom: 8px; color: ${isDark ? '#d8e4ec' : '#2c3e50'}; border-bottom: 1px solid ${isDark ? '#2d3748' : '#e2e8f0'}; padding-bottom: 4px;">${translateLiteral('Troca Térmica Global')}</div>
             <div class="prop-group">
                 ${makeLabel('Modo do gráfico', 'Define a exibição do perfil térmico no monitor: Espacial (T vs Comprimento) ou Térmico (T vs Q).')}
                 ${renderCustomSelectHtml({
@@ -123,7 +123,7 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
                 <input type="text" id="disp-hx-flow-mode" value="${comp.getModoEscoamento?.(engine) === 'paralelo' ? translateLiteral('Corrente Paralela (Co-corrente)') : translateLiteral('Contracorrente')}" disabled>
             </div>
 
-            <div style="font-weight: bold; margin: 12px 0 8px 0; color: ${isDark ? '#5dade2' : '#2980b9'}; border-bottom: 1px solid ${isDark ? '#2d3748' : '#e2e8f0'}; padding-bottom: 4px;">Corrente 1 (Processo - in1 / out1)</div>
+            <div style="font-weight: bold; margin: 12px 0 8px 0; color: ${isDark ? '#5dade2' : '#2980b9'}; border-bottom: 1px solid ${isDark ? '#2d3748' : '#e2e8f0'}; padding-bottom: 4px;">${translateLiteral('Corrente 1 (Processo - in1 / out1)')}</div>
             <div class="prop-group">
                 ${makeUnitLabel('Vazão Corrente 1', 'flow', TOOLTIP.heatExchangerFlow)}
                 <input type="text" id="disp-hx-flow" ${hintAttr(TOOLTIP.heatExchangerFlow)} value="${displayUnitValue('flow', comp.vazao1Lps ?? comp.fluxoReal, 2)}" disabled>
@@ -145,7 +145,7 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
                 <input type="text" id="disp-hx-deltap" ${hintAttr(TOOLTIP.heatExchangerPressureDrop)} value="${displayUnitValue('pressure', comp.deltaPAtualBar, 2)}" disabled>
             </div>
 
-            <div style="font-weight: bold; margin: 12px 0 8px 0; color: ${isDark ? '#f39c12' : '#d35400'}; border-bottom: 1px solid ${isDark ? '#2d3748' : '#e2e8f0'}; padding-bottom: 4px;">Corrente 2 (Serviço - in2 / out2)</div>
+            <div style="font-weight: bold; margin: 12px 0 8px 0; color: ${isDark ? '#f39c12' : '#d35400'}; border-bottom: 1px solid ${isDark ? '#2d3748' : '#e2e8f0'}; padding-bottom: 4px;">${translateLiteral('Corrente 2 (Serviço - in2 / out2)')}</div>
             <div class="prop-group">
                 ${makeUnitLabel('Vazão Corrente 2', 'flow', TOOLTIP.heatExchangerFlow2 || TOOLTIP.heatExchangerFlow)}
                 <input type="text" id="disp-hx-flow-2" ${hintAttr(TOOLTIP.heatExchangerFlow2 || TOOLTIP.heatExchangerFlow)} value="${displayUnitValue('flow', comp.vazao2Lps ?? 0, 2)}" disabled>
@@ -169,7 +169,7 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
         `;
 
         const advancedContent = `
-            <div style="font-weight: bold; margin-bottom: 8px; color: ${isDark ? '#d8e4ec' : '#2c3e50'}; border-bottom: 1px solid ${isDark ? '#2d3748' : '#e2e8f0'}; padding-bottom: 4px;">Análise Térmica Rigorosa</div>
+            <div style="font-weight: bold; margin-bottom: 8px; color: ${isDark ? '#d8e4ec' : '#2c3e50'}; border-bottom: 1px solid ${isDark ? '#2d3748' : '#e2e8f0'}; padding-bottom: 4px;">${translateLiteral('Análise Térmica Rigorosa')}</div>
             <div class="prop-group">
                 ${makeLabel('LMTD (Média Logarítmica)', 'Diferença Média Logarítmica de Temperatura entre as correntes: força motriz térmica média ao longo do trocador.')}
                 <input type="text" id="disp-hx-lmtd" value="${(comp.lmtdC || 0).toFixed(2)} °C" disabled>
@@ -182,7 +182,7 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
                 ${makeLabel('Pinch Point (ΔT mín)', 'Menor diferença pontual de temperatura entre os dois fluidos ao longo do trocador (ponto de estrangulamento térmico).')}
                 <input type="text" id="disp-hx-pinch" value="${(comp.pinchPointMinDeltaTC || 0).toFixed(2)} °C" disabled>
             </div>
-            <div style="font-weight: bold; margin: 12px 0 8px 0; color: ${isDark ? '#d8e4ec' : '#2c3e50'}; border-bottom: 1px solid ${isDark ? '#2d3748' : '#e2e8f0'}; padding-bottom: 4px;">Parâmetros Hidráulicos e de Limite</div>
+            <div style="font-weight: bold; margin: 12px 0 8px 0; color: ${isDark ? '#d8e4ec' : '#2c3e50'}; border-bottom: 1px solid ${isDark ? '#2d3748' : '#e2e8f0'}; padding-bottom: 4px;">${translateLiteral('Parâmetros Hidráulicos e de Limite')}</div>
             <div class="prop-group">
                 ${makeLabel('Perda local K', TOOLTIP.heatExchangerK)}
                 <input type="number" id="input-hx-loss-k" ${hintAttr(TOOLTIP.heatExchangerK)} value="${comp.perdaLocalK}" step="0.1" min="0" max="100">
@@ -331,5 +331,3 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
         return unsubscribeComponent;
     }
 };
-
-;

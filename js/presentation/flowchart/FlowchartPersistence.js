@@ -102,7 +102,7 @@ export function parseFlowchartDocument(payload) {
     };
 }
 
-export function loadWorkspaceIntoEngine(engine, workspace) {
+function loadWorkspaceIntoEngine(engine, workspace) {
     if (!engine || !workspace) return false;
 
     if (engine.isRunning) engine.stop();

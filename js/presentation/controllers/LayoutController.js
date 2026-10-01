@@ -1,7 +1,6 @@
 import { subscribeLanguageChanges, t } from '../i18n/LanguageManager.js';
 
 const MIN_MONITOR_HEIGHT_PX = 320;
-const MAX_MONITOR_HEIGHT_PX = 600;
 const DESKTOP_MONITOR_MARGIN_PX = 24;
 const MOBILE_MONITOR_MARGIN_PX = 16;
 const DESKTOP_LAYOUT_BREAKPOINT_PX = 960;

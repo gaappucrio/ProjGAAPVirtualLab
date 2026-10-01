@@ -1043,13 +1043,6 @@ function nextComponentId() {
     return `dwsim-${Date.now()}-${componentIdCounter}`;
 }
 
-function defaultSourceEndpoint(componentType = 'pump') {
-    return defaultEndpointFor(componentType, 'out');
-}
-
-function defaultTargetEndpoint(componentType = 'pump') {
-    return defaultEndpointFor(componentType, 'in');
-}
 
 /**
  * Devolve o endpoint padrão para um tipo de componente GAAP e direção de porta.

@@ -2339,6 +2339,8 @@
       {
       position: absolute;
       /* Posiciona os componentes de forma absoluta dentro do workspace, permitindo que eles sejam movidos livremente e proporcionando um layout mais organizado e profissional para os componentes no workspace, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para os componentes no workspace */
+      z-index: 2;
+      /* Garante que os componentes e suas portas fiquem acima da camada de canos */
       cursor: move;
       /* Define o cursor como uma mão quando o mouse está sobre o componente, indicando que ele é movível */
       box-sizing: border-box;
@@ -2473,6 +2475,18 @@
       /* Permite que os canos sejam exibidos mesmo que ultrapassem os limites da camada, garantindo que as conexões entre os componentes sejam exibidas corretamente e proporcionando um layout mais organizado e profissional para os canos no workspace, especialmente quando combinado com as outras propriedades para criar um layout dinâmico e agradável para os canos no workspace */
   }
 
+  .pipe-hitbox
+
+  /* HITBOX TRANSPARENTE AMPLIADA PARA FACILITAR O CLIQUE NOS CANOS */
+      {
+      fill: none;
+      stroke: transparent;
+      stroke-width: 18;
+      stroke-linecap: round;
+      pointer-events: stroke;
+      cursor: pointer;
+  }
+
   .pipe-line
 
   /* ESTILO PARA AS LINHAS DE CONEXÃO (CANOS)  */
@@ -2487,13 +2501,16 @@
       /* Define o estilo da ponta das linhas de conexão */
       pointer-events: stroke;
       /* Permite que os eventos do mouse sejam detectados apenas no traçado dos canos */
+      cursor: pointer;
+      /* Define o cursor do mouse para indicar que o Cano é clicável */
       transition: stroke 0.5s;
       /* Adiciona uma transição suave para a cor do traçado dos canos, criando um efeito de destaque visual quando os usuários interagem com os canos, melhorando a experiência do usuário e proporcionando um visual mais dinâmico e agradável para os canos no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os canos no workspace */
   }
 
-  .pipe-line:hover
+  .pipe-line:hover,
+  .pipe-hitbox:hover + .pipe-line
 
-  /* ESTILO PARA Cano QUANDO O MOUSE ESTÁ SOBRE ELE  */
+  /* ESTILO PARA Cano QUANDO O MOUSE ESTÁ SOBRE ELE OU SOBRE A HITBOX */
       {
       stroke: #bdc3c7;
       /* Define a cor do traçado dos canos quando o mouse está sobre eles, criando um efeito de destaque visual que chama a atenção dos usuários para os canos e proporcionando uma experiência de visualização mais imersiva para os usuários, além de criar um visual mais dinâmico e agradável para os canos no workspace, especialmente quando combinado com as outras propriedades para criar um layout organizado e profissional para os canos no workspace */

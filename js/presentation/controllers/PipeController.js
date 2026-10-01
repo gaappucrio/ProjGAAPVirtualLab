@@ -144,15 +144,6 @@ function getConnectionRenderPoints(connection) {
     };
 }
 
-function normalizeVector(vector, fallback = { x: 1, y: 0 }) {
-    const magnitude = Math.hypot(vector?.x || 0, vector?.y || 0);
-    if (magnitude < 0.0001) return fallback;
-    return {
-        x: vector.x / magnitude,
-        y: vector.y / magnitude
-    };
-}
-
 function rotateVector(vector, rotationDeg = 0) {
     const radians = (Number(rotationDeg) || 0) * Math.PI / 180;
     const cos = Math.cos(radians);

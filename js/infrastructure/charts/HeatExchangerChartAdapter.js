@@ -299,7 +299,7 @@ export function buildHeatExchangerCurveDatasets(component, options = {}) {
     };
 }
 
-export function applyHeatExchangerChartPresentation(chart, datasets, { expanded = false } = {}) {
+function applyHeatExchangerChartPresentation(chart, datasets, { expanded = false } = {}) {
     if (!chart) return;
 
     const profile = getScaleProfile({ expanded });

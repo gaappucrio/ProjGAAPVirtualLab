@@ -253,7 +253,7 @@ const HEAT_EXCHANGER_COMPONENT_VISUAL = {
                 const isContra = modo === 'contracorrente';
 
                 if (isDual) {
-                    const tagModo = isContra ? 'Contra' : 'Paralelo';
+                    const tagModo = isContra ? t('visual.counter') : t('visual.parallel');
                     temp.textContent = `S1: ${t1InStr}→${t1OutStr} | S2: ${t2InStr}→${t2OutStr} (${tagModo})`;
                     temp.setAttribute('font-size', '8');
                 } else if (hasS2 && !hasS1) {
@@ -266,7 +266,23 @@ const HEAT_EXCHANGER_COMPONENT_VISUAL = {
             }
         };
 
-        registerVisualCleanup(visual, subscribeUnitPreferences(() => atualizarEstadoTermico()));
+        const unsubscribeUnits = subscribeUnitPreferences(() => {
+            if (!visual.isConnected) {
+                unsubscribeUnits();
+                return;
+            }
+            atualizarEstadoTermico();
+        });
+        registerVisualCleanup(visual, unsubscribeUnits);
+
+        const unsubscribeLanguage = subscribeLanguageChanges(() => {
+            if (!visual.isConnected) {
+                unsubscribeLanguage();
+                return;
+            }
+            atualizarEstadoTermico();
+        });
+        registerVisualCleanup(visual, unsubscribeLanguage);
 
         subscribeVisual(visual, logica, (dados) => {
             if (dados.tipo === COMPONENT_EVENTS.POSITION_UPDATE) atualizarElevacoes();

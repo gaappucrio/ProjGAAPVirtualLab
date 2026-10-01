@@ -71,6 +71,9 @@ export function drawConnectionCurve(x1, y1, x2, y2, options = {}) {
 }
 
 export function createConnectionVisual(pipeLayer, connection, handlers = {}) {
+    const hitboxEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    hitboxEl.setAttribute('class', 'pipe-hitbox');
+
     const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     pathEl.setAttribute('class', 'pipe-line');
     pathEl.setAttribute('marker-end', 'url(#arrow)');
@@ -85,18 +88,22 @@ export function createConnectionVisual(pipeLayer, connection, handlers = {}) {
     heightLabelEl.setAttribute('text-anchor', 'middle');
 
     if (handlers.onMouseDown) {
+        hitboxEl.addEventListener('mousedown', (event) => handlers.onMouseDown(connection, event, pathEl));
         pathEl.addEventListener('mousedown', (event) => handlers.onMouseDown(connection, event, pathEl));
     }
 
     if (handlers.onDoubleClick) {
+        hitboxEl.addEventListener('dblclick', (event) => handlers.onDoubleClick(connection, event, pathEl));
         pathEl.addEventListener('dblclick', (event) => handlers.onDoubleClick(connection, event, pathEl));
     }
 
+    pipeLayer.appendChild(hitboxEl);
     pipeLayer.appendChild(pathEl);
     pipeLayer.appendChild(labelEl);
     pipeLayer.appendChild(heightLabelEl);
 
     registerConnectionVisual(connection, {
+        hitbox: hitboxEl,
         path: pathEl,
         label: labelEl,
         labelHeight: heightLabelEl
@@ -129,13 +136,15 @@ export function updateConnectionVisualLayout(connection, sourcePoint, targetPoin
     const midX = (sourcePoint.x + targetPoint.x) / 2;
     const midY = (sourcePoint.y + targetPoint.y) / 2;
 
-    visual.path.setAttribute('d', drawConnectionCurve(
+    const curveD = drawConnectionCurve(
         sourcePoint.x,
         sourcePoint.y,
         targetPoint.x,
         targetPoint.y,
         options
-    ));
+    );
+    visual.hitbox?.setAttribute('d', curveD);
+    visual.path.setAttribute('d', curveD);
     visual.label?.setAttribute('x', midX);
     visual.label?.setAttribute('y', midY - 10);
     visual.labelHeight?.setAttribute('x', midX);
@@ -185,6 +194,7 @@ export function removeConnectionVisual(connection) {
     const visual = unregisterConnectionVisual(connection);
     if (!visual) return;
 
+    visual.hitbox?.remove();
     visual.label?.remove();
     visual.labelHeight?.remove();
     visual.path?.remove();
