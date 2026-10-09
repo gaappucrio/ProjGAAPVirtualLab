@@ -205,6 +205,10 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
                 ${makeLabel('Efetividade máxima (%)', TOOLTIP.heatExchangerMaxEffectiveness)}
                 <input type="number" id="input-hx-max-effectiveness" ${hintAttr(TOOLTIP.heatExchangerMaxEffectiveness)} value="${(comp.efetividadeMaxima * 100).toFixed(1)}" step="0.1" min="0" max="100">
             </div>
+            <div class="prop-group">
+                ${makeLabel('Volume interno por corrente (L)', TOOLTIP.heatExchangerHoldupVolume)}
+                <input type="number" id="input-hx-holdup-volume" ${hintAttr(TOOLTIP.heatExchangerHoldupVolume)} value="${Number(comp.volumeInternoL ?? 0)}" step="0.1" min="0" max="10000">
+            </div>
         `;
 
         return renderPropertyTabs({
@@ -329,6 +333,17 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
                     comp.setEfetividadeMaxima(validated);
                     refreshNetworkAfterThermalChange();
                     setValue('input-hx-max-effectiveness', (comp.efetividadeMaxima * 100).toFixed(1));
+                }
+            );
+        });
+
+        bind('input-hx-holdup-volume', 'change', (event) => {
+            validateInputWithFeedback(
+                event.target,
+                (value, name) => InputValidator.validateNumber(value, 0, 10000, name),
+                'Volume interno por corrente',
+                (validated) => {
+                    setValue('input-hx-holdup-volume', comp.setVolumeInterno(validated));
                 }
             );
         });

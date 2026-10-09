@@ -5,6 +5,7 @@ import {
     TOOLTIP,
     baseFromDisplay,
     bind,
+    bindCustomSelect,
     byId,
     displayBound,
     displayEditableUnitValue,
@@ -14,6 +15,7 @@ import {
     makeLabel,
     makeUnitLabel,
     notifyPanelRefresh,
+    renderCustomSelectHtml,
     renderPropertyTabs,
     setValue,
     validateInputWithFeedback
@@ -80,6 +82,22 @@ export const TANK_PROPERTIES_PRESENTER = {
                 <input type="number" id="input-altura-tanque" ${hintAttr(TOOLTIP.tankHeight)} value="${displayEditableUnitValue('length', comp.alturaUtilMetros, 3)}" step="${displayStep('length', 0.05)}" min="${displayBound('length', 0.5)}" max="${displayBound('length', 10)}">
             </div>
             <div class="prop-group">
+                ${makeLabel('Tipo de tanque', TOOLTIP.tankType)}
+                ${renderCustomSelectHtml({
+                    id: 'input-tipo-tanque',
+                    value: comp.tipoTanque === 'fechado' ? 'fechado' : 'atmosferico',
+                    title: TOOLTIP.tankType,
+                    options: [
+                        { value: 'atmosferico', label: translateLiteral('Aberto (atmosférico)') },
+                        { value: 'fechado', label: translateLiteral('Fechado (colchão de gás)') }
+                    ]
+                })}
+            </div>
+            <div class="prop-group" id="grp-precarga-tanque" style="display:${comp.tipoTanque === 'fechado' ? 'block' : 'none'};">
+                ${makeUnitLabel('Pré-carga do gás (vaso vazio)', 'pressure', TOOLTIP.tankPrecharge)}
+                <input type="number" id="input-precarga-tanque" ${hintAttr(TOOLTIP.tankPrecharge)} value="${displayEditableUnitValue('pressure', comp.pressaoPreCargaBar, 3)}" step="${displayStep('pressure', 0.1)}" min="${displayBound('pressure', 0)}" max="${displayBound('pressure', 20)}">
+            </div>
+            <div class="prop-group">
                 ${makeUnitLabel('Pressão no fundo', 'pressure', TOOLTIP.tankBottomPressure)}
                 <input type="text" id="disp-pressao-tanque" ${hintAttr(TOOLTIP.tankBottomPressure)} value="${displayUnitValue('pressure', comp.pressaoFundoBar, 2)}" disabled>
             </div>
@@ -94,6 +112,10 @@ export const TANK_PROPERTIES_PRESENTER = {
             <div class="prop-group">
                 ${makeUnitLabel('Vazão de saída', 'flow', TOOLTIP.tankOutletFlow)}
                 <input type="text" id="disp-qout-tanque" ${hintAttr(TOOLTIP.tankOutletFlow)} value="${displayUnitValue('flow', comp.lastQout, 2)}" disabled>
+            </div>
+            <div class="prop-group">
+                ${makeUnitLabel('Vazão de transbordo', 'flow', TOOLTIP.tankOverflow)}
+                <input type="text" id="disp-transbordo-tanque" ${hintAttr(TOOLTIP.tankOverflow)} value="${displayUnitValue('flow', comp.vazaoTransbordoLps || 0, 2)}" disabled>
             </div>
             <div class="prop-group">
                 ${makeLabel('Tempo de residência (s)', TOOLTIP.tankResidenceTime)}
@@ -304,6 +326,29 @@ export const TANK_PROPERTIES_PRESENTER = {
                     comp.alturaBocalSaidaM = Math.max(0, Math.min(comp.alturaUtilMetros, validated));
                     comp.sincronizarMetricasFisicas();
                     emitirVolumeAtualizado();
+                }
+            );
+        });
+
+        bindCustomSelect('input-tipo-tanque');
+        bind('input-tipo-tanque', 'change', (event) => {
+            comp.tipoTanque = event.target.value === 'fechado' ? 'fechado' : 'atmosferico';
+            const grupoPreCarga = byId('grp-precarga-tanque');
+            if (grupoPreCarga) grupoPreCarga.style.display = comp.tipoTanque === 'fechado' ? 'block' : 'none';
+            comp.sincronizarMetricasFisicas();
+            setValue('disp-pressao-tanque', displayUnitValue('pressure', comp.pressaoFundoBar, 2));
+            notifyPanelRefresh();
+        });
+
+        bind('input-precarga-tanque', 'change', (event) => {
+            validateInputWithFeedback(
+                event.target,
+                (value, name) => InputValidator.validateNumber(baseFromDisplay('pressure', value), 0, 20, name),
+                'Pré-carga do gás',
+                (validated) => {
+                    comp.pressaoPreCargaBar = validated;
+                    comp.sincronizarMetricasFisicas();
+                    setValue('disp-pressao-tanque', displayUnitValue('pressure', comp.pressaoFundoBar, 2));
                 }
             );
         });

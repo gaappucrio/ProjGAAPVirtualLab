@@ -137,7 +137,8 @@ const TOOLTIP_TEXTS = {
             heatExchangerFlow: 'Vazão atual na Corrente 1.',
             heatExchangerFlow2: 'Vazão atual na Corrente 2.',
             heatExchangerK: 'Perda localizada adicional do casco, bocais e internos do trocador.',
-            heatExchangerMaxEffectiveness: 'Limite superior de efetividade térmica usado para evitar troca perfeita idealizada.',
+            heatExchangerMaxEffectiveness: 'Limite opcional de efetividade térmica (padrão 100%: sem limite, efetividade pelo método NTU). Use valores menores para representar incrustação.',
+            heatExchangerHoldupVolume: 'Volume de fluido retido em cada lado do trocador. A temperatura de saída responde com atraso de 1ª ordem, τ = V/Q (tempo de residência), até o regime ε-NTU; 0 L torna a resposta instantânea.',
             heatExchangerEffectiveness: 'Efetividade térmica calculada pelo método NTU.',
             heatExchangerPressureDrop: 'Queda de pressão na Corrente 1.',
             heatExchangerPressureDrop2: 'Queda de pressão na Corrente 2.',
@@ -149,7 +150,10 @@ const TOOLTIP_TEXTS = {
             tankInletHeight: 'Elevação vertical do bocal de entrada em relação ao fundo do tanque.',
             tankOutletHeight: 'Elevação vertical do bocal de saída em relação ao fundo do tanque.',
             tankCd: 'Coeficiente de descarga efetivo da saída do tanque.',
-            tankBottomPressure: 'Pressão hidrostática no fundo do tanque.',
+            tankBottomPressure: 'Pressão manométrica no fundo do tanque: pressão do gás no topo mais a coluna de líquido (rho·g·h).',
+            tankType: 'Aberto: o topo fica à pressão atmosférica e a saída enxerga só a coluna de líquido; cheio, transborda. Fechado: um colchão de gás comprimido (lei de Boyle) pressuriza o vaso, como num tanque hidropneumático.',
+            tankPrecharge: 'Pressão manométrica do gás com o vaso vazio. Ao encher, o gás é comprimido e a pressão sobe na proporção volume total / volume de gás.',
+            tankOverflow: 'Vazão que sai pelo ladrão quando o tanque aberto está cheio; a massa continua contabilizada no balanço.',
             tankLiquidLevel: 'Altura atual do espelho de líquido em relação ao fundo.',
             tankInletFlow: 'Vazão de entrada atual no tanque.',
             tankOutletFlow: 'Vazão de saída atual no tanque.',
@@ -296,7 +300,8 @@ const TOOLTIP_TEXTS = {
             heatExchangerFlow: 'Current flow through Stream 1.',
             heatExchangerFlow2: 'Current flow through Stream 2.',
             heatExchangerK: 'Additional minor loss from the shell, nozzles, and internals.',
-            heatExchangerMaxEffectiveness: 'Upper thermal effectiveness limit used to avoid ideal perfect exchange.',
+            heatExchangerMaxEffectiveness: 'Optional thermal effectiveness limit (default 100%: no limit, effectiveness from the NTU method). Use lower values to represent fouling.',
+            heatExchangerHoldupVolume: 'Fluid volume held on each side of the exchanger. The outlet temperature follows a first-order lag, τ = V/Q (residence time), towards the ε-NTU steady state; 0 L makes the response instantaneous.',
             heatExchangerEffectiveness: 'Thermal effectiveness calculated using the NTU method.',
             heatExchangerPressureDrop: 'Pressure drop across Stream 1.',
             heatExchangerPressureDrop2: 'Pressure drop across Stream 2.',
@@ -308,7 +313,10 @@ const TOOLTIP_TEXTS = {
             tankInletHeight: 'Vertical elevation of the inlet nozzle relative to the tank bottom.',
             tankOutletHeight: 'Vertical elevation of the outlet nozzle relative to the tank bottom.',
             tankCd: 'Effective discharge coefficient of the tank outlet.',
-            tankBottomPressure: 'Hydrostatic pressure at the tank bottom.',
+            tankBottomPressure: 'Gauge pressure at the tank bottom: gas pressure at the top plus the liquid column (rho·g·h).',
+            tankType: "Open: the top is at atmospheric pressure and the outlet only sees the liquid column; when full, it overflows. Closed: a compressed gas cushion (Boyle's law) pressurizes the vessel, like a hydropneumatic tank.",
+            tankPrecharge: 'Gauge gas pressure with the vessel empty. As it fills, the gas is compressed and the pressure rises in proportion to total volume / gas volume.',
+            tankOverflow: 'Flow leaving through the overflow when the open tank is full; the mass is still accounted for in the balance.',
             tankLiquidLevel: 'Current liquid surface height relative to the bottom.',
             tankInletFlow: 'Current inlet flow into the tank.',
             tankOutletFlow: 'Current outlet flow from the tank.',
@@ -344,6 +352,17 @@ const TEXTS = {
             importDwsimSuccess: ({ count }) => `Importação DWSIM concluída: ${count} componente(s) criado(s).`,
             importDwsimSkipped: ({ count }) => `${count} componente(s) DWSIM sem equivalente foram ignorados(s).`,
             relativeHeight: 'Altura relativa',
+            legacySolver: 'Solver legado',
+            legacySolverTitle: 'Usa o solver push-based anterior, apenas para comparação durante a migração. O padrão (desligado) é o solver global, que resolve pressões e vazões simultaneamente como uma planta real.',
+            transientState: 'Regime transiente',
+            steadyStateSince: ({ time }) => `Regime permanente · desde t = ${time} s`,
+            steadyStateTitle: ({ hold }) => `Regime permanente: vazões, volumes dos tanques e temperaturas variando menos que 0,001 por segundo (L/s², L/s e °C/s) durante ${hold} s seguidos.`,
+            transientDominant: ({ label, variable }) => `Maior variação agora: ${variable} em ${label}.`,
+            steadyStateVariable: {
+                flow: 'vazão',
+                volume: 'volume',
+                temperature: 'temperatura'
+            },
             language: 'Inglês',
             languageTitle: 'Alterna os textos do laboratório entre português e inglês.',
             themeLightTitle: 'Ativar modo escuro',
@@ -458,8 +477,8 @@ const TEXTS = {
             successSourceMany: ({ count }) => `${count} fontes ajustadas para o limite físico do set point.`
         },
         networkDiagnostics: {
-            closedLoop: ({ count }) => `Malha fechada detectada em ${count} ilha(s): o solver nodal experimental sera usado para evitar erro silencioso do modelo push-based.`,
-            floatingActive: ({ count }) => `${count} malha(s) fechada(s) sem fonte, dreno ou tanque: o solver nodal usa referencia manometrica relativa. Use como experimento didatico.`,
+            closedLoop: ({ count }) => `Malha fechada detectada em ${count} ilha(s): pressões e vazões são resolvidas simultaneamente pelo solver global.`,
+            floatingActive: ({ count }) => `${count} malha(s) fechada(s) sem fonte, dreno ou tanque: as pressões são relativas a uma referência manométrica arbitrária. Use como experimento didático.`,
             floatingPassive: ({ count }) => `${count} malha(s) fechada(s) passiva(s) sem fronteira de pressao: a solucao fisica esperada e vazao zero.`
         },
         common: {
@@ -486,6 +505,17 @@ const TEXTS = {
             importDwsimSuccess: ({ count }) => `DWSIM import complete: ${count} component(s) created.`,
             importDwsimSkipped: ({ count }) => `${count} DWSIM component(s) without an equivalent were skipped.`,
             relativeHeight: 'Relative height',
+            legacySolver: 'Legacy solver',
+            legacySolverTitle: 'Uses the previous push-based solver, only for comparison during the migration. The default (off) is the global solver, which solves pressures and flows simultaneously like a real plant.',
+            transientState: 'Transient state',
+            steadyStateSince: ({ time }) => `Steady state · since t = ${time} s`,
+            steadyStateTitle: ({ hold }) => `Steady state: flows, tank volumes and temperatures changing less than 0.001 per second (L/s², L/s and °C/s) for ${hold} s in a row.`,
+            transientDominant: ({ label, variable }) => `Largest change now: ${variable} at ${label}.`,
+            steadyStateVariable: {
+                flow: 'flow',
+                volume: 'volume',
+                temperature: 'temperature'
+            },
             language: 'English',
             languageTitle: 'Switches the lab text between Portuguese and English.',
             themeLightTitle: 'Turn on dark mode',
@@ -600,8 +630,8 @@ const TEXTS = {
             successSourceMany: ({ count }) => `${count} sources adjusted to the physical set point limit.`
         },
         networkDiagnostics: {
-            closedLoop: ({ count }) => `Closed loop detected in ${count} island(s): the experimental nodal solver will be used to avoid silent push-based model errors.`,
-            floatingActive: ({ count }) => `${count} closed loop(s) without source, sink, or tank: the nodal solver uses a relative gauge-pressure reference. Treat it as a didactic experiment.`,
+            closedLoop: ({ count }) => `Closed loop detected in ${count} island(s): pressures and flows are solved simultaneously by the global solver.`,
+            floatingActive: ({ count }) => `${count} closed loop(s) without source, sink, or tank: pressures are relative to an arbitrary gauge reference. Treat it as a didactic experiment.`,
             floatingPassive: ({ count }) => `${count} passive closed loop(s) without a pressure boundary: the expected physical solution is zero flow.`
         },
         common: {
@@ -767,6 +797,17 @@ const LEGACY_PT_TO_EN = {
     'Eficiência atual': 'Current efficiency',
     'Parâmetros de curva, cavitação e dinâmica da bomba. Os campos atuais mostram a condição instantânea da sucção e ajudam a entender se a bomba está operando com folga ou perto da cavitação.': 'Pump curve, cavitation, and dynamics parameters. Current fields show instantaneous suction condition and help explain whether the pump is operating with margin or near cavitation.',
     'Capacidade total': 'Total capacity',
+    'Tipo de tanque': 'Tank type',
+    'Solver hidráulico': 'Hydraulic solver',
+    'Legado (push)': 'Legacy (push)',
+    'Global (simultâneo)': 'Global (simultaneous)',
+    'Pré-carga do gás (bar)': 'Gas pre-charge (bar)',
+    'Vazão de transbordo do tanque (L/s)': 'Tank overflow flow (L/s)',
+    'Aberto (atmosférico)': 'Open (atmospheric)',
+    'Fechado (colchão de gás)': 'Closed (gas cushion)',
+    'Pré-carga do gás (vaso vazio)': 'Gas pre-charge (empty vessel)',
+    'Pré-carga do gás': 'Gas pre-charge',
+    'Vazão de transbordo': 'Overflow flow',
     'Volume atual': 'Current volume',
     'Altura útil': 'Useful height',
     'Pressão no fundo': 'Bottom pressure',
@@ -975,6 +1016,8 @@ const LEGACY_PT_TO_EN = {
     'Coeficiente UA': 'UA coefficient',
     'Perda local': 'Minor loss',
     'Efetividade máxima': 'Maximum effectiveness',
+    'Volume interno por corrente (L)': 'Holdup volume per stream (L)',
+    'Volume interno por corrente': 'Holdup volume per stream',
     'Calor específico': 'Specific heat'
 };
 

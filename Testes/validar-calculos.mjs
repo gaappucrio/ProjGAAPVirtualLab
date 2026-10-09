@@ -1986,7 +1986,8 @@ test('trocador sinaliza risco de ebulicao quando Pv na saida atinge a pressao ab
     assert.equal(aquecimentoModerado.temRiscoEbulicao(), false, 'Agua abaixo de 80 C a ~2,5 bar abs. permanece liquida');
 
     const aquecimentoSevero = medir(250);
-    assert.ok(aquecimentoSevero.temperaturaSaidaC > 130, 'Utilidade a 250 C aquece acima da saturacao local');
+    // Saída para dreno a 0 bar manométrico: pressão absoluta ~1 atm, saturação em ~100 °C.
+    assert.ok(aquecimentoSevero.temperaturaSaidaC > 105, `Utilidade a 250 C aquece acima da saturacao local: ${aquecimentoSevero.temperaturaSaidaC}`);
     assert.equal(aquecimentoSevero.temRiscoEbulicao(), true, 'Pv(T) acima da pressao absoluta deve sinalizar ebulicao');
 });
 

@@ -67,6 +67,8 @@ const CLONEABLE_PROPERTIES_BY_TYPE = {
         'alturaBocalEntradaM',
         'alturaBocalSaidaM',
         'volumeInicial',
+        'tipoTanque',
+        'pressaoPreCargaBar',
         'fluidoConteudo',
         'setpointAtivo',
         'setpoint',
@@ -80,6 +82,7 @@ const CLONEABLE_PROPERTIES_BY_TYPE = {
         'uaWPorK',
         'perdaLocalK',
         'efetividadeMaxima',
+        'volumeInternoL',
         'tipoPerfilGrafico'
     ]
 };

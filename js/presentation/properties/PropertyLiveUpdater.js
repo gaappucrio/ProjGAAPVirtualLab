@@ -210,6 +210,7 @@ function updateTankValues(component) {
     setFieldValue('disp-nível-tanque', component.getAlturaLiquidoM(), 'length', 2);
     setFieldValue('disp-qin-tanque', component.lastQin, 'flow', 2);
     setFieldValue('disp-qout-tanque', component.lastQout, 'flow', 2);
+    setFieldValue('disp-transbordo-tanque', component.vazaoTransbordoLps || 0, 'flow', 2);
     setValue('disp-tempo-residencia-tanque', formatResidenceTime(calculateTankResidenceTimeS(component).timeS));
     const fluid = component.getFluidoConteudo?.() || component.fluidoConteudo;
     setValue('disp-tank-fluid', fluid?.nome || '-');

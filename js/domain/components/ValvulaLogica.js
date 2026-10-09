@@ -201,7 +201,9 @@ export class ValvulaLogica extends ComponenteFisico {
         }
 
         const characteristicFactor = this.getCharacteristicFactor(aberturaNormalizada);
-        const effectiveCv = Math.max(0.05, this.cv * Math.max(characteristicFactor, 0.05));
+        // Cv efetivo segue a característica inerente sem piso artificial (como no DWSIM: Kv·f(x));
+        // abaixo do limiar de fechamento a válvula veda totalmente.
+        const effectiveCv = this.cv * characteristicFactor;
         const hydraulicAreaFactor = clamp((0.2 + (0.8 * characteristicFactor)), FATOR_MINIMO_AREA, 1);
         const hydraulicAreaM2 = this.getAreaConexaoM2() * hydraulicAreaFactor;
         const throttlingLoss = Math.max(0, (1 / Math.max(FATOR_MINIMO_AREA, characteristicFactor)) - 1);

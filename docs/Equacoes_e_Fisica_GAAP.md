@@ -198,6 +198,18 @@ Onde:
 - $g$: Aceleração da gravidade ($9{,}81\text{ m/s}^2$)
 - $h$: Altura do nível de líquido no interior do tanque ($m$, obtida por $h = (V_{\text{atual}} / V_{\max}) \cdot H_{\text{útil}}$)
 
+### Tanque Aberto, Vaso Fechado e Transbordo
+O tanque impõe as pressões dos bocais ao solver global e, por isso, desacopla montante e jusante como um reservatório real:
+
+$$P_{\text{saída}} = P_{\text{gás}} + \rho g (h - z_{\text{saída}}), \qquad P_{\text{entrada}} = P_{\text{gás}} + \rho g \max(0, h - z_{\text{entrada}})$$
+
+- **Tanque aberto (atmosférico):** $P_{\text{gás}} = 0$ (manométrica).
+- **Vaso fechado (colchão de gás):** Boyle isotérmico a partir da pré-carga com o vaso vazio,
+  $$P_{\text{gás,abs}} = (P_{\text{pré}} + P_{\text{atm}}) \frac{V_{\text{total}}}{V_{\text{total}} - V_{\text{líquido}}}$$
+  O vaso enche até $P_{\text{gás}}$ equilibrar a pressão de alimentação.
+- **Transbordo:** com o tanque cheio, $Q_{\text{transbordo}} = (V_t + (\Sigma Q_{in} - \Sigma Q_{out})\Delta t - V_{\max})/\Delta t$ — a massa excedente sai pelo ladrão, sem criar pressão fictícia.
+- **Saída limitada pelo inventário:** $Q_{out} \le V/\Delta t$.
+
 ### Mistura de Fases e Balanceamento
 No caso de confluência de fluidos distintos, a densidade da mistura é apurada volumetricamente:
 
@@ -341,6 +353,13 @@ Onde:
 - $K_{\text{local}}$: Coeficiente de perda singular do trocador
 - $A_{\text{hid}}$: Área de escoamento da conexão ($m^2$)
 
+### 5.3 Resposta Dinâmica do Trocador (Atraso Térmico)
+O ε-NTU define a temperatura de **regime** $T_{\text{alvo}}$. A temperatura que sai segue um atraso de 1ª ordem com o tempo de residência de cada lado:
+
+$$\tau_i = \frac{V_{\text{interno}}}{Q_i}, \qquad T_{i,\text{out}}^{n+1} = T_{i,\text{out}}^{n} + \left(T_{i,\text{alvo}} - T_{i,\text{out}}^{n}\right)\left(1 - e^{-\Delta t/\tau_i}\right)$$
+
+Em $t = \tau$ a saída percorreu $1 - e^{-1} \approx 63{,}2\%$ do degrau; após $5\tau$, mais de $99\%$. Padrão $V_{\text{interno}} = 2\text{ L}$ por corrente; $V_{\text{interno}} = 0$ desliga o atraso. O regime permanente coincide exatamente com o ε-NTU.
+
 ## 6. Automação e Malhas de Controle (PID)
 
 O simulador embute automação de malha fechada permitindo que tanques controlem válvulas autonomamente.
@@ -356,9 +375,19 @@ Onde:
 
 Para garantir a estabilidade da malha, o algoritmo embute proteção *Anti-Windup* por **integração condicional**: a integral deixa de acumular enquanto a saída está saturada e o erro empurraria o atuador ainda mais para o limite (com um teto de segurança $|K_i \cdot \text{integral}| \le 1$). A integral **não** é zerada quando o erro troca de sinal: em regime, é ela que sustenta a abertura de equilíbrio da válvula, e zerá-la provocava um ciclo limite permanente. Quando o tanque tem válvulas de entrada e de saída, uma zona morta (*Deadband*) paramétrica suprime trepidações quando o erro tangencia zero.
 
-## 7. Arquitetura do Solucionador Híbrido (Solver)
+## 7. Arquitetura do Solucionador (Solver)
 
-As equações individuais dos componentes supracitados são aglutinadas num arcabouço dinâmico. O GAAP Virtual Lab utiliza uma **Arquitetura de Solução Híbrida** para otimizar desempenho e lidar com topologias complexas, operando dois motores matemáticos simultaneamente: o **Solver Sequencial (Push-Based)** e o **Solver Nodal Simultâneo**.
+### 7.0 Solver Global Simultâneo (padrão)
+Todas as equações dos componentes são resolvidas **ao mesmo tempo** pelo Global Gradient Algorithm (Todini–Pilati, base do EPANET), em `GlobalHydraulicSolver.js`. Para cada ramo $j$ entre os nós $a$ e $b$:
+
+$$P_a - P_b = \Phi_j(Q_j) = \underbrace{\operatorname{sgn}(Q_j)\,K_j \frac{\rho Q_j^2}{2A_j^2}}_{\text{perdas}} - \underbrace{\rho g \Delta z_j}_{\text{estático}} - \underbrace{H_{\text{bomba}}(Q_j)\,c_{\text{cav}}}_{\text{bomba}} + \underbrace{\frac{I_j}{\Delta t}\left(Q_j - Q_j^{\text{ant}}\right)}_{\text{inércia}}, \qquad I_j = \frac{\rho L_j}{A_j}$$
+
+e em cada nó livre $\sum Q_{\text{entra}} - \sum Q_{\text{sai}} = 0$. O termo de inércia é Euler implícito da equação de quantidade de movimento do tubo, $\frac{\rho L}{A}\frac{dQ}{dt} = \Delta P - \Delta P_{\text{perdas}}$: a vazão acelera fisicamente e o regime é idêntico ao estacionário. Newton com $p_j = 1/\Phi_j'$ gera o sistema nodal simétrico definido positivo $\mathbf{A}\,\mathbf{P} = \mathbf{b}$ (Cholesky). Conjuntos ativos tratam válvulas de retenção/unidirecionais (sem fluxo reverso, como no DWSIM dinâmico), tetos de vazão das fontes e o inventário dos tanques; o fator de cavitação é a raiz de $g(c) = f_{\text{cav}}(c) - c$.
+
+**Validação contra o DWSIM dinâmico** (`Testes/fisica-e-dwsim.test.mjs`): alimentação 1 bar → válvula $K_v$ ($C_v$ 40) → tanque atmosférico 2 m³ → válvula $K_v$ ($C_v$ 100) → produto. Nível e vazão coincidem com o modelo de referência do DWSIM ($Q = K_v\sqrt{1000\,\Delta P/\rho}/3{,}6$ L/s, Euler explícito) dentro de 1% de 60 s a 600 s, e o nível de regime coincide com o analítico $h = (K_{v1}/K_{v2})^2 \Delta P/(\rho g)$.
+
+### Solver legado (híbrido push-based + nodal)
+O solver anterior continua acessível pelo toggle **Solver legado** apenas para comparação. Ele utiliza uma **Arquitetura de Solução Híbrida**, operando dois motores matemáticos: o **Solver Sequencial (Push-Based)** e o **Solver Nodal Simultâneo**.
 
 A cada *tick* da simulação, o sistema fatia a malha geral em "Ilhas Hidráulicas" independentes (`HydraulicNetworkAnalyzer.js`), avaliando a topologia de grafos. Dependendo da estrutura de cada ilha, o motor delega a resolução para o algoritmo mais adequado:
 
@@ -428,6 +457,9 @@ O fluxo da malha cíclica converge iterativamente garantindo que a diferença en
 
 ### 7.3 Restrições Físicas e Balanceamento de Massa
 Ambos os motores operam sob limites físicos definidos. Limites de conservação de massa e restrições de nível (ex. *Over/Underflow* dos tanques) são impostos via matrizes de corte topológicas, acionando uma etapa de balanceamento a jusante caso os componentes não suportem escoar a vazão transiente, garantindo estabilidade do modelo em qualquer um dos *solvers*.
+
+### 7.4 Critério de Regime Permanente
+O simulador declara regime permanente quando, por $10\text{ s}$ seguidos, $|dQ/dt| \le 10^{-3}\text{ L/s}^2$ em todas as conexões, $|dV/dt| \le 10^{-3}\text{ L/s}$ em todos os tanques e $|dT/dt| \le 10^{-3}\text{ °C/s}$ em tanques e saídas de trocadores (`SteadyStateMonitor.js`). Num tanque que se aproxima do nível de equilíbrio com constante de tempo $\tau_{\text{tanque}} \approx 2Ah/Q$, isso exige alguns $\tau$ — tanques grandes levam de fato vários minutos para estabilizar.
 
 ---
 *Documento gerado e revisado para atestar a termodinâmica, automação e arquitetura híbrida de escoamento fluido do GAAP Virtual Lab.*

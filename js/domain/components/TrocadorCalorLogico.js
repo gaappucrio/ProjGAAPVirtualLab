@@ -16,6 +16,10 @@ const PERDA_LOCAL_PADRAO_K = 0;
 // Sem limitador artificial por padrão: a efetividade vem só do ε-NTU, mantendo Q = UA·F_T·LMTD.
 // Valores menores continuam disponíveis como limite opcional (ex.: incrustação).
 const EFETIVIDADE_MAXIMA_PADRAO = 1.0;
+// Volume de fluido retido em cada lado (ordem de grandeza de um trocador de bancada de ~1 m²).
+// A saída responde ao ε-NTU com atraso de 1ª ordem, τ = V/Q (tempo de residência); 0 desliga o atraso.
+const VOLUME_INTERNO_PADRAO_L = 2.0;
+const VOLUME_INTERNO_MAXIMO_L = 10000;
 
 // Líquido entra em ebulição quando Pv(T) atinge a pressão absoluta local; o modelo segue
 // monofásico, então o risco é sinalizado em vez de simulado.
@@ -65,6 +69,7 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         this.areaM2 = AREA_PADRAO_M2;
         this.perdaLocalK = PERDA_LOCAL_PADRAO_K;
         this.efetividadeMaxima = EFETIVIDADE_MAXIMA_PADRAO;
+        this.volumeInternoL = VOLUME_INTERNO_PADRAO_L;
         this.fluxoReal = 0;
         this.vazao1Lps = 0;
         this.vazao2Lps = 0;
@@ -87,11 +92,57 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         this.deltaP2AtualBar = 0;
         this.riscoEbulicao1 = false;
         this.riscoEbulicao2 = false;
+        // Regime alvo (ε-NTU) e temperatura que de fato sai de cada lado (estado do atraso térmico).
+        this.temperaturaSaidaAlvoC = this.temperaturaSaidaC;
+        this.temperaturaSaida2AlvoC = this.temperaturaSaida2C;
+        this._temperaturaSaidaEstado = { 1: null, 2: null };
+        this._dinamicaTermicaAtiva = false;
         this._ultimoEstadoNotificado = '';
     }
 
     temRiscoEbulicao() {
         return this.riscoEbulicao1 || this.riscoEbulicao2;
+    }
+
+    getConstanteTempoTermicaS(streamId = 1) {
+        if (!(this.volumeInternoL > 0)) return 0;
+        const vazaoLps = streamId === 2 ? this.vazao2Lps : this.vazao1Lps;
+        return vazaoLps > EPSILON_FLOW ? this.volumeInternoL / vazaoLps : Infinity;
+    }
+
+    // Temperatura na porta de saída: fora da simulação (ou com volume nulo) é o próprio alvo ε-NTU;
+    // na partida, antes de o lado acumular estado, sai o fluido que estava parado na temperatura de entrada.
+    getTemperaturaSaidaEfetivaC(streamId, alvoC, entradaC = alvoC) {
+        if (!this._dinamicaTermicaAtiva || !(this.volumeInternoL > 0)) return alvoC;
+        const estado = this._temperaturaSaidaEstado[streamId];
+        if (Number.isFinite(estado)) return estado;
+        return Number.isFinite(entradaC) ? entradaC : alvoC;
+    }
+
+    // Cada lado se comporta como um volume de mistura: dT/dt = (T_alvo − T)/τ, integrado de forma exata
+    // para o passo (estável para qualquer dt). Sem vazão (τ → ∞) o fluido retido mantém a temperatura.
+    atualizarDinamica(dt) {
+        if (!(dt > 0)) return;
+        this._dinamicaTermicaAtiva = true;
+        [1, 2].forEach((streamId) => {
+            const estado = this._temperaturaSaidaEstado[streamId];
+            const alvo = streamId === 2 ? this.temperaturaSaida2AlvoC : this.temperaturaSaidaAlvoC;
+            const tau = this.getConstanteTempoTermicaS(streamId);
+            if (!Number.isFinite(estado) || !Number.isFinite(alvo) || !Number.isFinite(tau)) return;
+            const fracao = tau > 0 ? 1 - Math.exp(-dt / tau) : 1;
+            this._temperaturaSaidaEstado[streamId] = estado + ((alvo - estado) * fracao);
+        });
+    }
+
+    _sincronizarEstadoTermico(streamId, vazaoLps, entradaC, alvoC) {
+        if (!this._dinamicaTermicaAtiva) return;
+        if (!(this.volumeInternoL > 0)) {
+            this._temperaturaSaidaEstado[streamId] = alvoC;
+            return;
+        }
+        if (!Number.isFinite(this._temperaturaSaidaEstado[streamId]) && vazaoLps > EPSILON_FLOW && Number.isFinite(entradaC)) {
+            this._temperaturaSaidaEstado[streamId] = entradaC;
+        }
     }
 
     getParametrosHidraulicos() {
@@ -346,7 +397,7 @@ export class TrocadorCalorLogico extends ComponenteFisico {
             const v2 = Math.max(vazaoLps || 0, this.getVazaoEntradaPorPorta('in2') || 0, this.vazao2Lps || 0);
             const resultado = this.calcularTrocaTermicaGlobal(f1, v1, fluidoEntrada, v2);
             return cloneFluido(fluidoEntrada, {
-                temperatura: resultado.t2Out
+                temperatura: this.getTemperaturaSaidaEfetivaC(2, resultado.t2Out, fluidoEntrada?.temperatura)
             });
         }
         const f2 = this.getFluidoEntradaMisturadoPorPorta('in2')
@@ -355,7 +406,7 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         const v2 = Math.max(this.getVazaoEntradaPorPorta('in2') || 0, this.vazao2Lps || 0);
         const resultado = this.calcularTrocaTermicaGlobal(fluidoEntrada, v1, f2, v2);
         return cloneFluido(fluidoEntrada, {
-            temperatura: resultado.t1Out
+            temperatura: this.getTemperaturaSaidaEfetivaC(1, resultado.t1Out, fluidoEntrada?.temperatura)
         });
     }
 
@@ -369,10 +420,14 @@ export class TrocadorCalorLogico extends ComponenteFisico {
 
         if (portId === 'out2' || portId === 'in2' || portId === '2') {
             const baseFluid = f2 || fallback || this.getSimulationContext()?.fluidoOperante;
-            return baseFluid ? cloneFluido(baseFluid, { temperatura: resultado.t2Out }) : null;
+            return baseFluid
+                ? cloneFluido(baseFluid, { temperatura: this.getTemperaturaSaidaEfetivaC(2, resultado.t2Out, f2?.temperatura) })
+                : null;
         }
         const baseFluid = f1 || fallback || this.getSimulationContext()?.fluidoOperante;
-        return baseFluid ? cloneFluido(baseFluid, { temperatura: resultado.t1Out }) : null;
+        return baseFluid
+            ? cloneFluido(baseFluid, { temperatura: this.getTemperaturaSaidaEfetivaC(1, resultado.t1Out, f1?.temperatura) })
+            : null;
     }
 
     temDuasCorrentesConectadas(engine = null) {
@@ -460,6 +515,13 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         this._notificarEstado(true);
     }
 
+    setVolumeInterno(valor) {
+        const numero = Number(valor);
+        this.volumeInternoL = clamp(Number.isFinite(numero) ? numero : this.volumeInternoL, 0, VOLUME_INTERNO_MAXIMO_L);
+        this._notificarEstado(true);
+        return this.volumeInternoL;
+    }
+
     _notificarEstado(force = false) {
         const duasCorrentes = this.temDuasCorrentesConectadas();
         const estado = [
@@ -526,11 +588,16 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         const parametros = this.getParametrosHidraulicos();
 
         this.temperaturaEntradaC = f1?.temperatura ?? 25;
-        this.temperaturaSaidaC = resultado.t1Out;
         this.temperaturaEntrada2C = (f2 && this.vazao2Lps > EPSILON_FLOW) ? f2.temperatura : (f2?.temperatura ?? this.temperaturaServicoC);
-        this.temperaturaSaida2C = resultado.t2Out;
-        this.deltaTemperaturaC = resultado.dt1;
-        this.deltaTemperatura2C = resultado.dt2;
+        this.temperaturaSaidaAlvoC = resultado.t1Out;
+        this.temperaturaSaida2AlvoC = resultado.t2Out;
+        this._sincronizarEstadoTermico(1, this.vazao1Lps, this.temperaturaEntradaC, resultado.t1Out);
+        this._sincronizarEstadoTermico(2, this.vazao2Lps, this.temperaturaEntrada2C, resultado.t2Out);
+        // Indicação de um termopar na saída; carga, ε e LMTD seguem o regime ε-NTU da troca na parede.
+        this.temperaturaSaidaC = this.getTemperaturaSaidaEfetivaC(1, resultado.t1Out, this.temperaturaEntradaC);
+        this.temperaturaSaida2C = this.getTemperaturaSaidaEfetivaC(2, resultado.t2Out, this.temperaturaEntrada2C);
+        this.deltaTemperaturaC = resultado.dt1 + (this.temperaturaSaidaC - resultado.t1Out);
+        this.deltaTemperatura2C = resultado.dt2 + (this.temperaturaSaida2C - resultado.t2Out);
         this.cargaTermicaW = resultado.duty;
         this.cargaTermicaMaximaW = resultado.maxHeat || 0;
         this.lmtdC = resultado.lmtd || 0;
