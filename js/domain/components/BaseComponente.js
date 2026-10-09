@@ -227,20 +227,6 @@ export class ComponenteFisico extends Observable {
         return Number.isFinite(weightedPressure) && weightedPressure > 0 ? weightedPressure : 0;
     }
 
-    getPressaoSaidaPortaBar(portId) {
-        if (!portId) return this.getPressaoSaidaBar();
-        const targetStream = (portId === 'in2' || portId === 'out2' || portId === '2') ? 2 : 1;
-        const isMatch = (c) => {
-            const cStream = (c.portId === 'in2' || c.portId === 'out2' || c.portId === '2') ? 2 : 1;
-            return cStream === targetStream;
-        };
-        const matches = this.estadoHidraulico.saidaFluidoContribuicoes.filter(isMatch);
-        const totalFlow = matches.reduce((acc, c) => acc + c.flowLps, 0);
-        if (totalFlow <= EPSILON_FLOW) return 0;
-        const weightedPressure = matches.reduce((acc, c) => acc + (Number(c.pressureBar) || 0) * c.flowLps, 0) / totalFlow;
-        return Number.isFinite(weightedPressure) && weightedPressure > 0 ? weightedPressure : 0;
-    }
-
     resetEstadoHidraulicoStream(streamId = 1) {
         const targetStream = Number(streamId) === 2 ? 2 : 1;
         const isMatch = (c) => {
@@ -259,18 +245,6 @@ export class ComponenteFisico extends Observable {
 
     getFluidoSaidaMisturado(fallback = null) {
         return mixFluidos(this.estadoHidraulico.saidaFluidoContribuicoes, fallback);
-    }
-
-    getFluidoSaidaMisturadoPorPorta(portId, fallback = null) {
-        if (!portId) return this.getFluidoSaidaMisturado(fallback);
-        const targetStream = (portId === 'in2' || portId === 'out2' || portId === '2') ? 2 : 1;
-        const isMatch = (c) => {
-            const cStream = (c.portId === 'in2' || c.portId === 'out2' || c.portId === '2') ? 2 : 1;
-            return cStream === targetStream;
-        };
-        const contribuicoes = this.estadoHidraulico.saidaFluidoContribuicoes.filter(isMatch);
-        if (contribuicoes.length === 0) return fallback;
-        return mixFluidos(contribuicoes, fallback);
     }
 
     marcarEmissaoIntrinseca() {
@@ -301,10 +275,6 @@ export class ComponenteFisico extends Observable {
     desconectarSaida(destino) {
         this.outputs = this.outputs.filter((out) => out !== destino);
         destino.inputs = destino.inputs.filter((inp) => inp !== this);
-    }
-
-    getFluxoSaida() {
-        return this.estadoHidraulico.saidaVazaoLps || 0;
     }
 
     destroy() {

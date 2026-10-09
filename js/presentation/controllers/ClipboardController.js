@@ -13,6 +13,7 @@ import { GRID_SIZE } from '../../infrastructure/dom/ComponentVisualConfig.js';
 import { isEnglishLanguage } from '../i18n/LanguageManager.js';
 import { makeComponentDraggable } from './DragDropController.js';
 import { updateAllPipes } from './PipeController.js';
+import { clearVisualSelection } from './WorkspaceSelectionController.js';
 
 const PASTE_OFFSET = GRID_SIZE;
 
@@ -214,20 +215,6 @@ function isTextEditingTarget(target) {
 
 function snapToGrid(value) {
     return Math.round((Number(value) || 0) / GRID_SIZE) * GRID_SIZE;
-}
-
-function clearVisualSelection() {
-    document.querySelectorAll('.placed-component').forEach((element) => {
-        element.classList.remove('selected');
-    });
-
-    document.querySelectorAll('.pipe-line').forEach((element) => {
-        element.classList.remove('selected');
-        element.setAttribute(
-            'marker-end',
-            element.classList.contains('active') ? 'url(#arrow-active)' : 'url(#arrow)'
-        );
-    });
 }
 
 export function syncComponentVisualState(component) {

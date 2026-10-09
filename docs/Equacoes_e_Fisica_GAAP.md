@@ -51,7 +51,7 @@ Onde:
 - $\rho$: Densidade do fluido em escoamento ($kg/m^3$)
 - $v$: Velocidade média de escoamento do fluido na seção transversal da conexão ($m/s$)
 
-O simulador soma o coeficiente $K$ de todos os componentes da malha à parcela distribuída calculada por Darcy-Weisbach.
+O simulador soma o coeficiente $K$ de todos os componentes da malha à parcela distribuída calculada por Darcy-Weisbach. Os coeficientes $K$ de acessórios e o $K$ equivalente do $C_v$ são tratados como constantes de escoamento turbulento; a dependência de Reynolds da rede entra pelo fator de atrito de Darcy do trecho (não há fator empírico adicional multiplicando $K$).
 
 ## 2. Modelagem das Bombas Centrífugas
 
@@ -68,6 +68,12 @@ Onde:
 - $Q$: Vazão de operação (L/s ou m³/s)
 - $Q_{max}$: Vazão máxima teórica da bomba
 - $\alpha$: Coeficiente de curvatura paramétrico
+
+O parâmetro `pressaoMaxima` da bomba é o $\Delta P$ de shutoff medido com a água de referência ($\rho_{\text{ref}} = 997\text{ kg/m}^3$). Como uma bomba centrífuga entrega a mesma **altura manométrica** para qualquer líquido, o ganho de pressão escala com a densidade do fluido bombeado:
+
+$$\Delta P_{\text{bomba}}(Q) = \rho \, g \, H(Q) = \Delta P_{\text{curva}}(Q) \cdot \frac{\rho}{\rho_{\text{ref}}}$$
+
+A curva $H \times Q$ já representa a carga líquida entregue ao fluido; a eficiência afeta apenas a potência de eixo e não é descontada novamente como perda hidráulica interna.
 
 ### Leis de Afinidade (Inversores de Frequência - VFD)
 O simulador permite a alteração da rotação da bomba (Atuador de acionamento de 0 a 100%). O impacto é calculado usando as Leis de Afinidade exatas:
@@ -126,10 +132,10 @@ A válvula de controle age como um estrangulamento de seção transversal variá
 ### Conversão $C_v / K_v$
 As válvulas operam através da premissa comercial de Fator de Vazão ($C_v$ em GPM/psi ou $K_v$ em m³/h/bar). O simulador modela a resistência convertendo o Fator de Vazão para o Coeficiente de Perda Local ($K$) através de relações métricas padronizadas, utilizando o diâmetro da tubulação:
 
-$$K \approx 0.00214 \cdot \frac{D^4}{K_v^2}$$
+$$K \approx 0.00214 \cdot \frac{D^4}{C_v^2} \approx 0.0016 \cdot \frac{D^4}{K_v^2}$$
 
 Onde:
-- $K$: Coeficiente adimensional de perda de carga localizada equivalente da válvula ($-$)
+- $K$: Coeficiente adimensional de perda de carga localizada equivalente da válvula ($-$). Por ser adimensional, não depende da densidade; o efeito da densidade (gravidade específica) aparece em $\Delta P = K \rho v^2 / 2$.
 - $D$: Diâmetro interno nominal da conexão ou flange da válvula (mm)
 - $K_v$: Coeficiente de vazão em unidades métricas ($m^3/h$ de água a $20^\circ\text{C}$ sob $\Delta P = 1\text{ bar}$)
 - $C_v$: Coeficiente de vazão em unidades imperiais ($\text{GPM}/\text{psi}^{0{,}5}$), relacionado por $K_v \approx 0{,}865 \cdot C_v$ ou $C_v \approx 1{,}156 \cdot K_v$
@@ -254,7 +260,7 @@ Os trocadores de calor do laboratório integram o **Método Efetividade-NTU ($\e
    - **Utilidade Térmica** ($C_r = 0$):
      $$\epsilon = 1 - e^{-NTU}$$
 
-   A efetividade é limitada à efetividade máxima física ($\epsilon \le \epsilon_{\max}$, padrão $0{,}95$).
+   Por padrão não há teto artificial ($\epsilon_{\max} = 1{,}0$): a efetividade vem apenas da relação $\varepsilon$-NTU, o que mantém $\dot{Q} = UA \cdot F_T \cdot \text{LMTD}$ consistente. Um $\epsilon_{\max} < 1$ pode ser configurado como limite opcional (por exemplo, para representar incrustação).
 
 4. **Taxa de Transferência Térmica e Segunda Lei da Termodinâmica:**
    A taxa real de calor transferido é:
@@ -268,6 +274,8 @@ Os trocadores de calor do laboratório integram o **Método Efetividade-NTU ($\e
    - **Envoltória de Temperatura:** Nenhuma temperatura de descarga pode violar os extremos de admissão:
      $$T_{\text{out}, i} \in \left[\min(T_{1,\text{in}}, T_{2,\text{in}}), \; \max(T_{1,\text{in}}, T_{2,\text{in}})\right], \quad \forall i \in \{1, 2\}$$
    - **Não-Cruzamento em Co-corrente:** Em escoamento paralelo, as correntes convergem para uma temperatura de equilíbrio comum $T_{\text{eq}} = (C_1 T_{1,\text{in}} + C_2 T_{2,\text{in}})/(C_1 + C_2)$, sendo proibido o cruzamento térmico ($T_{1,\text{out}} \ge T_{2,\text{out}}$ se $T_{1,\text{in}} \ge T_{2,\text{in}}$).
+
+   **Risco de Ebulição (modelo monofásico):** o simulador trata as correntes como líquido. Quando a pressão de vapor do fluido na temperatura de saída atinge a pressão absoluta local da corrente ($P_{\text{vap}}(T_{\text{out}}) \ge P_{\text{saída}} + P_{\text{atm}}$), o trocador sinaliza `riscoEbulicao` e o painel exibe um alerta de vaporização (*flashing*), em vez de continuar apresentando o resultado como líquido sem aviso.
 
 5. **Perda de Carga Hidráulica Individual:**
    Cada corrente calcula sua própria perda por acessório singular:
@@ -346,7 +354,7 @@ Onde:
 - $K_p, K_i, K_d$: Ganhos Proporcional, Integral e Derivativo
 - $\Delta t$: Intervalo de tempo do *tick* da simulação
 
-Para garantir a estabilidade gráfica da simulação, o algoritmo embute proteção *Anti-Windup* que limita o crescimento explosivo da ação integral, além de uma zona morta (*Deadband*) paramétrica que suprime trepidações infinitesimais quando o erro tangencia zero.
+Para garantir a estabilidade da malha, o algoritmo embute proteção *Anti-Windup* por **integração condicional**: a integral deixa de acumular enquanto a saída está saturada e o erro empurraria o atuador ainda mais para o limite (com um teto de segurança $|K_i \cdot \text{integral}| \le 1$). A integral **não** é zerada quando o erro troca de sinal: em regime, é ela que sustenta a abertura de equilíbrio da válvula, e zerá-la provocava um ciclo limite permanente. Quando o tanque tem válvulas de entrada e de saída, uma zona morta (*Deadband*) paramétrica suprime trepidações quando o erro tangencia zero.
 
 ## 7. Arquitetura do Solucionador Híbrido (Solver)
 

@@ -796,6 +796,8 @@ const LEGACY_PT_TO_EN = {
     'O trocador opera com troca térmica acoplada entre as Correntes 1 e 2. A temperatura de serviço fixa está desabilitada pois a temperatura da Corrente 2 governa o processo.': 'The heat exchanger operates with coupled heat transfer between Streams 1 and 2. The fixed service temperature is disabled because Stream 2 temperature governs the process.',
     'Operação com utilidade: a troca térmica utiliza a temperatura de serviço configurada.': 'Utility operation: heat exchange uses the configured service temperature.',
     'Desabilitada: a Corrente 2 está conectada e governa a temperatura de troca.': 'Disabled: Stream 2 is connected and governs the exchange temperature.',
+    'Risco de ebulição na saída': 'Boiling risk at outlet',
+    'A pressão de vapor do fluido na temperatura de saída atinge a pressão absoluta local. O simulador trata o escoamento como líquido monofásico; em uma planta real haveria vaporização (flashing).': 'The fluid vapor pressure at the outlet temperature reaches the local absolute pressure. The simulator treats the flow as single-phase liquid; a real plant would flash.',
     'Troca Térmica Global': 'Global Heat Transfer',
     'Modo do gráfico': 'Chart profile mode',
     'Define a exibição do perfil térmico no monitor: Espacial (T vs Comprimento) ou Térmico (T vs Q).': 'Sets the thermal profile display in the monitor: Spatial (T vs Length) or Thermal (T vs Q).',

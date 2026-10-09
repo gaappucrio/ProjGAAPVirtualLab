@@ -19,6 +19,7 @@ import {
     validateInputWithFeedback
 } from '../PropertyPresenterShared.js';
 import { translateLiteral } from '../../i18n/LanguageManager.js';
+import { formatResidenceTime } from '../PropertyValueFormatters.js';
 import { calculateTankResidenceTimeS } from '../../../domain/services/ResidenceTime.js';
 
 function getTankControlVisualState(active, available) {
@@ -33,10 +34,6 @@ function syncTankControlVisualState(groupEl, state) {
     groupEl.classList.toggle('is-active', state === 'active');
     groupEl.classList.toggle('is-ready', state === 'ready');
     groupEl.classList.toggle('is-blocked', state === 'blocked');
-}
-
-function formatResidenceTime(valueS) {
-    return Number.isFinite(valueS) ? `${valueS.toFixed(2)} s` : translateLiteral('Sem fluxo');
 }
 
 export const TANK_PROPERTIES_PRESENTER = {
@@ -196,13 +193,13 @@ export const TANK_PROPERTIES_PRESENTER = {
                 syncTankControlVisualState(grp, getTankControlVisualState(comp.setpointAtivo, diagnostico.podeAtivar));
 
                 if (comp.setpointAtivo) {
-                    grp.style.borderColor = isDark ? '#e74c3c' : '#e74c3c';
+                    grp.style.borderColor = '#e74c3c';
                     grp.style.background = isDark ? '#2d1b1b' : '#fdf5f4';
                 } else if (diagnostico.podeAtivar) {
                     grp.style.borderColor = isDark ? '#2d3d4b' : '#eee';
                     grp.style.background = isDark ? '#1d2a35' : '#f9fbfb';
                 } else {
-                    grp.style.borderColor = isDark ? '#f39c12' : '#f39c12';
+                    grp.style.borderColor = '#f39c12';
                     grp.style.background = isDark ? '#2d2418' : '#fff8ee';
                 }
             }

@@ -25,11 +25,6 @@ export function parseStrictNumber(value) {
  * Validador centralizado para entradas editadas pelo usuário.
  */
 export class InputValidator {
-    constructor() {
-        this.validationRules = new Map();
-        this.errors = [];
-    }
-
     /**
      * Valida valor numerico dentro de limites.
      */
@@ -56,14 +51,7 @@ export class InputValidator {
      * Valida vazão em litros por segundo.
      */
     static validateFlow(value, maxFlow = 500, fieldName = 'Vazão') {
-        const result = this.validateNumber(value, 0, maxFlow, fieldName);
-        if (!result.valid) return result;
-
-        if (result.value > maxFlow) {
-            return { valid: false, error: translateLiteral(`${translateLiteral(fieldName)} não pode exceder ${maxFlow} l/s`) };
-        }
-
-        return result;
+        return this.validateNumber(value, 0, maxFlow, fieldName);
     }
 
     /**
@@ -74,52 +62,10 @@ export class InputValidator {
     }
 
     /**
-     * Valida altura em metros.
-     */
-    static validateHeight(value, maxHeight = 100, fieldName = 'Altura') {
-        return this.validateNumber(value, -maxHeight, maxHeight, fieldName);
-    }
-
-    /**
      * Valida volume em litros.
      */
     static validateVolume(value, maxVolume = 10000, fieldName = 'Volume') {
         return this.validateNumber(value, 0.1, maxVolume, fieldName);
-    }
-
-    /**
-     * Valida abertura de válvula (0 a 100%).
-     */
-    static validateOpening(value, fieldName = 'Abertura') {
-        return this.validateNumber(value, 0, 100, fieldName);
-    }
-
-    /**
-     * Valida grau de acionamento (0 a 100%).
-     */
-    static validateDrive(value, fieldName = 'Comando de Acionamento') {
-        return this.validateNumber(value, 0, 100, fieldName);
-    }
-
-    /**
-     * Valida diametro em milimetros.
-     */
-    static validateDiameter(value, fieldName = 'Diâmetro') {
-        const result = this.validateNumber(value, 1, 300, fieldName);
-        if (!result.valid) return result;
-
-        if (result.value < 1 || result.value > 300) {
-            return { valid: false, error: translateLiteral(`${translateLiteral(fieldName)} deve estar entre 1mm e 300mm`) };
-        }
-
-        return result;
-    }
-
-    /**
-     * Valida eficiencia (0 a 100%).
-     */
-    static validateEfficiency(value, fieldName = 'Eficiência') {
-        return this.validateNumber(value, 0, 100, fieldName);
     }
 
     /**
@@ -133,14 +79,7 @@ export class InputValidator {
      * Valida viscosidade dinâmica em Pa.s.
      */
     static validateViscosity(value, fieldName = 'Viscosidade') {
-        const result = this.validateNumber(value, 0.0001, 10, fieldName);
-        if (!result.valid) return result;
-
-        if (result.value <= 0) {
-            return { valid: false, error: translateLiteral(`${translateLiteral(fieldName)} deve ser maior que 0`) };
-        }
-
-        return result;
+        return this.validateNumber(value, 0.0001, 10, fieldName);
     }
 
     /**
@@ -158,27 +97,6 @@ export class InputValidator {
             .trim()
             .substring(0, maxLength)
             .replace(/[<>]/g, '');
-    }
-
-    /**
-     * Valida entrada com tratamento de erro automatico.
-     */
-    static validateAndAlert(value, validator, fieldName = 'Campo') {
-        const result = validator(value, fieldName);
-
-        if (!result.valid) {
-            alert(translateLiteral(`Erro: ${result.error}`));
-            return null;
-        }
-
-        return result.value;
-    }
-
-    /**
-     * Cria validador customizado com min/max.
-     */
-    static createRangeValidator(min, max, fieldName = 'Valor') {
-        return (value) => this.validateNumber(value, min, max, fieldName);
     }
 }
 

@@ -5,6 +5,7 @@ import {
     EPSILON_FLOW,
     lpsToM3s
 } from '../../domain/units/HydraulicUnits.js';
+import { getGridColors } from './ChartTheme.js';
 
 const HEAT_EXCHANGER_CURVE_POINT_COUNT = 40;
 const DEFAULT_WATER_DENSITY_KG_M3 = 997;
@@ -20,19 +21,6 @@ const HEAT_EXCHANGER_CHART_COLORS = Object.freeze({
     operation2Border: '#d4edfa',
     operatingLine: '#27ae60'
 });
-
-function getGridColors() {
-    const isDark = typeof document !== 'undefined' && document.body?.classList?.contains('theme-dark');
-    return {
-        grid: isDark ? 'rgba(125, 153, 174, 0.28)' : '#e1e8ed',
-        border: isDark ? 'rgba(155, 178, 193, 0.45)' : '#c9d8df',
-        tick: isDark ? '#b8c9d6' : '#6c8392',
-        label: isDark ? '#d8e4ec' : '#49606f',
-        legend: isDark ? '#c5d5df' : '#5f6f7f',
-        tooltipBg: isDark ? 'rgba(12, 20, 29, 0.94)' : 'rgba(44, 62, 80, 0.92)',
-        tooltipBorder: isDark ? '#3b4e5d' : '#d8e3ea'
-    };
-}
 
 function finiteNumber(value, fallback = 0) {
     const numericValue = Number(value);
@@ -55,7 +43,7 @@ function getScaleProfile({ expanded = false } = {}) {
         tickFontSize: expanded ? 11 : 10,
         legendFontSize: expanded ? 10.5 : 9,
         legendPadding: expanded ? 8 : 6,
-        legendBoxSize: expanded ? 8 : 8,
+        legendBoxSize: 8,
         maxTicksX: expanded ? 7 : 5,
         maxTicksY: expanded ? 5 : 4,
         pointRadius: expanded ? 5 : 4,

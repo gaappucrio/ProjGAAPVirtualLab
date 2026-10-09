@@ -1136,3 +1136,28 @@ O sistema já possui suporte funcional para montagem visual, seleção múltipla
   3. **Método `syncWithEngine()` no Monitor:** introduzida rotina dedicada que purga o histórico de slots, limpa alertas de bloqueio e valida se o equipamento/cano do gráfico compacto ainda existe no motor, voltando a `createEmptyCompactChart` caso tenha sido desfeito. Re-renderiza gráficos compactos e detalhados conforme o modo de exibição ativo.
   4. **Integração com `restoreWorkspaceSnapshot` e `engine.clear()`:** `UndoController.js` agora notifica `engine.monitorController?.syncWithEngine()` ao concluir a restauração do snapshot (`Ctrl+Z`/`Ctrl+Y`), e `SimulationEngine.js` sincroniza o monitor ao limpar a simulação (`clear()`), além de reagir ao evento `conexao_removida`.
   5. **Validação Automatizada (`Testes/cenarios-aplicacao.test.mjs`):** inclusão de teste unitário verificando a sincronização dos slots e do gráfico compacto após desfazimento e remoção de componentes, mantendo a suíte em 108 testes com 100% de aprovação (108/108).
+
+- Resolvido em 2026-10-08: correções físicas pontuais de baixo risco após auditoria de fidelidade física:
+  1. **PID sem ciclo limite (`LevelController.js`):** removido o reset da integral quando o erro troca de sinal. Com entrada constante e apenas válvula de saída, a integral é o que sustenta a abertura de equilíbrio, e zerá-la mantinha `T-07` em ciclo permanente (572–622 L, válvula entre 3 % e 38 %). O anti-windup passou a ser por integração condicional: a integral congela enquanto a saída está saturada no sentido do erro. `T-07` agora converge para 570,0 L em cerca de 45 s.
+  2. **Bomba (`BombaLogica.js`, `HydraulicBranchModel.js`, `NodalHydraulicSolver.js`, `PumpDwsimJsonExporter.js`):** removida a perda interna `K = 1/η` que os dois solvers descontavam da curva H x Q, que já é carga líquida. A curva passou a preservar a altura manométrica: `getCurvaPressaoBar(Q, drive, ρ)` escala o ΔP por ρ/ρ_ref, com ρ_ref = 997 kg/m³ (novo `DEFAULT_FLUID_DENSITY_KG_M3`). Água a 25 °C não muda; outros fluidos recebem ΔP = ρgH. O exportador DWSIM passa a densidade explicitamente, mantendo a altura constante.
+  3. **Correção empírica de Reynolds removida (`HydraulicBranchModel.js`):** o fator `1 + 120/√Re·w` multiplicava todos os K (inclusive o K do Cv da válvula). Não era correlação padrão, só existia no solver push e fazia a queda real da válvula divergir da calculada pelo Cv.
+  4. **Bocal do tanque:** o K de saída passou de `1 + 1/Cd²` para `1/Cd²`, porque Cd já inclui a energia cinética do jato.
+  5. **Trocador de calor (`TrocadorCalorLogico.js` e presenter):** efetividade sem teto artificial por padrão (ε_max = 1,0, configurável de 0 a 100 %), mantendo Q = UA·F_T·LMTD. Novo sinalizador de risco de ebulição por corrente (`riscoEbulicao1/2`, `temRiscoEbulicao()`), com alerta no painel quando Pv(T_saída) ≥ P_abs.
+  6. **Fluido da fonte (`Fluido.js`, `BoundaryComponentPropertiesPresenter.js`):** editar só a temperatura recalcula ρ, μ e Pv, porque o painel deixa de reenviar como explícitos campos que o usuário não editou. Ao reancorar `refTemperatura`, as propriedades não informadas também são reancoradas, e editar só a densidade a 90 °C não deixa μ/Pv presos a 25 °C. Antes, água a 90 °C ficava com Pv = 0,0317 bar e o NPSHa não mudava.
+  7. **Chart.js:** versão fixada em `chart.js@4.5.1` (a mesma que o CDN já servia) com SRI (`integrity` + `crossorigin`).
+  8. **Otimização sem mudança de comportamento:**
+     - Removidos códigos sem chamadores: `getFluxoSaidaFromTank` (4 classes), `getFluxoSaida`, `getPressaoSaidaPortaBar`, `getFluidoSaidaMisturadoPorPorta`, `calcularSaidaTrocadorCalor`, `setDuasCorrentesConectadasOverride`, o evento `PRESSURE_UPDATE`, validadores estáticos nunca usados e ramos inalcançáveis do `InputValidator`, helpers DOM e reexports não consumidos, imports sem uso e ternários com ramos idênticos.
+     - Duplicatas idênticas consolidadas: `getGridColors`/`formatAxisTick` no novo `infrastructure/charts/ChartTheme.js`, `formatResidenceTime` em `PropertyValueFormatters`, `clearVisualSelection` exportado por `WorkspaceSelectionController` e `finiteNumber`/`FLOW_EPSILON_LPS` em `PipePressureProfile`.
+  9. **Testes:**
+     - Removido o teste que só verificava markup do seletor customizado e mesclado o teste duplicado de ajuste de válvula.
+     - O teste da função morta do trocador passou a cobrir a classe real, incluindo o resfriamento em modo utilidade.
+     - Corrigido o `finally` que restaurava a unidade de temperatura errada.
+     - Asserções antigas que eram fotos numéricas foram trocadas por invariantes físicos: teto 1/(1+Cr) em co-corrente, sem cruzamento e balanço de energia fechado.
+     - Adicionados 6 testes de regressão (PID sem ciclo limite em planta, integral na troca de sinal e na saturação, altura manométrica da bomba, Q = UA·F_T·LMTD acima de 95 %, risco de ebulição, recálculo de propriedades por temperatura). Todos falham no código anterior.
+     - A suíte conta agora com 112 testes, todos aprovados (112/112).
+  10. **Limitações conhecidas, deixadas para a avaliação estrutural:**
+      - O tanque repassa a pressão de entrada para a saída.
+      - O solver push-based não fecha a pressão nos drenos.
+      - Uma bomba ligada diretamente a uma válvula fica quase sem vazão no solver push.
+      - O solver nodal fica singular com nós de fonte/dreno sem ramos.
+      - Não há fluxo reverso nem pressão subatmosférica.

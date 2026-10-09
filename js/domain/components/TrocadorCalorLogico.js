@@ -1,5 +1,7 @@
 import { ComponentEventPayloads } from '../events/ComponentEventPayloads.js';
 import {
+    DEFAULT_ATMOSPHERIC_PRESSURE_BAR,
+    DEFAULT_FLUID_DENSITY_KG_M3,
     DEFAULT_FLUID_SPECIFIC_HEAT_JKGK,
     EPSILON_FLOW,
     lpsToM3s
@@ -11,7 +13,19 @@ const TEMPERATURA_SERVICO_PADRAO_C = 80;
 const UA_PADRAO_W_K = 2500;
 const AREA_PADRAO_M2 = 1.0;
 const PERDA_LOCAL_PADRAO_K = 0;
-const EFETIVIDADE_MAXIMA_PADRAO = 0.95;
+// Sem limitador artificial por padrão: a efetividade vem só do ε-NTU, mantendo Q = UA·F_T·LMTD.
+// Valores menores continuam disponíveis como limite opcional (ex.: incrustação).
+const EFETIVIDADE_MAXIMA_PADRAO = 1.0;
+
+// Líquido entra em ebulição quando Pv(T) atinge a pressão absoluta local; o modelo segue
+// monofásico, então o risco é sinalizado em vez de simulado.
+function avaliarRiscoEbulicao(fluidoEntrada, temperaturaSaidaC, pressaoSaidaBar, vazaoLps) {
+    if (!fluidoEntrada || !(vazaoLps > EPSILON_FLOW) || !Number.isFinite(temperaturaSaidaC)) return false;
+    const fluidoSaida = cloneFluido(fluidoEntrada, { temperatura: temperaturaSaidaC });
+    const pressaoAbsolutaBar = Math.max(0, numeroSeguro(pressaoSaidaBar, 0))
+        + numeroSeguro(fluidoSaida.pressaoAtmosfericaBar, DEFAULT_ATMOSPHERIC_PRESSURE_BAR);
+    return numeroSeguro(fluidoSaida.pressaoVaporBar, 0) >= pressaoAbsolutaBar;
+}
 
 function numeroSeguro(value, fallback) {
     const numericValue = Number(value);
@@ -43,76 +57,6 @@ export function calcularLmtd({ t1In, t1Out, t2In, t2Out, modo = 'contracorrente'
     return { lmtd: Math.max(0, lmtd), minDt, ft: 1.0 };
 }
 
-export function calcularSaidaTrocadorCalor({
-    temperaturaEntradaC,
-    temperaturaServicoC,
-    uaWPorK,
-    vazaoLps,
-    densidadeKgM3,
-    calorEspecificoJkgK,
-    efetividadeMaxima = EFETIVIDADE_MAXIMA_PADRAO
-} = {}) {
-    const inletTemperatureC = numeroSeguro(temperaturaEntradaC, 25);
-    const serviceTemperatureC = numeroSeguro(temperaturaServicoC, TEMPERATURA_SERVICO_PADRAO_C);
-    const safeUaWPorK = Math.max(0, numeroSeguro(uaWPorK, UA_PADRAO_W_K));
-    const safeFlowLps = Math.max(0, numeroSeguro(vazaoLps, 0));
-    const safeDensityKgM3 = Math.max(1, numeroSeguro(densidadeKgM3, 997));
-    const safeSpecificHeatJkgK = Math.max(
-        1,
-        numeroSeguro(calorEspecificoJkgK, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK)
-    );
-    const safeMaxEffectiveness = clamp(
-        numeroSeguro(efetividadeMaxima, EFETIVIDADE_MAXIMA_PADRAO),
-        0,
-        0.999
-    );
-
-    if (safeFlowLps <= EPSILON_FLOW || safeUaWPorK <= 0) {
-        return {
-            temperaturaEntradaC: inletTemperatureC,
-            temperaturaSaidaC: inletTemperatureC,
-            deltaTemperaturaC: 0,
-            cargaTermicaW: 0,
-            cargaTermicaMaximaW: 0,
-            lmtdC: 0,
-            fatorCorrecaoLmtd: 1.0,
-            pinchPointMinDeltaTC: 0,
-            efetividade: 0,
-            vazaoMassaKgS: 0,
-            capacidadeTermicaWPorK: 0
-        };
-    }
-
-    const massFlowKgS = lpsToM3s(safeFlowLps) * safeDensityKgM3;
-    const heatCapacityRateWPorK = massFlowKgS * safeSpecificHeatJkgK;
-    const ntu = safeUaWPorK / Math.max(Number.EPSILON, heatCapacityRateWPorK);
-    const efetividade = clamp(1 - Math.exp(-ntu), 0, safeMaxEffectiveness);
-    const outletTemperatureC = inletTemperatureC + (efetividade * (serviceTemperatureC - inletTemperatureC));
-    const heatDutyW = heatCapacityRateWPorK * (outletTemperatureC - inletTemperatureC);
-    const maxHeatDutyW = heatCapacityRateWPorK * Math.abs(serviceTemperatureC - inletTemperatureC);
-    const lmtdCalc = calcularLmtd({
-        t1In: inletTemperatureC,
-        t1Out: outletTemperatureC,
-        t2In: serviceTemperatureC,
-        t2Out: serviceTemperatureC,
-        modo: 'utilidade'
-    });
-
-    return {
-        temperaturaEntradaC: inletTemperatureC,
-        temperaturaSaidaC: outletTemperatureC,
-        deltaTemperaturaC: outletTemperatureC - inletTemperatureC,
-        cargaTermicaW: heatDutyW,
-        cargaTermicaMaximaW: maxHeatDutyW,
-        lmtdC: lmtdCalc.lmtd,
-        fatorCorrecaoLmtd: lmtdCalc.ft,
-        pinchPointMinDeltaTC: lmtdCalc.minDt,
-        efetividade,
-        vazaoMassaKgS: massFlowKgS,
-        capacidadeTermicaWPorK: heatCapacityRateWPorK
-    };
-}
-
 export class TrocadorCalorLogico extends ComponenteFisico {
     constructor(id, tag, x, y) {
         super(id, tag, x, y);
@@ -141,7 +85,13 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         this.vazaoMassa2KgS = 0;
         this.deltaPAtualBar = 0;
         this.deltaP2AtualBar = 0;
+        this.riscoEbulicao1 = false;
+        this.riscoEbulicao2 = false;
         this._ultimoEstadoNotificado = '';
+    }
+
+    temRiscoEbulicao() {
+        return this.riscoEbulicao1 || this.riscoEbulicao2;
     }
 
     getParametrosHidraulicos() {
@@ -250,7 +200,7 @@ export class TrocadorCalorLogico extends ComponenteFisico {
             }
             if (vazao1 <= EPSILON_FLOW && vazao2 > EPSILON_FLOW) {
                 const cp2 = Math.max(1, numeroSeguro(fluido2?.calorEspecificoJkgK, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK));
-                const den2 = Math.max(1, numeroSeguro(fluido2?.densidade, 997));
+                const den2 = Math.max(1, numeroSeguro(fluido2?.densidade, DEFAULT_FLUID_DENSITY_KG_M3));
                 const m2 = lpsToM3s(vazao2) * den2;
                 const c2 = m2 * cp2;
                 if (c2 <= 0) {
@@ -288,7 +238,7 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         }
 
         const cp1 = Math.max(1, numeroSeguro(fluido1?.calorEspecificoJkgK, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK));
-        const den1 = Math.max(1, numeroSeguro(fluido1?.densidade, 997));
+        const den1 = Math.max(1, numeroSeguro(fluido1?.densidade, DEFAULT_FLUID_DENSITY_KG_M3));
         const m1 = lpsToM3s(vazao1) * den1;
         const c1 = m1 * cp1;
 
@@ -299,7 +249,7 @@ export class TrocadorCalorLogico extends ComponenteFisico {
 
         if (fluido2 && vazao2 > EPSILON_FLOW) {
             const cp2 = Math.max(1, numeroSeguro(fluido2.calorEspecificoJkgK, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK));
-            const den2 = Math.max(1, numeroSeguro(fluido2.densidade, 997));
+            const den2 = Math.max(1, numeroSeguro(fluido2.densidade, DEFAULT_FLUID_DENSITY_KG_M3));
             const m2 = lpsToM3s(vazao2) * den2;
             c2 = m2 * cp2;
             cmin = Math.min(c1, c2);
@@ -426,9 +376,6 @@ export class TrocadorCalorLogico extends ComponenteFisico {
     }
 
     temDuasCorrentesConectadas(engine = null) {
-        if (this._duasCorrentesConectadasOverride !== undefined) {
-            return Boolean(this._duasCorrentesConectadasOverride);
-        }
         if (engine && typeof engine.isTrocadorComDuasCorrentes === 'function') {
             return engine.isTrocadorComDuasCorrentes(this);
         }
@@ -446,11 +393,6 @@ export class TrocadorCalorLogico extends ComponenteFisico {
             return true;
         }
         return false;
-    }
-
-    setDuasCorrentesConectadasOverride(valor) {
-        this._duasCorrentesConectadasOverride = valor === null || valor === undefined ? undefined : Boolean(valor);
-        this._notificarEstado(true);
     }
 
     getDiagnosticoOperacao(engine = null) {
@@ -513,7 +455,7 @@ export class TrocadorCalorLogico extends ComponenteFisico {
 
     setEfetividadeMaxima(valorPercentual) {
         const numero = Number(valorPercentual);
-        const percentual = clamp(Number.isFinite(numero) ? numero : this.efetividadeMaxima * 100, 0, 99.9);
+        const percentual = clamp(Number.isFinite(numero) ? numero : this.efetividadeMaxima * 100, 0, 100);
         this.efetividadeMaxima = percentual / 100;
         this._notificarEstado(true);
     }
@@ -537,7 +479,8 @@ export class TrocadorCalorLogico extends ComponenteFisico {
             (this.areaM2 || 1).toFixed(3),
             this.uWPorM2K.toFixed(1),
             this.tipoPerfilGrafico,
-            duasCorrentes ? 'dual' : 'single'
+            duasCorrentes ? 'dual' : 'single',
+            this.temRiscoEbulicao() ? 'boiling' : 'liquid'
         ].join('|');
 
         if (!force && estado === this._ultimoEstadoNotificado) return;
@@ -565,7 +508,8 @@ export class TrocadorCalorLogico extends ComponenteFisico {
             efetividadeAtual: this.efetividadeAtual,
             deltaPAtualBar: this.deltaPAtualBar,
             deltaP2AtualBar: this.deltaP2AtualBar,
-            duasCorrentesConectadas: duasCorrentes
+            duasCorrentesConectadas: duasCorrentes,
+            riscoEbulicao: this.temRiscoEbulicao()
         }));
     }
 
@@ -593,18 +537,18 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         this.fatorCorrecaoLmtd = resultado.ft || 1.0;
         this.pinchPointMinDeltaTC = resultado.minDt || 0;
         this.efetividadeAtual = resultado.ef;
-        this.vazaoMassaKgS = lpsToM3s(this.vazao1Lps) * (f1?.densidade || 997);
-        this.vazaoMassa2KgS = lpsToM3s(this.vazao2Lps) * (f2?.densidade || 997);
+        this.vazaoMassaKgS = lpsToM3s(this.vazao1Lps) * (f1?.densidade || DEFAULT_FLUID_DENSITY_KG_M3);
+        this.vazaoMassa2KgS = lpsToM3s(this.vazao2Lps) * (f2?.densidade || DEFAULT_FLUID_DENSITY_KG_M3);
         this.deltaPAtualBar = pressureLossFromFlow(
             this.vazao1Lps,
             parametros.hydraulicAreaM2,
-            f1?.densidade || 997,
+            f1?.densidade || DEFAULT_FLUID_DENSITY_KG_M3,
             parametros.localLossCoeff
         );
         this.deltaP2AtualBar = pressureLossFromFlow(
             this.vazao2Lps,
             parametros.hydraulicAreaM2,
-            f2?.densidade || 997,
+            f2?.densidade || DEFAULT_FLUID_DENSITY_KG_M3,
             parametros.localLossCoeff
         );
         this.pressaoEntrada1AtualBar = this.getPressaoEntradaPortaBar('in1');
@@ -617,6 +561,8 @@ export class TrocadorCalorLogico extends ComponenteFisico {
             : (this.vazao2Lps > EPSILON_FLOW && Number.isFinite(this.pressaoEntradaAtualBar) && this.pressaoEntradaAtualBar > 0 ? this.pressaoEntradaAtualBar : 0);
         this.pressaoSaidaAtualBar = this.vazao1Lps > EPSILON_FLOW ? Math.max(0, p1In - this.deltaPAtualBar) : 0;
         this.pressaoSaida2AtualBar = this.vazao2Lps > EPSILON_FLOW ? Math.max(0, p2In - this.deltaP2AtualBar) : 0;
+        this.riscoEbulicao1 = avaliarRiscoEbulicao(f1, this.temperaturaSaidaC, this.pressaoSaidaAtualBar, this.vazao1Lps);
+        this.riscoEbulicao2 = avaliarRiscoEbulicao(f2, this.temperaturaSaida2C, this.pressaoSaida2AtualBar, this.vazao2Lps);
         this._notificarEstado();
     }
 
@@ -639,6 +585,8 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         this.pressaoEntrada2AtualBar = 0;
         this.pressaoSaidaAtualBar = 0;
         this.pressaoSaida2AtualBar = 0;
+        this.riscoEbulicao1 = false;
+        this.riscoEbulicao2 = false;
         this._notificarEstado(true);
     }
 }

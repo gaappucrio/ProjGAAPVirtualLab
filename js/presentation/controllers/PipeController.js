@@ -22,7 +22,6 @@ import {
 import {
     createConnectionVisual,
     createTransientConnectionVisual,
-    drawConnectionCurve,
     removeConnectionVisual,
     removeTransientConnectionVisual,
     updateConnectionFlowVisual,

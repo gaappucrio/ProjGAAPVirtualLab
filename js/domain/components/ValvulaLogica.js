@@ -467,8 +467,4 @@ export class ValvulaLogica extends ComponenteFisico {
         });
         return resultado;
     }
-
-    getFluxoSaidaFromTank() {
-        return this.fluxoReal;
-    }
 }

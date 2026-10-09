@@ -1,5 +1,5 @@
 import { BombaLogica } from './BombaLogica.js';
-import { clamp, ComponenteFisico, flowFromBernoulli } from './BaseComponente.js';
+import { clamp, ComponenteFisico } from './BaseComponente.js';
 import { ComponentEventPayloads } from '../events/ComponentEventPayloads.js';
 import { FonteLogica } from './FonteLogica.js';
 import { ValvulaLogica } from './ValvulaLogica.js';
@@ -791,29 +791,6 @@ export class TanqueLogico extends ComponenteFisico {
         if (this.temEntradaPressurizada()) {
             this.pressaoSaidaAtualBar = this.getPressaoConexaoSemPerdaBar(fluidoAtual, context.usarAlturaRelativa);
         }
-    }
-
-    getFluxoSaida() {
-        return this.lastQout || 0;
-    }
-
-    getFluxoSaidaFromTank(
-        nivelMontante,
-        fluido = this.getSimulationContext().queries.getComponentFluid?.(this) || this.getSimulationContext().fluidoOperante,
-        usarAlturaRelativa = this.getSimulationContext().usarAlturaRelativa
-    ) {
-        const headBar = this.getPressaoDisponivelSaidaParaNivelBar(
-            fluido,
-            nivelMontante,
-            usarAlturaRelativa
-        );
-
-        return flowFromBernoulli(
-            headBar,
-            this.getAreaConexaoM2(),
-            fluido.densidade,
-            1.0 / Math.max(0.15, this.coeficienteSaida * this.coeficienteSaida)
-        );
     }
 
     destroy() {

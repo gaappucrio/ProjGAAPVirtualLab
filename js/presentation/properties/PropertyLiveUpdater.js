@@ -20,17 +20,13 @@ import { localizeElement, translateLiteral } from '../i18n/LanguageManager.js';
 import { resolvePipePressureProfile } from '../monitoring/PipePressureProfile.js';
 import { resolveSinkPressureProfile } from '../monitoring/SinkPressureProfile.js';
 import { byId, isActive, setValue } from './PropertyDomAdapter.js';
-import { formatMeasuredValue, setFieldValue } from './PropertyValueFormatters.js';
+import { formatMeasuredValue, formatResidenceTime, setFieldValue } from './PropertyValueFormatters.js';
 import { updateTankControlAvailabilityUI } from './TankSaturationAlertPresenter.js';
 import { syncCustomSelectValue } from './CustomSelect.js';
 
 function getPumpNpshMargin(component) {
     const npshRequeridoAtualM = component.npshRequeridoAtualM ?? component.npshRequeridoM ?? 0;
     return component.getMargemNpshAtualM?.() ?? (component.npshDisponivelM - npshRequeridoAtualM);
-}
-
-function formatResidenceTime(valueS) {
-    return Number.isFinite(valueS) ? `${valueS.toFixed(2)} s` : translateLiteral('Sem fluxo');
 }
 
 function getPumpNpshCondition(component) {
@@ -394,8 +390,7 @@ function updateHeatExchangerValues(component, engine = null, { monitorController
     const inputTempServico = byId('input-hx-service-temp');
     const painelAlerta = byId('painel-alerta-duas-correntes-hx');
     const textoAviso = byId('texto-aviso-temp-servico-hx');
-    const duasCorrentes = component.temDuasCorrentesConectadas?.(engine) === true
-        || engine?.isTrocadorComDuasCorrentes?.(component) === true;
+    const duasCorrentes = component.temDuasCorrentesConectadas?.(engine) === true;
 
     if (inputTempServico && !isActive(inputTempServico)) {
         inputTempServico.disabled = duasCorrentes;
@@ -405,6 +400,10 @@ function updateHeatExchangerValues(component, engine = null, { monitorController
     }
     if (textoAviso) {
         textoAviso.style.display = duasCorrentes ? 'block' : 'none';
+    }
+    const painelEbulicao = byId('painel-alerta-ebulicao-hx');
+    if (painelEbulicao) {
+        painelEbulicao.style.display = component.temRiscoEbulicao?.() === true ? 'block' : 'none';
     }
 
     setValue('disp-hx-duty', `${(component.cargaTermicaW / 1000).toFixed(2)} kW`);

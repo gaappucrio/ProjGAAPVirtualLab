@@ -1069,6 +1069,29 @@ test('importacao de planta teste: teste planta.json (6 ilhas / cenarios integrad
     assert.equal(activeConns.length, 17, 'Todas as 17 conexoes de teste planta.json devem estar ativas');
 });
 
+test('controle de nivel PID estabiliza T-07 no set point sem ciclo limite', () => {
+    const raw = fs.readFileSync(path.join(PLANTAS_TESTE_DIR, 'teste planta.json'), 'utf8');
+    const engine = createEngine();
+    restoreFlowchartDocument(engine, raw);
+    const t7 = engine.componentes.find((c) => c.tag === 'T-07');
+    const tick = () => {
+        engine.tickPipeline.updateHighLevelControls(0.1);
+        simulateTicks(engine, 1, 0.1);
+    };
+
+    for (let i = 0; i < 700; i += 1) tick();
+    const volumes = [];
+    for (let i = 0; i < 300; i += 1) {
+        tick();
+        volumes.push(t7.volumeAtual);
+    }
+
+    const amplitudeL = Math.max(...volumes) - Math.min(...volumes);
+    assert.ok(amplitudeL < 1, `Nivel deve ficar estavel apos o transiente (amplitude ${amplitudeL} L)`);
+    approx(t7.volumeAtual, 570, 2, 'Volume deve convergir ao set point de 57%');
+    approx(t7.lastQout, t7.lastQin, 0.05, 'Em regime a saida iguala a entrada');
+});
+
 test('importacao de planta teste: teste_trocatroca.json (3 cenarios termicos: utilidade, paralelo e contracorrente)', () => {
     const raw = fs.readFileSync(path.join(PLANTAS_TESTE_DIR, 'teste_trocatroca.json'), 'utf8');
     const engine = createEngine();
@@ -1097,8 +1120,15 @@ test('importacao de planta teste: teste_trocatroca.json (3 cenarios termicos: ut
     assert.equal(tcParalelo.temDuasCorrentesConectadas(), true);
     assert.equal(tcParalelo.getModoEscoamento(engine), 'paralelo');
     assert.ok(tcParalelo.temperaturaSaidaC >= 49.0 && tcParalelo.temperaturaSaidaC <= 52.0, `T1 out paralelo deve convergir para ~50-51 C: ${tcParalelo.temperaturaSaidaC}`);
-    assert.ok(tcParalelo.temperaturaSaida2C >= 51.5 && tcParalelo.temperaturaSaida2C <= 54.0, `T2 out paralelo deve convergir para ~52-53 C: ${tcParalelo.temperaturaSaida2C}`);
-    assert.ok(tcParalelo.efetividadeAtual <= 0.52, `Efetividade em paralelo nao pode ultrapassar o teto termodinamico (~51.7%): ${tcParalelo.efetividadeAtual}`);
+    // Co-corrente: as correntes se aproximam sem cruzar e a efetividade respeita o teto 1 / (1 + Cr).
+    assert.ok(tcParalelo.temperaturaSaida2C > tcParalelo.temperaturaSaidaC, `T2 out paralelo nao pode cruzar T1 out: T1=${tcParalelo.temperaturaSaidaC}, T2=${tcParalelo.temperaturaSaida2C}`);
+    const c1Paralelo = tcParalelo.vazaoMassaKgS;
+    const c2Paralelo = tcParalelo.vazaoMassa2KgS;
+    const crParalelo = Math.min(c1Paralelo, c2Paralelo) / Math.max(c1Paralelo, c2Paralelo);
+    assert.ok(tcParalelo.efetividadeAtual <= 1 / (1 + crParalelo) + 1e-6, `Efetividade em paralelo nao pode ultrapassar o teto termodinamico 1/(1+Cr): ${tcParalelo.efetividadeAtual}`);
+    const calorRecebido = c1Paralelo * (tcParalelo.temperaturaSaidaC - 25);
+    const calorCedido = c2Paralelo * (80 - tcParalelo.temperaturaSaida2C);
+    assert.ok(Math.abs(calorRecebido - calorCedido) / calorCedido < 0.01, `Balanco de energia sensivel deve fechar: recebido=${calorRecebido}, cedido=${calorCedido}`);
 
     // Cenário 3: Trocador Dual-Stream em Contracorrente (TC-01 - copia, inferior)
     const tcContra = tcList.find((c) => c.y === 960);
@@ -1114,20 +1144,6 @@ test('importacao de planta teste: teste_trocatroca.json (3 cenarios termicos: ut
         tcContra.efetividadeAtual > tcParalelo.efetividadeAtual,
         `Efetividade em contracorrente (${tcContra.efetividadeAtual}) deve ser superior a paralelo (${tcParalelo.efetividadeAtual})`
     );
-});
-
-test('painel do trocador de calor renderiza seletor de perfil com custom-select suave', () => {
-    const tc = new TrocadorCalorLogico('tc-custom-select', 'TC-CS', 0, 0);
-    const html = HEAT_EXCHANGER_PROPERTIES_PRESENTER.render(tc);
-
-    assert.ok(html.includes('id="input-hx-chart-mode-wrapper"'), 'Deve conter o wrapper custom-select');
-    assert.ok(html.includes('class="custom-select-wrapper"'), 'Deve utilizar a classe custom-select-wrapper');
-    assert.ok(html.includes('id="input-hx-chart-mode-trigger"'), 'Deve conter o trigger');
-    assert.ok(html.includes('class="custom-select-arrow"'), 'Deve conter a seta customizada com rotação suave');
-    assert.ok(html.includes('id="input-hx-chart-mode-options"'), 'Deve conter as opções com transição de abertura');
-    assert.ok(html.includes('data-value="position"'), 'Deve conter a opção Perfil Espacial');
-    assert.ok(html.includes('data-value="thermal"'), 'Deve conter a opção Perfil Térmico');
-    assert.ok(!html.includes('<select id="input-hx-chart-mode"'), 'Não deve conter select HTML padrão');
 });
 
 test('trocador operado com apenas uma corrente adota modo contracorrente por padrao', () => {

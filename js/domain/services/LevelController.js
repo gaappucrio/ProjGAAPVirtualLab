@@ -74,17 +74,17 @@ export function calculatePidLevelControl({
 
     state.resting = false;
 
-    if (state.lastError !== undefined && state.lastError * error < 0) {
-        state.integral = 0;
-    }
-
     const derivative = safeDt > 0 ? (error - (state.lastError || 0)) / safeDt : 0;
     state.lastError = error;
-    state.integral += error * safeDt;
-
-    const integralLimit = safeKi > 0 ? 1 / safeKi : 1;
-    state.integral = clamp(state.integral, -integralLimit, integralLimit);
     state.derivative = Number.isFinite(derivative) ? derivative : 0;
+
+    // Anti-windup por integração condicional: a integral congela enquanto a saída
+    // está saturada e o erro empurraria o atuador ainda mais para o limite.
+    const integralLimit = safeKi > 0 ? 1 / safeKi : 1;
+    const candidateIntegral = clamp(state.integral + (error * safeDt), -integralLimit, integralLimit);
+    const candidateOutput = (safeKp * error) + (safeKi * candidateIntegral) + (safeKd * state.derivative);
+    const windingUp = (candidateOutput > outputMax && error > 0) || (candidateOutput < outputMin && error < 0);
+    if (!windingUp) state.integral = candidateIntegral;
 
     const rawOutput = (safeKp * error) + (safeKi * state.integral) + (safeKd * state.derivative);
     const u = clamp(rawOutput, outputMin, outputMax);

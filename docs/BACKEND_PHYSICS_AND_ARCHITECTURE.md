@@ -164,12 +164,8 @@ Calculada a partir do coeficiente local adimensional de perda da conexão $K_{\t
 
 $$\Delta P = \frac{1}{2} \cdot \rho \cdot K_{\text{adimensional}} \cdot v^2$$
 
-#### Correção por Viscosidade e Reynolds Baixo
-Para fluidos viscosos ou velocidades muito baixas, os coeficientes de perda de carga local ($K_{\text{local}}$, perda de saída do tanque, etc.) sofrem uma penalização corretiva baseada no Reynolds para modelar o aumento da resistência viscosa em regimes não-turbulentos:
-
-$$f_{\text{corr}} = \text{clamp}\left(1 + \frac{120}{\sqrt{\max(Re, 1)}} \cdot \left(1 + 0.18 \cdot \log_{10}\left(\frac{\mu}{\mu_{\text{água}}}\right)\right), \; 1, \; 4\right)$$
-
-$$K_{\text{corrigido}} = K_{\text{base}} \cdot f_{\text{corr}}$$
+#### Coeficientes $K$ e Número de Reynolds
+Os coeficientes de perda localizada ($K_{\text{local}}$ do Cano, $K$ equivalente do $C_v$ da válvula, $1/C_d^2$ do bocal do tanque, $K$ de entrada do dreno) são tratados como constantes de escoamento turbulento, que é a condição em que são medidos. A influência da viscosidade e do Reynolds entra pelo fator de atrito de Darcy do trecho. Uma penalização empírica anterior ($K \cdot (1 + 120/\sqrt{Re} \cdots)$) foi removida em 2026-10-08: não correspondia a nenhuma correlação padrão (Hooper 2-K, Darby 3-K ou fator $F_R$ da ISA-75.01), inflava $K$ em 15–40 % mesmo em regime turbulento, fazia a queda real da válvula divergir da queda calculada pelo $C_v$ e só existia no solver push-based.
 
 #### Relação Vazão vs Queda de Pressão (Bernoulli Simplificado)
 Para estimar a vazão transitória a partir de um $\Delta P$ disponível ou vice-versa, o solver utiliza:
@@ -193,6 +189,8 @@ A pressão fornecida pela bomba a uma vazão $Q$ é calculada por:
 $$H(Q) = H_{\text{máx}} \cdot \omega_{\text{ef}}^2 \cdot \left(1 - \left(\frac{Q}{Q_{\text{nominal}} \cdot \omega_{\text{ef}}}\right)^2\right) \quad \text{[bar]}$$
 
 A bomba parada ($\omega_{\text{ef}} = 0$) atua como uma barreira hidráulica ideal, impedindo passagens passivas de vazão.
+
+`pressaoMaxima` ($H_{\text{máx}}$ acima, em bar) é o ganho de shutoff com água de referência ($\rho_{\text{ref}} = 997\text{ kg/m}^3$). A bomba entrega a mesma altura manométrica para qualquer líquido, então o ganho efetivo escala com a densidade do fluido bombeado: $\Delta P = H(Q) \cdot \rho / \rho_{\text{ref}}$ (equivalente a $\Delta P = \rho g H$). Para água a 25 °C o valor é idêntico ao da curva; óleo ou água quente recebem proporcionalmente menos pressão. A curva $H \times Q$ já é a carga líquida: nenhum solver desconta perda interna adicional proporcional a $1/\eta$.
 
 #### Eficiência Hidráulica
 Calculada por uma curva parabólica em torno do ponto de melhor eficiência (BEP - *Best Efficiency Point*, configurado por padrão em $72\%$ da vazão nominal para a rotação atual):
@@ -244,9 +242,9 @@ $$Q_{\text{gpm}} = Cv \cdot \sqrt{\frac{\Delta P_{\text{psi}}}{SG}} \quad \impli
 
 A partir do $Cv$ efetivo na abertura atual, a válvula é convertida internamente para um coeficiente de perda de carga localizado adimensional ($K_{\text{válvula}}$) com base no diâmetro do flange da válvula $d_{\text{válvula}}$:
 
-$$K_{\text{válvula}} = \frac{\rho_{\text{água}}}{\rho} \cdot \frac{d_{\text{válvula}}^4 \cdot \pi^2}{8 \cdot (Cv \cdot C_{\text{conv}})^2 \cdot 1000}$$
+$$K_{\text{válvula}} = \frac{2 \, A^2 \cdot 10^5}{\rho_{\text{ref}} \cdot \left(K_v / 3600\right)^2} \approx 2{,}14 \cdot 10^{-3} \, \frac{d_{\text{mm}}^4}{C_v^2}$$
 
-Onde $C_{\text{conv}}$ é a constante de conversão dimensional interna para converter as unidades da fórmula para o SI. Com abertura de $100\%$ e $Cv$ elevado, $K_{\text{válvula}}$ se aproxima de zero. Abertura efetiva igual a $0.0\%$ zera o $Cv$ e impõe $K_{\text{válvula}} = 10^6$ (bloqueio hidráulico ideal).
+Onde $A = \pi d^2/4$ é a área do flange (m²), $K_v$ está em m³/h e $\rho_{\text{ref}}$ é a densidade da água de referência da norma. $K_{\text{válvula}}$ é adimensional e **não** depende da densidade do fluido: a gravidade específica entra em $\Delta P = K \rho v^2 / 2$, reproduzindo $\Delta P = SG \cdot (Q/K_v)^2$. Com abertura de $100\%$ e $Cv$ elevado, $K_{\text{válvula}}$ se aproxima de zero. Abertura efetiva igual a $0.0\%$ zera o $Cv$ e impõe $K_{\text{válvula}} = 10^6$ (bloqueio hidráulico ideal).
 
 #### Características Inerentes da Válvula
 A fração de vazão máxima ($f(x)$) em função da abertura fracionária ($x \in [0, 1]$) depende do perfil selecionado:
@@ -280,6 +278,11 @@ A pressão exercida na saída do bocal de fundo é:
 $$P_{\text{hidrostática}} = \frac{\rho \cdot g \cdot h_{\text{líquido}}}{10^5} \quad \text{[bar]}$$
 
 Onde $h_{\text{líquido}} = \left(\frac{V_{\text{atual}}}{V_{\text{máx}}}\right) \cdot H_{\text{útil}}$ representa a altura de líquido instantânea.
+
+A descarga pelo bocal usa o coeficiente de descarga $C_d$ na forma $K_{\text{bocal}} = 1/C_d^2$ (Torricelli: $v = C_d\sqrt{2gh}$). Esse termo já inclui a energia cinética do jato, por isso nenhum $K = 1$ adicional é somado na saída do tanque.
+
+> [!WARNING]
+> Limitação conhecida (em avaliação estrutural): quando há vazão de entrada, o tanque repassa a pressão de chegada da entrada para a saída (`temEntradaPressurizada`), comportamento herdado da comparação com o *Tank* de regime permanente do DWSIM. Para um tanque atmosférico real, a saída enxerga apenas $P_{\text{atm}} + \rho g (h - z_{\text{bocal}})$.
 
 #### Balanço Dinâmico de Inventário
 A cada tick, o volume é integrado numericamente:
@@ -366,7 +369,7 @@ O modo de escoamento é inferido dinamicamente pela topologia de conexão das po
 - **Utilidade Térmica ($C_r = 0$):**
   $$\varepsilon = 1 - e^{-NTU}$$
 
-A efetividade instantânea calculada é limitada pela efetividade máxima física do componente ($\varepsilon \le \varepsilon_{\max}$, padrão $95\%$, configurável até $99{,}9\%$).
+A efetividade instantânea vem diretamente da relação $\varepsilon$-NTU. Por padrão não existe teto artificial ($\varepsilon_{\max} = 100\%$), o que mantém a carga térmica consistente com $UA \cdot F_T \cdot \text{LMTD}$; um $\varepsilon_{\max}$ menor (0–100 %) pode ser configurado como limite opcional, por exemplo para representar incrustação.
 
 #### Carga Térmica e Temperaturas de Saída
 A taxa máxima de transferência teórica é $Q_{\max} = C_{\min} \cdot |T_{1,\text{in}} - T_{2,\text{in}}|$, resultando na carga térmica efetiva:
@@ -445,6 +448,7 @@ Para assegurar estrita validade termodinâmica e prevenir extrapolações sob co
    Caso a integração numérica preliminar indicasse $T_{1,\text{out}} < T_{2,\text{out}}$, o algoritmo reajusta as temperaturas na fronteira de equilíbrio assintótico:
    $$T_{\text{eq}} = \frac{C_1 T_{1,\text{in}} + C_2 T_{2,\text{in}}}{C_1 + C_2}, \qquad T_{1,\text{out}} = T_{2,\text{out}} = T_{\text{eq}}$$
 3. **Regularização Numérica de Capacidade:** Parâmetros de fluido recebem salvaguardas mínimas ($c_p \ge 1\text{ J/(kg}\cdot\text{K)}$ e $\rho \ge 1\text{ kg/m}^3$), eliminando singularidades de divisão por zero no cálculo do $NTU$ e das taxas $C_1, C_2$.
+4. **Risco de Ebulição:** o modelo é monofásico. Para cada corrente ativa, o fluido de saída é recalculado na temperatura de saída e, se $P_{\text{vap}}(T_{\text{out}}) \ge P_{\text{saída}} + P_{\text{atm}}$, o componente marca `riscoEbulicao1`/`riscoEbulicao2` (`temRiscoEbulicao()`) e o painel exibe o alerta "Risco de ebulição na saída".
 
 #### Perdas de Carga Hidráulicas Independentes
 Cada corrente calcula sua própria perda de carga por atrito/acessório singular com base na área hidráulica interna e no coeficiente local $K$:
@@ -457,7 +461,7 @@ O trocador de calor opera com segregação hidráulica independente entre a Corr
 - A Corrente 2 determina sua pressão de entrada específica $P_{2,\text{in}}$ a partir das contribuições na porta `in2` (ou `out2` em contracorrente) e fornece pressão de saída na porta de descarga correspondente:
   $$P_{2,\text{out}} = \max(0, P_{2,\text{in}} - \Delta P_2)$$
 
-Os métodos `getPressaoEntradaPortaBar(portId)` e `getPressaoSaidaPortaBar(portId)` em `BaseComponente.js` calculam a pressão média ponderada de escoamento filtrada exclusivamente pela porta e corrente selecionada. Em `HydraulicBranchModel.js`, o método `getPhysicalOutletPressureBar(source, portId)` e a reconciliação de pressões das conexões associam a descarga do trocador diretamente à respectiva corrente física, prevenindo que uma corrente de menor pressão contamine a pressão motriz de uma corrente de maior pressão e evitando reduções artificiais de vazão.
+O método `getPressaoEntradaPortaBar(portId)` em `BaseComponente.js` calcula a pressão média ponderada de escoamento filtrada exclusivamente pela porta e corrente selecionada. Em `HydraulicBranchModel.js`, o método `getPhysicalOutletPressureBar(source, portId)` e a reconciliação de pressões das conexões associam a descarga do trocador diretamente à respectiva corrente física, prevenindo que uma corrente de menor pressão contamine a pressão motriz de uma corrente de maior pressão e evitando reduções artificiais de vazão.
 
 #### Representação Nodal em Grafos Hidráulicos
 No solucionador nodal simultâneo (`NodalHydraulicSolver.js`), o trocador de calor é modelado como **4 nós lógicos distintos** interconectados por **2 ramos internos independentes**:
@@ -510,7 +514,7 @@ O sinal de saída calculado $u(t)$ é a soma clássica das parcelas Proporcional
 
 $$u(t) = K_p \cdot e(t) + K_i \cdot \int_{0}^{t} e(\tau)d\tau + K_d \cdot \frac{de(t)}{dt}$$
 
-*   **Anti-Windup (Clamping):** A parcela integral acumulada é congelada caso o atuador atinja os limites físicos de abertura total ou fechamento total ($u(t) \notin [0, 1]$), evitando instabilidade oscilatória após saturação.
+*   **Anti-Windup (Integração Condicional):** A parcela integral deixa de acumular enquanto a saída está saturada e o erro empurraria o atuador ainda mais para o limite, com teto de segurança $|K_i \cdot \text{integral}| \le 1$. A integral **não** é zerada quando o erro troca de sinal: em regime ela sustenta a abertura de equilíbrio da válvula (com entrada constante e só válvula de saída, $u < 0$ precisa de integral persistente). O reset por troca de sinal, removido em 2026-10-08, causava um ciclo limite permanente (ex.: `T-07` oscilando entre 572 e 622 L com a válvula entre 3 % e 38 %).
 *   **Ganhos Padrão do Lab:** Reescalados para erro normalizado ($K_p = 4.0$, $K_i = 0.6$, $K_d = 0.0$ - efetivamente um controlador **PI** estável e suave).
 
 ---
