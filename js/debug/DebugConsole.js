@@ -5,7 +5,9 @@
 // =============================================
 
 import { setupDebugPanel } from './DebugPanel.js';
+import { componentRow, connectionRow as buildConnectionRow } from './DebugRows.js';
 import { createEventTracer } from './EventTracer.js';
+import { setupHoverInspector } from './HoverInspector.js';
 import { checkInvariants, createInvariantMonitor } from './InvariantChecker.js';
 import { createTickStepper } from './TickStepper.js';
 
@@ -16,56 +18,23 @@ export function isDebugEnabled(search = globalThis.location?.search || '') {
     return flag !== null && !DISABLED_FLAG_VALUES.has(flag.toLowerCase());
 }
 
-function round(value, digits = 4) {
-    const numericValue = Number(value);
-    if (!Number.isFinite(numericValue)) return value;
-    const factor = 10 ** digits;
-    return Math.round(numericValue * factor) / factor;
-}
-
-function describeComponent(component) {
-    return component ? `${component.tag} (${component.id})` : '?';
-}
-
 export function createDebugApi({ engine, runtime = {}, logger = console } = {}) {
     const findComponent = (tagOrId) => engine.componentes.find((component) =>
         component.id === tagOrId || component.tag === tagOrId
     ) || null;
 
-    const componentRow = (component) => ({
-        id: component.id,
-        tag: component.tag,
-        tipo: component.constructor.name,
-        qEntradaLps: round(component.estadoHidraulico?.entradaVazaoLps),
-        qSaidaLps: round(component.estadoHidraulico?.saidaVazaoLps),
-        pEntradaBar: round(component.getPressaoEntradaBar?.()),
-        pSaidaBar: round(component.getPressaoSaidaBar?.())
-    });
+    const connectionRow = (connection) => buildConnectionRow(engine, connection);
 
-    // Lê o estado sem criar entradas novas no store (getConnectionState criaria).
-    const connectionRow = (connection) => {
-        const state = engine.connectionStateStore.get(connection) || {};
-        return {
-            id: connection.id,
-            de: describeComponent(engine.getComponentById(connection.sourceId)),
-            para: describeComponent(engine.getComponentById(connection.targetId)),
-            vazaoLps: round(state.flowLps ?? 0),
-            pEntradaBar: round(state.pipeInletPressureBar ?? 0),
-            pSaidaBar: round(state.pipeOutletPressureBar ?? 0),
-            perdaBar: round(state.totalLossBar ?? 0),
-            regime: state.regime ?? 'sem estado'
-        };
-    };
-
-    const tracer = createEventTracer({ engine, logger });
     const monitor = createInvariantMonitor({ engine, logger });
     const stepper = createTickStepper({ engine, logger, shouldHalt: () => monitor.consumeHalt() });
+    const tracer = createEventTracer({ engine, logger, isInsideStep: () => stepper.stepping });
 
     const api = {
         engine,
         runtime,
         tracer,
         monitor,
+        ultimoHover: null,
 
         vigiar(opcoes = {}) {
             monitor.start(opcoes);
@@ -194,7 +163,7 @@ export function createDebugApi({ engine, runtime = {}, logger = console } = {}) 
                 { comando: '__GAAP.solver()', descricao: 'modo do solver (push/nodal) e métricas de convergência' },
                 { comando: '__GAAP.analise()', descricao: 'última análise topológica da rede (ilhas, malhas)' },
                 { comando: '__GAAP.rastrear()', descricao: 'liga o rastreio de eventos (mostra ações fora do tick, com pilha)' },
-                { comando: '__GAAP.rastrear({ incluirTick: true })', descricao: 'mostra também os eventos disparados a cada tick' },
+                { comando: '__GAAP.rastrear({ incluirTick: true })', descricao: 'registra e mostra também os eventos de cada tick (sem isso, eles só entram na contagem)' },
                 { comando: '__GAAP.rastrear({ tag: "tag", tipos: ["estado"] })', descricao: 'filtra por componente e/ou tipo de evento' },
                 { comando: '__GAAP.pararRastreio()', descricao: 'desliga o rastreio e mostra quantos eventos de cada tipo' },
                 { comando: '__GAAP.eventos({ tipo, tag, ultimos })', descricao: 'tabela dos últimos eventos registrados' },
@@ -204,9 +173,11 @@ export function createDebugApi({ engine, runtime = {}, logger = console } = {}) 
                 { comando: '__GAAP.medir(3)', descricao: 'com a simulação rodando, mede o tempo de cada fase por 3 s' },
                 { comando: '__GAAP.checagens()', descricao: 'violações físicas registradas (checagem automática a cada tick)' },
                 { comando: '__GAAP.vigiar({ pausarNoErro: true })', descricao: 'pausa a simulação na primeira violação nova' },
-                { comando: '__GAAP.checarAgora()', descricao: 'roda as checagens uma vez no estado atual' },
+                { comando: '__GAAP.checarAgora()', descricao: 'roda as checagens uma vez no estado atual (exceto convergência do solver, que só é medida durante um tick)' },
                 { comando: '__GAAP.limparChecagens()', descricao: 'zera o registro de violações' },
                 { comando: '__GAAP.pararVigia()', descricao: 'desliga as checagens automáticas' },
+                { comando: '__GAAP.ultimoHover', descricao: 'último componente, porta ou cano sob o mouse (objeto real)' },
+                { comando: '__GAAP.hover()', descricao: 'liga/desliga o tooltip de hover (ou hover(false))' },
                 { comando: '__GAAP.engine', descricao: 'acesso direto ao SistemaSimulacao' }
             ]);
         }
@@ -221,6 +192,15 @@ export function setupDebugConsole({ engine, runtime, target = globalThis, logger
     const api = createDebugApi({ engine, runtime, logger });
     target.__GAAP = api;
     api.monitor.start();
+
+    const hover = setupHoverInspector({ engine, api, doc });
+    api.hover = (ligar = !hover?.enabled) => {
+        const enabled = hover?.setEnabled(ligar) ?? false;
+        logger.info?.(`[GAAP debug] tooltip de hover ${enabled ? 'ligado' : 'desligado'}.`);
+        return enabled;
+    };
+    api.hoverLigado = () => hover?.enabled ?? false;
+
     setupDebugPanel({ api, engine, doc });
     logger.info?.('[GAAP debug] modo debug ativo. Digite __GAAP.ajuda() no console.');
     return api;

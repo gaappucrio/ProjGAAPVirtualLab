@@ -31,12 +31,20 @@ export function createTickStepper({
         }
     };
 
+    let stepping = false;
+
     return {
-        step(n = 1, { dt = DEFAULT_DT_S } = {}) {
+        get stepping() {
+            return stepping;
+        },
+
+        step(n = 1, { dt: requestedDt = DEFAULT_DT_S } = {}) {
             const count = Math.max(1, Math.floor(Number(n) || 1));
-            if (engine.isRunning) {
-                engine.stop();
-                logger.info?.('[GAAP debug] simulação pausada para avançar tick a tick.');
+            // dt inválido viraria NaN em engine.lastTime e travaria todos os passos seguintes.
+            const numericDt = Number(requestedDt);
+            const dt = Number.isFinite(numericDt) && numericDt > 0 ? numericDt : DEFAULT_DT_S;
+            if (dt !== numericDt) {
+                logger.warn?.(`[GAAP debug] dt inválido (${requestedDt}); usando ${DEFAULT_DT_S.toFixed(4)} s.`);
             }
             if (dt > MAX_PIPELINE_DT_S) {
                 logger.warn?.(`[GAAP debug] dt=${dt}s é limitado a ${MAX_PIPELINE_DT_S}s pelo pipeline.`);
@@ -47,8 +55,15 @@ export function createTickStepper({
             let executed = 0;
             let halted = false;
             shouldHalt(); // descarta pedido de parada antigo, de antes deste passo
+            // Eventos disparados pelo próprio passo (inclusive os stop()) ficam marcados
+            // como "dentro do passo", para o rastreador não confundir com ações do usuário.
+            stepping = true;
             profiler.start();
             try {
+                if (engine.isRunning) {
+                    engine.stop();
+                    logger.info?.('[GAAP debug] simulação pausada para avançar tick a tick.');
+                }
                 while (executed < count && !halted) {
                     runOneTick(dt);
                     executed += 1;
@@ -56,6 +71,10 @@ export function createTickStepper({
                 }
             } finally {
                 profiler.stop();
+                // Mesmo efeito do botão ⏸: avisa a UI e desliga a animação de fluxo
+                // que o tick ligou ao rodar com isRunning = true.
+                engine.stop();
+                stepping = false;
             }
 
             const result = {

@@ -103,8 +103,37 @@ test('passo: se a simulação estiver rodando, pausa via engine.stop()', () => {
     engine.stop = () => { stopCalls += 1; engine.isRunning = false; };
 
     stepper.step(1);
-    assert.equal(stopCalls, 1);
+    assert.ok(stopCalls >= 1);
     assert.equal(engine.isRunning, false);
+});
+
+test('passo: ao terminar avisa a UI como o botão ⏸ (desliga a animação de fluxo)', () => {
+    const { engine } = createPlant();
+    const motorStates = [];
+    engine.subscribe((event) => {
+        if (event.tipo === 'estado_motor') motorStates.push(event.rodando);
+    });
+
+    createTickStepper({ engine, logger: silentLogger }).step(3);
+    assert.deepEqual(motorStates, [false]);
+});
+
+test('passo: dt inválido usa o padrão em vez de corromper o relógio', () => {
+    const { engine } = createPlant();
+    const warnings = [];
+    const stepper = createTickStepper({ engine, logger: { warn: (message) => warnings.push(message) } });
+
+    const invalid = stepper.step(1, { dt: 'abc' });
+    assert.ok(Math.abs(invalid.tempoSimuladoS - 1 / 60) < 1e-9);
+    assert.ok(Number.isFinite(engine.lastTime));
+    assert.equal(warnings.length, 1);
+
+    stepper.step(1, { dt: Infinity });
+    assert.ok(Number.isFinite(engine.lastTime), 'Infinity também é rejeitado');
+    assert.equal(warnings.length, 2);
+
+    const next = stepper.step(1, { dt: 0.05 });
+    assert.ok(Math.abs(next.tempoSimuladoS - 0.05) < 1e-9, 'os passos seguintes continuam funcionando');
 });
 
 test('passo: medir() exige simulação rodando e restaura os métodos ao final', async () => {
@@ -135,7 +164,7 @@ test('passo: rastreador e medidor podem ser desligados em qualquer ordem', (t) =
         Observable.prototype.notify = originalNotify;
     });
 
-    tracer.start({ ignorar: [] });
+    tracer.start({ ignorar: [], incluirTick: true });
     const stepper = createTickStepper({ engine, logger: silentLogger });
     stepper.step(2);
     assert.ok(tracer.entries().some((entry) => entry.emTick && entry.tick === 2),
@@ -146,17 +175,39 @@ test('passo: rastreador e medidor podem ser desligados em qualquer ordem', (t) =
     assert.equal(Object.hasOwn(engine.tickPipeline, 'run'), false);
 });
 
-test('wrapMethod: restauração fora de ordem não quebra a cadeia', () => {
-    const target = { value: () => 'base' };
-    let outerActive = true;
-    const restoreInner = wrapMethod(target, 'value', (prev) => () => `inner(${prev()})`);
-    const restoreOuter = wrapMethod(target, 'value', (prev) => () => (outerActive ? `outer(${prev()})` : prev()));
+test('wrapMethod: desligar fora de ordem remove a camada certa e não deixa resíduo', () => {
+    class Base { value() { return 'base'; } }
+    const target = new Base();
 
+    const restoreInner = wrapMethod(target, 'value', (prev) => function inner() { return `inner(${prev.call(this)})`; });
+    const restoreOuter = wrapMethod(target, 'value', (prev) => function outer() { return `outer(${prev.call(this)})`; });
     assert.equal(target.value(), 'outer(inner(base))');
-    assert.equal(restoreInner(), false, 'não restaura por baixo de outro wrapper');
-    outerActive = false;
+
+    assert.equal(restoreInner(), true);
+    assert.equal(target.value(), 'outer(base)');
+    assert.equal(restoreInner(), false, 'restaurar duas vezes não faz nada');
     assert.equal(restoreOuter(), true);
-    assert.equal(target.value(), 'inner(base)');
+    assert.equal(target.value(), 'base');
+    assert.equal(Object.hasOwn(target, 'value'), false, 'volta a usar o método do protótipo');
+});
+
+test('wrapMethod: ciclos repetidos de liga/desliga não empilham wrappers mortos', () => {
+    const { engine } = createPlant();
+    const originalNotify = Observable.prototype.notify;
+    const tracer = createEventTracer({ engine, logger: silentLogger });
+    const stepper = createTickStepper({ engine, logger: silentLogger });
+
+    for (let cycle = 0; cycle < 5; cycle += 1) {
+        tracer.start();
+        const restoreExtra = wrapMethod(engine.tickPipeline, 'run', (prev) => function extra(...args) { return prev.apply(this, args); });
+        stepper.step(1);
+        tracer.stop();
+        restoreExtra();
+    }
+
+    assert.equal(Observable.prototype.notify, originalNotify);
+    assert.equal(Object.hasOwn(engine.tickPipeline, 'run'), false);
+    assert.equal(Object.hasOwn(engine, 'updatePipesVisual'), false);
 });
 
 test('snapshot: detecta NaN e campos novos ou removidos', () => {
@@ -183,4 +234,29 @@ test('snapshot: foto genérica inclui estado dos componentes e das conexões', (
     assert.ok(fields.includes('tank-01.volumeAtual'));
     assert.ok(fields.includes('inlet-01.estadoHidraulico.saidaVazaoLps'));
     assert.ok(fields.some((field) => /^conn-\d+\.flowLps$/.test(field)));
+});
+
+test('passo: eventos disparados pelo próprio passo não aparecem como ação do usuário no rastreio', (t) => {
+    const { engine } = createPlant();
+    const originalNotify = Observable.prototype.notify;
+    const liveHeaders = [];
+    const stepper = createTickStepper({ engine, logger: silentLogger });
+    const tracer = createEventTracer({
+        engine,
+        logger: { groupCollapsed: (line) => liveHeaders.push(line), log: () => {}, trace: () => {}, groupEnd: () => {} },
+        isInsideStep: () => stepper.stepping
+    });
+    t.after(() => {
+        tracer.stop();
+        Observable.prototype.notify = originalNotify;
+    });
+
+    tracer.start();
+    for (let i = 0; i < 5; i += 1) stepper.step(1);
+
+    assert.deepEqual(liveHeaders, [], 'nada do passo é impresso ao vivo');
+    assert.equal(stepper.stepping, false);
+    const motor = tracer.summary().find((row) => row.tipo === 'estado_motor');
+    assert.equal(motor.qtd, 5);
+    assert.equal(motor.emTick, 5, 'o stop() do fim do passo conta como parte do passo');
 });

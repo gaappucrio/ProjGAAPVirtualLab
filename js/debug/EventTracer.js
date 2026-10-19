@@ -54,11 +54,17 @@ function warnUnknownOptions(userOptions, logger) {
     });
 }
 
-export function createEventTracer({ engine, logger = console, now = () => globalThis.performance.now() } = {}) {
+export function createEventTracer({
+    engine,
+    logger = console,
+    now = () => globalThis.performance.now(),
+    isInsideStep = () => false
+} = {}) {
     let active = false;
     let restoreFns = [];
     let options = { ...DEFAULT_OPTIONS };
     let entries = [];
+    let counts = new Map();
     let sequence = 0;
     let depth = 0;
     let tickIndex = 0;
@@ -74,8 +80,20 @@ export function createEventTracer({ engine, logger = console, now = () => global
         const tipo = data?.tipo;
         if (options.tipos && !options.tipos.includes(tipo)) return false;
         if (options.ignorar?.includes(tipo)) return false;
-        if (options.tag && observable?.tag !== options.tag && observable?.id !== options.tag) return false;
-        return true;
+        if (!options.tag) return true;
+        if (options.tag === 'engine') return observable === engine;
+        return observable?.tag === options.tag || observable?.id === options.tag;
+    };
+
+    // Contagem de todos os eventos que passam no filtro, inclusive os de tick
+    // que não vão para o buffer (assim eles não expulsam as ações do usuário).
+    const countEvent = (origem, tipo, emTick, ms) => {
+        const key = `${origem}|${tipo}`;
+        const group = counts.get(key) || { origem, tipo, qtd: 0, emTick: 0, msTotal: 0 };
+        group.qtd += 1;
+        if (emTick) group.emTick += 1;
+        group.msTotal += ms;
+        counts.set(key, group);
     };
 
     const printLive = (entry) => {
@@ -99,22 +117,30 @@ export function createEventTracer({ engine, logger = console, now = () => global
     const createTracedNotify = (originalNotify) => function tracedNotify(data) {
         if (!active || !matchesFilters(this, data)) return originalNotify.call(this, data);
 
-        sequence += 1;
-        const entry = {
-            n: sequence,
-            tick: tickIndex,
-            emTick: insideTick,
-            origem: describeSource(this),
-            tipo: data?.tipo ?? '?',
-            resumo: summarizePayload(data),
-            ouvintes: this.listeners?.length ?? 0,
-            profundidade: depth,
-            ms: null,
-            payload: data
-        };
-        entries.push(entry);
-        if (entries.length > options.max) entries.shift();
-        printLive(entry);
+        const origem = describeSource(this);
+        const tipo = data?.tipo ?? '?';
+        // Eventos de um __GAAP.passo() contam como tick mesmo fora do run() (ex.: o stop() final).
+        const emTick = insideTick || isInsideStep();
+        let entry = null;
+
+        if (!emTick || options.incluirTick) {
+            sequence += 1;
+            entry = {
+                n: sequence,
+                tick: tickIndex,
+                emTick,
+                origem,
+                tipo,
+                resumo: summarizePayload(data),
+                ouvintes: this.listeners?.length ?? 0,
+                profundidade: depth,
+                ms: null,
+                payload: data
+            };
+            entries.push(entry);
+            if (entries.length > options.max) entries.shift();
+            printLive(entry);
+        }
 
         const start = now();
         depth += 1;
@@ -122,7 +148,9 @@ export function createEventTracer({ engine, logger = console, now = () => global
             return originalNotify.call(this, data);
         } finally {
             depth -= 1;
-            entry.ms = round(now() - start);
+            const ms = now() - start;
+            if (entry) entry.ms = round(ms);
+            countEvent(origem, tipo, emTick, ms);
         }
     };
 
@@ -147,8 +175,11 @@ export function createEventTracer({ engine, logger = console, now = () => global
             warnUnknownOptions(userOptions, logger);
             options = { ...DEFAULT_OPTIONS, ...userOptions };
             entries = [];
+            counts = new Map();
             sequence = 0;
             depth = 0;
+            tickIndex = 0;
+            insideTick = false;
 
             if (!active) {
                 active = true;
@@ -165,7 +196,8 @@ export function createEventTracer({ engine, logger = console, now = () => global
             restoreFns.forEach((restore) => restore());
             restoreFns = [];
 
-            logger.info?.(`[GAAP debug] rastreio desligado. ${entries.length} evento(s) registrados.`);
+            const total = [...counts.values()].reduce((sum, group) => sum + group.qtd, 0);
+            logger.info?.(`[GAAP debug] rastreio desligado. ${total} evento(s), ${entries.length} no buffer.`);
             const summary = tracer.summary();
             logger.table?.(summary);
             return summary;
@@ -174,21 +206,16 @@ export function createEventTracer({ engine, logger = console, now = () => global
         entries({ tipo = null, tag = null, ultimos = 50 } = {}) {
             return entries
                 .filter((entry) => !tipo || entry.tipo === tipo)
-                .filter((entry) => !tag || entry.origem.startsWith(`${tag} (`) || entry.origem.includes(`(${tag})`))
+                .filter((entry) => !tag || entry.origem === tag
+                    || entry.origem.startsWith(`${tag} (`) || entry.origem.includes(`(${tag})`))
                 .slice(-ultimos);
         },
 
         summary() {
-            const groups = new Map();
-            entries.forEach((entry) => {
-                const key = `${entry.origem}|${entry.tipo}`;
-                const group = groups.get(key) || { origem: entry.origem, tipo: entry.tipo, qtd: 0, emTick: 0, msTotal: 0 };
-                group.qtd += 1;
-                if (entry.emTick) group.emTick += 1;
-                group.msTotal = round(group.msTotal + (entry.ms || 0));
-                groups.set(key, group);
-            });
-            return [...groups.values()].sort((a, b) => b.qtd - a.qtd);
+            // Arredonda só na saída: somar valores já arredondados zeraria eventos de < 0,0005 ms.
+            return [...counts.values()]
+                .map((group) => ({ ...group, msTotal: round(group.msTotal) }))
+                .sort((a, b) => b.qtd - a.qtd);
         }
     };
 

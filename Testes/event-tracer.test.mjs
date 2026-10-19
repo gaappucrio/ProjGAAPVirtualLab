@@ -111,23 +111,46 @@ test('rastreio: filtros por tipo, tag e lista de ignorados', (t) => {
     assert.equal(tracer.entries().length, 0, 'update_painel é ignorado por padrão');
 });
 
-test('rastreio: eventos do tick são marcados e não poluem o console por padrão', (t) => {
-    const { engine } = createPlant();
+test('rastreio: eventos do tick só entram na contagem, sem lotar o buffer nem o console', (t) => {
+    const { engine, fonte } = createPlant();
     const { tracer, logger } = withTracer(t, engine);
 
     engine.isRunning = true;
     engine.lastTime = 0;
-    tracer.start({ ignorar: [] });
-    engine.tickPipeline.run(16);
+    tracer.start({ ignorar: [], max: 3 });
+    engine.selectComponent(fonte);
+    for (let i = 1; i <= 20; i += 1) engine.tickPipeline.run(i * 16);
 
-    const tickEntries = tracer.entries().filter((entry) => entry.emTick);
-    assert.ok(tickEntries.length > 0, 'o tick deve emitir ao menos update_painel');
-    assert.ok(tickEntries.every((entry) => entry.tick === 1));
-    assert.equal(logger.lines.length, 0, 'eventos de tick só aparecem ao vivo com incluirTick');
+    assert.deepEqual(tracer.entries().map((entry) => entry.tipo), ['selecao'],
+        'a ação do usuário não pode ser expulsa do buffer pelos eventos de tick');
+    const panel = tracer.summary().find((row) => row.tipo === 'update_painel');
+    assert.equal(panel.qtd, 20);
+    assert.equal(panel.emTick, 20);
+    const liveHeaders = logger.lines.filter(([kind]) => kind === 'group');
+    assert.equal(liveHeaders.length, 1, 'só a seleção aparece ao vivo');
+    assert.match(liveHeaders[0][1], /engine → selecao/);
 
     tracer.start({ ignorar: [], incluirTick: true, pilha: false });
-    engine.tickPipeline.run(32);
-    assert.ok(logger.lines.some(([, line]) => /\[tick \d+\] engine → update_painel/.test(line)));
+    engine.tickPipeline.run(400);
+    const tickEntries = tracer.entries().filter((entry) => entry.emTick);
+    assert.ok(tickEntries.length > 0);
+    assert.ok(tickEntries.every((entry) => entry.tick === 1), 'start() zera a contagem de ticks');
+    assert.ok(logger.lines.some(([, line]) => /\[tick 1\] engine → update_painel/.test(line)));
+});
+
+test('rastreio: filtro tag "engine" pega os eventos do motor', (t) => {
+    const { engine, fonte } = createPlant();
+    const { tracer } = withTracer(t, engine);
+
+    tracer.start({ tag: 'engine' });
+    engine.selectComponent(fonte);
+    fonte.notify(ComponentEventPayloads.tagUpdate());
+    assert.deepEqual(tracer.entries().map((entry) => entry.origem), ['engine']);
+
+    tracer.start();
+    engine.selectComponent(fonte);
+    fonte.notify(ComponentEventPayloads.tagUpdate());
+    assert.deepEqual(tracer.entries({ tag: 'engine' }).map((entry) => entry.tipo), ['selecao']);
 });
 
 test('rastreio: resumo agrupa por origem e tipo', (t) => {
@@ -165,4 +188,22 @@ test('rastreio: resumo do payload mostra tags em vez de objetos', () => {
         summarizePayload({ tipo: 'selecao', componente: fonte, conexao: connection, componentes: [fonte], grau: 1 / 3 }),
         'componente: inlet-01, conexao: conn-x, componentes: [inlet-01], grau: 0.3333'
     );
+});
+
+test('rastreio: tempos muito curtos se acumulam sem serem zerados pelo arredondamento', (t) => {
+    const { engine, fonte } = createPlant();
+    const originalNotify = Observable.prototype.notify;
+    let clock = 0;
+    const tracer = createEventTracer({ engine, logger: {}, now: () => { clock += 0.00015; return clock; } });
+    t.after(() => {
+        tracer.stop();
+        Observable.prototype.notify = originalNotify;
+    });
+
+    tracer.start({ aoVivo: false });
+    for (let i = 0; i < 5000; i += 1) fonte.notify(ComponentEventPayloads.tagUpdate());
+
+    const [row] = tracer.summary();
+    assert.equal(row.qtd, 5000);
+    assert.ok(Math.abs(row.msTotal - 0.75) < 0.01, `esperado ~0,75 ms, veio ${row.msTotal}`);
 });
