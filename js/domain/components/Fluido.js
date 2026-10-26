@@ -310,7 +310,19 @@ export function updateFluidoProperties(fluido, dados = {}) {
             fluido.refPressaoVaporBar = positiveNumber(dados.pressaoVaporBar, DEFAULT_FLUID_VAPOR_PRESSURE_BAR, 0.0001);
         }
         if (dados.refTemperatura === undefined && hasExplicitTemp) {
-            fluido.refTemperatura = Number(dados.temperatura);
+            // Reancora as propriedades não informadas na nova temperatura de referência; sem isso,
+            // editar só a densidade a 90 °C deixaria μ e Pv de 25 °C presos à referência de 90 °C.
+            const novaRefTemperatura = Number(dados.temperatura);
+            if (!hasExplicitDensity && dados.refDensidade === undefined) {
+                fluido.refDensidade = calculateDensityAtTemp(fluido, novaRefTemperatura);
+            }
+            if (!hasExplicitVisc && dados.refViscosidadeDinamicaPaS === undefined) {
+                fluido.refViscosidadeDinamicaPaS = calculateViscosityAtTemp(fluido, novaRefTemperatura);
+            }
+            if (!hasExplicitVapor && dados.refPressaoVaporBar === undefined) {
+                fluido.refPressaoVaporBar = calculateVaporPressureAtTemp(fluido, novaRefTemperatura);
+            }
+            fluido.refTemperatura = novaRefTemperatura;
         }
     }
 

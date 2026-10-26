@@ -56,12 +56,14 @@ graph TD
 
 1.  **`calculateDeltaTime(timestamp)`**: Calcula e limita o $dt$ do frame corrente.
 2.  **`updateHighLevelControls(dt)`**: Executa o controlador de nível (PID) dos tanques antes da resolução física da rede. A saída do controle modula a abertura das válvulas, influenciando diretamente a hidráulica a ser resolvida.
-3.  **`updateComponentDynamics(dt)`**: Aplica dinâmicas físicas transientes de equipamentos, tais como o avanço da rampa de rotação de bombas e o tempo de curso de posicionamento de válvulas.
-4.  **`resolveHydraulicNetwork(dt)`**: Invoca o solver hidráulico para propagar pressões, vazões e propriedades físicas dos fluidos ao longo de toda a rede lógica.
+3.  **`updateComponentDynamics(dt)`**: Aplica dinâmicas físicas transientes de equipamentos, tais como o avanço da rampa de rotação de bombas, o tempo de curso de posicionamento de válvulas e o atraso térmico de 1ª ordem das saídas do trocador de calor ($\tau = V/Q$, seção 4.5).
+4.  **`resolveHydraulicNetwork(dt)`**: Invoca o solver hidráulico global (seção 5) para resolver simultaneamente pressões e vazões de toda a rede, com a inércia do fluido nos tubos, e propagar as propriedades dos fluidos.
 5.  **`syncComponentMetrics(dt)`**: Sincroniza estados internos finais de conservação de massa e integra variáveis dinâmicas acumuladas (ex: inventário volumétrico do tanque, tempo de residência).
 6.  **`updateVisuals()`**: Atualiza estados visuais do DOM e de portas na camada de infraestrutura.
 7.  **`publishUpdates()`**: Dispara eventos de atualização da aplicação para atualizar painéis de propriedades e séries temporais de monitoramento.
 8.  **`updateSolverMetrics()`**: Atualiza os contadores internos de performance do solver para monitorar convergência.
+
+Os passos 2–5 formam `SimulationTickPipeline.advance(dt)`, um passo físico completo independente do relógio do navegador (usado também pelos testes). Ao final de cada passo, `SteadyStateMonitor` (seção 5.6) avalia se a planta atingiu regime permanente.
 
 ---
 
@@ -164,12 +166,8 @@ Calculada a partir do coeficiente local adimensional de perda da conexão $K_{\t
 
 $$\Delta P = \frac{1}{2} \cdot \rho \cdot K_{\text{adimensional}} \cdot v^2$$
 
-#### Correção por Viscosidade e Reynolds Baixo
-Para fluidos viscosos ou velocidades muito baixas, os coeficientes de perda de carga local ($K_{\text{local}}$, perda de saída do tanque, etc.) sofrem uma penalização corretiva baseada no Reynolds para modelar o aumento da resistência viscosa em regimes não-turbulentos:
-
-$$f_{\text{corr}} = \text{clamp}\left(1 + \frac{120}{\sqrt{\max(Re, 1)}} \cdot \left(1 + 0.18 \cdot \log_{10}\left(\frac{\mu}{\mu_{\text{água}}}\right)\right), \; 1, \; 4\right)$$
-
-$$K_{\text{corrigido}} = K_{\text{base}} \cdot f_{\text{corr}}$$
+#### Coeficientes $K$ e Número de Reynolds
+Os coeficientes de perda localizada ($K_{\text{local}}$ do Cano, $K$ equivalente do $C_v$ da válvula, $1/C_d^2$ do bocal do tanque, $K$ de entrada do dreno) são tratados como constantes de escoamento turbulento, que é a condição em que são medidos. A influência da viscosidade e do Reynolds entra pelo fator de atrito de Darcy do trecho. Uma penalização empírica anterior ($K \cdot (1 + 120/\sqrt{Re} \cdots)$) foi removida em 2026-10-08: não correspondia a nenhuma correlação padrão (Hooper 2-K, Darby 3-K ou fator $F_R$ da ISA-75.01), inflava $K$ em 15–40 % mesmo em regime turbulento, fazia a queda real da válvula divergir da queda calculada pelo $C_v$ e só existia no solver push-based.
 
 #### Relação Vazão vs Queda de Pressão (Bernoulli Simplificado)
 Para estimar a vazão transitória a partir de um $\Delta P$ disponível ou vice-versa, o solver utiliza:
@@ -194,6 +192,8 @@ $$H(Q) = H_{\text{máx}} \cdot \omega_{\text{ef}}^2 \cdot \left(1 - \left(\frac{
 
 A bomba parada ($\omega_{\text{ef}} = 0$) atua como uma barreira hidráulica ideal, impedindo passagens passivas de vazão.
 
+`pressaoMaxima` ($H_{\text{máx}}$ acima, em bar) é o ganho de shutoff com água de referência ($\rho_{\text{ref}} = 997\text{ kg/m}^3$). A bomba entrega a mesma altura manométrica para qualquer líquido, então o ganho efetivo escala com a densidade do fluido bombeado: $\Delta P = H(Q) \cdot \rho / \rho_{\text{ref}}$ (equivalente a $\Delta P = \rho g H$). Para água a 25 °C o valor é idêntico ao da curva; óleo ou água quente recebem proporcionalmente menos pressão. A curva $H \times Q$ já é a carga líquida: nenhum solver desconta perda interna adicional proporcional a $1/\eta$.
+
 #### Eficiência Hidráulica
 Calculada por uma curva parabólica em torno do ponto de melhor eficiência (BEP - *Best Efficiency Point*, configurado por padrão em $72\%$ da vazão nominal para a rotação atual):
 
@@ -214,6 +214,8 @@ Essas relações são implementadas diretamente no modelo de domínio (`BombaLog
 O NPSH disponível no flange de sucção ($NPSH_{\text{a}}$) é avaliado considerando a carga de pressão manométrica absoluta, a pressão de vapor do fluido na temperatura local e a carga cinética:
 
 $$NPSH_{\text{a}} = \frac{P_{\text{sucção, abs}} - P_{\text{vapor}}}{\rho \cdot g} + \frac{v_{\text{sucção}}^2}{2 \cdot g} \quad \text{[metros]}$$
+
+No solver global, se a pressão estática absoluta na sucção cai abaixo de $P_{\text{vapor}}$, a coluna líquida se separa e $NPSH_{\text{a}} = 0$ (a carga cinética não é somada): é o limite físico de uma bomba alimentada por uma fonte com vazão insuficiente. O fator de cavitação $c$ é resolvido junto com a rede como raiz de $g(c) = f_{\text{cav}}(c) - c$ (regula falsi com intervalo inicial em torno do passo anterior), evitando a oscilação de um ponto fixo.
 
 O solver de ramos (`HydraulicBranchModel.js`) e o solver nodal (`NodalHydraulicSolver.js`) implementam verificações defensivas robustas: se a pressão atmosférica, a densidade ou a pressão de vapor não estiverem disponíveis no estado intermediário, são aplicados valores canônicos de fallback físico seguro ($P_{\text{atm}} = 1.01325\text{ bar}$, $\rho = 997\text{ kg/m}^3$, $P_{\text{vap}} = 0.0317\text{ bar}$), evitando a propagação de `NaN` ou descontinuidades numéricas em transientes.
 
@@ -244,9 +246,9 @@ $$Q_{\text{gpm}} = Cv \cdot \sqrt{\frac{\Delta P_{\text{psi}}}{SG}} \quad \impli
 
 A partir do $Cv$ efetivo na abertura atual, a válvula é convertida internamente para um coeficiente de perda de carga localizado adimensional ($K_{\text{válvula}}$) com base no diâmetro do flange da válvula $d_{\text{válvula}}$:
 
-$$K_{\text{válvula}} = \frac{\rho_{\text{água}}}{\rho} \cdot \frac{d_{\text{válvula}}^4 \cdot \pi^2}{8 \cdot (Cv \cdot C_{\text{conv}})^2 \cdot 1000}$$
+$$K_{\text{válvula}} = \frac{2 \, A^2 \cdot 10^5}{\rho_{\text{ref}} \cdot \left(K_v / 3600\right)^2} \approx 2{,}14 \cdot 10^{-3} \, \frac{d_{\text{mm}}^4}{C_v^2}$$
 
-Onde $C_{\text{conv}}$ é a constante de conversão dimensional interna para converter as unidades da fórmula para o SI. Com abertura de $100\%$ e $Cv$ elevado, $K_{\text{válvula}}$ se aproxima de zero. Abertura efetiva igual a $0.0\%$ zera o $Cv$ e impõe $K_{\text{válvula}} = 10^6$ (bloqueio hidráulico ideal).
+Onde $A = \pi d^2/4$ é a área do flange (m²), $K_v$ está em m³/h e $\rho_{\text{ref}}$ é a densidade da água de referência da norma. $K_{\text{válvula}}$ é adimensional e **não** depende da densidade do fluido: a gravidade específica entra em $\Delta P = K \rho v^2 / 2$, reproduzindo $\Delta P = SG \cdot (Q/K_v)^2$. Com abertura de $100\%$ e $Cv$ elevado, $K_{\text{válvula}}$ se aproxima de zero. Abertura efetiva igual a $0.0\%$ zera o $Cv$ e impõe $K_{\text{válvula}} = 10^6$ (bloqueio hidráulico ideal).
 
 #### Características Inerentes da Válvula
 A fração de vazão máxima ($f(x)$) em função da abertura fracionária ($x \in [0, 1]$) depende do perfil selecionado:
@@ -281,12 +283,30 @@ $$P_{\text{hidrostática}} = \frac{\rho \cdot g \cdot h_{\text{líquido}}}{10^5}
 
 Onde $h_{\text{líquido}} = \left(\frac{V_{\text{atual}}}{V_{\text{máx}}}\right) \cdot H_{\text{útil}}$ representa a altura de líquido instantânea.
 
+A descarga pelo bocal usa o coeficiente de descarga $C_d$ na forma $K_{\text{bocal}} = 1/C_d^2$ (Torricelli: $v = C_d\sqrt{2gh}$). Esse termo já inclui a energia cinética do jato, por isso nenhum $K = 1$ adicional é somado na saída do tanque.
+
+#### Tanque Aberto (Atmosférico) e Vaso Fechado (`tipoTanque`)
+O tanque é um nó de pressão imposta no solver global — ele **desacopla** a pressão de montante da de jusante, como um reservatório real:
+
+| Bocal | Tanque aberto (`'atmosferico'`) | Vaso fechado (`'fechado'`) |
+|---|---|---|
+| Saída (fundo) | $P = \rho g (h - z_{\text{saída}})$ | $P = P_{\text{gás}} + \rho g (h - z_{\text{saída}})$ |
+| Entrada | $P = \rho g \max(0, h - z_{\text{entrada}})$ | $P = P_{\text{gás}} + \rho g \max(0, h - z_{\text{entrada}})$ |
+
+O colchão de gás do vaso fechado segue Boyle isotérmico a partir da pré-carga com o vaso vazio:
+
+$$P_{\text{gás,abs}} = (P_{\text{pré}} + P_{\text{atm}}) \cdot \frac{V_{\text{total}}}{V_{\text{total}} - V_{\text{líquido}}}$$
+
+com volume de gás mínimo de $10^{-4} V_{\text{total}}$ para evitar a singularidade. A entrada do tanque recebe a perda de saída do jato ($K = 1$). Com o tanque cheio, o excedente sai como **transbordo** (`vazaoTransbordoLps`), fechando o balanço de massa em vez de criar pressão fictícia.
+
 #### Balanço Dinâmico de Inventário
 A cada tick, o volume é integrado numericamente:
 
 $$\frac{dV}{dt} = \sum Q_{\text{entradas}} - \sum Q_{\text{saídas}}$$
 
 $$V_{\text{novo}} = \text{clamp}(V_{\text{anterior}} + (Q_{\text{in}} - Q_{\text{out}}) \cdot dt, \; 0, \; V_{\text{máx}})$$
+
+O que excede $V_{\text{máx}}$ é contabilizado como $Q_{\text{transbordo}} = (V_{\text{balanço}} - V_{\text{máx}})/dt$. A vazão de saída é limitada pelo inventário disponível no passo ($Q_{\text{out}} \le V/dt$).
 
 #### Tempo de Residência
 O tempo de residência hidráulico médio ($\tau$) é calculado pela relação de volume útil e vazão volumétrica de saída estacionária:
@@ -366,7 +386,7 @@ O modo de escoamento é inferido dinamicamente pela topologia de conexão das po
 - **Utilidade Térmica ($C_r = 0$):**
   $$\varepsilon = 1 - e^{-NTU}$$
 
-A efetividade instantânea calculada é limitada pela efetividade máxima física do componente ($\varepsilon \le \varepsilon_{\max}$, padrão $95\%$, configurável até $99{,}9\%$).
+A efetividade instantânea vem diretamente da relação $\varepsilon$-NTU. Por padrão não existe teto artificial ($\varepsilon_{\max} = 100\%$), o que mantém a carga térmica consistente com $UA \cdot F_T \cdot \text{LMTD}$; um $\varepsilon_{\max}$ menor (0–100 %) pode ser configurado como limite opcional, por exemplo para representar incrustação.
 
 #### Carga Térmica e Temperaturas de Saída
 A taxa máxima de transferência teórica é $Q_{\max} = C_{\min} \cdot |T_{1,\text{in}} - T_{2,\text{in}}|$, resultando na carga térmica efetiva:
@@ -381,6 +401,13 @@ As temperaturas de saída são obtidas pelo balanço de energia sensível:
 - Se $T_{1,\text{in}} < T_{2,\text{in}}$ (Corrente 1 fria aquecendo, Corrente 2 quente resfriando):
   $$T_{1,\text{out}} = T_{1,\text{in}} + \frac{Q_{\text{térmico}}}{C_1}$$
   $$T_{2,\text{out}} = T_{2,\text{in}} - \frac{Q_{\text{térmico}}}{C_2} \quad (\text{ou } T_{\text{serviço}} \text{ no modo utilidade})$$
+
+#### Resposta Dinâmica: Atraso Térmico de 1ª Ordem (`volumeInternoL`)
+O ε-NTU fornece o **regime** ($T_{\text{alvo}}$). Num trocador real a saída só chega a esse valor depois de renovar o fluido retido em cada lado. Cada corrente é tratada como um volume de mistura com constante de tempo igual ao tempo de residência:
+
+$$\tau_i = \frac{V_{\text{interno}}}{Q_i}, \qquad \frac{dT_{i,\text{out}}}{dt} = \frac{T_{i,\text{alvo}} - T_{i,\text{out}}}{\tau_i}$$
+
+integrado de forma exata no passo ($T \leftarrow T + (T_{\text{alvo}} - T)(1 - e^{-dt/\tau})$, estável para qualquer $dt$). Na partida, sai primeiro o fluido parado no trocador (na temperatura de entrada); sem vazão ($\tau \to \infty$) o fluido retido mantém a temperatura. Padrão: $V_{\text{interno}} = 2\text{ L}$ por corrente (trocador de bancada de ~1 m²); $V_{\text{interno}} = 0$ reproduz a resposta instantânea. O regime permanente é exatamente o ε-NTU — a comparação com o DWSIM e com a teoria não muda. Carga térmica, ε e LMTD exibidos são os da troca na parede (ε-NTU); `temperaturaSaidaC`/`temperaturaSaida2C` e os canos a jusante recebem a temperatura que de fato sai. A inércia térmica da parede metálica não é modelada.
 
 #### Dimensionamento: Área ($A$), Coeficiente Global ($U$) e Produto $UA$
 O trocador de calor desacopla a geometria e a transmissão térmica mantendo a relação fundamental de dimensionamento:
@@ -445,6 +472,7 @@ Para assegurar estrita validade termodinâmica e prevenir extrapolações sob co
    Caso a integração numérica preliminar indicasse $T_{1,\text{out}} < T_{2,\text{out}}$, o algoritmo reajusta as temperaturas na fronteira de equilíbrio assintótico:
    $$T_{\text{eq}} = \frac{C_1 T_{1,\text{in}} + C_2 T_{2,\text{in}}}{C_1 + C_2}, \qquad T_{1,\text{out}} = T_{2,\text{out}} = T_{\text{eq}}$$
 3. **Regularização Numérica de Capacidade:** Parâmetros de fluido recebem salvaguardas mínimas ($c_p \ge 1\text{ J/(kg}\cdot\text{K)}$ e $\rho \ge 1\text{ kg/m}^3$), eliminando singularidades de divisão por zero no cálculo do $NTU$ e das taxas $C_1, C_2$.
+4. **Risco de Ebulição:** o modelo é monofásico. Para cada corrente ativa, o fluido de saída é recalculado na temperatura de saída e, se $P_{\text{vap}}(T_{\text{out}}) \ge P_{\text{saída}} + P_{\text{atm}}$, o componente marca `riscoEbulicao1`/`riscoEbulicao2` (`temRiscoEbulicao()`) e o painel exibe o alerta "Risco de ebulição na saída".
 
 #### Perdas de Carga Hidráulicas Independentes
 Cada corrente calcula sua própria perda de carga por atrito/acessório singular com base na área hidráulica interna e no coeficiente local $K$:
@@ -457,7 +485,7 @@ O trocador de calor opera com segregação hidráulica independente entre a Corr
 - A Corrente 2 determina sua pressão de entrada específica $P_{2,\text{in}}$ a partir das contribuições na porta `in2` (ou `out2` em contracorrente) e fornece pressão de saída na porta de descarga correspondente:
   $$P_{2,\text{out}} = \max(0, P_{2,\text{in}} - \Delta P_2)$$
 
-Os métodos `getPressaoEntradaPortaBar(portId)` e `getPressaoSaidaPortaBar(portId)` em `BaseComponente.js` calculam a pressão média ponderada de escoamento filtrada exclusivamente pela porta e corrente selecionada. Em `HydraulicBranchModel.js`, o método `getPhysicalOutletPressureBar(source, portId)` e a reconciliação de pressões das conexões associam a descarga do trocador diretamente à respectiva corrente física, prevenindo que uma corrente de menor pressão contamine a pressão motriz de uma corrente de maior pressão e evitando reduções artificiais de vazão.
+O método `getPressaoEntradaPortaBar(portId)` em `BaseComponente.js` calcula a pressão média ponderada de escoamento filtrada exclusivamente pela porta e corrente selecionada. Em `HydraulicBranchModel.js`, o método `getPhysicalOutletPressureBar(source, portId)` e a reconciliação de pressões das conexões associam a descarga do trocador diretamente à respectiva corrente física, prevenindo que uma corrente de menor pressão contamine a pressão motriz de uma corrente de maior pressão e evitando reduções artificiais de vazão.
 
 #### Representação Nodal em Grafos Hidráulicos
 No solucionador nodal simultâneo (`NodalHydraulicSolver.js`), o trocador de calor é modelado como **4 nós lógicos distintos** interconectados por **2 ramos internos independentes**:
@@ -510,12 +538,30 @@ O sinal de saída calculado $u(t)$ é a soma clássica das parcelas Proporcional
 
 $$u(t) = K_p \cdot e(t) + K_i \cdot \int_{0}^{t} e(\tau)d\tau + K_d \cdot \frac{de(t)}{dt}$$
 
-*   **Anti-Windup (Clamping):** A parcela integral acumulada é congelada caso o atuador atinja os limites físicos de abertura total ou fechamento total ($u(t) \notin [0, 1]$), evitando instabilidade oscilatória após saturação.
+*   **Anti-Windup (Integração Condicional):** A parcela integral deixa de acumular enquanto a saída está saturada e o erro empurraria o atuador ainda mais para o limite, com teto de segurança $|K_i \cdot \text{integral}| \le 1$. A integral **não** é zerada quando o erro troca de sinal: em regime ela sustenta a abertura de equilíbrio da válvula (com entrada constante e só válvula de saída, $u < 0$ precisa de integral persistente). O reset por troca de sinal, removido em 2026-10-08, causava um ciclo limite permanente (ex.: `T-07` oscilando entre 572 e 622 L com a válvula entre 3 % e 38 %).
 *   **Ganhos Padrão do Lab:** Reescalados para erro normalizado ($K_p = 4.0$, $K_i = 0.6$, $K_d = 0.0$ - efetivamente um controlador **PI** estável e suave).
 
 ---
 
-## 5. Algoritmo do Solver Hidráulico (Push-Based Solver)
+## 5. Algoritmo do Solver Hidráulico
+
+### 5.0 Solver Global Simultâneo (`GlobalHydraulicSolver.js`, padrão)
+Desde a migração estrutural, toda a rede (malhas abertas e fechadas) é resolvida de uma vez pelo **Global Gradient Algorithm** (Todini–Pilati, o mesmo do EPANET):
+
+*   **Incógnitas:** pressões manométricas dos nós (`${id}:in`, `${id}:out`; no trocador `in1/out1/in2/out2`) e vazões dos ramos (conexões, válvulas, bombas, correntes do trocador).
+*   **Condições de contorno:** fonte = pressão imposta com teto de vazão (`vazaoMaxima`); dreno = contrapressão imposta; tanque = pressões dos bocais (seção 4.3) com teto de saída $V/dt$.
+*   **Equação de cada ramo:** $P_{\text{de}} - P_{\text{para}} = \Phi(Q)$, com $\Phi$ = perdas (Darcy-Weisbach + $K$ locais + $K$ da válvula pelo $C_v$ efetivo) $-$ ganho estático $-$ carga da bomba $+$ **inércia**.
+*   **Inércia do fluido (Euler implícito):** cada tubo contribui $I\,(Q - Q_{\text{anterior}})/dt$ com $I = \rho L / A$ (em bar/(L/s²): $I = \rho L/(A \cdot 10^8)$). Isso substitui o relaxamento empírico do solver legado: a vazão acelera fisicamente conforme $dQ/dt = (A/\rho L)\,\Delta P$ e o golpe de partida é amortecido sem parâmetros arbitrários.
+*   **Newton:** linearização $p = 1/\Phi'(Q)$, sistema nodal SPD resolvido por Cholesky (eliminação gaussiana como reserva) e atualização $Q \leftarrow (Q - p\Phi) + p(P_{\text{de}} - P_{\text{para}})$.
+*   **Conjuntos ativos (estilo EPANET):** ramos unidirecionais (válvulas, bombas com retenção, bocais) fecham se $Q < 0$ e reabrem quando a pressão motriz volta a ser positiva — o DWSIM dinâmico também não permite fluxo reverso. Fontes que atingem `vazaoMaxima` passam a injetar vazão fixa; tanques que esvaziam limitam a saída a $V/dt$.
+*   **Diagnósticos:** `global_floating_reference` (ilha sem pressão de referência), `global_not_converged`, `global_below_vapor_pressure` e `floating_closed_loop_blocked`.
+
+Depois da solução, as vazões e pressões são escritas nas conexões (`writeConnectionStates`), o fluido é propagado em ordem topológica (mistura nos nós, conteúdo dos tanques, saída do trocador com o atraso térmico) e as métricas de bomba (NPSH, eficiência, fator de cavitação) são atualizadas.
+
+> [!NOTE]
+> O solver push-based descrito em 5.1–5.4 continua disponível pelo toggle **Solver legado** da toolbar (`modoSolver = 'legado'`), apenas para comparação durante a migração.
+
+### Solver legado (push-based, `HydraulicNetworkSolver.js`)
 
 O solver em `HydraulicNetworkSolver.js` opera resolvendo localmente as pressões e estimando fluxos que são propagados sequencialmente a partir de emissores primários (Fontes e Tanques com inventário).
 
@@ -570,6 +616,17 @@ Para ilhas hidráulicas contendo circuitos fechados (anéis de recirculação), 
 
 ---
 
+### 5.6 Detecção de Regime Permanente (`SteadyStateMonitor.js`)
+A cada passo, o monitor mede a taxa de variação de todas as leituras — vazão de cada conexão, volume e temperatura de cada tanque e temperaturas de saída de cada trocador — e declara **regime permanente** quando todas ficam abaixo da resolução prática por $10\text{ s}$ seguidos:
+
+| Grandeza | Tolerância |
+|---|---|
+| Vazão | $\lvert dQ/dt \rvert \le 10^{-3}\text{ L/s}^2$ |
+| Volume de tanque | $\lvert dV/dt \rvert \le 10^{-3}\text{ L/s}$ |
+| Temperatura | $\lvert dT/dt \rvert \le 10^{-3}\text{ °C/s}$ |
+
+O indicador da toolbar mostra "Regime transiente" (com a grandeza que mais varia no tooltip) ou "Regime permanente · desde t = …". Qualquer perturbação (abrir válvula, mudar setpoint) devolve o estado a transiente no passo seguinte. A exportação de dados registra o tempo simulado e o instante em que o regime foi atingido.
+
 ## 6. Validação e Comparação com Outros Simuladores
 
 Os resultados do GAAP Virtual Lab podem ser validados e comparados com simuladores comerciais de processos químicos (como DWSIM ou Aspen Plus). É essencial compreender as premissas adotadas por cada plataforma para realizar comparações coerentes.
@@ -578,8 +635,8 @@ Os resultados do GAAP Virtual Lab podem ser validados e comparados com simulador
 
 | Característica | GAAP Virtual Lab | DWSIM / Aspen Plus |
 |---|---|---|
-| **Regime de Simulação** | Dinâmico/Transiente (relaxamento de fluxo de 1ª ordem, integração de tanques por Euler). | Estacionário (cálculo de balanço de pressões e vazões instantâneo). |
-| **Balanço Hidráulico** | Solver local iterativo (push-based com retropropagação transiente). | Solver global simultâneo (sistemas de equações não lineares acopladas via Newton-Raphson). |
+| **Regime de Simulação** | Dinâmico em tempo real (inércia do fluido nos tubos, integração de tanques por Euler, atraso térmico do trocador); atinge regime permanente sozinho. | DWSIM dinâmico: Euler explícito de passo fixo; DWSIM/Aspen estacionário: balanço instantâneo. |
+| **Balanço Hidráulico** | Solver global simultâneo (GGA/Newton) com conjuntos ativos e inércia. | DWSIM dinâmico: vazões algébricas por $K_v$ a cada passo, tanque atmosférico, sem tubos; estacionário: Newton global. |
 | **Separabilidade de Perdas** | Perdas de canos e perdas de componentes passantes (válvulas, trocadores) são tratadas de forma totalmente isolada. | Perdas de carga de válvulas e conexões podem ser aglutinadas em trechos hidráulicos. |
 
 ### 6.2 Diretrizes de Comparação

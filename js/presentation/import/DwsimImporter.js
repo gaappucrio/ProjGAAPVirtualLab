@@ -954,8 +954,8 @@ function heatExchangerParameters(simEl, dwsimType = '') {
         || queryNumeric(simEl, 'ThermalEfficiency', 0)
         || queryNumeric(simEl, 'Efficiency', 0)
         || queryNumericDeep(simEl, ['MaximumEffectiveness', 'Effectiveness', 'ThermalEfficiency', 'Efficiency'], 0)
-        || 0.95;
-    const efetividadeMaxima = clamp(rawEff > 1 ? rawEff / 100 : rawEff, 0.1, 0.999);
+        || 1.0;
+    const efetividadeMaxima = clamp(rawEff > 1 ? rawEff / 100 : rawEff, 0.1, 1.0);
 
     return {
         temperaturaServicoC: tempServico,

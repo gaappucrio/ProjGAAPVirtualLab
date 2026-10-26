@@ -60,11 +60,24 @@ function renderHeatExchangerDualStreamAlert(duasCorrentesConectadas) {
     `;
 }
 
+function renderHeatExchangerBoilingAlert(riscoEbulicao) {
+    const isDark = typeof document !== 'undefined' && document.body?.classList?.contains('theme-dark');
+    const colors = getThemeAwareHeatExchangerAlertColors(isDark);
+    const display = riscoEbulicao ? 'block' : 'none';
+
+    return `
+        <div id="painel-alerta-ebulicao-hx" class="prop-group gaap-alert gaap-alert--warning" data-alert-severity="warning" style="display:${display}; border-left:4px solid ${colors.border}; border-color:${colors.border}; background:${colors.background}; padding:10px 12px; margin-bottom:12px;">
+            <h4 class="gaap-alert__title" style="margin:0 0 6px; color:${colors.color}; font-size:13px;">${translateLiteral('Risco de ebulição na saída')}</h4>
+            <p class="gaap-alert__body" style="margin:0; font-size:11px; line-height:1.45; color:${colors.bodyColor};">${translateLiteral('A pressão de vapor do fluido na temperatura de saída atinge a pressão absoluta local. O simulador trata o escoamento como líquido monofásico; em uma planta real haveria vaporização (flashing).')}</p>
+        </div>
+    `;
+}
+
 export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
     render: (comp) => {
         const engine = resolvePresentationEngine();
         const diagnostico = comp.getDiagnosticoOperacao?.(engine) ?? {
-            duasCorrentesConectadas: comp.temDuasCorrentesConectadas?.(engine) === true || engine?.isTrocadorComDuasCorrentes?.(comp) === true
+            duasCorrentesConectadas: comp.temDuasCorrentesConectadas?.(engine) === true
         };
         const duasCorrentesConectadas = diagnostico.duasCorrentesConectadas === true;
         const bloqueioServicoAttr = duasCorrentesConectadas ? 'disabled' : '';
@@ -76,6 +89,7 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
 
         const basicContent = `
             ${renderHeatExchangerDualStreamAlert(duasCorrentesConectadas)}
+            ${renderHeatExchangerBoilingAlert(comp.temRiscoEbulicao?.() === true)}
             <div style="font-weight: bold; margin-bottom: 8px; color: ${isDark ? '#d8e4ec' : '#2c3e50'}; border-bottom: 1px solid ${isDark ? '#2d3748' : '#e2e8f0'}; padding-bottom: 4px;">${translateLiteral('Troca Térmica Global')}</div>
             <div class="prop-group">
                 ${makeLabel('Modo do gráfico', 'Define a exibição do perfil térmico no monitor: Espacial (T vs Comprimento) ou Térmico (T vs Q).')}
@@ -189,7 +203,11 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
             </div>
             <div class="prop-group">
                 ${makeLabel('Efetividade máxima (%)', TOOLTIP.heatExchangerMaxEffectiveness)}
-                <input type="number" id="input-hx-max-effectiveness" ${hintAttr(TOOLTIP.heatExchangerMaxEffectiveness)} value="${(comp.efetividadeMaxima * 100).toFixed(1)}" step="0.1" min="0" max="99.9">
+                <input type="number" id="input-hx-max-effectiveness" ${hintAttr(TOOLTIP.heatExchangerMaxEffectiveness)} value="${(comp.efetividadeMaxima * 100).toFixed(1)}" step="0.1" min="0" max="100">
+            </div>
+            <div class="prop-group">
+                ${makeLabel('Volume interno por corrente (L)', TOOLTIP.heatExchangerHoldupVolume)}
+                <input type="number" id="input-hx-holdup-volume" ${hintAttr(TOOLTIP.heatExchangerHoldupVolume)} value="${Number(comp.volumeInternoL ?? 0)}" step="0.1" min="0" max="10000">
             </div>
         `;
 
@@ -206,8 +224,7 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
         const textoAviso = byId('texto-aviso-temp-servico-hx');
 
         const sincronizarBloqueioDuasCorrentes = () => {
-            const duasCorrentes = comp.temDuasCorrentesConectadas?.(engine) === true
-                || engine?.isTrocadorComDuasCorrentes?.(comp) === true;
+            const duasCorrentes = comp.temDuasCorrentesConectadas?.(engine) === true;
             if (inputTempServico) {
                 inputTempServico.disabled = duasCorrentes;
                 const tooltip = duasCorrentes
@@ -224,8 +241,7 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
         };
 
         bind('input-hx-service-temp', 'change', (event) => {
-            const duasCorrentes = comp.temDuasCorrentesConectadas?.(engine) === true
-                || engine?.isTrocadorComDuasCorrentes?.(comp) === true;
+            const duasCorrentes = comp.temDuasCorrentesConectadas?.(engine) === true;
             if (duasCorrentes) {
                 sincronizarBloqueioDuasCorrentes();
                 setValue('input-hx-service-temp', displayEditableUnitValue('temperature', comp.temperaturaServicoC, 2));
@@ -311,12 +327,23 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
         bind('input-hx-max-effectiveness', 'change', (event) => {
             validateInputWithFeedback(
                 event.target,
-                (value, name) => InputValidator.validateNumber(value, 0, 99.9, name),
+                (value, name) => InputValidator.validateNumber(value, 0, 100, name),
                 'Efetividade máxima',
                 (validated) => {
                     comp.setEfetividadeMaxima(validated);
                     refreshNetworkAfterThermalChange();
                     setValue('input-hx-max-effectiveness', (comp.efetividadeMaxima * 100).toFixed(1));
+                }
+            );
+        });
+
+        bind('input-hx-holdup-volume', 'change', (event) => {
+            validateInputWithFeedback(
+                event.target,
+                (value, name) => InputValidator.validateNumber(value, 0, 10000, name),
+                'Volume interno por corrente',
+                (validated) => {
+                    setValue('input-hx-holdup-volume', comp.setVolumeInterno(validated));
                 }
             );
         });

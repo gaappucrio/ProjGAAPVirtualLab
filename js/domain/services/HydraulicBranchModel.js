@@ -9,7 +9,7 @@ import { cloneFluido } from '../components/Fluido.js';
 import {
     BAR_TO_PA,
     DEFAULT_ENTRY_LOSS,
-    DEFAULT_FLUID_VISCOSITY_PA_S,
+    DEFAULT_FLUID_DENSITY_KG_M3,
     DEFAULT_PIPE_DIAMETER_M,
     EPSILON_FLOW,
     GRAVITY,
@@ -292,35 +292,19 @@ export class HydraulicBranchModel {
         return 0;
     }
 
-    getLocalLossReynoldsCorrection(pipeHydraulics, fluid) {
-        const reynolds = Number(pipeHydraulics?.reynolds);
-        if (!Number.isFinite(reynolds) || reynolds <= 0) return 1;
-
-        const viscosityRatio = Math.max(
-            1,
-            (Number(fluid?.viscosidadeDinamicaPaS) || DEFAULT_FLUID_VISCOSITY_PA_S) / DEFAULT_FLUID_VISCOSITY_PA_S
-        );
-        const viscosityWeight = clamp(1 + (Math.log10(viscosityRatio) * 0.18), 1, 1.4);
-        const reynoldsPenalty = (120 / Math.sqrt(Math.max(reynolds, 1))) * viscosityWeight;
-
-        return clamp(1 + reynoldsPenalty, 1, 4);
-    }
-
     calculateBranchLossBreakdown(conn, supply, target, baseTargetEntryLossCoeff, geometry, flowLps, fluid) {
         const pipeAreaM2 = conn.areaM2;
         const sourceAreaM2 = Math.max(1e-9, supply.hydraulicAreaM2 || pipeAreaM2);
         const targetAreaM2 = Math.max(1e-9, this.getTargetEntranceArea(target) || pipeAreaM2);
         const density = fluid.densidade;
         const pipeHydraulics = this.context.getPipeHydraulics(conn, geometry, pipeAreaM2, flowLps, fluid);
-        const localLossCorrection = this.getLocalLossReynoldsCorrection(pipeHydraulics, fluid);
-        const sourceLossCoeff = Math.max(0, (
-            (supply.connectionBaseLossCoeff ?? 1)
-            + (supply.localLossCoeff || 0)
-        ) * localLossCorrection);
-        const pipeLocalLossCoeff = Math.max(0, (conn.perdaLocalK || 0) * localLossCorrection);
+        // Coeficientes K de acessórios e o K equivalente do Cv valem para escoamento turbulento;
+        // a dependência de Reynolds da rede entra pelo fator de atrito de Darcy no trecho.
+        const sourceLossCoeff = Math.max(0, (supply.connectionBaseLossCoeff ?? 1) + (supply.localLossCoeff || 0));
+        const pipeLocalLossCoeff = Math.max(0, conn.perdaLocalK || 0);
         const pipeDistributedLossCoeff = Math.max(0, pipeHydraulics.distributedLossCoeff);
         const pipeLossCoeff = pipeLocalLossCoeff + pipeDistributedLossCoeff;
-        const targetEntryLossCoeff = Math.max(0, baseTargetEntryLossCoeff * localLossCorrection);
+        const targetEntryLossCoeff = Math.max(0, baseTargetEntryLossCoeff);
         const sourceLossBar = pressureLossFromFlow(flowLps, sourceAreaM2, density, sourceLossCoeff);
         const pipeLocalLossBar = pressureLossFromFlow(flowLps, pipeAreaM2, density, pipeLocalLossCoeff);
         const pipeDistributedLossBar = pressureLossFromFlow(flowLps, pipeAreaM2, density, pipeDistributedLossCoeff);
@@ -680,6 +664,7 @@ export class HydraulicBranchModel {
             const hasPressurizedInlet = comp.temEntradaPressurizada?.() === true;
             const pressureBar = comp.getPressaoConexaoSemPerdaBar?.(fluid, this.context.usarAlturaRelativa)
                 ?? comp.getPressaoDisponivelSaidaBar(fluid, this.context.usarAlturaRelativa);
+            // 1/Cd² já inclui a energia cinética do jato no bocal; somar 1 contaria a carga de velocidade duas vezes.
             const localLossCoeff = hasPressurizedInlet
                 ? 0
                 : 1.0 / Math.max(0.15, comp.coeficienteSaida * comp.coeficienteSaida);
@@ -687,7 +672,7 @@ export class HydraulicBranchModel {
                 availableFlowLps: availableFromInventory,
                 pressureBar,
                 hydraulicAreaM2: areaM2,
-                connectionBaseLossCoeff: hasPressurizedInlet ? 0 : 1,
+                connectionBaseLossCoeff: 0,
                 localLossCoeff,
                 fluid
             };
@@ -721,11 +706,12 @@ export class HydraulicBranchModel {
             const absSuctionBar = (fluid.pressaoAtmosfericaBar || 1.01325) + inletPressure;
             const npshAvailableM = Math.max(
                 0,
-                (((absSuctionBar - (fluid.pressaoVaporBar || 0)) * BAR_TO_PA) / ((fluid.densidade || 997) * GRAVITY))
+                (((absSuctionBar - (fluid.pressaoVaporBar || 0)) * BAR_TO_PA) / ((fluid.densidade || DEFAULT_FLUID_DENSITY_KG_M3) * GRAVITY))
                 + suctionVelocityHeadM
             );
             const npshRequiredM = comp.getCurvaNpshRequeridoM(suctionFlowReference, drive);
             const cavitationFactor = comp.calcularFatorCavitacao(npshAvailableM, npshRequiredM);
+            comp.densidadeOperacaoKgM3 = fluid.densidade || DEFAULT_FLUID_DENSITY_KG_M3;
             const boostBar = comp.getCurvaPressaoBar(referenceFlow, drive) * cavitationFactor;
             const effectiveQRemaining = qRemaining * cavitationFactor;
 

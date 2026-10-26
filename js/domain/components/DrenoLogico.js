@@ -1,5 +1,4 @@
-import { ComponenteFisico, flowFromBernoulli } from './BaseComponente.js';
-import { pressureFromHeadBar } from '../units/HydraulicUnits.js';
+import { ComponenteFisico } from './BaseComponente.js';
 
 export class DrenoLogico extends ComponenteFisico {
     constructor(id, tag, x, y) {
@@ -12,13 +11,5 @@ export class DrenoLogico extends ComponenteFisico {
     sincronizarMetricasFisicas() {
         super.sincronizarMetricasFisicas();
         this.vazaoRecebidaLps = this.estadoHidraulico.entradaVazaoLps;
-    }
-
-    getFluxoSaidaFromTank(nivelNormalizado) {
-        const context = this.getSimulationContext();
-        const fluid = context.queries.getComponentFluid?.(this) || context.fluidoOperante;
-        const densidade = fluid?.densidade || 1000;
-        const headBar = pressureFromHeadBar(Math.max(0, nivelNormalizado) * 2.4, densidade);
-        return flowFromBernoulli(headBar, this.getAreaConexaoM2(), densidade, 1 + this.perdaEntradaK);
     }
 }

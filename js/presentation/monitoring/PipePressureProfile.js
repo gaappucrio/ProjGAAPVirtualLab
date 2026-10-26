@@ -1,6 +1,6 @@
-const FLOW_EPSILON_LPS = 1e-9;
+export const FLOW_EPSILON_LPS = 1e-9;
 
-function finiteNumber(value, fallback = null) {
+export function finiteNumber(value, fallback = null) {
     const numericValue = Number(value);
     return Number.isFinite(numericValue) ? numericValue : fallback;
 }

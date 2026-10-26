@@ -166,7 +166,7 @@ Responsabilidade: conter a regra física, modelos de componentes e serviços hid
 Principais módulos:
 - `domain/components/` — classes lógicas de componentes, como bomba, tanque, válvula, trocador de calor, fonte e dreno.
 - `domain/models/ConnectionModel.js` — definição de conexão lógica entre componentes.
-- `domain/services/` — solver hidráulico, cálculo de perdas, análise de rede, hidráulica de tubulação, tempo de residência e controle de nível PID.
+- `domain/services/` — solver hidráulico global (`GlobalHydraulicSolver.js`, padrão) e solvers legados, cálculo de perdas, análise de rede, hidráulica de tubulação, tempo de residência e controle de nível PID.
 - `domain/context/SimulationContext.js` — contexto de simulação com parâmetros físicos e unidades.
 
 Interface com outros módulos:
@@ -177,7 +177,8 @@ Interface com outros módulos:
 Responsabilidade: orquestrar estado, eventos e fluxo da simulação, fazendo a ponte entre domínio e apresentação.
 Principais módulos:
 - `application/engine/SimulationEngine.js` — estado da simulação, ciclo de vida e injeção de backend.
-- `application/engine/SimulationTickPipeline.js` — pipeline de atualização do tick de simulação.
+- `application/engine/SimulationTickPipeline.js` — pipeline de atualização do tick de simulação (`advance(dt)` executa um passo físico completo).
+- `application/engine/SteadyStateMonitor.js` — detecção de regime permanente pelas taxas de variação de vazões, volumes e temperaturas.
 - `application/stores/` — stores para seleção, topologia, conexões e configuração.
 - `application/services/ConnectionService.js` — serviço para criar e gerenciar conexões de componentes.
 - `application/events/` — eventos de engine e payloads genéricos.
@@ -229,20 +230,22 @@ Este módulo instancia o engine, conecta serviços de visual, cria controladores
 ### 3.2 Simulação hidrodinâmica
 
 - O sistema deve iniciar e pausar o motor de simulação.
-- O motor deve calcular pressões, vazões e perdas hidráulicas.
+- O motor deve calcular pressões, vazões e perdas hidráulicas resolvendo a rede inteira simultaneamente (solver global), incluindo a inércia do fluido nos tubos; a pressão em cada dreno deve fechar com a contrapressão configurada.
+- O solver legado (push-based) deve continuar acessível por um toggle na toolbar, apenas para comparação.
 - O sistema deve aplicar altura relativa quando habilitada.
 - Deve detectar malhas fechadas e notificar o usuário.
+- O sistema deve indicar quando a planta atinge regime permanente (vazões, volumes e temperaturas estáveis por 10 s simulados) e voltar a "transiente" a qualquer perturbação.
 - O sistema deve preservar o estado hidráulico visível após pausa.
 
 ### 3.3 Componentes específicos
 
-- Bombas devem ter curvas de carga, eficiência e NPSHr.
+- Bombas devem ter curvas de carga, eficiência e NPSHr. A curva é definida com água de referência e preserva a altura manométrica para outros fluidos ($\Delta P = \rho g H$); a eficiência afeta somente a potência de eixo.
 - Válvulas devem ter abertura desejada, tempo de curso, perfil de característica e alerta didático de subdimensionamento hidráulico por queda de pressão.
-- Tanques devem calcular pressão hidrostática, permitir controle de set point por controlador de nível PID separado da dinâmica física e não introduzir queda própria entre o Cano de entrada e o Cano de saída quando houver entrada pressurizada.
+- Tanques devem calcular pressão hidrostática e permitir controle de set point por controlador de nível PID (com anti-windup por integração condicional e convergência ao set point sem ciclo limite) separado da dinâmica física. O tanque aberto (atmosférico) impõe apenas $\rho g h$ na saída, desacoplando a pressão de montante; o vaso fechado soma a pressão de um colchão de gás (Boyle, a partir da pré-carga configurada). Com o tanque cheio, o excedente deve sair como transbordo, exibido no painel e na exportação.
 - Tanques e tubulações devem exibir tempo de residência atual quando houver vazão suficiente.
-- Fontes devem definir fluido, pressão de alimentação e vazão máxima; a pressão dirige a vazão resolvida e a vazão máxima limita a capacidade entregue quando a fonte satura. A vazão máxima padrão da entrada é `32 m³/h`.
+- Fontes devem definir fluido, pressão de alimentação e vazão máxima; alterar apenas a temperatura do fluido deve recalcular densidade, viscosidade e pressão de vapor pelas correlações do fluido; a pressão dirige a vazão resolvida e a vazão máxima limita a capacidade entregue quando a fonte satura. A vazão máxima padrão da entrada é `32 m³/h`.
 - Drenos devem manter contrapressão de saída, exibir a pressão final da rede antes da perda de entrada e explicitar a queda causada pelo `K` de entrada.
-- Trocadores de calor devem suportar operação com utilidade térmica (temperatura de serviço fixa para escoamento monostream tanto na Corrente 1 quanto na Corrente 2) ou com duas correntes hidraulicamente independentes conectadas em portas dedicadas (Corrente 1: in1/out1; Corrente 2: in2/out2). Quando duas correntes estão conectadas, a edição da temperatura de serviço é desabilitada, o modo de escoamento (contracorrente ou paralelo) é inferido pela topologia das portas via `isContracorrente(engine)` e a troca térmica é calculada pelo método $\varepsilon$-NTU com conservação de energia sensível. Caso uma das correntes conectadas tenha vazão nula, a taxa de calor é estritamente zerada para impedir troca com fluido estagnado. Cada corrente preserva pressões de entrada e saída independentes ($P_{1,\text{in}}, P_{1,\text{out}}$ e $P_{2,\text{in}}, P_{2,\text{out}}$), balanço de massa individual ($Q_{1,\text{in}} = Q_{1,\text{out}}$ e $Q_{2,\text{in}} = Q_{2,\text{out}}$) com convergência residual desacoplada ($\Delta Q_{\text{residual}} = \max(|Q_{1,\text{in}} - Q_{1,\text{out}}|, |Q_{2,\text{in}} - Q_{2,\text{out}}|)$), e rastreamento explícito de vazões mássicas (`vazaoMassaKgS` e `vazaoMassa2KgS`). O trocador conta com perfil gráfico longitudinal de temperatura em tempo real e integração plena com o solucionador nodal para circuitos fechados em série flutuantes.
+- Trocadores de calor devem suportar operação com utilidade térmica (temperatura de serviço fixa para escoamento monostream tanto na Corrente 1 quanto na Corrente 2) ou com duas correntes hidraulicamente independentes conectadas em portas dedicadas (Corrente 1: in1/out1; Corrente 2: in2/out2). Quando duas correntes estão conectadas, a edição da temperatura de serviço é desabilitada, o modo de escoamento (contracorrente ou paralelo) é inferido pela topologia das portas via `isContracorrente(engine)` e a troca térmica é calculada pelo método $\varepsilon$-NTU com conservação de energia sensível, sem teto artificial de efetividade por padrão ($\varepsilon_{\max} = 100\%$, configurável como limite opcional). Como o modelo é monofásico, o trocador deve sinalizar risco de ebulição quando a pressão de vapor na temperatura de saída atingir a pressão absoluta local da corrente. Caso uma das correntes conectadas tenha vazão nula, a taxa de calor é estritamente zerada para impedir troca com fluido estagnado. Cada corrente preserva pressões de entrada e saída independentes ($P_{1,\text{in}}, P_{1,\text{out}}$ e $P_{2,\text{in}}, P_{2,\text{out}}$), balanço de massa individual ($Q_{1,\text{in}} = Q_{1,\text{out}}$ e $Q_{2,\text{in}} = Q_{2,\text{out}}$) com convergência residual desacoplada ($\Delta Q_{\text{residual}} = \max(|Q_{1,\text{in}} - Q_{1,\text{out}}|, |Q_{2,\text{in}} - Q_{2,\text{out}}|)$), e rastreamento explícito de vazões mássicas (`vazaoMassaKgS` e `vazaoMassa2KgS`). O trocador conta com perfil gráfico longitudinal de temperatura em tempo real e integração plena com o solucionador nodal para circuitos fechados em série flutuantes. A temperatura de saída responde com atraso de 1ª ordem $\tau = V_{\text{interno}}/Q$ (volume interno por corrente configurável, padrão 2 L; 0 L = resposta instantânea) e converge exatamente ao regime ε-NTU.
 
 ### 3.4 Exportação e persistência
 
@@ -312,7 +315,7 @@ A seguir estão as funções/chaves de alto valor do sistema, com seus objetivos
 ### 5.3 `setupToolbar({ engine, onClearCanvas, onTopologyVisualChange, onThemeChange, undoManager })`
 
 - Módulo: `js/presentation/controllers/ToolbarController.js`
-- Objetivo: configurar a toolbar principal, incluindo controle de simulação, exportação de dados, tema, idioma e altura relativa.
+- Objetivo: configurar a toolbar principal, incluindo controle de simulação, exportação de dados, tema, idioma, altura relativa, toggle do solver legado e indicador de regime permanente.
 - Pré-condições: o DOM deve ter os botões e controles esperados.
 - Entrada:
   - `engine`: instância do motor.
@@ -326,7 +329,9 @@ A seguir estão as funções/chaves de alto valor do sistema, com seus objetivos
   - O botão de exportação aciona `exportSimulationData(engine)`.
   - O tema persistido em `localStorage` é aplicado e o botão atualiza o estado visual.
   - O idioma atual é aplicado aos rótulos da toolbar.
-- Interface com o usuário: botões de simulação, limpar, exportar dados, alternar idioma, alternar tema e altura relativa.
+  - O toggle "Solver legado" chama `engine.setModoSolver('legado' | 'global')` e registra a ação no histórico.
+  - O indicador `#steady-state-indicator` reflete `engine.getSteadyStateStatus()` a cada `PANEL_UPDATE`, alterando estilos só na troca de estado.
+- Interface com o usuário: botões de simulação, limpar, exportar dados, alternar idioma, alternar tema, altura relativa, solver legado e indicador de regime.
 
 ### 5.4 `createFlowchartDocument(engine, options)`
 
@@ -1106,6 +1111,7 @@ A seguir, a lista completa de módulos e símbolos exportados.
 - `js/application/engine/HydraulicNetworkContext.js`: HydraulicNetworkContext, HydraulicScopedNetworkContext
 - `js/application/engine/SimulationEngine.js`: ComponenteFisico, ENGINE, EPSILON_FLOW, FLUID_PRESETS, MAX_NETWORK_FLOW_LPS, Observable, SistemaSimulacao, clamp, flowFromBernoulli, pressureFromHeadBar, pressureLossFromFlow, setComponentVisualCleanupHooks, setComponentVisualPositionResolver, setConnectionVisualUpdater, setPortStateUpdater, smoothFirstOrder
 - `js/application/engine/SimulationTickPipeline.js`: SimulationTickPipeline
+- `js/application/engine/SteadyStateMonitor.js`: STEADY_STATE_FLOW_RATE_TOLERANCE_LPS_PER_S, STEADY_STATE_HOLD_TIME_S, STEADY_STATE_TEMPERATURE_RATE_TOLERANCE_C_PER_S, STEADY_STATE_VOLUME_RATE_TOLERANCE_LPS, SteadyStateMonitor
 - `js/application/events/EventPayloads.js`: ComponentEventPayloads, EngineEventPayloads
 - `js/application/events/EventTypes.js`: COMPONENT_EVENTS, ENGINE_EVENTS
 - `js/application/services/ConnectionGeometryCalculator.js`: calculateConnectionGeometry, calculatePortPosition
@@ -1121,13 +1127,14 @@ A seguir, a lista completa de módulos e símbolos exportados.
 - `js/domain/components/DrenoLogico.js`: DrenoLogico
 - `js/domain/components/Fluido.js`: cloneFluido, createFluidoFromProperties, mixFluidos, updateFluidoProperties
 - `js/domain/components/FonteLogica.js`: FonteLogica
-- `js/domain/components/TanqueLogico.js`: TanqueLogico
-- `js/domain/components/TrocadorCalorLogico.js`: TrocadorCalorLogico, calcularLmtd, calcularSaidaTrocadorCalor
+- `js/domain/components/TanqueLogico.js`: TIPO_TANQUE_ATMOSFERICO, TIPO_TANQUE_FECHADO, TanqueLogico
+- `js/domain/components/TrocadorCalorLogico.js`: TrocadorCalorLogico, calcularLmtd
 - `js/domain/components/ValvulaLogica.js`: VALVE_PROFILE_DEFINITIONS, ValvulaLogica
-- `js/domain/context/SimulationContext.js`: createSimulationContext, mergeSimulationContext
+- `js/domain/context/SimulationContext.js`: MODO_SOLVER_GLOBAL, MODO_SOLVER_LEGADO, createSimulationContext, mergeSimulationContext, normalizarModoSolver
 - `js/domain/events/ComponentEventPayloads.js`: ComponentEventPayloads
 - `js/domain/events/ComponentEventTypes.js`: COMPONENT_EVENTS
 - `js/domain/models/ConnectionModel.js`: ConnectionModel
+- `js/domain/services/GlobalHydraulicSolver.js`: GlobalHydraulicSolver
 - `js/domain/services/HydraulicBranchModel.js`: HydraulicBranchModel
 - `js/domain/services/HydraulicNetworkAnalyzer.js`: analyzeHydraulicNetwork
 - `js/domain/services/HydraulicNetworkSolver.js`: HydraulicNetworkSolver
@@ -1136,7 +1143,8 @@ A seguir, a lista completa de módulos e símbolos exportados.
 - `js/domain/services/PipeHydraulics.js`: classifyFlowRegime, darcyFrictionFactor, diameterFromFlowVelocity, diameterFromM3sVelocity, ensureConnectionDesignFlowLps, ensureConnectionProperties, getConnectionResponseTimeS, getCurrentDesignFlowCandidateLps, getPipeHydraulics, getSuggestedDiameterForConnection, reynoldsFromFlow
 - `js/domain/services/ResidenceTime.js`: calculateConnectionResidenceTimeS, calculateResidenceTimeS, calculateTankResidenceTimeS, getTankResidenceFlowBasis
 - `js/domain/services/ValveSizingDiagnostics.js`: aplicarAjusteDimensionamentoValvula, diagnosticarDimensionamentoValvula
-- `js/domain/units/HydraulicUnits.js`: BAR_TO_PA, CONSTANTES_CONVERSAO, DEFAULT_ATMOSPHERIC_PRESSURE_BAR, DEFAULT_DESIGN_VELOCITY_MPS, DEFAULT_ENTRY_LOSS, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK, DEFAULT_FLUID_VAPOR_PRESSURE_BAR, DEFAULT_FLUID_VISCOSITY_PA_S, DEFAULT_PIPE_DIAMETER_M, DEFAULT_PIPE_EXTRA_LENGTH_M, DEFAULT_PIPE_FRICTION, DEFAULT_PIPE_MINOR_LOSS, DEFAULT_PIPE_ROUGHNESS_MM, DEFAULT_PIPE_SCHEMATIC_LENGTH_M, DEFAULT_SOURCE_MAX_FLOW_LPS, DEFAULT_SOURCE_PRESSURE_BAR, EPSILON_FLOW, GRAVITY, MAX_NETWORK_FLOW_LPS, PADROES_HIDRAULICOS, areaFromDiameter, lpsToM3s, m3sToLps, pressureFromHeadBar
+- `js/domain/units/HydraulicUnits.js`: BAR_TO_PA, DEFAULT_ATMOSPHERIC_PRESSURE_BAR, DEFAULT_DESIGN_VELOCITY_MPS, DEFAULT_ENTRY_LOSS, DEFAULT_FLUID_DENSITY_KG_M3, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK, DEFAULT_FLUID_VAPOR_PRESSURE_BAR, DEFAULT_FLUID_VISCOSITY_PA_S, DEFAULT_PIPE_DIAMETER_M, DEFAULT_PIPE_EXTRA_LENGTH_M, DEFAULT_PIPE_FRICTION, DEFAULT_PIPE_MINOR_LOSS, DEFAULT_PIPE_ROUGHNESS_MM, DEFAULT_PIPE_SCHEMATIC_LENGTH_M, DEFAULT_SOURCE_MAX_FLOW_LPS, DEFAULT_SOURCE_PRESSURE_BAR, EPSILON_FLOW, GRAVITY, MAX_NETWORK_FLOW_LPS, areaFromDiameter, lpsToM3s, m3sToLps, pressureFromHeadBar
+- `js/infrastructure/charts/ChartTheme.js`: formatAxisTick, getGridColors
 - `js/infrastructure/charts/HeatExchangerChartAdapter.js`: applyHeatExchangerChartPresentation, buildHeatExchangerCurveDatasets, createHeatExchangerChart, refreshHeatExchangerChart
 - `js/infrastructure/charts/PipePressureChartAdapter.js`: buildPipePressureProfile, createPipePressureChart, refreshPipePressureChart
 - `js/infrastructure/charts/PumpChartAdapter.js`: applyPumpChartPresentation, buildPumpCurveDatasets, createPumpChart, refreshPumpChart
@@ -1172,7 +1180,7 @@ A seguir, a lista completa de módulos e símbolos exportados.
 - `js/presentation/controllers/ToolbarController.js`: setupToolbar
 - `js/presentation/controllers/UndoController.js`: createUndoRedoHistory, createWorkspaceSnapshot, restoreWorkspaceSnapshot, setupUndoController
 - `js/presentation/controllers/UnitsController.js`: bindUnitsPanel, renderUnitsPanel
-- `js/presentation/controllers/WorkspaceSelectionController.js`: setupWorkspaceSelectionController
+- `js/presentation/controllers/WorkspaceSelectionController.js`: clearVisualSelection, setupWorkspaceSelectionController
 - `js/presentation/export/PumpDwsimJsonExporter.js`: buildPumpDwsimJsonData, exportPumpDwsimJson
 - `js/presentation/export/SimulationDataExporter.js`: buildExportHtml, exportSimulationData
 - `js/presentation/flowchart/FlowchartPersistence.js`: FLOWCHART_DOCUMENT_TYPE, FLOWCHART_DOCUMENT_VERSION, createFlowchartDocument, downloadFlowchartDocument, getFlowchartFileName, loadWorkspaceIntoEngine, parseFlowchartDocument, readFlowchartFile, restoreFlowchartDocument
@@ -1180,18 +1188,18 @@ A seguir, a lista completa de módulos e símbolos exportados.
 - `js/presentation/import/DwsimImporter.js`: importDwsimDocument, parseDwsimXml, readDwsimFile, translateDwsimToWorkspace
 - `js/presentation/monitoring/MonitorSlotHistory.js`: createMonitorSlotHistory
 - `js/presentation/monitoring/PipeMonitorGrouping.js`: canMergePipeMonitorEntries, getPipeMonitorEntryIds, isPipeMonitorEntry
-- `js/presentation/monitoring/PipePressureProfile.js`: resolvePipePressureProfile, resolvePipePressureProfileOptions
+- `js/presentation/monitoring/PipePressureProfile.js`: FLOW_EPSILON_LPS, finiteNumber, resolvePipePressureProfile, resolvePipePressureProfileOptions
 - `js/presentation/monitoring/SinkPressureProfile.js`: resolveSinkPressureProfile
 - `js/presentation/properties/ComponentPropertiesPresenter.js`: disposeComponentPropertyBindings, getComponentTypeKey, renderComponentProperties
 - `js/presentation/properties/ConnectionPropertiesPresenter.js`: renderConnectionProperties
 - `js/presentation/properties/DefaultPropertiesPresenter.js`: renderDefaultProperties
-- `js/presentation/properties/PropertyDomAdapter.js`: bind, byId, isActive, setDisabled, setDisplay, setHtml, setText, setValue, setValueWhenBlurred, valueOf
+- `js/presentation/properties/PropertyDomAdapter.js`: bind, byId, isActive, setHtml, setValue, valueOf
 - `js/presentation/properties/PropertyLiveUpdater.js`: updatePropertyPanelValues
-- `js/presentation/properties/PropertyPresenterShared.js`: COMPONENT_EVENTS, ComponentEventPayloads, ENGINE_EVENTS, EngineEventPayloads, InputValidator, TOOLTIP, TOOLTIPS, baseFromDisplay, bind, byId, clearInputError, displayBound, displayEditableUnitValue, displayStep, displayUnitValue, getPresentationEngine, getUnitSymbol, hintAttr, isActive, makeLabel, makeUnitLabel, notifyPanelRefresh, renderPropertyTabs, setDisabled, setDisplay, setHtml, setText, setValue, setValueWhenBlurred, showInputError, subscribeUnitPreferences, validateInputWithFeedback, valueOf, volumeText
+- `js/presentation/properties/PropertyPresenterShared.js`: COMPONENT_EVENTS, ComponentEventPayloads, InputValidator, TOOLTIP, TOOLTIPS, baseFromDisplay, bind, bindCustomSelect, byId, clearInputError, displayBound, displayEditableUnitValue, displayStep, displayUnitValue, escapeHtml, getPresentationEngine, hintAttr, isActive, makeLabel, makeUnitLabel, notifyPanelRefresh, renderCustomSelectHtml, renderPropertyTabs, setValue, showInputError, validateInputWithFeedback, valueOf
 - `js/presentation/properties/PropertyTabs.js`: bindPropertyTabs, getPropertyTabsState, renderPropertyTabs, restorePropertyTabsState
 - `js/presentation/properties/PropertyTooltips.js`: TOOLTIPS
 - `js/presentation/properties/PropertyUnitsPresenter.js`: bindUnitControls, renderUnitControls
-- `js/presentation/properties/PropertyValueFormatters.js`: displayBound, displayEditableUnitValue, displayStep, displayUnitValue, formatMeasuredValue, inputBaseValue, rawBaseValue, setFieldValue
+- `js/presentation/properties/PropertyValueFormatters.js`: displayBound, displayEditableUnitValue, displayStep, displayUnitValue, formatMeasuredValue, formatResidenceTime, rawBaseValue, setFieldValue
 - `js/presentation/properties/TankSaturationAlertPresenter.js`: bindTankSaturationAlertActions, hideTankSaturationAlert, refreshTankSaturationAlertForComponents, updateTankControlAvailabilityUI, updateTankSaturationAlert
 - `js/presentation/properties/component/BoundaryComponentPropertiesPresenter.js`: SINK_PROPERTIES_PRESENTER, SOURCE_PROPERTIES_PRESENTER
 - `js/presentation/properties/component/ComponentPropertyPresenterRegistry.js`: getComponentPropertyPresenter

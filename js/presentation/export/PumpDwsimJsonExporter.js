@@ -42,7 +42,7 @@ function buildNominalCurve(pump, densityKgM3) {
 
     for (let index = 0; index <= PUMP_CURVE_POINT_COUNT; index += 1) {
         const flowLps = (qMax * index) / PUMP_CURVE_POINT_COUNT;
-        const pressureRiseBar = pump.getCurvaPressaoBar(flowLps, 1);
+        const pressureRiseBar = pump.getCurvaPressaoBar(flowLps, 1, densityKgM3);
         const efficiencyFraction = pump.getCurvaEficiencia(flowLps, 1);
         points.push({
             flow_m3_s: round(lpsToM3s(flowLps), 9),

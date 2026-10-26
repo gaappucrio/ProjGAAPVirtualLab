@@ -403,6 +403,18 @@
       color: var(--gaap-neutral-title) !important;
   }
 
+  body.theme-dark .toolbar-note.steady-state-indicator[data-state="steady"] {
+      background: var(--gaap-success-bg) !important;
+      border-color: var(--gaap-success-border) !important;
+      color: var(--gaap-success-title) !important;
+  }
+
+  body.theme-dark .toolbar-note.steady-state-indicator[data-state="transient"] {
+      background: var(--gaap-neutral-bg) !important;
+      border-color: var(--gaap-neutral-border) !important;
+      color: var(--gaap-neutral-title) !important;
+  }
+
   body.theme-dark .toolbar-note[data-state="disabled"] {
       background: var(--gaap-warning-bg) !important;
       border-color: var(--gaap-warning-border) !important;

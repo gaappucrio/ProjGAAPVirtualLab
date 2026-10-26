@@ -130,13 +130,20 @@ export class ComponenteFisico extends Observable {
         return areaFromDiameter(this.diametroConexaoM);
     }
 
+    // Sem escoamento, usa a pressão nodal resolvida pelo solver global (pressão estática, como um
+    // manômetro na porta); no solver legado esse valor não existe e a leitura volta a 0.
+    getPressaoNoPortaBar(port) {
+        const pressureBar = this.estadoHidraulico.pressaoNoPorta?.[port];
+        return Number.isFinite(pressureBar) ? pressureBar : 0;
+    }
+
     getPressaoEntradaBar() {
-        if (this.estadoHidraulico.entradaVazaoLps <= EPSILON_FLOW) return 0;
+        if (this.estadoHidraulico.entradaVazaoLps <= EPSILON_FLOW) return this.getPressaoNoPortaBar('in');
         return this.estadoHidraulico.entradaPressaoPonderadaBar / this.estadoHidraulico.entradaVazaoLps;
     }
 
     getPressaoSaidaBar() {
-        if (this.estadoHidraulico.saidaVazaoLps <= EPSILON_FLOW) return 0;
+        if (this.estadoHidraulico.saidaVazaoLps <= EPSILON_FLOW) return this.getPressaoNoPortaBar('out');
         return this.estadoHidraulico.saidaPressaoPonderadaBar / this.estadoHidraulico.saidaVazaoLps;
     }
 
@@ -222,21 +229,10 @@ export class ComponenteFisico extends Observable {
         };
         const matches = this.estadoHidraulico.entradaFluidoContribuicoes.filter(isMatch);
         const totalFlow = matches.reduce((acc, c) => acc + c.flowLps, 0);
-        if (totalFlow <= EPSILON_FLOW) return 0;
-        const weightedPressure = matches.reduce((acc, c) => acc + (Number(c.pressureBar) || 0) * c.flowLps, 0) / totalFlow;
-        return Number.isFinite(weightedPressure) && weightedPressure > 0 ? weightedPressure : 0;
-    }
-
-    getPressaoSaidaPortaBar(portId) {
-        if (!portId) return this.getPressaoSaidaBar();
-        const targetStream = (portId === 'in2' || portId === 'out2' || portId === '2') ? 2 : 1;
-        const isMatch = (c) => {
-            const cStream = (c.portId === 'in2' || c.portId === 'out2' || c.portId === '2') ? 2 : 1;
-            return cStream === targetStream;
-        };
-        const matches = this.estadoHidraulico.saidaFluidoContribuicoes.filter(isMatch);
-        const totalFlow = matches.reduce((acc, c) => acc + c.flowLps, 0);
-        if (totalFlow <= EPSILON_FLOW) return 0;
+        if (totalFlow <= EPSILON_FLOW) {
+            const staticPressureBar = this.estadoHidraulico.pressaoNoEntradaPorCorrente?.[targetStream];
+            return Number.isFinite(staticPressureBar) && staticPressureBar > 0 ? staticPressureBar : 0;
+        }
         const weightedPressure = matches.reduce((acc, c) => acc + (Number(c.pressureBar) || 0) * c.flowLps, 0) / totalFlow;
         return Number.isFinite(weightedPressure) && weightedPressure > 0 ? weightedPressure : 0;
     }
@@ -259,18 +255,6 @@ export class ComponenteFisico extends Observable {
 
     getFluidoSaidaMisturado(fallback = null) {
         return mixFluidos(this.estadoHidraulico.saidaFluidoContribuicoes, fallback);
-    }
-
-    getFluidoSaidaMisturadoPorPorta(portId, fallback = null) {
-        if (!portId) return this.getFluidoSaidaMisturado(fallback);
-        const targetStream = (portId === 'in2' || portId === 'out2' || portId === '2') ? 2 : 1;
-        const isMatch = (c) => {
-            const cStream = (c.portId === 'in2' || c.portId === 'out2' || c.portId === '2') ? 2 : 1;
-            return cStream === targetStream;
-        };
-        const contribuicoes = this.estadoHidraulico.saidaFluidoContribuicoes.filter(isMatch);
-        if (contribuicoes.length === 0) return fallback;
-        return mixFluidos(contribuicoes, fallback);
     }
 
     marcarEmissaoIntrinseca() {
@@ -301,10 +285,6 @@ export class ComponenteFisico extends Observable {
     desconectarSaida(destino) {
         this.outputs = this.outputs.filter((out) => out !== destino);
         destino.inputs = destino.inputs.filter((inp) => inp !== this);
-    }
-
-    getFluxoSaida() {
-        return this.estadoHidraulico.saidaVazaoLps || 0;
     }
 
     destroy() {

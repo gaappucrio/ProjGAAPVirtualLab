@@ -73,16 +73,22 @@ export class SimulationTickPipeline {
         });
     }
 
-    run(timestamp) {
-        if (!this.engine.isRunning) return;
-
-        const dt = this.calculateDeltaTime(timestamp);
+    // Um passo completo da física, sem depender do relógio do navegador.
+    advance(dt) {
         this.engine.elapsedTime += dt;
 
         this.updateHighLevelControls(dt);
         this.updateComponentDynamics(dt);
         this.solveHydraulicNetwork(dt);
         this.syncPhysicalMetrics(dt);
+        this.engine.steadyStateMonitor?.update(this.engine, dt);
+    }
+
+    run(timestamp) {
+        if (!this.engine.isRunning) return;
+
+        const dt = this.calculateDeltaTime(timestamp);
+        this.advance(dt);
 
         this.engine.updatePipesVisual();
         this.engine.notify(EngineEventPayloads.panelUpdate(dt));
