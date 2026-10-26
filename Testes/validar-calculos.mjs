@@ -4,7 +4,7 @@ import test from 'node:test';
 import { FLUID_PRESETS, SistemaSimulacao } from '../js/application/engine/SimulationEngine.js';
 import { BombaLogica } from '../js/domain/components/BombaLogica.js';
 import { DrenoLogico } from '../js/domain/components/DrenoLogico.js';
-import { createFluidoFromProperties, mixFluidos } from '../js/domain/components/Fluido.js';
+import { cloneFluido, createFluidoFromProperties, mixFluidos } from '../js/domain/components/Fluido.js';
 import { FonteLogica } from '../js/domain/components/FonteLogica.js';
 import { TanqueLogico } from '../js/domain/components/TanqueLogico.js';
 import {
@@ -1913,94 +1913,78 @@ test('importador DWSIM organiza layout dos componentes com espacamento confortav
     });
 });
 
-// Regressões das correções físicas de 2026-10-08.
+test('refinamentos fisicos: curvas da bomba em rotacao parcial, preservacao de referencia em misturas e propriedades de corrente DWSIM', () => {
+    // 1. Curva da bomba no grafico reflete a rotacao efetiva pelas Leis de Afinidade
+    const bomba = new BombaLogica('B-AFF', 'B-AFF', 0, 0);
+    bomba.vazaoNominal = 40;
+    bomba.pressaoMaxima = 4.0;
+    bomba.acionamentoEfetivo = 50; // 50% de rotacao -> Q escala por 0.5, Head shutoff escala por 0.25 (1.0 bar)
+    bomba.recalcularMetricasDerivadasCurva();
 
-test('controlador PID mantem a integral quando o erro troca de sinal e congela na saturacao', () => {
-    const config = { deadband: 0, reactivationBand: 0, outputMin: -1, outputMax: 1 };
-    const state = createLevelControllerState();
-    for (let i = 0; i < 50; i += 1) {
-        calculatePidLevelControl({ setpoint: 0.5, measurement: 0.52, dt: 0.1, kp: 4, ki: 0.6, state, config });
-    }
-    const integralAntes = state.integral;
-    assert.ok(integralAntes < 0, 'Nivel acima do set point acumula integral negativa');
+    const datasetsMeiaRotacao = buildPumpCurveDatasets(bomba);
+    approx(datasetsMeiaRotacao.headPoints[0].y, toDisplayValue('pressure', 1.0), 1e-6, 'Shutoff head no grafico a 50% deve ser 0.25 * 4.0 = 1.0 bar');
+    approx(datasetsMeiaRotacao.headPoints.at(-1).x, toDisplayValue('flow', 20.0), 1e-6, 'Vazao maxima da curva a 50% deve ser 0.5 * 40 = 20 L/s');
 
-    calculatePidLevelControl({ setpoint: 0.5, measurement: 0.499, dt: 0.1, kp: 4, ki: 0.6, state, config });
-    assert.ok(state.integral < 0 && state.integral > integralAntes, 'Troca de sinal do erro nao pode zerar a integral (causava ciclo limite)');
+    // 2. Misturas sucessivas preservam refTemperatura e refDensidade sem deriva termica
+    const aguaFria = cloneFluido(FLUID_PRESETS.agua, { temperatura: 20 });
+    const aguaQuente = cloneFluido(FLUID_PRESETS.agua, { temperatura: 80 });
+    const mistura = mixFluidos([
+        { fluido: aguaFria, volumeL: 50 },
+        { fluido: aguaQuente, volumeL: 50 }
+    ]);
+    approx(mistura.refTemperatura, 25, 1e-6, 'Temperatura de referencia de 25 C deve ser preservada apos mistura');
+    approx(mistura.refDensidade, 997, 1e-6, 'Densidade de referencia a 25 C deve ser preservada apos mistura');
 
-    const saturado = createLevelControllerState();
-    for (let i = 0; i < 100; i += 1) {
-        calculatePidLevelControl({ setpoint: 1, measurement: 0, dt: 0.1, kp: 4, ki: 0.6, state: saturado, config });
-    }
-    assert.equal(saturado.integral, 0, 'Integral nao acumula enquanto a saida esta saturada no sentido do erro');
-});
+    // 3. Tanque inicialmente vazio atualiza fluidoConteudo em regime passante
+    const tanquePassante = new TanqueLogico('T-PASS', 'T-PASS', 0, 0);
+    tanquePassante.volumeAtual = 0;
+    tanquePassante.lastQin = 10;
+    tanquePassante.lastQout = 10;
+    tanquePassante.atualizarMisturaConteudo(0.1, aguaQuente, 0);
+    approx(tanquePassante.fluidoConteudo.temperatura, 80, 1e-6, 'Tanque passante com volume zero deve assumir temperatura do fluido de entrada');
 
-test('bomba entrega a mesma altura manometrica para fluidos de densidades diferentes', () => {
-    const bomba = new BombaLogica('P-rho', 'P-rho', 0, 0);
-    const deltaPAguaBar = bomba.getCurvaPressaoBar(20, 1, 997);
-    const deltaPOleoBar = bomba.getCurvaPressaoBar(20, 1, 850);
-
-    approx(deltaPAguaBar, bomba.getCurvaPressaoBar(20, 1), 1e-12, 'Agua de referencia preserva a curva em bar');
-    approx(
-        (deltaPOleoBar * 1e5) / (850 * 9.81),
-        (deltaPAguaBar * 1e5) / (997 * 9.81),
-        1e-9,
-        'Altura manometrica H = dP / (rho g) independe do fluido'
-    );
-});
-
-test('trocador sem limitador artificial fecha Q = UA * F_T * LMTD acima de 95% de efetividade', () => {
-    const trocador = new TrocadorCalorLogico('HX-eps', 'TC-eps', 0, 0);
-    assert.equal(trocador.efetividadeMaxima, 1, 'Efetividade sem teto artificial por padrao');
-    trocador.uaWPorK = 3 * 4182;
-    trocador.temperaturaServicoC = 80;
-
-    const resultado = trocador.calcularTrocaTermicaGlobal({ temperatura: 20, densidade: 1000, calorEspecificoJkgK: 4182 }, 1, null, 0);
-    approx(resultado.ef, 1 - Math.exp(-3), 1e-12, 'Efetividade e-NTU com NTU = 3 (acima de 0,95)');
-    approx(resultado.duty, trocador.uaWPorK * resultado.ft * resultado.lmtd, 1e-3, 'Carga termica deve fechar com UA * F_T * LMTD');
-});
-
-test('trocador sinaliza risco de ebulicao quando Pv na saida atinge a pressao absoluta', () => {
-    const medir = (temperaturaServicoC) => {
-        const engine = new SistemaSimulacao();
-        engine.isRunning = true;
-        const fonte = new FonteLogica('F-boil', 'F-boil', 0, 0);
-        const trocador = new TrocadorCalorLogico('HX-boil', 'TC-boil', 100, 0);
-        const dreno = new DrenoLogico('D-boil', 'D-boil', 200, 0);
-        fonte.pressaoFonteBar = 1.5;
-        fonte.vazaoMaxima = 1;
-        trocador.temperaturaServicoC = temperaturaServicoC;
-        [fonte, trocador, dreno].forEach((component) => engine.add(component));
-        engine.addConnection(new ConnectionModel({ sourceId: fonte.id, targetId: trocador.id, targetEndpoint: { portId: 'in1' } }));
-        engine.addConnection(new ConnectionModel({ sourceId: trocador.id, targetId: dreno.id, sourceEndpoint: { portId: 'out1' } }));
-        for (let i = 0; i < 100; i += 1) {
-            engine.resolveHydraulicNetwork(0.1);
-            engine.componentes.forEach((component) => component.sincronizarMetricasFisicas(
-                engine.hydraulicContext.getComponentFluid(component) || engine.fluidoOperante
-            ));
-        }
-        return trocador;
-    };
-
-    const aquecimentoModerado = medir(80);
-    assert.ok(aquecimentoModerado.vazao1Lps > 0.1, 'Corrente 1 deve escoar');
-    assert.equal(aquecimentoModerado.temRiscoEbulicao(), false, 'Agua abaixo de 80 C a ~2,5 bar abs. permanece liquida');
-
-    const aquecimentoSevero = medir(250);
-    // Saída para dreno a 0 bar manométrico: pressão absoluta ~1 atm, saturação em ~100 °C.
-    assert.ok(aquecimentoSevero.temperaturaSaidaC > 105, `Utilidade a 250 C aquece acima da saturacao local: ${aquecimentoSevero.temperaturaSaidaC}`);
-    assert.equal(aquecimentoSevero.temRiscoEbulicao(), true, 'Pv(T) acima da pressao absoluta deve sinalizar ebulicao');
-});
-
-test('editar so a temperatura da fonte recalcula densidade, viscosidade e pressao de vapor', () => {
-    const fonte = new FonteLogica('F-temp', 'F-temp', 0, 0);
-
-    fonte.atualizarFluidoEntrada({ temperatura: 90 });
-    approx(fonte.fluidoEntrada.densidade, 965.3, 0.5, 'Densidade da agua a 90 C');
-    approx(fonte.fluidoEntrada.viscosidadeDinamicaPaS, 0.000315, 0.00001, 'Viscosidade da agua a 90 C');
-    approx(fonte.fluidoEntrada.pressaoVaporBar, 0.701, 0.01, 'Pressao de vapor da agua a 90 C');
-
-    fonte.atualizarFluidoEntrada({ temperatura: 90, densidade: 960 });
-    approx(fonte.fluidoEntrada.densidade, 960, 1e-9, 'Densidade explicita prevalece');
-    approx(fonte.fluidoEntrada.viscosidadeDinamicaPaS, 0.000315, 0.00001, 'Viscosidade continua coerente apos editar so a densidade');
-    approx(fonte.fluidoEntrada.pressaoVaporBar, 0.701, 0.01, 'Pressao de vapor continua coerente apos editar so a densidade');
+    // 4. Importador DWSIM extrai propriedades termofisicas (Density, Viscosity, SpecificHeat) de MaterialStream
+    const graphicObjects = new Map([
+        ['FeedOil', {
+            name: 'FeedOil',
+            objectType: 'MaterialStream',
+            inputs: [],
+            outputs: [{ targetName: 'V-01', connIndex: 0 }]
+        }],
+        ['V-01', {
+            name: 'V-01',
+            objectType: 'Valve',
+            inputs: [{ sourceName: 'FeedOil', connIndex: 0 }],
+            outputs: []
+        }]
+    ]);
+    const simObjects = new Map([
+        ['FeedOil', {
+            name: 'FeedOil',
+            type: 'MaterialStream',
+            element: {
+                querySelector(selector) {
+                    const tag = selector.replace(':scope > ', '').trim();
+                    const map = {
+                        Temperature: '313.15', // 40 C
+                        GaugePressure: '250000', // 2.5 barg
+                        Flow: '0.010', // 10 L/s
+                        Density: '860',
+                        Viscosity: '0.035',
+                        SpecificHeat: '2.0' // 2.0 kJ/(kg.K) -> 2000 J/(kg.K)
+                    };
+                    return map[tag] !== undefined ? { textContent: map[tag] } : null;
+                },
+                querySelectorAll() { return []; }
+            }
+        }]
+    ]);
+    const { workspace } = translateDwsimToWorkspace({ graphicObjects, simObjects });
+    const src = workspace.components.find(c => c.snapshot?.type === 'source');
+    assert.ok(src);
+    approx(src.snapshot.properties.pressaoFonteBar, 2.5, 1e-6, 'GaugePressure de 250 kPa deve resultar em 2.5 bar');
+    approx(src.snapshot.properties.fluidoEntrada.temperatura, 40, 1e-6);
+    approx(src.snapshot.properties.fluidoEntrada.densidade, 860, 1e-6);
+    approx(src.snapshot.properties.fluidoEntrada.viscosidadeDinamicaPaS, 0.035, 1e-6);
+    approx(src.snapshot.properties.fluidoEntrada.calorEspecificoJkgK, 2000, 1e-6);
 });

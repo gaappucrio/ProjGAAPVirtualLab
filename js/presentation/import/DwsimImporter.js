@@ -815,6 +815,9 @@ function kelvinToCelsius(kelvinOrCelsius, fallbackC = 25) {
 }
 
 function sourceParameters(simEl) {
+    const gaugePressurePa = findDimensionValue(simEl, 'GaugePressure')
+        || queryNumeric(simEl, 'GaugePressure', 0)
+        || queryNumericDeep(simEl, ['GaugePressure', 'gauge_pressure'], 0);
     const pressurePa = findDimensionValue(simEl, 'Pressure')
         || queryNumeric(simEl, 'Pressure', 0)
         || queryNumericDeep(simEl, ['pressure', 'Pressure'], 0);
@@ -825,23 +828,50 @@ function sourceParameters(simEl) {
     const tempK = findDimensionValue(simEl, 'Temperature')
         || queryNumeric(simEl, 'Temperature', 0)
         || queryNumericDeep(simEl, ['temperature', 'Temperature'], 0);
+    const densityKgM3 = findDimensionValue(simEl, 'Density')
+        || queryNumeric(simEl, 'Density', 0)
+        || queryNumericDeep(simEl, ['Density', 'density'], 0);
+    const viscosityPaS = findDimensionValue(simEl, 'Viscosity')
+        || queryNumeric(simEl, 'Viscosity', 0)
+        || queryNumericDeep(simEl, ['Viscosity', 'DynamicViscosity', 'viscosity'], 0);
+    const specificHeatRaw = findDimensionValue(simEl, 'SpecificHeat')
+        || queryNumeric(simEl, 'SpecificHeat', 0)
+        || queryNumeric(simEl, 'HeatCapacity', 0)
+        || queryNumericDeep(simEl, ['SpecificHeat', 'HeatCapacity', 'Cp'], 0);
 
-    const pressaoFonteBar = pressurePa > 0
-        ? Math.max(0.01, pressurePa * PA_TO_BAR)
-        : DEFAULT_SOURCE_PRESSURE_BAR;
+    let pressaoFonteBar = DEFAULT_SOURCE_PRESSURE_BAR;
+    if (gaugePressurePa > 0) {
+        pressaoFonteBar = Math.max(0.01, gaugePressurePa * PA_TO_BAR);
+    } else if (pressurePa > 0) {
+        const isStandardAtmosphericPa = Math.abs(pressurePa - 101325) <= 200;
+        pressaoFonteBar = isStandardAtmosphericPa
+            ? DEFAULT_SOURCE_PRESSURE_BAR
+            : Math.max(0.01, pressurePa * PA_TO_BAR);
+    }
     const vazaoMaximaLps = flowM3s > 0
         ? Math.max(0.1, flowM3s * M3S_TO_LPS)
         : DEFAULT_SOURCE_MAX_FLOW_LPS;
     const temperaturaC = tempK > 0 ? kelvinToCelsius(tempK, 25) : 25;
-    const isCustomTemp = Math.abs(temperaturaC - 25.0) > 0.05;
+    const fluidOverrides = { temperatura: temperaturaC };
+    if (densityKgM3 >= 100 && densityKgM3 <= 5000) {
+        fluidOverrides.densidade = densityKgM3;
+    }
+    if (viscosityPaS > 0 && viscosityPaS <= 100) {
+        fluidOverrides.viscosidadeDinamicaPaS = viscosityPaS;
+    }
+    if (specificHeatRaw > 0) {
+        fluidOverrides.calorEspecificoJkgK = specificHeatRaw <= 50 ? specificHeatRaw * 1000 : specificHeatRaw;
+    }
+    const isCustomFluid = Math.abs(temperaturaC - 25.0) > 0.05
+        || fluidOverrides.densidade !== undefined
+        || fluidOverrides.viscosidadeDinamicaPaS !== undefined
+        || fluidOverrides.calorEspecificoJkgK !== undefined;
 
     return {
         pressaoFonteBar,
         vazaoMaxima: vazaoMaximaLps,
-        fluidoEntradaPresetId: isCustomTemp ? 'custom' : 'agua',
-        fluidoEntrada: createFluidoFromProperties({
-            temperatura: temperaturaC
-        })
+        fluidoEntradaPresetId: isCustomFluid ? 'custom' : 'agua',
+        fluidoEntrada: createFluidoFromProperties(fluidOverrides)
     };
 }
 

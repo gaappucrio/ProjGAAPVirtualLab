@@ -725,7 +725,6 @@ export class HydraulicBranchModel {
                 pressureBar: inletPressure + boostBar,
                 hydraulicAreaM2: areaM2,
                 connectionBaseLossCoeff: 0,
-                // A curva H x Q já é a carga líquida entregue; a eficiência afeta só a potência de eixo.
                 localLossCoeff: 0,
                 boostBar,
                 cavitationFactor,

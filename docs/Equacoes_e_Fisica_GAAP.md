@@ -129,16 +129,16 @@ Onde:
 
 A válvula de controle age como um estrangulamento de seção transversal variável.
 
-### Conversão $C_v / K_v$
-As válvulas operam através da premissa comercial de Fator de Vazão ($C_v$ em GPM/psi ou $K_v$ em m³/h/bar). O simulador modela a resistência convertendo o Fator de Vazão para o Coeficiente de Perda Local ($K$) através de relações métricas padronizadas, utilizando o diâmetro da tubulação:
+### Conversão $C_v / K_v$ (Norma IEC 60534 / ISA-75.01)
+As válvulas operam através da premissa comercial de Fator de Vazão ($C_v$ em $\text{GPM}/\sqrt{\text{psi}}$ ou $K_v$ em $\text{m}^3/\text{h}/\sqrt{\text{bar}}$). O simulador modela a resistência convertendo o Fator de Vazão para o Coeficiente de Perda Local ($K$) através das constantes exatas da norma IEC 60534 (`HydraulicUnits.js`), utilizando o diâmetro interno da tubulação:
 
-$$K \approx 0.00214 \cdot \frac{D^4}{C_v^2} \approx 0.0016 \cdot \frac{D^4}{K_v^2}$$
+$$K = \frac{2 \cdot \Delta P_{\text{Pa}}}{\rho v^2} \approx 0{,}001600 \cdot \frac{D_{\text{mm}}^4}{K_v^2} \approx 0{,}001197 \cdot \frac{D_{\text{mm}}^4}{C_v^2}$$
 
 Onde:
-- $K$: Coeficiente adimensional de perda de carga localizada equivalente da válvula ($-$). Por ser adimensional, não depende da densidade; o efeito da densidade (gravidade específica) aparece em $\Delta P = K \rho v^2 / 2$.
-- $D$: Diâmetro interno nominal da conexão ou flange da válvula (mm)
-- $K_v$: Coeficiente de vazão em unidades métricas ($m^3/h$ de água a $20^\circ\text{C}$ sob $\Delta P = 1\text{ bar}$)
-- $C_v$: Coeficiente de vazão em unidades imperiais ($\text{GPM}/\text{psi}^{0{,}5}$), relacionado por $K_v \approx 0{,}865 \cdot C_v$ ou $C_v \approx 1{,}156 \cdot K_v$
+- $K$: Coeficiente adimensional de perda de carga localizada equivalente da válvula ($-$)
+- $D_{\text{mm}}$: Diâmetro interno nominal da conexão ou flange da válvula ($\text{mm}$)
+- $K_v$: Coeficiente de vazão em unidades métricas ($\text{m}^3/\text{h}$ de água a $15{,}6^\circ\text{C}$ / $60^\circ\text{F}$, $\rho_{\text{ref}} = 999{,}016\text{ kg/m}^3$, sob $\Delta P = 1\text{ bar}$)
+- $C_v$: Coeficiente de vazão em unidades imperiais ($\text{GPM}/\text{psi}^{0{,}5}$), relacionado por $K_v = 0{,}8649786 \cdot C_v$ ou $C_v = 1{,}156098 \cdot K_v$
 
 ### Característica Inerente
 A resposta entre a porcentagem de abertura do atuador e a abertura efetiva ($K_v$ resultante) é descrita por equações de curva selecionáveis (`ValvulaLogica.js`):
