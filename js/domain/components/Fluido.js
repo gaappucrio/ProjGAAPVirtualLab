@@ -425,31 +425,56 @@ export function mixFluidos(contributions = [], fallback = null, { nome = 'Mistur
     const totalWeight = validContributions.reduce((sum, entry) => sum + entry.weight, 0);
     const composition = {};
     let density = 0;
+    let refDensity = 0;
+    let refTemperature = 0;
     let thermalEnergyWeighted = 0;
     let logViscosity = 0;
+    let refLogViscosity = 0;
     let heatCapacityMassWeight = 0;
     let heatCapacityWeighted = 0;
     let vaporPressure = 0;
+    let refVaporPressure = 0;
     let atmosphericPressure = 0;
     const colorComposition = {};
 
     validContributions.forEach(({ fluido, weight }) => {
         const fraction = weight / totalWeight;
         const fluidDensity = positiveNumber(fluido.densidade, DEFAULT_FLUID_DENSITY, 1);
+        const fluidRefDensity = positiveNumber(fluido.refDensidade ?? fluido.densidade, fluidDensity, 1);
+        const fluidRefTemp = Number.isFinite(Number(fluido.refTemperatura))
+            ? Number(fluido.refTemperatura)
+            : DEFAULT_FLUID_TEMPERATURE;
         const fluidTemperature = Number.isFinite(Number(fluido.temperatura)) ? Number(fluido.temperatura) : DEFAULT_FLUID_TEMPERATURE;
         const fluidSpecificHeat = positiveNumber(
             fluido.calorEspecificoJkgK,
             DEFAULT_FLUID_SPECIFIC_HEAT_JKGK,
             1
         );
+        const fluidViscosity = positiveNumber(fluido.viscosidadeDinamicaPaS, DEFAULT_FLUID_VISCOSITY_PA_S, 0.00001);
+        const fluidRefViscosity = positiveNumber(
+            fluido.refViscosidadeDinamicaPaS ?? fluido.viscosidadeDinamicaPaS,
+            fluidViscosity,
+            0.00001
+        );
+        const fluidVaporPressure = positiveNumber(fluido.pressaoVaporBar, DEFAULT_FLUID_VAPOR_PRESSURE_BAR, 0.0001);
+        const fluidRefVaporPressure = positiveNumber(
+            fluido.refPressaoVaporBar ?? fluido.pressaoVaporBar,
+            fluidVaporPressure,
+            0.0001
+        );
+
         density += fraction * fluidDensity;
-        logViscosity += fraction * Math.log(positiveNumber(fluido.viscosidadeDinamicaPaS, DEFAULT_FLUID_VISCOSITY_PA_S, 0.00001));
+        refDensity += fraction * fluidRefDensity;
+        refTemperature += fraction * fluidRefTemp;
+        logViscosity += fraction * Math.log(fluidViscosity);
+        refLogViscosity += fraction * Math.log(fluidRefViscosity);
         const massWeight = weight * fluidDensity;
         const heatCapacityContribution = massWeight * fluidSpecificHeat;
         heatCapacityMassWeight += massWeight;
         heatCapacityWeighted += heatCapacityContribution;
         thermalEnergyWeighted += heatCapacityContribution * fluidTemperature;
-        vaporPressure += fraction * positiveNumber(fluido.pressaoVaporBar, DEFAULT_FLUID_VAPOR_PRESSURE_BAR, 0.0001);
+        vaporPressure += fraction * fluidVaporPressure;
+        refVaporPressure += fraction * fluidRefVaporPressure;
         atmosphericPressure += fraction * positiveNumber(fluido.pressaoAtmosfericaBar, DEFAULT_ATMOSPHERIC_PRESSURE_BAR, 0.5);
 
         getFluidCompositionEntries(fluido).forEach(([componentName, componentFraction]) => {
@@ -474,14 +499,18 @@ export function mixFluidos(contributions = [], fallback = null, { nome = 'Mistur
     return createFluidoFromProperties({
         nome: compositionNames.length > 1 ? `${nome}: ${compositionNames.join(' / ')}` : compositionNames[0]?.replace(/\s\d+%$/, '') || nome,
         densidade: density,
+        refDensidade: refDensity,
+        refTemperatura: refTemperature,
         temperatura: heatCapacityWeighted > 0
             ? thermalEnergyWeighted / heatCapacityWeighted
             : DEFAULT_FLUID_TEMPERATURE,
         viscosidadeDinamicaPaS: Math.exp(logViscosity),
+        refViscosidadeDinamicaPaS: Math.exp(refLogViscosity),
         calorEspecificoJkgK: heatCapacityMassWeight > 0
             ? heatCapacityWeighted / heatCapacityMassWeight
             : DEFAULT_FLUID_SPECIFIC_HEAT_JKGK,
         pressaoVaporBar: vaporPressure,
+        refPressaoVaporBar: refVaporPressure,
         pressaoAtmosfericaBar: atmosphericPressure,
         composicao: normalizedComposition,
         corVisual: dominantVisualColor,

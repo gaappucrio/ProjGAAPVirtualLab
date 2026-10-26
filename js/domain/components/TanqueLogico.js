@@ -182,6 +182,11 @@ export class TanqueLogico extends ComponenteFisico {
         const entrada = fluidoEntrada || this.getFluidoEntradaMisturado(this.getFluidoConteudo());
         const volumeConteudoAnteriorL = Math.max(0, volumeAnteriorL);
         const volumeFinalL = Math.max(0, this.volumeAtual);
+        if (volumeFinalL <= EPSILON_FLOW) {
+            this.fluidoConteudo = cloneFluido(entrada);
+            return;
+        }
+
         const volumeAntigoRetidoL = clamp(volumeFinalL - entradaVolumeL, 0, volumeConteudoAnteriorL);
         const entradaRetidaL = Math.max(0, volumeFinalL - volumeAntigoRetidoL);
 

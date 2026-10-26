@@ -43,7 +43,10 @@ function getMaxPointValue(points) {
 }
 
 export function buildPumpCurveDatasets(component) {
+    const rawDrive = typeof component.getDriveAtual === 'function' ? component.getDriveAtual() : 1;
+    const drive = Number.isFinite(rawDrive) && rawDrive > 0 ? rawDrive : 1;
     const qMax = Math.max(1, component.vazaoNominal);
+    const qCurveMax = Math.max(0.1, qMax * drive);
     const pressureUnit = getUnitSymbol('pressure');
     const flowUnit = getUnitSymbol('flow');
     const lengthUnit = getUnitSymbol('length');
@@ -52,11 +55,11 @@ export function buildPumpCurveDatasets(component) {
     const npshPoints = [];
 
     for (let i = 0; i <= PUMP_CURVE_POINT_COUNT; i += 1) {
-        const flowLps = (qMax * i) / PUMP_CURVE_POINT_COUNT;
+        const flowLps = (qCurveMax * i) / PUMP_CURVE_POINT_COUNT;
         const flowDisplay = toDisplayValue('flow', flowLps);
-        headPoints.push({ x: flowDisplay, y: toDisplayValue('pressure', component.getCurvaPressaoBar(flowLps, 1)) });
-        efficiencyPoints.push({ x: flowDisplay, y: component.getCurvaEficiencia(flowLps, 1) * 100 });
-        npshPoints.push({ x: flowDisplay, y: toDisplayValue('length', component.getCurvaNpshRequeridoM(flowLps, 1)) });
+        headPoints.push({ x: flowDisplay, y: toDisplayValue('pressure', component.getCurvaPressaoBar(flowLps, drive)) });
+        efficiencyPoints.push({ x: flowDisplay, y: component.getCurvaEficiencia(flowLps, drive) * 100 });
+        npshPoints.push({ x: flowDisplay, y: toDisplayValue('length', component.getCurvaNpshRequeridoM(flowLps, drive)) });
     }
 
     return {

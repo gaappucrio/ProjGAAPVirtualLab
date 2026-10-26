@@ -638,6 +638,7 @@ export class NodalHydraulicSolver {
         const areaM2 = Math.min(connection.areaM2, sourceArea, targetArea);
         const sourceOutletLossCoeff = this.getSourceOutletLossCoeff(source);
         const targetEntryLossCoeff = this.getBoundaryTargetEntryLossCoeff(target);
+        const connectionBaseLossCoeff = (source instanceof TanqueLogico && !source.temEntradaPressurizada?.()) ? 1 : 0;
         const disabled = this.isShutoffComponent(source)
             || this.isShutoffComponent(target)
             || (
@@ -655,9 +656,10 @@ export class NodalHydraulicSolver {
             target,
             areaM2,
             geometry,
+            connectionBaseLossCoeff,
             sourceOutletLossCoeff,
             targetEntryLossCoeff,
-            baseLossCoeff: Math.max(0, 1 + connection.perdaLocalK + sourceOutletLossCoeff + targetEntryLossCoeff),
+            baseLossCoeff: Math.max(0, connectionBaseLossCoeff + connection.perdaLocalK + sourceOutletLossCoeff + targetEntryLossCoeff),
             staticHeadBar: pressureFromHeadBar(geometry.headGainM, fluid.densidade),
             fluid,
             disabled,
@@ -768,7 +770,10 @@ export class NodalHydraulicSolver {
 
     getSourceOutletLossCoeff(source) {
         if (source instanceof FonteLogica) return DEFAULT_ENTRY_LOSS;
-        if (source instanceof TanqueLogico) return 0;
+        if (source instanceof TanqueLogico) {
+            if (source.temEntradaPressurizada?.() === true) return 0;
+            return 1.0 / Math.max(0.15, source.coeficienteSaida * source.coeficienteSaida);
+        }
         return 0;
     }
 
@@ -805,7 +810,10 @@ export class NodalHydraulicSolver {
 
         const flowLps = this.solvePassiveFlowForPressure(branch, availablePressureBar);
         const hydraulics = this.getBranchHydraulics(branch, flowLps);
-        const totalLossCoeff = branch.baseLossCoeff + hydraulics.distributedLossCoeff;
+        const localLossCorrection = branch.kind === 'connection' && this.hydraulicModel?.getLocalLossReynoldsCorrection
+            ? this.hydraulicModel.getLocalLossReynoldsCorrection(hydraulics, branch.fluid)
+            : 1;
+        const totalLossCoeff = (branch.baseLossCoeff * localLossCorrection) + hydraulics.distributedLossCoeff;
         const lossBar = pressureLossFromFlow(flowLps, branch.areaM2, branch.fluid.densidade, totalLossCoeff);
 
         return {
@@ -890,7 +898,10 @@ export class NodalHydraulicSolver {
 
     createPassiveResultAtFlow(branch, flowLps, fromPressureBar, toPressureBar) {
         const hydraulics = this.getBranchHydraulics(branch, flowLps);
-        const totalLossCoeff = branch.baseLossCoeff + hydraulics.distributedLossCoeff;
+        const localLossCorrection = branch.kind === 'connection' && this.hydraulicModel?.getLocalLossReynoldsCorrection
+            ? this.hydraulicModel.getLocalLossReynoldsCorrection(hydraulics, branch.fluid)
+            : 1;
+        const totalLossCoeff = (branch.baseLossCoeff * localLossCorrection) + hydraulics.distributedLossCoeff;
         const lossBar = pressureLossFromFlow(flowLps, branch.areaM2, branch.fluid.densidade, totalLossCoeff);
 
         return {
@@ -950,7 +961,10 @@ export class NodalHydraulicSolver {
 
     getBranchLossBar(branch, flowLps) {
         const hydraulics = this.getBranchHydraulics(branch, flowLps);
-        const totalLossCoeff = branch.baseLossCoeff + hydraulics.distributedLossCoeff;
+        const localLossCorrection = branch.kind === 'connection' && this.hydraulicModel?.getLocalLossReynoldsCorrection
+            ? this.hydraulicModel.getLocalLossReynoldsCorrection(hydraulics, branch.fluid)
+            : 1;
+        const totalLossCoeff = (branch.baseLossCoeff * localLossCorrection) + hydraulics.distributedLossCoeff;
         return pressureLossFromFlow(flowLps, branch.areaM2, branch.fluid.densidade, totalLossCoeff);
     }
 
@@ -970,8 +984,8 @@ export class NodalHydraulicSolver {
         const cavitationFactor = pump.calcularFatorCavitacao(npshAvailableM, npshRequiredM);
         const boostBar = pump.getCurvaPressaoBar(flowLps, drive) * cavitationFactor;
         const efficiency = pump.getEficienciaInstantanea(flowLps);
-        const lossCoeff = 1.0 / Math.max(0.18, efficiency);
-        const lossBar = pressureLossFromFlow(flowLps, branch.areaM2, fluid.densidade, lossCoeff);
+        const lossCoeff = 0;
+        const lossBar = 0;
 
         return {
             boostBar,
@@ -1067,7 +1081,10 @@ export class NodalHydraulicSolver {
                 flowLps,
                 fluid
             );
-            const totalLossCoeff = branch.baseLossCoeff + pipeHydraulics.distributedLossCoeff;
+            const localLossCorrection = this.hydraulicModel?.getLocalLossReynoldsCorrection
+                ? this.hydraulicModel.getLocalLossReynoldsCorrection(pipeHydraulics, fluid)
+                : 1;
+            const totalLossCoeff = (branch.baseLossCoeff * localLossCorrection) + pipeHydraulics.distributedLossCoeff;
             const totalLossBar = pressureLossFromFlow(flowLps, branch.areaM2, fluid.densidade, totalLossCoeff);
             const pipeDistributedLossBar = pressureLossFromFlow(
                 flowLps,
@@ -1079,13 +1096,13 @@ export class NodalHydraulicSolver {
                 flowLps,
                 branch.areaM2,
                 fluid.densidade,
-                Math.max(0, connection.perdaLocalK || 0)
+                Math.max(0, (connection.perdaLocalK || 0) * localLossCorrection)
             );
             const targetEntryLossBar = pressureLossFromFlow(
                 flowLps,
                 branch.areaM2,
                 fluid.densidade,
-                Math.max(0, branch.targetEntryLossCoeff || 0)
+                Math.max(0, (branch.targetEntryLossCoeff || 0) * localLossCorrection)
             );
             const pipePressureDropBar = pipeDistributedLossBar + pipeLocalLossBar;
             const responseTimeS = this.hydraulicModel.getConnectionResponseTimeS(connection, branch.geometry, fluid);

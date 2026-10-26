@@ -739,7 +739,7 @@ export class HydraulicBranchModel {
                 pressureBar: inletPressure + boostBar,
                 hydraulicAreaM2: areaM2,
                 connectionBaseLossCoeff: 0,
-                localLossCoeff: 1.0 / Math.max(0.18, efficiency),
+                localLossCoeff: 0,
                 boostBar,
                 cavitationFactor,
                 fluid

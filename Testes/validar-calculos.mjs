@@ -4,7 +4,7 @@ import test from 'node:test';
 import { FLUID_PRESETS, SistemaSimulacao } from '../js/application/engine/SimulationEngine.js';
 import { BombaLogica } from '../js/domain/components/BombaLogica.js';
 import { DrenoLogico } from '../js/domain/components/DrenoLogico.js';
-import { createFluidoFromProperties, mixFluidos } from '../js/domain/components/Fluido.js';
+import { cloneFluido, createFluidoFromProperties, mixFluidos } from '../js/domain/components/Fluido.js';
 import { FonteLogica } from '../js/domain/components/FonteLogica.js';
 import { TanqueLogico } from '../js/domain/components/TanqueLogico.js';
 import {
@@ -1945,4 +1945,80 @@ test('importador DWSIM organiza layout dos componentes com espacamento confortav
         assert.ok(c.snapshot.x >= 120, `${c.snapshot.tag} X deve respeitar margem`);
         assert.ok(c.snapshot.y >= 120, `${c.snapshot.tag} Y deve respeitar margem`);
     });
+});
+
+test('refinamentos fisicos: curvas da bomba em rotacao parcial, preservacao de referencia em misturas e propriedades de corrente DWSIM', () => {
+    // 1. Curva da bomba no grafico reflete a rotacao efetiva pelas Leis de Afinidade
+    const bomba = new BombaLogica('B-AFF', 'B-AFF', 0, 0);
+    bomba.vazaoNominal = 40;
+    bomba.pressaoMaxima = 4.0;
+    bomba.acionamentoEfetivo = 50; // 50% de rotacao -> Q escala por 0.5, Head shutoff escala por 0.25 (1.0 bar)
+    bomba.recalcularMetricasDerivadasCurva();
+
+    const datasetsMeiaRotacao = buildPumpCurveDatasets(bomba);
+    approx(datasetsMeiaRotacao.headPoints[0].y, toDisplayValue('pressure', 1.0), 1e-6, 'Shutoff head no grafico a 50% deve ser 0.25 * 4.0 = 1.0 bar');
+    approx(datasetsMeiaRotacao.headPoints.at(-1).x, toDisplayValue('flow', 20.0), 1e-6, 'Vazao maxima da curva a 50% deve ser 0.5 * 40 = 20 L/s');
+
+    // 2. Misturas sucessivas preservam refTemperatura e refDensidade sem deriva termica
+    const aguaFria = cloneFluido(FLUID_PRESETS.agua, { temperatura: 20 });
+    const aguaQuente = cloneFluido(FLUID_PRESETS.agua, { temperatura: 80 });
+    const mistura = mixFluidos([
+        { fluido: aguaFria, volumeL: 50 },
+        { fluido: aguaQuente, volumeL: 50 }
+    ]);
+    approx(mistura.refTemperatura, 25, 1e-6, 'Temperatura de referencia de 25 C deve ser preservada apos mistura');
+    approx(mistura.refDensidade, 997, 1e-6, 'Densidade de referencia a 25 C deve ser preservada apos mistura');
+
+    // 3. Tanque inicialmente vazio atualiza fluidoConteudo em regime passante
+    const tanquePassante = new TanqueLogico('T-PASS', 'T-PASS', 0, 0);
+    tanquePassante.volumeAtual = 0;
+    tanquePassante.lastQin = 10;
+    tanquePassante.lastQout = 10;
+    tanquePassante.atualizarMisturaConteudo(0.1, aguaQuente, 0);
+    approx(tanquePassante.fluidoConteudo.temperatura, 80, 1e-6, 'Tanque passante com volume zero deve assumir temperatura do fluido de entrada');
+
+    // 4. Importador DWSIM extrai propriedades termofisicas (Density, Viscosity, SpecificHeat) de MaterialStream
+    const graphicObjects = new Map([
+        ['FeedOil', {
+            name: 'FeedOil',
+            objectType: 'MaterialStream',
+            inputs: [],
+            outputs: [{ targetName: 'V-01', connIndex: 0 }]
+        }],
+        ['V-01', {
+            name: 'V-01',
+            objectType: 'Valve',
+            inputs: [{ sourceName: 'FeedOil', connIndex: 0 }],
+            outputs: []
+        }]
+    ]);
+    const simObjects = new Map([
+        ['FeedOil', {
+            name: 'FeedOil',
+            type: 'MaterialStream',
+            element: {
+                querySelector(selector) {
+                    const tag = selector.replace(':scope > ', '').trim();
+                    const map = {
+                        Temperature: '313.15', // 40 C
+                        GaugePressure: '250000', // 2.5 barg
+                        Flow: '0.010', // 10 L/s
+                        Density: '860',
+                        Viscosity: '0.035',
+                        SpecificHeat: '2.0' // 2.0 kJ/(kg.K) -> 2000 J/(kg.K)
+                    };
+                    return map[tag] !== undefined ? { textContent: map[tag] } : null;
+                },
+                querySelectorAll() { return []; }
+            }
+        }]
+    ]);
+    const { workspace } = translateDwsimToWorkspace({ graphicObjects, simObjects });
+    const src = workspace.components.find(c => c.snapshot?.type === 'source');
+    assert.ok(src);
+    approx(src.snapshot.properties.pressaoFonteBar, 2.5, 1e-6, 'GaugePressure de 250 kPa deve resultar em 2.5 bar');
+    approx(src.snapshot.properties.fluidoEntrada.temperatura, 40, 1e-6);
+    approx(src.snapshot.properties.fluidoEntrada.densidade, 860, 1e-6);
+    approx(src.snapshot.properties.fluidoEntrada.viscosidadeDinamicaPaS, 0.035, 1e-6);
+    approx(src.snapshot.properties.fluidoEntrada.calorEspecificoJkgK, 2000, 1e-6);
 });
