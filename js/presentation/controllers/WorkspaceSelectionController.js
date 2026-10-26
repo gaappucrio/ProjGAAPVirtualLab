@@ -2,7 +2,7 @@ import { camera } from './CameraController.js';
 
 const MARQUEE_MIN_DISTANCE_PX = 4;
 
-function clearVisualSelection() {
+export function clearVisualSelection() {
     document.querySelectorAll('.placed-component').forEach((element) => {
         element.classList.remove('selected');
     });

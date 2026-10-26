@@ -138,7 +138,8 @@ function createConnectionSnapshot(connection) {
 export function createWorkspaceSnapshot(engine) {
     return {
         config: {
-            usarAlturaRelativa: engine?.usarAlturaRelativa === true
+            usarAlturaRelativa: engine?.usarAlturaRelativa === true,
+            modoSolver: engine?.modoSolver || 'global'
         },
         components: (engine?.componentes || [])
             .map((component) => ({
@@ -192,6 +193,7 @@ export function restoreWorkspaceSnapshot(engine, snapshot, { undoManager } = {})
     removeWorkspaceComponentVisuals();
     engine.clear();
     engine.setUsarAlturaRelativa?.(snapshot.config?.usarAlturaRelativa === true);
+    engine.setModoSolver?.(snapshot.config?.modoSolver);
 
     const workspaceCanvas = document.getElementById('workspace-canvas');
     const componentsById = new Map();

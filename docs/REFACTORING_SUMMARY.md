@@ -40,10 +40,11 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 
 - Motor de simulação por `requestAnimationFrame`.
 - Pipeline de tick separado em etapas claras.
-- Propagação de pressão e vazão de montante para jusante.
+- Solver global simultâneo (`GlobalHydraulicSolver.js`): pressões e vazões de toda a rede resolvidas juntas (Global Gradient Algorithm/Newton), com fechamento exato da pressão nos drenos; o solver push-based anterior fica disponível pelo toggle "Solver legado".
 - Cálculo de perdas por atrito e perdas locais.
 - Cálculo de velocidade média, Reynolds, regime de escoamento e fator de atrito.
-- Dinâmica transitória de conexões por suavização de primeira ordem.
+- Dinâmica transitória de conexões pela inércia física do fluido nos tubos ($I = \rho L/A$, Euler implícito).
+- Indicador de regime permanente na toolbar (`SteadyStateMonitor.js`).
 - Conservação de massa em componentes passantes, como válvulas e bombas.
 - Suporte a múltiplas saídas e redes com dezenas de componentes.
 - O fluido que entra na rede é definido pela fonte de entrada, não por uma configuração global.
@@ -87,6 +88,8 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Bocais com elevação de entrada e saída.
 - Vazão de entrada e saída.
 - Pressão hidrostática calculada pela altura de líquido.
+- Tipo de tanque: aberto (atmosférico, saída a $\rho g h$, desacoplando a pressão de montante) ou vaso fechado (colchão de gás por Boyle a partir da pré-carga).
+- Transbordo com balanço de massa quando o tanque está cheio (`vazaoTransbordoLps`).
 - Tempo de residência atual calculado por `V/Q`, usando a vazão de saída como referência e a vazão de entrada quando não há saída.
 - Controle de nível por set point.
 - Bloqueio de ativação do controle caso não exista válvula conectada diretamente à saída do tanque.
@@ -109,8 +112,9 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Transferência de calor via método $\varepsilon$-NTU com balanço de energia sensível:
   - Cálculo de capacidades térmicas $C_1 = \dot{m}_1 c_{p,1}$ e $C_2 = \dot{m}_2 c_{p,2}$, determinando $C_{\min}$, $C_{\max}$ e $C_r = C_{\min}/C_{\max}$.
   - Rastreamento explícito das grandezas de vazão mássica `vazaoMassaKgS` ($\dot{m}_1$) e `vazaoMassa2KgS` ($\dot{m}_2$) no estado de domínio.
-  - Efetividade calculada pela fórmula analítica correspondente ao modo de escoamento e limitada à efetividade máxima física (padrão 95%, configurável até 99,9%).
+  - Efetividade calculada pela fórmula analítica correspondente ao modo de escoamento, sem teto artificial por padrão ($\varepsilon_{\max} = 100\%$, configurável como limite opcional).
   - Cálculo de temperaturas de saída acopladas ($T_{1,\text{out}}, T_{2,\text{out}}$) e carga térmica transferida ($\dot{Q}$ em Watts).
+  - Atraso térmico de 1ª ordem na saída de cada corrente, $\tau = V_{\text{interno}}/Q$ (volume interno configurável, padrão 2 L; 0 L = instantâneo), convergindo exatamente ao ε-NTU.
 - Independência hidráulica e integração nodal:
   - Vazões, velocidades e perdas de carga singulares ($\Delta P_1, \Delta P_2$) são resolvidas separadamente para cada corrente com base nas áreas hidráulicas e coeficientes $K$ locais.
   - Suporte completo no solucionador nodal simultâneo (`NodalHydraulicSolver.js`), com modelagem de 4 nós (`in1`, `out1`, `in2`, `out2`) e 2 ramos internos indexados por stream (`internal:${id}:1` e `internal:${id}:2`), viabilizando malhas fechadas e loops em série flutuantes em uma ou ambas as correntes.
@@ -396,9 +400,9 @@ Etapas:
 
 1. Calcular `dt` considerando velocidade da simulação.
 2. Atualizar controles de alto nível, como controle de nível do tanque.
-3. Atualizar dinâmicas internas, como rampa da bomba e curso da válvula.
-4. Resolver a rede hidráulica.
-5. Sincronizar métricas físicas dos componentes.
+3. Atualizar dinâmicas internas, como rampa da bomba, curso da válvula e atraso térmico do trocador.
+4. Resolver a rede hidráulica (solver global, com inércia do fluido).
+5. Sincronizar métricas físicas dos componentes e avaliar o regime permanente (`SteadyStateMonitor`).
 6. Atualizar tubos e estados visuais.
 7. Publicar evento de atualização do painel.
 8. Atualizar métricas internas do solver.
@@ -534,7 +538,9 @@ As cores visuais são resolvidas por `FluidVisualStyle.js`. Água permanece azul
 
 ## 7. Solver Hidráulico
 
-O solver atual é push-based: fontes e tanques iniciam a emissão de vazão e pressão, e o sistema propaga pelos ramos.
+O solver padrão é o **global simultâneo** (`GlobalHydraulicSolver.js`): monta nós de pressão e ramos para toda a planta e resolve tudo de uma vez por Newton (Global Gradient Algorithm, como no EPANET), com inércia do fluido, conjuntos ativos para ramos unidirecionais/retenção, teto de vazão das fontes, inventário dos tanques e fator de cavitação acoplado. Detalhes em `docs/BACKEND_PHYSICS_AND_ARCHITECTURE.md` (seção 5.0).
+
+O texto abaixo descreve o solver **legado** (push-based), mantido atrás do toggle "Solver legado" para comparação durante a migração: fontes e tanques iniciam a emissão de vazão e pressão, e o sistema propaga pelos ramos.
 
 Arquivos principais:
 
@@ -951,6 +957,7 @@ Marcos concluídos:
 - Testes de arquitetura e comportamento adicionados.
 - Testes de arquitetura passaram a impedir regressões em que `domain/` importe camadas externas ou `application/` importe apresentação/infraestrutura visual.
 - Verificação final de consistência física adicionou validação numérica estrita, normalização segura de parâmetros de tubulação e proteção contra altura útil inválida em tanques.
+- Solver global simultâneo adotado como padrão (2026-10-09), com solver legado sob toggle; tanques aberto/fechado com transbordo; atraso térmico do trocador; indicador de regime permanente.
 
 Pontos ainda observáveis:
 
@@ -1036,7 +1043,9 @@ Conclusão: o solver nodal é uma evolução desejável para malhas fechadas, ma
 
 Riscos atuais e mitigação:
 
-- O solver push-based continua sendo o padrão para redes abertas e didáticas. Malhas fechadas são detectadas por `HydraulicNetworkAnalyzer` e sinalizadas na UI antes da simulação, usando o solver nodal experimental somente nas ilhas necessárias.
+- Desde 2026-10-09 o solver global simultâneo é o padrão para redes abertas e fechadas. O push-based e o nodal experimental continuam disponíveis apenas pelo toggle "Solver legado", para comparação; a remoção deles fica para quando a migração for considerada encerrada.
+- Pendente de um arquivo DWSIM real para validação: conversão dos ganhos do PID importado (o DWSIM normaliza o erro e a saída de forma diferente; hoje os ganhos são copiados 1:1) e conversão da condutância de perda de carga do trocador ($K_r = A\sqrt{2\rho/K}$) para o $K$ local do GAAP.
+- Limitações físicas assumidas: trocador sem inércia térmica da parede (só o volume de fluido), vaso fechado isotérmico, sem transporte com atraso (tempo morto) nas tubulações.
 - Redes muito complexas, com recirculação real ou malhas mal condicionadas, continuam fora do escopo industrial validado. O aviso de diagnóstico deixa claro quando a planta entrou no modo nodal experimental.
 - A UI continua manual; a validação automatizada permanece concentrada na suíte Node principal para evitar dependências pesadas de navegador.
 - As unidades permanecem separadas entre `domain/units/HydraulicUnits.js` e `presentation/units/DisplayUnits.js`; os testes de camadas seguem impedindo recriação de `utils/` genérico.
@@ -1136,3 +1145,64 @@ O sistema já possui suporte funcional para montagem visual, seleção múltipla
   3. **Método `syncWithEngine()` no Monitor:** introduzida rotina dedicada que purga o histórico de slots, limpa alertas de bloqueio e valida se o equipamento/cano do gráfico compacto ainda existe no motor, voltando a `createEmptyCompactChart` caso tenha sido desfeito. Re-renderiza gráficos compactos e detalhados conforme o modo de exibição ativo.
   4. **Integração com `restoreWorkspaceSnapshot` e `engine.clear()`:** `UndoController.js` agora notifica `engine.monitorController?.syncWithEngine()` ao concluir a restauração do snapshot (`Ctrl+Z`/`Ctrl+Y`), e `SimulationEngine.js` sincroniza o monitor ao limpar a simulação (`clear()`), além de reagir ao evento `conexao_removida`.
   5. **Validação Automatizada (`Testes/cenarios-aplicacao.test.mjs`):** inclusão de teste unitário verificando a sincronização dos slots e do gráfico compacto após desfazimento e remoção de componentes, mantendo a suíte em 108 testes com 100% de aprovação (108/108).
+
+- Resolvido em 2026-10-08: correções físicas pontuais de baixo risco após auditoria de fidelidade física:
+  1. **PID sem ciclo limite (`LevelController.js`):** removido o reset da integral quando o erro troca de sinal. Com entrada constante e apenas válvula de saída, a integral é o que sustenta a abertura de equilíbrio, e zerá-la mantinha `T-07` em ciclo permanente (572–622 L, válvula entre 3 % e 38 %). O anti-windup passou a ser por integração condicional: a integral congela enquanto a saída está saturada no sentido do erro. `T-07` agora converge para 570,0 L em cerca de 45 s.
+  2. **Bomba (`BombaLogica.js`, `HydraulicBranchModel.js`, `NodalHydraulicSolver.js`, `PumpDwsimJsonExporter.js`):** removida a perda interna `K = 1/η` que os dois solvers descontavam da curva H x Q, que já é carga líquida. A curva passou a preservar a altura manométrica: `getCurvaPressaoBar(Q, drive, ρ)` escala o ΔP por ρ/ρ_ref, com ρ_ref = 997 kg/m³ (novo `DEFAULT_FLUID_DENSITY_KG_M3`). Água a 25 °C não muda; outros fluidos recebem ΔP = ρgH. O exportador DWSIM passa a densidade explicitamente, mantendo a altura constante.
+  3. **Correção empírica de Reynolds removida (`HydraulicBranchModel.js`):** o fator `1 + 120/√Re·w` multiplicava todos os K (inclusive o K do Cv da válvula). Não era correlação padrão, só existia no solver push e fazia a queda real da válvula divergir da calculada pelo Cv.
+  4. **Bocal do tanque:** o K de saída passou de `1 + 1/Cd²` para `1/Cd²`, porque Cd já inclui a energia cinética do jato.
+  5. **Trocador de calor (`TrocadorCalorLogico.js` e presenter):** efetividade sem teto artificial por padrão (ε_max = 1,0, configurável de 0 a 100 %), mantendo Q = UA·F_T·LMTD. Novo sinalizador de risco de ebulição por corrente (`riscoEbulicao1/2`, `temRiscoEbulicao()`), com alerta no painel quando Pv(T_saída) ≥ P_abs.
+  6. **Fluido da fonte (`Fluido.js`, `BoundaryComponentPropertiesPresenter.js`):** editar só a temperatura recalcula ρ, μ e Pv, porque o painel deixa de reenviar como explícitos campos que o usuário não editou. Ao reancorar `refTemperatura`, as propriedades não informadas também são reancoradas, e editar só a densidade a 90 °C não deixa μ/Pv presos a 25 °C. Antes, água a 90 °C ficava com Pv = 0,0317 bar e o NPSHa não mudava.
+  7. **Chart.js:** versão fixada em `chart.js@4.5.1` (a mesma que o CDN já servia) com SRI (`integrity` + `crossorigin`).
+  8. **Otimização sem mudança de comportamento:**
+     - Removidos códigos sem chamadores: `getFluxoSaidaFromTank` (4 classes), `getFluxoSaida`, `getPressaoSaidaPortaBar`, `getFluidoSaidaMisturadoPorPorta`, `calcularSaidaTrocadorCalor`, `setDuasCorrentesConectadasOverride`, o evento `PRESSURE_UPDATE`, validadores estáticos nunca usados e ramos inalcançáveis do `InputValidator`, helpers DOM e reexports não consumidos, imports sem uso e ternários com ramos idênticos.
+     - Duplicatas idênticas consolidadas: `getGridColors`/`formatAxisTick` no novo `infrastructure/charts/ChartTheme.js`, `formatResidenceTime` em `PropertyValueFormatters`, `clearVisualSelection` exportado por `WorkspaceSelectionController` e `finiteNumber`/`FLOW_EPSILON_LPS` em `PipePressureProfile`.
+  9. **Testes:**
+     - Removido o teste que só verificava markup do seletor customizado e mesclado o teste duplicado de ajuste de válvula.
+     - O teste da função morta do trocador passou a cobrir a classe real, incluindo o resfriamento em modo utilidade.
+     - Corrigido o `finally` que restaurava a unidade de temperatura errada.
+     - Asserções antigas que eram fotos numéricas foram trocadas por invariantes físicos: teto 1/(1+Cr) em co-corrente, sem cruzamento e balanço de energia fechado.
+     - Adicionados 6 testes de regressão (PID sem ciclo limite em planta, integral na troca de sinal e na saturação, altura manométrica da bomba, Q = UA·F_T·LMTD acima de 95 %, risco de ebulição, recálculo de propriedades por temperatura). Todos falham no código anterior.
+     - A suíte conta agora com 112 testes, todos aprovados (112/112).
+  10. **Limitações conhecidas, deixadas para a avaliação estrutural:**
+      - O tanque repassa a pressão de entrada para a saída.
+      - O solver push-based não fecha a pressão nos drenos.
+      - Uma bomba ligada diretamente a uma válvula fica quase sem vazão no solver push.
+      - O solver nodal fica singular com nós de fonte/dreno sem ramos.
+      - Não há fluxo reverso nem pressão subatmosférica.
+- Resolvido em 2026-10-09: migração estrutural para o solver global e dinâmica física de laboratório real, comparada ao modo dinâmico do DWSIM:
+  1. **Solver global simultâneo (`GlobalHydraulicSolver.js`):** Global Gradient Algorithm (Todini–Pilati/EPANET) com Cholesky. As incógnitas são as pressões nos nós e as vazões nos ramos. Ele trata:
+     - inércia do fluido nos tubos por Euler implícito, $I = \rho L/A$;
+     - conjuntos ativos: ramos sem fluxo reverso, retenção da bomba, teto de vazão das fontes e inventário dos tanques;
+     - cavitação com o fator resolvido por regula falsi (Illinois), começando num intervalo estreito em torno do passo anterior; isso derrubou o custo de 12,2 para 3,8 ms/tick na planta de 23 componentes;
+     - $NPSH_a = 0$ quando a sucção cai abaixo da pressão de vapor.
+     O solver push-based fica sob o toggle **Solver legado** (`modoSolver`, persistido no fluxograma e no histórico de desfazer).
+  2. **Tanques (`TanqueLogico.js`):**
+     - tipo aberto ou fechado: o aberto impõe apenas $\rho g h$ na saída; o fechado usa colchão de gás por Boyle a partir de `pressaoPreCargaBar`;
+     - o excedente com o tanque cheio sai como transbordo (`vazaoTransbordoLps`);
+     - a entrada recebe a perda de jato $K = 1$.
+     Isso substitui a "conexão neutra" de 2026-06-15, que repassava a pressão de entrada para a saída e não existe num reservatório real (o comportamento antigo segue no solver legado).
+  3. **Válvula:** removido o piso de 5% do $C_v$ efetivo; válvula fechada retém a pressão de montante como um manômetro real.
+  4. **Trocador de calor:** atraso de 1ª ordem $\tau = V_{\text{interno}}/Q$ na saída de cada corrente. O parâmetro `volumeInternoL` (padrão 2 L) aparece no painel, no clipboard e na exportação. O regime continua exatamente ε-NTU.
+  5. **Regime permanente (`SteadyStateMonitor.js`):** indicador na toolbar e colunas na exportação (tempo simulado, regime permanente e instante em que foi atingido). O critério exige que estas taxas fiquem abaixo do limite por 10 s seguidos:
+     - $|dQ/dt| \le 10^{-3}$ L/s²;
+     - $|dV/dt| \le 10^{-3}$ L/s;
+     - $|dT/dt| \le 10^{-3}$ °C/s.
+     `SimulationTickPipeline.advance(dt)` executa um passo físico completo.
+  6. **Exportação:**
+     - corrigido: as colunas "Solver hidráulico", "Tipo de tanque", "Pré-carga do gás" e "Vazão de transbordo do tanque" eram preenchidas nas linhas mas não estavam nas listas de colunas, então não saíam na planilha;
+     - adicionada a coluna de volume interno do trocador.
+  7. **Validação (`Testes/fisica-e-dwsim.test.mjs`, 13 testes):**
+     - equação de $K_v$ do DWSIM, em série e em paralelo;
+     - interseção bomba × sistema;
+     - nível de Torricelli;
+     - inércia $dQ/dt$;
+     - válvula fechada;
+     - vaso de Boyle;
+     - modelo de referência do DWSIM dinâmico (alimentação → $K_v$ → tanque atmosférico → $K_v$; nível e vazão dentro de 1% de 60 a 600 s);
+     - atraso térmico ($63{,}2\%$ em $t = \tau$; regime = ε-NTU);
+     - detecção de regime (só após o nível estabilizar; volta a transiente com perturbação).
+  8. **Plantas de teste reavaliadas** (detalhes em `docs/CENARIOS_DE_PLANTAS_TESTE.md`):
+     - `teste planta.json`: com o solver global as plantas mostram o comportamento físico real. Bombas alimentadas por fontes com teto de vazão cavitam (P-01, P-02, P-05). Tanques com descarga subdimensionada transbordam (T-01c, T-06, T-07). O set point de 57% da Ilha 6 é inatingível, pois a válvula totalmente aberta escoa 17,8 L/s contra 27,8 L/s de entrada. O teste de PID passou a usar uma planta programática viável.
+     - `teste_trocatroca.json`: as três vazões ficam em 1 L/s, com ε = 45,1 / 34,9 / 37,5%, iguais ao analítico e sem cruzamento térmico.
+  9. **Testes:** 125/125 aprovados.

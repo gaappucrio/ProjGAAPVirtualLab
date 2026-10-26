@@ -51,7 +51,7 @@ Onde:
 - $\rho$: Densidade do fluido em escoamento ($kg/m^3$)
 - $v$: Velocidade média de escoamento do fluido na seção transversal da conexão ($m/s$)
 
-O simulador soma o coeficiente $K$ de todos os componentes da malha à parcela distribuída calculada por Darcy-Weisbach.
+O simulador soma o coeficiente $K$ de todos os componentes da malha à parcela distribuída calculada por Darcy-Weisbach. Os coeficientes $K$ de acessórios e o $K$ equivalente do $C_v$ são tratados como constantes de escoamento turbulento; a dependência de Reynolds da rede entra pelo fator de atrito de Darcy do trecho (não há fator empírico adicional multiplicando $K$).
 
 ## 2. Modelagem das Bombas Centrífugas
 
@@ -68,6 +68,12 @@ Onde:
 - $Q$: Vazão de operação (L/s ou m³/s)
 - $Q_{max}$: Vazão máxima teórica da bomba
 - $\alpha$: Coeficiente de curvatura paramétrico
+
+O parâmetro `pressaoMaxima` da bomba é o $\Delta P$ de shutoff medido com a água de referência ($\rho_{\text{ref}} = 997\text{ kg/m}^3$). Como uma bomba centrífuga entrega a mesma **altura manométrica** para qualquer líquido, o ganho de pressão escala com a densidade do fluido bombeado:
+
+$$\Delta P_{\text{bomba}}(Q) = \rho \, g \, H(Q) = \Delta P_{\text{curva}}(Q) \cdot \frac{\rho}{\rho_{\text{ref}}}$$
+
+A curva $H \times Q$ já representa a carga líquida entregue ao fluido; a eficiência afeta apenas a potência de eixo e não é descontada novamente como perda hidráulica interna.
 
 ### Leis de Afinidade (Inversores de Frequência - VFD)
 O simulador permite a alteração da rotação da bomba (Atuador de acionamento de 0 a 100%). O impacto é calculado usando as Leis de Afinidade exatas:
@@ -126,10 +132,10 @@ A válvula de controle age como um estrangulamento de seção transversal variá
 ### Conversão $C_v / K_v$
 As válvulas operam através da premissa comercial de Fator de Vazão ($C_v$ em GPM/psi ou $K_v$ em m³/h/bar). O simulador modela a resistência convertendo o Fator de Vazão para o Coeficiente de Perda Local ($K$) através de relações métricas padronizadas, utilizando o diâmetro da tubulação:
 
-$$K \approx 0.00214 \cdot \frac{D^4}{K_v^2}$$
+$$K \approx 0.00214 \cdot \frac{D^4}{C_v^2} \approx 0.0016 \cdot \frac{D^4}{K_v^2}$$
 
 Onde:
-- $K$: Coeficiente adimensional de perda de carga localizada equivalente da válvula ($-$)
+- $K$: Coeficiente adimensional de perda de carga localizada equivalente da válvula ($-$). Por ser adimensional, não depende da densidade; o efeito da densidade (gravidade específica) aparece em $\Delta P = K \rho v^2 / 2$.
 - $D$: Diâmetro interno nominal da conexão ou flange da válvula (mm)
 - $K_v$: Coeficiente de vazão em unidades métricas ($m^3/h$ de água a $20^\circ\text{C}$ sob $\Delta P = 1\text{ bar}$)
 - $C_v$: Coeficiente de vazão em unidades imperiais ($\text{GPM}/\text{psi}^{0{,}5}$), relacionado por $K_v \approx 0{,}865 \cdot C_v$ ou $C_v \approx 1{,}156 \cdot K_v$
@@ -191,6 +197,18 @@ Onde:
 - $\rho$: Densidade do líquido contido no tanque ($kg/m^3$)
 - $g$: Aceleração da gravidade ($9{,}81\text{ m/s}^2$)
 - $h$: Altura do nível de líquido no interior do tanque ($m$, obtida por $h = (V_{\text{atual}} / V_{\max}) \cdot H_{\text{útil}}$)
+
+### Tanque Aberto, Vaso Fechado e Transbordo
+O tanque impõe as pressões dos bocais ao solver global e, por isso, desacopla montante e jusante como um reservatório real:
+
+$$P_{\text{saída}} = P_{\text{gás}} + \rho g (h - z_{\text{saída}}), \qquad P_{\text{entrada}} = P_{\text{gás}} + \rho g \max(0, h - z_{\text{entrada}})$$
+
+- **Tanque aberto (atmosférico):** $P_{\text{gás}} = 0$ (manométrica).
+- **Vaso fechado (colchão de gás):** Boyle isotérmico a partir da pré-carga com o vaso vazio,
+  $$P_{\text{gás,abs}} = (P_{\text{pré}} + P_{\text{atm}}) \frac{V_{\text{total}}}{V_{\text{total}} - V_{\text{líquido}}}$$
+  O vaso enche até $P_{\text{gás}}$ equilibrar a pressão de alimentação.
+- **Transbordo:** com o tanque cheio, $Q_{\text{transbordo}} = (V_t + (\Sigma Q_{in} - \Sigma Q_{out})\Delta t - V_{\max})/\Delta t$ — a massa excedente sai pelo ladrão, sem criar pressão fictícia.
+- **Saída limitada pelo inventário:** $Q_{out} \le V/\Delta t$.
 
 ### Mistura de Fases e Balanceamento
 No caso de confluência de fluidos distintos, a densidade da mistura é apurada volumetricamente:
@@ -254,7 +272,7 @@ Os trocadores de calor do laboratório integram o **Método Efetividade-NTU ($\e
    - **Utilidade Térmica** ($C_r = 0$):
      $$\epsilon = 1 - e^{-NTU}$$
 
-   A efetividade é limitada à efetividade máxima física ($\epsilon \le \epsilon_{\max}$, padrão $0{,}95$).
+   Por padrão não há teto artificial ($\epsilon_{\max} = 1{,}0$): a efetividade vem apenas da relação $\varepsilon$-NTU, o que mantém $\dot{Q} = UA \cdot F_T \cdot \text{LMTD}$ consistente. Um $\epsilon_{\max} < 1$ pode ser configurado como limite opcional (por exemplo, para representar incrustação).
 
 4. **Taxa de Transferência Térmica e Segunda Lei da Termodinâmica:**
    A taxa real de calor transferido é:
@@ -268,6 +286,8 @@ Os trocadores de calor do laboratório integram o **Método Efetividade-NTU ($\e
    - **Envoltória de Temperatura:** Nenhuma temperatura de descarga pode violar os extremos de admissão:
      $$T_{\text{out}, i} \in \left[\min(T_{1,\text{in}}, T_{2,\text{in}}), \; \max(T_{1,\text{in}}, T_{2,\text{in}})\right], \quad \forall i \in \{1, 2\}$$
    - **Não-Cruzamento em Co-corrente:** Em escoamento paralelo, as correntes convergem para uma temperatura de equilíbrio comum $T_{\text{eq}} = (C_1 T_{1,\text{in}} + C_2 T_{2,\text{in}})/(C_1 + C_2)$, sendo proibido o cruzamento térmico ($T_{1,\text{out}} \ge T_{2,\text{out}}$ se $T_{1,\text{in}} \ge T_{2,\text{in}}$).
+
+   **Risco de Ebulição (modelo monofásico):** o simulador trata as correntes como líquido. Quando a pressão de vapor do fluido na temperatura de saída atinge a pressão absoluta local da corrente ($P_{\text{vap}}(T_{\text{out}}) \ge P_{\text{saída}} + P_{\text{atm}}$), o trocador sinaliza `riscoEbulicao` e o painel exibe um alerta de vaporização (*flashing*), em vez de continuar apresentando o resultado como líquido sem aviso.
 
 5. **Perda de Carga Hidráulica Individual:**
    Cada corrente calcula sua própria perda por acessório singular:
@@ -333,6 +353,13 @@ Onde:
 - $K_{\text{local}}$: Coeficiente de perda singular do trocador
 - $A_{\text{hid}}$: Área de escoamento da conexão ($m^2$)
 
+### 5.3 Resposta Dinâmica do Trocador (Atraso Térmico)
+O ε-NTU define a temperatura de **regime** $T_{\text{alvo}}$. A temperatura que sai segue um atraso de 1ª ordem com o tempo de residência de cada lado:
+
+$$\tau_i = \frac{V_{\text{interno}}}{Q_i}, \qquad T_{i,\text{out}}^{n+1} = T_{i,\text{out}}^{n} + \left(T_{i,\text{alvo}} - T_{i,\text{out}}^{n}\right)\left(1 - e^{-\Delta t/\tau_i}\right)$$
+
+Em $t = \tau$ a saída percorreu $1 - e^{-1} \approx 63{,}2\%$ do degrau; após $5\tau$, mais de $99\%$. Padrão $V_{\text{interno}} = 2\text{ L}$ por corrente; $V_{\text{interno}} = 0$ desliga o atraso. O regime permanente coincide exatamente com o ε-NTU.
+
 ## 6. Automação e Malhas de Controle (PID)
 
 O simulador embute automação de malha fechada permitindo que tanques controlem válvulas autonomamente.
@@ -346,11 +373,21 @@ Onde:
 - $K_p, K_i, K_d$: Ganhos Proporcional, Integral e Derivativo
 - $\Delta t$: Intervalo de tempo do *tick* da simulação
 
-Para garantir a estabilidade gráfica da simulação, o algoritmo embute proteção *Anti-Windup* que limita o crescimento explosivo da ação integral, além de uma zona morta (*Deadband*) paramétrica que suprime trepidações infinitesimais quando o erro tangencia zero.
+Para garantir a estabilidade da malha, o algoritmo embute proteção *Anti-Windup* por **integração condicional**: a integral deixa de acumular enquanto a saída está saturada e o erro empurraria o atuador ainda mais para o limite (com um teto de segurança $|K_i \cdot \text{integral}| \le 1$). A integral **não** é zerada quando o erro troca de sinal: em regime, é ela que sustenta a abertura de equilíbrio da válvula, e zerá-la provocava um ciclo limite permanente. Quando o tanque tem válvulas de entrada e de saída, uma zona morta (*Deadband*) paramétrica suprime trepidações quando o erro tangencia zero.
 
-## 7. Arquitetura do Solucionador Híbrido (Solver)
+## 7. Arquitetura do Solucionador (Solver)
 
-As equações individuais dos componentes supracitados são aglutinadas num arcabouço dinâmico. O GAAP Virtual Lab utiliza uma **Arquitetura de Solução Híbrida** para otimizar desempenho e lidar com topologias complexas, operando dois motores matemáticos simultaneamente: o **Solver Sequencial (Push-Based)** e o **Solver Nodal Simultâneo**.
+### 7.0 Solver Global Simultâneo (padrão)
+Todas as equações dos componentes são resolvidas **ao mesmo tempo** pelo Global Gradient Algorithm (Todini–Pilati, base do EPANET), em `GlobalHydraulicSolver.js`. Para cada ramo $j$ entre os nós $a$ e $b$:
+
+$$P_a - P_b = \Phi_j(Q_j) = \underbrace{\operatorname{sgn}(Q_j)\,K_j \frac{\rho Q_j^2}{2A_j^2}}_{\text{perdas}} - \underbrace{\rho g \Delta z_j}_{\text{estático}} - \underbrace{H_{\text{bomba}}(Q_j)\,c_{\text{cav}}}_{\text{bomba}} + \underbrace{\frac{I_j}{\Delta t}\left(Q_j - Q_j^{\text{ant}}\right)}_{\text{inércia}}, \qquad I_j = \frac{\rho L_j}{A_j}$$
+
+e em cada nó livre $\sum Q_{\text{entra}} - \sum Q_{\text{sai}} = 0$. O termo de inércia é Euler implícito da equação de quantidade de movimento do tubo, $\frac{\rho L}{A}\frac{dQ}{dt} = \Delta P - \Delta P_{\text{perdas}}$: a vazão acelera fisicamente e o regime é idêntico ao estacionário. Newton com $p_j = 1/\Phi_j'$ gera o sistema nodal simétrico definido positivo $\mathbf{A}\,\mathbf{P} = \mathbf{b}$ (Cholesky). Conjuntos ativos tratam válvulas de retenção/unidirecionais (sem fluxo reverso, como no DWSIM dinâmico), tetos de vazão das fontes e o inventário dos tanques; o fator de cavitação é a raiz de $g(c) = f_{\text{cav}}(c) - c$.
+
+**Validação contra o DWSIM dinâmico** (`Testes/fisica-e-dwsim.test.mjs`): alimentação 1 bar → válvula $K_v$ ($C_v$ 40) → tanque atmosférico 2 m³ → válvula $K_v$ ($C_v$ 100) → produto. Nível e vazão coincidem com o modelo de referência do DWSIM ($Q = K_v\sqrt{1000\,\Delta P/\rho}/3{,}6$ L/s, Euler explícito) dentro de 1% de 60 s a 600 s, e o nível de regime coincide com o analítico $h = (K_{v1}/K_{v2})^2 \Delta P/(\rho g)$.
+
+### Solver legado (híbrido push-based + nodal)
+O solver anterior continua acessível pelo toggle **Solver legado** apenas para comparação. Ele utiliza uma **Arquitetura de Solução Híbrida**, operando dois motores matemáticos: o **Solver Sequencial (Push-Based)** e o **Solver Nodal Simultâneo**.
 
 A cada *tick* da simulação, o sistema fatia a malha geral em "Ilhas Hidráulicas" independentes (`HydraulicNetworkAnalyzer.js`), avaliando a topologia de grafos. Dependendo da estrutura de cada ilha, o motor delega a resolução para o algoritmo mais adequado:
 
@@ -420,6 +457,9 @@ O fluxo da malha cíclica converge iterativamente garantindo que a diferença en
 
 ### 7.3 Restrições Físicas e Balanceamento de Massa
 Ambos os motores operam sob limites físicos definidos. Limites de conservação de massa e restrições de nível (ex. *Over/Underflow* dos tanques) são impostos via matrizes de corte topológicas, acionando uma etapa de balanceamento a jusante caso os componentes não suportem escoar a vazão transiente, garantindo estabilidade do modelo em qualquer um dos *solvers*.
+
+### 7.4 Critério de Regime Permanente
+O simulador declara regime permanente quando, por $10\text{ s}$ seguidos, $|dQ/dt| \le 10^{-3}\text{ L/s}^2$ em todas as conexões, $|dV/dt| \le 10^{-3}\text{ L/s}$ em todos os tanques e $|dT/dt| \le 10^{-3}\text{ °C/s}$ em tanques e saídas de trocadores (`SteadyStateMonitor.js`). Num tanque que se aproxima do nível de equilíbrio com constante de tempo $\tau_{\text{tanque}} \approx 2Ah/Q$, isso exige alguns $\tau$ — tanques grandes levam de fato vários minutos para estabilizar.
 
 ---
 *Documento gerado e revisado para atestar a termodinâmica, automação e arquitetura híbrida de escoamento fluido do GAAP Virtual Lab.*

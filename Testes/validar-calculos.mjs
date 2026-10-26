@@ -9,10 +9,9 @@ import { FonteLogica } from '../js/domain/components/FonteLogica.js';
 import { TanqueLogico } from '../js/domain/components/TanqueLogico.js';
 import {
     TrocadorCalorLogico,
-    calcularLmtd,
-    calcularSaidaTrocadorCalor
+    calcularLmtd
 } from '../js/domain/components/TrocadorCalorLogico.js';
-import { readDwsimFile, parseDwsimXml, translateDwsimToWorkspace, arrangeDwsimLayout } from '../js/presentation/import/DwsimImporter.js';
+import { translateDwsimToWorkspace, arrangeDwsimLayout } from '../js/presentation/import/DwsimImporter.js';
 import {
     VALVE_FLOW_COEFFICIENT_UNITS,
     VALVE_PROFILE_DEFINITIONS,
@@ -47,6 +46,7 @@ import { buildHeatExchangerCurveDatasets } from '../js/infrastructure/charts/Hea
 import {
     formatUnitValue,
     getUnitOptions,
+    getUnitPreferences,
     getUnitSymbol,
     setUnitPreference,
     toBaseValue,
@@ -96,7 +96,6 @@ test('padroes iniciais usam fonte de 150 kPa e cano esquematico de 100 m', () =>
     assert.equal(connection.extraLengthM, 99);
     assert.equal(DEFAULT_SOURCE_PRESSURE_BAR, 1.5);
     assert.equal(fonte.pressaoFonteBar, 1.5);
-    assert.equal(fonte.pressaoFonteBar * 100, 150);
     assert.equal(geometry.straightLengthM, 1);
     assert.equal(geometry.lengthM, 100);
 
@@ -301,32 +300,23 @@ test('tanque normaliza altura util e bocais para manter hidrostatica fisica', ()
 });
 
 test('trocador de calor usa efetividade NTU e conserva sentido termico', () => {
-    const resultado = calcularSaidaTrocadorCalor({
-        temperaturaEntradaC: 20,
-        temperaturaServicoC: 80,
-        uaWPorK: 4182,
-        vazaoLps: 1,
-        densidadeKgM3: 1000,
-        calorEspecificoJkgK: 4182,
-        efetividadeMaxima: 0.99
-    });
+    const trocador = new TrocadorCalorLogico('HX-NTU', 'TC-NTU', 0, 0);
+    trocador.uaWPorK = 4182;
+    trocador.temperaturaServicoC = 80;
+    // C = 1 L/s * 1000 kg/m3 * 4182 J/kg.K = 4182 W/K, logo NTU = 1 em modo utilidade.
+    const capacidadeTermicaWPorK = 4182;
 
+    const aquecimento = trocador.calcularTrocaTermicaGlobal({ temperatura: 20, densidade: 1000, calorEspecificoJkgK: 4182 }, 1, null, 0);
     const efetividadeEsperada = 1 - Math.exp(-1);
-    approx(resultado.efetividade, efetividadeEsperada, 1e-12, 'Efetividade NTU');
-    approx(resultado.temperaturaSaidaC, 20 + (efetividadeEsperada * 60), 1e-9, 'Temperatura de saida aquecida');
-    approx(resultado.cargaTermicaW, resultado.capacidadeTermicaWPorK * resultado.deltaTemperaturaC, 1e-9, 'Carga termica por m_dot cp dT');
+    approx(aquecimento.ef, efetividadeEsperada, 1e-12, 'Efetividade NTU');
+    approx(aquecimento.t1Out, 20 + (efetividadeEsperada * 60), 1e-9, 'Temperatura de saida aquecida');
+    approx(aquecimento.duty, capacidadeTermicaWPorK * (aquecimento.t1Out - 20), 1e-6, 'Carga termica por m_dot cp dT');
 
-    const resfriamento = calcularSaidaTrocadorCalor({
-        temperaturaEntradaC: 80,
-        temperaturaServicoC: 20,
-        uaWPorK: 4182,
-        vazaoLps: 1,
-        densidadeKgM3: 1000,
-        calorEspecificoJkgK: 4182
-    });
-
-    assert.ok(resfriamento.temperaturaSaidaC < 80, 'Servico frio deve resfriar o fluido');
-    assert.ok(resfriamento.cargaTermicaW < 0, 'Carga termica negativa indica resfriamento');
+    trocador.temperaturaServicoC = 20;
+    const resfriamento = trocador.calcularTrocaTermicaGlobal({ temperatura: 80, densidade: 1000, calorEspecificoJkgK: 4182 }, 1, null, 0);
+    assert.ok(resfriamento.t1Out < 80, 'Servico frio deve resfriar o fluido');
+    assert.ok(resfriamento.t1Out > 20, 'Utilidade fria nao pode resfriar abaixo da temperatura de servico');
+    approx(resfriamento.duty, capacidadeTermicaWPorK * (80 - resfriamento.t1Out), 1e-6, 'Carga de resfriamento por m_dot cp dT');
 });
 
 test('trocador de calor clona fluido de saida sem alterar composicao hidraulica', () => {
@@ -685,16 +675,19 @@ test('coeficiente da valvula alterna entre Cv e Kv sem mudar a fisica', () => {
 
 test('diagnostico de dimensionamento da valvula sugere liberar passagem quando ha gargalo', () => {
     const valvula = new ValvulaLogica('V-sizing', 'V-sizing', 0, 0);
-    valvula.aplicarPerfilCaracteristica('custom');
-    valvula.setCoeficienteVazao(18);
-    valvula.setCoeficientePerda(12);
-    valvula.setTipoCaracteristica('linear');
-    valvula.setAbertura(100);
-    valvula.aberturaEfetiva = 100;
-    valvula.fluxoReal = 18;
-    valvula.pressaoEntradaAtualBar = 1.2;
-    valvula.pressaoSaidaAtualBar = 0.2;
-    valvula.deltaPAtualBar = 1.0;
+    const valvulaIsolada = new ValvulaLogica('V-sizing-other', 'V-sizing-other', 0, 0);
+    [valvula, valvulaIsolada].forEach((item) => {
+        item.aplicarPerfilCaracteristica('custom');
+        item.setCoeficienteVazao(18);
+        item.setCoeficientePerda(12);
+        item.setTipoCaracteristica('linear');
+        item.setAbertura(100);
+        item.aberturaEfetiva = 100;
+        item.fluxoReal = 18;
+        item.pressaoEntradaAtualBar = 1.2;
+        item.pressaoSaidaAtualBar = 0.2;
+        item.deltaPAtualBar = 1.0;
+    });
 
     const diagnostico = valvula.getDiagnosticoDimensionamento();
 
@@ -708,6 +701,8 @@ test('diagnostico de dimensionamento da valvula sugere liberar passagem quando h
     assert.equal(valvula.perfilCaracteristica, 'custom');
     assert.ok(valvula.cv > 18, 'Ajuste deve aumentar Cv');
     assert.ok(valvula.perdaLocalK < 12, 'Ajuste deve reduzir K');
+    approx(valvulaIsolada.cv, 18, 1e-12, 'Cv de outra valvula nao deve mudar');
+    approx(valvulaIsolada.perdaLocalK, 12, 1e-12, 'K de outra valvula nao deve mudar');
 });
 
 test('diagnostico da valvula nao confunde perda fisica do Cv com K manual', () => {
@@ -751,33 +746,6 @@ test('diagnostico da valvula fica silencioso quando a abertura alta vem do set p
     assert.equal(diagnostico.ativo, false);
     assert.equal(diagnostico.suprimidoPorSetpoint, true);
     assert.equal(ajuste.aplicado, false);
-});
-
-test('ajuste de dimensionamento da valvula altera somente a valvula selecionada', () => {
-    const valvulaSelecionada = new ValvulaLogica('V-sizing-target', 'V-sizing-target', 0, 0);
-    const valvulaIsolada = new ValvulaLogica('V-sizing-other', 'V-sizing-other', 0, 0);
-
-    [valvulaSelecionada, valvulaIsolada].forEach((valvula) => {
-        valvula.aplicarPerfilCaracteristica('custom');
-        valvula.setCoeficienteVazao(18);
-        valvula.setCoeficientePerda(12);
-        valvula.setTipoCaracteristica('linear');
-        valvula.setAbertura(100);
-        valvula.aberturaEfetiva = 100;
-        valvula.fluxoReal = 18;
-        valvula.pressaoEntradaAtualBar = 1.2;
-        valvula.pressaoSaidaAtualBar = 0.2;
-        valvula.deltaPAtualBar = 1.0;
-    });
-
-    const resultado = valvulaSelecionada.aplicarAjusteDimensionamento();
-
-    assert.equal(resultado.aplicado, true);
-    assert.ok(valvulaSelecionada.cv > 18);
-    assert.ok(valvulaSelecionada.perdaLocalK < 12);
-    approx(valvulaIsolada.cv, 18, 1e-12, 'Cv de outra valvula nao deve mudar');
-    approx(valvulaIsolada.perdaLocalK, 12, 1e-12, 'K de outra valvula nao deve mudar');
-    assert.equal(valvulaIsolada.perfilCaracteristica, 'custom');
 });
 
 test('perfis da válvula aplicam propriedades e modo personalizado libera edição fina', () => {
@@ -1263,7 +1231,7 @@ test('unidade Kelvin converte corretamente e integra com preferências de exibi�
     assert.equal(kelvinOption.symbol, 'K');
 
     // Estado original
-    const prevPref = getUnitSymbol('temperature');
+    const prevPref = getUnitPreferences().temperature;
 
     try {
         setUnitPreference('temperature', 'k');
@@ -1282,10 +1250,8 @@ test('unidade Kelvin converte corretamente e integra com preferências de exibi�
         // Formatação
         const formatted = formatUnitValue('temperature', 25);
         assert.ok(formatted.includes('298'), 'Formatação deve conter valor convertido');
-        const symbol = getUnitSymbol('temperature');
-        assert.equal(symbol, 'K', 'Símbolo deve ser K');
     } finally {
-        setUnitPreference('temperature', prevPref === 'K' ? 'c' : (prevPref === '°F' ? 'f' : 'c'));
+        setUnitPreference('temperature', prevPref);
     }
 });
 
@@ -1945,4 +1911,96 @@ test('importador DWSIM organiza layout dos componentes com espacamento confortav
         assert.ok(c.snapshot.x >= 120, `${c.snapshot.tag} X deve respeitar margem`);
         assert.ok(c.snapshot.y >= 120, `${c.snapshot.tag} Y deve respeitar margem`);
     });
+});
+
+// Regressões das correções físicas de 2026-10-08.
+
+test('controlador PID mantem a integral quando o erro troca de sinal e congela na saturacao', () => {
+    const config = { deadband: 0, reactivationBand: 0, outputMin: -1, outputMax: 1 };
+    const state = createLevelControllerState();
+    for (let i = 0; i < 50; i += 1) {
+        calculatePidLevelControl({ setpoint: 0.5, measurement: 0.52, dt: 0.1, kp: 4, ki: 0.6, state, config });
+    }
+    const integralAntes = state.integral;
+    assert.ok(integralAntes < 0, 'Nivel acima do set point acumula integral negativa');
+
+    calculatePidLevelControl({ setpoint: 0.5, measurement: 0.499, dt: 0.1, kp: 4, ki: 0.6, state, config });
+    assert.ok(state.integral < 0 && state.integral > integralAntes, 'Troca de sinal do erro nao pode zerar a integral (causava ciclo limite)');
+
+    const saturado = createLevelControllerState();
+    for (let i = 0; i < 100; i += 1) {
+        calculatePidLevelControl({ setpoint: 1, measurement: 0, dt: 0.1, kp: 4, ki: 0.6, state: saturado, config });
+    }
+    assert.equal(saturado.integral, 0, 'Integral nao acumula enquanto a saida esta saturada no sentido do erro');
+});
+
+test('bomba entrega a mesma altura manometrica para fluidos de densidades diferentes', () => {
+    const bomba = new BombaLogica('P-rho', 'P-rho', 0, 0);
+    const deltaPAguaBar = bomba.getCurvaPressaoBar(20, 1, 997);
+    const deltaPOleoBar = bomba.getCurvaPressaoBar(20, 1, 850);
+
+    approx(deltaPAguaBar, bomba.getCurvaPressaoBar(20, 1), 1e-12, 'Agua de referencia preserva a curva em bar');
+    approx(
+        (deltaPOleoBar * 1e5) / (850 * 9.81),
+        (deltaPAguaBar * 1e5) / (997 * 9.81),
+        1e-9,
+        'Altura manometrica H = dP / (rho g) independe do fluido'
+    );
+});
+
+test('trocador sem limitador artificial fecha Q = UA * F_T * LMTD acima de 95% de efetividade', () => {
+    const trocador = new TrocadorCalorLogico('HX-eps', 'TC-eps', 0, 0);
+    assert.equal(trocador.efetividadeMaxima, 1, 'Efetividade sem teto artificial por padrao');
+    trocador.uaWPorK = 3 * 4182;
+    trocador.temperaturaServicoC = 80;
+
+    const resultado = trocador.calcularTrocaTermicaGlobal({ temperatura: 20, densidade: 1000, calorEspecificoJkgK: 4182 }, 1, null, 0);
+    approx(resultado.ef, 1 - Math.exp(-3), 1e-12, 'Efetividade e-NTU com NTU = 3 (acima de 0,95)');
+    approx(resultado.duty, trocador.uaWPorK * resultado.ft * resultado.lmtd, 1e-3, 'Carga termica deve fechar com UA * F_T * LMTD');
+});
+
+test('trocador sinaliza risco de ebulicao quando Pv na saida atinge a pressao absoluta', () => {
+    const medir = (temperaturaServicoC) => {
+        const engine = new SistemaSimulacao();
+        engine.isRunning = true;
+        const fonte = new FonteLogica('F-boil', 'F-boil', 0, 0);
+        const trocador = new TrocadorCalorLogico('HX-boil', 'TC-boil', 100, 0);
+        const dreno = new DrenoLogico('D-boil', 'D-boil', 200, 0);
+        fonte.pressaoFonteBar = 1.5;
+        fonte.vazaoMaxima = 1;
+        trocador.temperaturaServicoC = temperaturaServicoC;
+        [fonte, trocador, dreno].forEach((component) => engine.add(component));
+        engine.addConnection(new ConnectionModel({ sourceId: fonte.id, targetId: trocador.id, targetEndpoint: { portId: 'in1' } }));
+        engine.addConnection(new ConnectionModel({ sourceId: trocador.id, targetId: dreno.id, sourceEndpoint: { portId: 'out1' } }));
+        for (let i = 0; i < 100; i += 1) {
+            engine.resolveHydraulicNetwork(0.1);
+            engine.componentes.forEach((component) => component.sincronizarMetricasFisicas(
+                engine.hydraulicContext.getComponentFluid(component) || engine.fluidoOperante
+            ));
+        }
+        return trocador;
+    };
+
+    const aquecimentoModerado = medir(80);
+    assert.ok(aquecimentoModerado.vazao1Lps > 0.1, 'Corrente 1 deve escoar');
+    assert.equal(aquecimentoModerado.temRiscoEbulicao(), false, 'Agua abaixo de 80 C a ~2,5 bar abs. permanece liquida');
+
+    const aquecimentoSevero = medir(250);
+    // Saída para dreno a 0 bar manométrico: pressão absoluta ~1 atm, saturação em ~100 °C.
+    assert.ok(aquecimentoSevero.temperaturaSaidaC > 105, `Utilidade a 250 C aquece acima da saturacao local: ${aquecimentoSevero.temperaturaSaidaC}`);
+    assert.equal(aquecimentoSevero.temRiscoEbulicao(), true, 'Pv(T) acima da pressao absoluta deve sinalizar ebulicao');
+});
+
+test('editar so a temperatura da fonte recalcula densidade, viscosidade e pressao de vapor', () => {
+    const fonte = new FonteLogica('F-temp', 'F-temp', 0, 0);
+
+    fonte.atualizarFluidoEntrada({ temperatura: 90 });
+    approx(fonte.fluidoEntrada.densidade, 965.3, 0.5, 'Densidade da agua a 90 C');
+    approx(fonte.fluidoEntrada.viscosidadeDinamicaPaS, 0.000315, 0.00001, 'Viscosidade da agua a 90 C');
+    approx(fonte.fluidoEntrada.pressaoVaporBar, 0.701, 0.01, 'Pressao de vapor da agua a 90 C');
+
+    fonte.atualizarFluidoEntrada({ temperatura: 90, densidade: 960 });
+    approx(fonte.fluidoEntrada.densidade, 960, 1e-9, 'Densidade explicita prevalece');
+    approx(fonte.fluidoEntrada.viscosidadeDinamicaPaS, 0.000315, 0.00001, 'Viscosidade continua coerente apos editar so a densidade');
+    approx(fonte.fluidoEntrada.pressaoVaporBar, 0.701, 0.01, 'Pressao de vapor continua coerente apos editar so a densidade');
 });

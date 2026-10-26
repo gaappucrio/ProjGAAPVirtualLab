@@ -1,5 +1,5 @@
 import { ComponentEventPayloads, EngineEventPayloads } from '../../application/events/EventPayloads.js';
-import { COMPONENT_EVENTS, ENGINE_EVENTS } from '../../application/events/EventTypes.js';
+import { COMPONENT_EVENTS } from '../../application/events/EventTypes.js';
 import { InputValidator, clearInputError, parseStrictNumber, showInputError } from '../validation/InputValidator.js';
 import { getPresentationEngine } from '../context/PresentationEngineContext.js';
 import { renderPropertyTabs } from './PropertyTabs.js';
@@ -8,25 +8,19 @@ import {
     bind,
     byId,
     isActive,
-    setDisabled,
-    setDisplay,
-    setHtml,
-    setText,
     setValue,
-    setValueWhenBlurred,
     valueOf
 } from './PropertyDomAdapter.js';
 import {
     formatUnitValue,
     getUnitSymbol,
-    subscribeUnitPreferences,
     toBaseValue,
     toDisplayValue
 } from '../units/DisplayUnits.js';
 
-import { bindCustomSelect, renderCustomSelectHtml, syncCustomSelectValue } from './CustomSelect.js';
+import { bindCustomSelect, renderCustomSelectHtml } from './CustomSelect.js';
 
-export { getPresentationEngine, ComponentEventPayloads, EngineEventPayloads, COMPONENT_EVENTS, ENGINE_EVENTS, InputValidator, clearInputError, showInputError, renderPropertyTabs, subscribeUnitPreferences, getUnitSymbol, TOOLTIPS, bind, byId, isActive, setHtml, setValue, valueOf, bindCustomSelect, renderCustomSelectHtml, syncCustomSelectValue };
+export { getPresentationEngine, ComponentEventPayloads, COMPONENT_EVENTS, InputValidator, clearInputError, showInputError, renderPropertyTabs, TOOLTIPS, bind, byId, isActive, setValue, valueOf, bindCustomSelect, renderCustomSelectHtml };
 
 export const TOOLTIP = TOOLTIPS.componentes;
 
@@ -57,7 +51,6 @@ export const baseFromDisplay = (category, rawValue, fallback = NaN) => {
     return Number.isFinite(converted) ? converted : fallback;
 };
 export const notifyPanelRefresh = () => getPresentationEngine().notify(EngineEventPayloads.panelUpdate(0));
-export const volumeText = (baseValue, digits = null) => `${displayUnitValue('volume', baseValue, digits)} ${getUnitSymbol('volume')}`;
 
 export const validateInputWithFeedback = (inputElement, validatorFn, fieldName, onSuccess, fallback) => {
     if (!inputElement) return fallback;

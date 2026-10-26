@@ -8,6 +8,7 @@ import { ValvulaLogica } from '../components/ValvulaLogica.js';
 import {
     BAR_TO_PA,
     DEFAULT_ENTRY_LOSS,
+    DEFAULT_FLUID_DENSITY_KG_M3,
     DEFAULT_PIPE_FRICTION,
     EPSILON_FLOW,
     GRAVITY,
@@ -968,15 +969,15 @@ export class NodalHydraulicSolver {
         );
         const npshRequiredM = pump.getCurvaNpshRequeridoM(flowLps, drive);
         const cavitationFactor = pump.calcularFatorCavitacao(npshAvailableM, npshRequiredM);
+        pump.densidadeOperacaoKgM3 = fluid.densidade || DEFAULT_FLUID_DENSITY_KG_M3;
         const boostBar = pump.getCurvaPressaoBar(flowLps, drive) * cavitationFactor;
         const efficiency = pump.getEficienciaInstantanea(flowLps);
-        const lossCoeff = 1.0 / Math.max(0.18, efficiency);
-        const lossBar = pressureLossFromFlow(flowLps, branch.areaM2, fluid.densidade, lossCoeff);
 
+        // A curva H x Q já é a carga líquida entregue; a eficiência afeta só a potência de eixo.
         return {
             boostBar,
-            lossBar,
-            lossCoeff,
+            lossBar: 0,
+            lossCoeff: 0,
             npshAvailableM,
             npshRequiredM,
             cavitationFactor,

@@ -19,7 +19,8 @@ export class FonteLogica extends ComponenteFisico {
 
     sincronizarMetricasFisicas() {
         super.sincronizarMetricasFisicas();
-        this.pressaoSaidaAtualBar = this.pressaoFonteBar;
         this.fluxoReal = this.estadoHidraulico.saidaVazaoLps;
+        // Saturada na vazão máxima, a fonte não sustenta a pressão nominal: mostra a pressão real na porta.
+        this.pressaoSaidaAtualBar = this.fluxoReal > 0 ? this.getPressaoSaidaBar() : this.pressaoFonteBar;
     }
 }

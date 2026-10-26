@@ -1,6 +1,6 @@
 import { clamp, ComponenteFisico, rampToTarget } from './BaseComponente.js';
 import { ComponentEventPayloads } from '../events/ComponentEventPayloads.js';
-import { EPSILON_FLOW } from '../units/HydraulicUnits.js';
+import { DEFAULT_FLUID_DENSITY_KG_M3, EPSILON_FLOW } from '../units/HydraulicUnits.js';
 
 export class BombaLogica extends ComponenteFisico {
     constructor(id, tag, x, y) {
@@ -24,6 +24,7 @@ export class BombaLogica extends ComponenteFisico {
         this.pressaoDescargaAtualBar = 0;
         this.cargaGeradaBar = 0;
         this.sucaoSemLiquido = false;
+        this.densidadeOperacaoKgM3 = DEFAULT_FLUID_DENSITY_KG_M3;
     }
 
     calcularFatorCavitacao(npshDisponivelM, npshRequeridoM = this.npshRequeridoAtualM ?? this.npshRequeridoM) {
@@ -52,11 +53,19 @@ export class BombaLogica extends ComponenteFisico {
         return this.estaBloqueadaPorSetpoint() ? 100 : this.grauAcionamento;
     }
 
-    getCurvaPressaoBar(flowLps, drive = 1) {
+    // pressaoMaxima é o ΔP de shutoff com água de referência; a bomba centrífuga entrega
+    // a mesma altura manométrica para qualquer fluido, então ΔP = ρ·g·H escala com a densidade.
+    getFatorDensidadeCurva(densidadeKgM3 = this.densidadeOperacaoKgM3) {
+        const densidade = Number(densidadeKgM3);
+        return Number.isFinite(densidade) && densidade > 0 ? densidade / DEFAULT_FLUID_DENSITY_KG_M3 : 1;
+    }
+
+    getCurvaPressaoBar(flowLps, drive = 1, densidadeKgM3 = this.densidadeOperacaoKgM3) {
         const driveClamped = clamp(drive, 0, 1);
         const qMax = Math.max(EPSILON_FLOW, this.vazaoNominal * Math.max(driveClamped, 0.05));
         const curveFrac = 1 - Math.pow(clamp(flowLps / qMax, 0, 1), 2);
-        return this.pressaoMaxima * driveClamped * driveClamped * Math.max(0, curveFrac);
+        return this.pressaoMaxima * this.getFatorDensidadeCurva(densidadeKgM3)
+            * driveClamped * driveClamped * Math.max(0, curveFrac);
     }
 
     getEficienciaInstantanea(flowLps = this.fluxoReal) {
@@ -216,10 +225,6 @@ export class BombaLogica extends ComponenteFisico {
             this.limparSucaoSemLiquido();
         }
         this.recalcularMetricasDerivadasCurva();
-    }
-
-    getFluxoSaidaFromTank() {
-        return this.fluxoReal;
     }
 
     getPotenciaHidraulicaKw(flowLps = this.fluxoReal, boostBar = this.cargaGeradaBar) {

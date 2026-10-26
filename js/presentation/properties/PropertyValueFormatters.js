@@ -5,7 +5,12 @@ import {
     toDisplayValue
 } from '../units/DisplayUnits.js';
 import { parseStrictNumber } from '../validation/InputValidator.js';
-import { byId, valueOf } from './PropertyDomAdapter.js';
+import { translateLiteral } from '../i18n/LanguageManager.js';
+import { byId } from './PropertyDomAdapter.js';
+
+export function formatResidenceTime(valueS) {
+    return Number.isFinite(valueS) ? `${valueS.toFixed(2)} s` : translateLiteral('Sem fluxo');
+}
 
 export function setFieldValue(id, value, category = null, digits = 2, suffix = '') {
     const element = byId(id);

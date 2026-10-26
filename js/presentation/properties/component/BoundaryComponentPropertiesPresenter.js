@@ -220,17 +220,21 @@ function applySourceFluidFromInputs(comp, { preferredPresetId = null } = {}) {
     }
     clearInputError(inputAtm);
 
+    // Em edição manual, ρ, μ e Pv só seguem como valores explícitos quando o usuário editou o campo;
+    // caso contrário o domínio os recalcula na nova temperatura (ex.: aquecer a água muda Pv e o NPSHa).
+    // Presets e troca de cor continuam enviando o estado completo exibido.
+    const editedByUser = (input) => preferredPresetId !== null || input.value !== input.defaultValue;
     const nextPresetId = preferredPresetId || 'custom';
     comp.atualizarFluidoEntrada(
         {
             nome: InputValidator.sanitizeText(valueOf('input-source-fluid-name'), 50),
-            densidade: densityResult.value,
             temperatura: temperatureResult.value,
-            viscosidadeDinamicaPaS: viscosityResult.value,
             calorEspecificoJkgK: specificHeatResult.value,
-            pressaoVaporBar: vaporResult.value,
             pressaoAtmosfericaBar: atmResult.value,
-            corVisual: getSourceFluidColorValue(fluido, nextPresetId)
+            corVisual: getSourceFluidColorValue(fluido, nextPresetId),
+            ...(editedByUser(inputDensity) ? { densidade: densityResult.value } : {}),
+            ...(editedByUser(inputViscosity) ? { viscosidadeDinamicaPaS: viscosityResult.value } : {}),
+            ...(editedByUser(inputVapor) ? { pressaoVaporBar: vaporResult.value } : {})
         },
         { presetId: nextPresetId }
     );

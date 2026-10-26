@@ -7,8 +7,7 @@ import { TOOLTIPS } from './PropertyTooltips.js';
 import { localizeElement, translateLiteral } from '../i18n/LanguageManager.js';
 import {
     DEFAULT_DESIGN_VELOCITY_MPS,
-    MAX_NETWORK_FLOW_LPS,
-    DEFAULT_PIPE_ROUGHNESS_MM
+    MAX_NETWORK_FLOW_LPS
 } from '../../domain/units/HydraulicUnits.js';
 import {
     getUnitSymbol
@@ -23,6 +22,7 @@ import {
     displayEditableUnitValue,
     displayStep,
     displayUnitValue,
+    formatResidenceTime,
     rawBaseValue
 } from './PropertyValueFormatters.js';
 import { bind, setValue } from './PropertyDomAdapter.js';
@@ -52,10 +52,6 @@ function getDesignFlowCandidateM(connection, state) {
 
 function formatFluidName(fluid) {
     return fluid?.nome || '-';
-}
-
-function formatResidenceTime(valueS) {
-    return Number.isFinite(valueS) ? `${valueS.toFixed(2)} s` : translateLiteral('Sem fluxo');
 }
 
 export function renderConnectionProperties({

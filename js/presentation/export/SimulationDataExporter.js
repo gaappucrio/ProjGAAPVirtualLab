@@ -16,7 +16,11 @@ import { formatUnitValue, getUnitPreferences, getUnitSymbol } from '../units/Dis
 
 const EXPORT_METADATA_COLUMNS = [
     'Data da exportação',
-    'Altura relativa'
+    'Altura relativa',
+    'Solver hidráulico',
+    'Tempo simulado (s)',
+    'Regime permanente',
+    'Regime permanente desde (s)'
 ];
 
 const COMPONENT_COLUMNS = [
@@ -86,6 +90,7 @@ const COMPONENT_COLUMNS = [
     'UA do trocador (W/K)',
     'Perda local do trocador K',
     'Efetividade máxima do trocador',
+    'Volume interno por corrente do trocador (L)',
     'Efetividade atual do trocador',
     'Temperatura de entrada do trocador (°C)',
     'Temperatura de saída do trocador (°C)',
@@ -107,6 +112,9 @@ const COMPONENT_COLUMNS = [
     'Elevação do bocal de entrada (m)',
     'Elevação do bocal de saída (m)',
     'Coeficiente de descarga do tanque',
+    'Tipo de tanque',
+    'Pré-carga do gás (bar)',
+    'Vazão de transbordo do tanque (L/s)',
     'Pressão no fundo do tanque (bar)',
     'Vazão de entrada do tanque (L/s)',
     'Vazão de saída do tanque (L/s)',
@@ -235,6 +243,12 @@ const EXPORT_LABELS_EN = {
     'UA do trocador': 'Heat exchanger UA',
     'Perda local do trocador K': 'Heat exchanger local loss K',
     'Efetividade máxima do trocador': 'Heat exchanger maximum effectiveness',
+    'Volume interno por corrente do trocador': 'Heat exchanger holdup volume per stream',
+    'Pré-carga do gás': 'Gas pre-charge',
+    'Vazão de transbordo do tanque': 'Tank overflow flow',
+    'Tempo simulado': 'Simulated time',
+    'Regime permanente': 'Steady state',
+    'Regime permanente desde': 'Steady state since',
     'Efetividade atual do trocador': 'Heat exchanger current effectiveness',
     'Temperatura de entrada do trocador': 'Heat exchanger inlet temperature',
     'Temperatura de saída do trocador': 'Heat exchanger outlet temperature',
@@ -328,6 +342,9 @@ const EXPORT_VALUE_TRANSLATIONS_EN = {
 
 const LOCALIZED_VALUE_COLUMNS = new Set([
     'Altura relativa',
+    'Solver hidráulico',
+    'Regime permanente',
+    'Tipo de tanque',
     'Tipo do componente',
     'Tipo de origem',
     'Tipo de destino',
@@ -463,9 +480,14 @@ function heightModeValue(value) {
 }
 
 function buildExportMetadataRows(engine, timestamp) {
+    const steadyState = engine?.getSteadyStateStatus?.();
     return [{
         'Data da exportação': timestamp.toLocaleString('pt-BR'),
-        'Altura relativa': heightModeValue(engine?.usarAlturaRelativa === true)
+        'Altura relativa': heightModeValue(engine?.usarAlturaRelativa === true),
+        'Solver hidráulico': engine?.isSolverLegado?.() === true ? 'Legado (push)' : 'Global (simultâneo)',
+        'Tempo simulado (s)': numberValue(engine?.elapsedTime || 0, 3),
+        'Regime permanente': booleanValue(steadyState?.steady === true),
+        'Regime permanente desde (s)': steadyState?.steady === true ? numberValue(steadyState.steadySinceS, 3) : ''
     }];
 }
 
@@ -578,6 +600,7 @@ function buildComponentRow(component, engine = null) {
         row['UA do trocador (W/K)'] = numberValue(component.uaWPorK, 3);
         row['Perda local do trocador K'] = numberValue(component.perdaLocalK, 5);
         row['Efetividade máxima do trocador'] = numberValue(component.efetividadeMaxima, 5);
+        row['Volume interno por corrente do trocador (L)'] = numberValue(component.volumeInternoL, 5);
         row['Efetividade atual do trocador'] = numberValue(component.efetividadeAtual, 5);
         row['Temperatura de entrada do trocador (°C)'] = numberValue(component.temperaturaEntradaC, 3);
         row['Temperatura de saída do trocador (°C)'] = numberValue(component.temperaturaSaidaC, 3);
@@ -603,6 +626,9 @@ function buildComponentRow(component, engine = null) {
         row['Elevação do bocal de entrada (m)'] = numberValue(component.alturaBocalEntradaM, 5);
         row['Elevação do bocal de saída (m)'] = numberValue(component.alturaBocalSaidaM, 5);
         row['Coeficiente de descarga do tanque'] = numberValue(component.coeficienteSaida, 5);
+        row['Tipo de tanque'] = component.tipoTanque === 'fechado' ? 'Fechado (colchão de gás)' : 'Aberto (atmosférico)';
+        row['Pré-carga do gás (bar)'] = numberValue(component.tipoTanque === 'fechado' ? component.pressaoPreCargaBar : 0, 5);
+        row['Vazão de transbordo do tanque (L/s)'] = numberValue(component.vazaoTransbordoLps || 0, 5);
         row['Pressão no fundo do tanque (bar)'] = numberValue(component.pressaoFundoBar, 5);
         row['Vazão de entrada do tanque (L/s)'] = numberValue(component.lastQin, 5);
         row['Vazão de saída do tanque (L/s)'] = numberValue(component.lastQout, 5);

@@ -11,9 +11,14 @@ import { HydraulicBranchModel } from '../../domain/services/HydraulicBranchModel
 import { analyzeHydraulicNetwork } from '../../domain/services/HydraulicNetworkAnalyzer.js';
 import { HydraulicNetworkSolver } from '../../domain/services/HydraulicNetworkSolver.js';
 import { NodalHydraulicSolver } from '../../domain/services/NodalHydraulicSolver.js';
+import { GlobalHydraulicSolver } from '../../domain/services/GlobalHydraulicSolver.js';
 import { ensureConnectionProperties as ensurePipeConnectionProperties } from '../../domain/services/PipeHydraulics.js';
 import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
-import { createSimulationContext } from '../../domain/context/SimulationContext.js';
+import {
+    MODO_SOLVER_LEGADO,
+    createSimulationContext,
+    normalizarModoSolver
+} from '../../domain/context/SimulationContext.js';
 import {
     DEFAULT_PIPE_FRICTION
 } from '../../domain/units/HydraulicUnits.js';
@@ -21,6 +26,7 @@ import { FLUID_PRESETS } from '../config/FluidPresets.js';
 import { EngineEventPayloads } from '../events/EventPayloads.js';
 import { HydraulicNetworkContext, HydraulicScopedNetworkContext } from './HydraulicNetworkContext.js';
 import { SimulationTickPipeline } from './SimulationTickPipeline.js';
+import { SteadyStateMonitor } from './SteadyStateMonitor.js';
 import { ConnectionGeometryService } from '../services/ConnectionGeometryService.js';
 import { ConnectionStateStore } from '../stores/ConnectionStateStore.js';
 import { SelectionStore } from '../stores/SelectionStore.js';
@@ -80,10 +86,12 @@ export class SistemaSimulacao extends Observable {
         this.hydraulicBranchModel = new HydraulicBranchModel(this.hydraulicContext);
         this.hydraulicSolver = new HydraulicNetworkSolver(this.hydraulicContext, this.hydraulicBranchModel);
         this.nodalHydraulicSolver = new NodalHydraulicSolver(this.hydraulicContext, this.hydraulicBranchModel);
+        this.globalHydraulicSolver = new GlobalHydraulicSolver(this.hydraulicContext, this.hydraulicBranchModel);
         this.lastHydraulicAnalysis = null;
         this.lastScopedSolverMetrics = null;
-        this.activeHydraulicSolverMode = 'push';
+        this.activeHydraulicSolverMode = 'global';
         this.tickPipeline = new SimulationTickPipeline({ engine: this });
+        this.steadyStateMonitor = new SteadyStateMonitor();
         this.isRunning = false;
         this.lastTime = 0;
         this.elapsedTime = 0;
@@ -106,6 +114,18 @@ export class SistemaSimulacao extends Observable {
 
     set usarAlturaRelativa(value) {
         this.configStore.usarAlturaRelativa = value !== false;
+    }
+
+    get modoSolver() {
+        return this.configStore.modoSolver;
+    }
+
+    set modoSolver(value) {
+        this.configStore.modoSolver = normalizarModoSolver(value);
+    }
+
+    isSolverLegado() {
+        return this.modoSolver === MODO_SOLVER_LEGADO;
     }
 
     get componentes() {
@@ -154,6 +174,7 @@ export class SistemaSimulacao extends Observable {
             isRunning: this.isRunning,
             fluidoOperante: this.fluidoOperante,
             usarAlturaRelativa: this.usarAlturaRelativa,
+            modoSolver: this.modoSolver,
             elapsedTime: this.elapsedTime,
             queries: {
                 isBombaBloqueadaPorSetpoint: (bomba) => this.isBombaBloqueadaPorSetpoint(bomba),
@@ -240,6 +261,14 @@ export class SistemaSimulacao extends Observable {
     }
 
     getSolverMetrics() {
+        if (this.activeHydraulicSolverMode === 'global') {
+            return {
+                networkAnalysis: this.lastHydraulicAnalysis,
+                ...this.globalHydraulicSolver.getMetrics(),
+                mode: 'global'
+            };
+        }
+
         if (this.lastScopedSolverMetrics) {
             return {
                 mode: this.activeHydraulicSolverMode,
@@ -259,6 +288,10 @@ export class SistemaSimulacao extends Observable {
         };
     }
 
+    getSteadyStateStatus() {
+        return this.steadyStateMonitor.getStatus();
+    }
+
     clear() {
         this.clearConnectionDynamics();
         [...this.conexoes].forEach((connection) => {
@@ -273,6 +306,7 @@ export class SistemaSimulacao extends Observable {
         this.connectionStateStore.clear();
         this.isRunning = false;
         this.elapsedTime = 0;
+        this.steadyStateMonitor.reset();
         this.selectionStore.clear();
         this.notify(EngineEventPayloads.selection(null, null));
         if (portStateUpdater) portStateUpdater();
@@ -317,7 +351,19 @@ export class SistemaSimulacao extends Observable {
     setUsarAlturaRelativa(ativo) {
         this.usarAlturaRelativa = ativo !== false;
         this.clearConnectionDynamics();
+        this.steadyStateMonitor.reset();
         if (!this.isRunning) this.resetHydraulicState();
+        this.updatePipesVisual();
+        this.notify(EngineEventPayloads.simulationConfig(this.usarAlturaRelativa));
+    }
+
+    setModoSolver(modo) {
+        const proximoModo = normalizarModoSolver(modo);
+        if (proximoModo === this.modoSolver) return;
+        this.modoSolver = proximoModo;
+        this.clearConnectionDynamics();
+        this.steadyStateMonitor.reset();
+        this.resetHydraulicState();
         this.updatePipesVisual();
         this.notify(EngineEventPayloads.simulationConfig(this.usarAlturaRelativa));
     }
@@ -503,6 +549,12 @@ export class SistemaSimulacao extends Observable {
         });
         this.lastHydraulicAnalysis = analysis;
 
+        if (!this.isSolverLegado()) {
+            this.lastScopedSolverMetrics = null;
+            this.activeHydraulicSolverMode = 'global';
+            return this.globalHydraulicSolver.resolve(dt, analysis);
+        }
+
         if (analysis.shouldUseNodalSolver) {
             if (analysis.islands.length > 1) {
                 return this.resolveScopedHydraulicIslands(dt, analysis);
@@ -515,6 +567,9 @@ export class SistemaSimulacao extends Observable {
     }
 
     reconcileConnectionPressureStatesFromComponentDrops() {
+        // O solver global já entrega pressões consistentes em todos os nós; a reconciliação só
+        // existe para corrigir o estado aproximado do solver legado.
+        if (!this.isSolverLegado()) return;
         this.hydraulicBranchModel.reconcileConnectionPressureStatesFromComponentDrops();
     }
 
