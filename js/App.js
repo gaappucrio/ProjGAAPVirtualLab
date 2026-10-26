@@ -5,5 +5,8 @@
 
 import { ENGINE } from './application/engine/SimulationEngine.js';
 import { setupVirtualLabRuntime } from './VirtualLabRuntime.js';
+import { isDebugEnabled, setupDebugConsole } from './debug/DebugConsole.js';
 
-setupVirtualLabRuntime({ engine: ENGINE });
+const runtime = setupVirtualLabRuntime({ engine: ENGINE });
+
+if (isDebugEnabled()) setupDebugConsole({ engine: ENGINE, runtime });
