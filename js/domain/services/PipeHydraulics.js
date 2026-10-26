@@ -87,7 +87,7 @@ function classifyFlowRegime(reynolds) {
  * Calcula o número de Reynolds para um escoamento.
  */
 function reynoldsFromFlow(flowLps, diameterM, areaM2, density, viscosityPaS) {
-    if (flowLps <= 0 || diameterM <= 0 || areaM2 <= 0) return 0;
+    if (!(flowLps > 1e-12) || !(diameterM > 0) || !(areaM2 > 0)) return 0;
     const safeDensity = positiveNumber(density, 0);
     if (safeDensity <= 0) return 0;
     const velocity = lpsToM3s(flowLps) / areaM2;
@@ -99,7 +99,7 @@ function reynoldsFromFlow(flowLps, diameterM, areaM2, density, viscosityPaS) {
  * interpolacao suave na faixa de transicao.
  */
 export function darcyFrictionFactor(reynolds, relativeRoughness) {
-    if (!Number.isFinite(reynolds) || reynolds <= 0) return DEFAULT_PIPE_FRICTION;
+    if (!Number.isFinite(reynolds) || !(reynolds > 1e-9)) return DEFAULT_PIPE_FRICTION;
     if (reynolds < 2300) return 64 / reynolds;
 
     const turbulent = 0.25 / Math.pow(

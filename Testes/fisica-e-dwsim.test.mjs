@@ -239,6 +239,52 @@ test('vaso fechado com colchao de gas enche ate equilibrar a pressao de alimenta
     const volumeEsperadoL = 1000 * (1 - ((0.5 + atm) / (2.0 + atm)));
     approx(vaso.volumeAtual, volumeEsperadoL, 0.01 * volumeEsperadoL, 'Volume de equilibrio do vaso hidropneumatico');
     assert.ok(vaso.lastQin < 0.05, `A entrada cessa no equilibrio: ${vaso.lastQin}`);
+    assert.equal(vaso.vazaoTransbordoLps, 0, 'Vaso fechado nao transborda para a atmosfera');
+});
+
+test('tanque fechado transmite pressao do colchao de gas aos bocais e ao diagnostico de setpoint', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-vaso-sp', 'F-vaso-sp', 0, 0);
+    const vaso = new TanqueLogico('T-vaso-sp', 'T-vaso-sp', 0, 0);
+    const valvulaSaida = criarValvula('V-vaso-out', 80);
+    const dreno = new DrenoLogico('D-vaso-sp', 'D-vaso-sp', 0, 0);
+
+    fonte.pressaoFonteBar = 3.0;
+    fonte.vazaoMaxima = 20;
+    vaso.tipoTanque = 'fechado';
+    vaso.pressaoPreCargaBar = 1.0;
+    vaso.capacidadeMaxima = 1000;
+    vaso.volumeAtual = 500;
+    vaso.setpoint = 50;
+    [fonte, vaso, valvulaSaida, dreno].forEach((c) => engine.add(c));
+    conectar(engine, fonte, vaso, TUBO_DESPREZIVEL);
+    conectar(engine, vaso, valvulaSaida, TUBO_DESPREZIVEL);
+    conectar(engine, valvulaSaida, dreno, TUBO_DESPREZIVEL);
+
+    passo(engine, 0.1);
+
+    const fluido = vaso.getFluidoConteudo();
+    const pressaoGasEsperadaBar = ((1.0 + fluido.pressaoAtmosfericaBar) * 2) - fluido.pressaoAtmosfericaBar;
+    approx(vaso.getPressaoGasBar(fluido), pressaoGasEsperadaBar, 0.05, 'Pressao do colchao de gas a 50% de nivel');
+    assert.ok(
+        vaso.pressaoSaidaAtualBar > pressaoGasEsperadaBar,
+        `Bocal de saida soma colchao de gas e coluna hidrostatica: ${vaso.pressaoSaidaAtualBar} > ${pressaoGasEsperadaBar}`
+    );
+
+    const resumoSp = vaso.getResumoAjustePressaoSetpoint(fluido, false);
+    approx(
+        resumoSp.pressaoSaidaSetpointBar,
+        vaso.getPressaoBocalSaidaParaNivelBar(fluido, 0.5, false),
+        1e-9,
+        'Resumo do setpoint no vaso fechado considera a pressao do gas na saida'
+    );
+    approx(
+        resumoSp.pressaoBaseEntradaSetpointBar,
+        vaso.getPressaoBocalEntradaParaNivelBar(fluido, 0.5, false),
+        1e-9,
+        'Resumo do setpoint no vaso fechado considera a contrapressao do gas na entrada'
+    );
+    assert.equal(vaso.vazaoTransbordoLps, 0, 'Vaso fechado nao gera vazao de transbordo atmosferico');
 });
 
 test('reproduz o modelo de referencia do DWSIM dinamico: alimentacao, valvula Kv, tanque atmosferico, valvula Kv', () => {
@@ -417,4 +463,79 @@ test('indicador de regime permanente acompanha o atraso termico do trocador', ()
     const taxaC = Math.abs(trocador.temperaturaSaidaAlvoC - trocador.temperaturaSaidaC) / 20;
     assert.ok(taxaC <= 1e-3 + 1e-9, `Taxa termica dentro da tolerancia ao declarar regime: ${taxaC} °C/s`);
     assert.ok(regimeS > 120, `Regime so depois do transiente termico: ${regimeS} s`);
+});
+
+test('bomba sobe de 0 a 32 m3/h sem zerar na presenca de ramos bloqueados e cavitacao no limite da fonte', () => {
+    const engine = createEngine();
+    const fonte1 = new FonteLogica('F-b1', 'F-b1', 0, 100);
+    const bomba1 = new BombaLogica('P-b1', 'P-b1', 200, 100);
+    const fonte2 = new FonteLogica('F-b2', 'F-b2', 0, 200);
+    const bomba2 = new BombaLogica('P-b2', 'P-b2', 200, 200);
+    const tanque = new TanqueLogico('T-b', 'T-b', 400, 150);
+    const valvulaFechada = criarValvula('V-fechada', 60);
+    valvulaFechada.setAbertura(0);
+    valvulaFechada.aberturaEfetiva = 0;
+    const dreno = new DrenoLogico('D-b', 'D-b', 800, 150);
+
+    [fonte1, bomba1, fonte2, bomba2, tanque, valvulaFechada, dreno].forEach((c) => engine.add(c));
+    conectar(engine, fonte1, bomba1);
+    conectar(engine, bomba1, tanque);
+    conectar(engine, fonte2, bomba2);
+    conectar(engine, bomba2, tanque);
+    conectar(engine, tanque, valvulaFechada);
+    conectar(engine, valvulaFechada, dreno);
+    bomba1.setAcionamento(100);
+    bomba2.setAcionamento(100);
+
+    const dt = 0.016;
+    let vazaoAnteriorM3h = 0;
+    let atingiu32M3h = false;
+
+    for (let i = 1; i <= 300; i += 1) {
+        engine.tickPipeline.advance(dt);
+        const vazaoM3h = bomba1.fluxoReal * 3.6;
+        assert.ok(Number.isFinite(vazaoM3h), `Vazao finita no passo ${i}`);
+        assert.ok(
+            vazaoM3h >= vazaoAnteriorM3h - 1e-3,
+            `Bomba nao pode cair abruptamente no passo ${i}: ${vazaoAnteriorM3h.toFixed(2)} -> ${vazaoM3h.toFixed(2)} m3/h`
+        );
+        if (Math.abs(vazaoM3h - 32) <= 0.05) atingiu32M3h = true;
+        if (atingiu32M3h) {
+            approx(vazaoM3h, 32, 0.05, `Bomba sustenta 32 m3/h no passo ${i}`);
+        }
+        vazaoAnteriorM3h = vazaoM3h;
+    }
+
+    assert.ok(atingiu32M3h, 'Bomba deve atingir 32 m3/h e permanecer estavel');
+});
+
+test('bomba succionando de tanque alimentado a 32 m3/h estabiliza em 32 m3/h sem zerar com altura relativa e jitter de dt', () => {
+    const engine = createEngine();
+    engine.usarAlturaRelativa = true;
+    const fonte = new FonteLogica('F-tq-b', 'F-tq-b', 0, 100);
+    const tanque = new TanqueLogico('T-tq-b', 'T-tq-b', 200, 100);
+    const bomba = new BombaLogica('P-tq-b', 'P-tq-b', 400, 100);
+    const dreno = new DrenoLogico('D-tq-b', 'D-tq-b', 600, 100);
+
+    [fonte, tanque, bomba, dreno].forEach((c) => engine.add(c));
+    conectar(engine, fonte, tanque);
+    conectar(engine, tanque, bomba);
+    conectar(engine, bomba, dreno);
+    bomba.setAcionamento(100);
+
+    let iniciouBombeamento = false;
+    for (let i = 1; i <= 900; i += 1) {
+        const dt = 0.016 + (0.002 * Math.sin(i));
+        engine.tickPipeline.advance(dt);
+        const vazaoM3h = bomba.fluxoReal * 3.6;
+        if (vazaoM3h > 1) iniciouBombeamento = true;
+        if (iniciouBombeamento) {
+            assert.ok(
+                vazaoM3h > 0.5,
+                `Bomba nao pode zerar apos iniciar bombeamento (passo ${i}: ${vazaoM3h.toFixed(2)} m3/h)`
+            );
+        }
+    }
+
+    approx(bomba.fluxoReal * 3.6, 32, 0.05, 'Bomba estabiliza na vazao de entrada do tanque (32 m3/h)');
 });

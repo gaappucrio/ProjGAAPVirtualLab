@@ -41,6 +41,7 @@ const CAVITATION_TOLERANCE = 1e-3;
 const CAVITATION_LOCAL_BRACKET = 0.05;
 // Coeficiente de perda na entrada de um tanque: a energia cinética do jato é dissipada no reservatório.
 const TANK_INLET_EXIT_LOSS_K = 1;
+const TANK_OUTLET_CUSHION_L = EPSILON_FLOW * 10;
 
 function isStream2Port(portId) {
     return portId === 'in2' || portId === 'out2' || portId === '2';
@@ -242,8 +243,11 @@ export class GlobalHydraulicSolver {
                 inputNode.boundaryKind = 'tank-inlet';
                 outputNode.fixedPressureBar = component.getPressaoBocalSaidaBar(fluid, usarAlturaRelativa);
                 outputNode.boundaryKind = 'tank-outlet';
+                const availableVolumeL = component.getVolumeDisponivelSaidaL?.(usarAlturaRelativa)
+                    ?? Math.max(0, component.volumeAtual);
+                outputNode.availableVolumeL = availableVolumeL;
                 outputNode.flowCapLps = dt > 0
-                    ? Math.max(0, component.volumeAtual) / dt
+                    ? availableVolumeL / dt
                     : Number.POSITIVE_INFINITY;
             } else if (component instanceof ValvulaLogica) {
                 addLink(this.createValveLink(component, inputNode.id, outputNode.id));
@@ -259,7 +263,50 @@ export class GlobalHydraulicSolver {
             addLink(this.createConnectionLink(connection, source, target, dt));
         });
 
+        this.reconcilePreviousFlows(links);
+
         return { nodes, links, componentById, dt };
+    }
+
+    // Garante que as vazões anteriores (usadas no termo de inércia dQ/dt) respeitem a continuidade
+    // através de equipamentos passantes sem volume acumulado, evitando picos artificiais de golpe de
+    // aríete quando um snapshot legado ou uma edição de topologia traz vazões em série incompatíveis.
+    reconcilePreviousFlows(links) {
+        const internalLinks = links.filter((link) => link.kind !== 'connection');
+        if (internalLinks.length === 0) return;
+
+        const scalePreviousFlows = (group, targetSum) => {
+            const currentSum = group.reduce((sum, link) => sum + link.previousFlowLps, 0);
+            if (currentSum <= targetSum + EPSILON_FLOW) return false;
+            const scale = currentSum > EPSILON_FLOW ? targetSum / currentSum : 0;
+            group.forEach((link) => {
+                link.previousFlowLps *= scale;
+            });
+            return true;
+        };
+
+        for (let pass = 0; pass < internalLinks.length; pass += 1) {
+            let changed = false;
+            internalLinks.forEach((internalLink) => {
+                const incoming = links.filter((link) => link.kind === 'connection' && link.open && link.to === internalLink.from);
+                const outgoing = links.filter((link) => link.kind === 'connection' && link.open && link.from === internalLink.to);
+                if (incoming.length === 0 && outgoing.length === 0) return;
+
+                if (!internalLink.open) {
+                    if (scalePreviousFlows(incoming, 0)) changed = true;
+                    if (scalePreviousFlows(outgoing, 0)) changed = true;
+                    return;
+                }
+
+                if (incoming.length === 0 || outgoing.length === 0) return;
+                const sumIn = incoming.reduce((sum, link) => sum + link.previousFlowLps, 0);
+                const sumOut = outgoing.reduce((sum, link) => sum + link.previousFlowLps, 0);
+                const consistentFlow = Math.min(sumIn, sumOut);
+                if (scalePreviousFlows(incoming, consistentFlow)) changed = true;
+                if (scalePreviousFlows(outgoing, consistentFlow)) changed = true;
+            });
+            if (!changed) break;
+        }
     }
 
     // O sentido hidráulico de cada corrente do trocador vem das portas efetivamente ligadas: a porta que
@@ -414,6 +461,7 @@ export class GlobalHydraulicSolver {
             drive,
             areaM2: positiveNumber(pump.getAreaConexaoM2?.(), 1e-6),
             // Fator de cavitação é tratado como incógnita própria (ver solveCavitation), partindo do passo anterior.
+            initialCavitationFactor: Math.min(1, Math.max(0, finiteNumber(pump.fatorCavitacaoAtual, 1))),
             cavitationFactor: Math.min(1, Math.max(0, finiteNumber(pump.fatorCavitacaoAtual, 1))),
             previousFlowLps: this.previousComponentLinkFlows.get(`pump:${pump.id}`) || 0,
             forcedClosed,
@@ -427,6 +475,7 @@ export class GlobalHydraulicSolver {
 
     connectionLossBar(link, flowLps) {
         const q = Math.abs(flowLps);
+        if (!(q > 1e-12)) return 0;
         const hydraulics = this.context.getPipeHydraulics(
             link.connection,
             link.geometry,
@@ -523,6 +572,9 @@ export class GlobalHydraulicSolver {
         let passes = 0;
 
         for (; passes < MAX_STATUS_PASSES; passes += 1) {
+            network.links.forEach((link) => {
+                if (link.kind === 'pump') link.cavitationFactor = link.initialCavitationFactor;
+            });
             const references = this.assignReferenceNodes(network, nodeState);
             let result = this.runNewton(network, flows, nodeState);
             totalIterations += result.iterations;
@@ -736,7 +788,7 @@ export class GlobalHydraulicSolver {
                 });
 
                 const solution = solveCholesky(matrix, rhs, size) || solveGaussian(matrix, rhs, size);
-                if (!solution) {
+                if (!solution || !solution.every(Number.isFinite)) {
                     this.metrics.lastDiagnostics.push({
                         code: 'global_singular_matrix',
                         severity: 'warning',
@@ -756,7 +808,9 @@ export class GlobalHydraulicSolver {
                 }
                 const conductance = conductances[link.index];
                 const base = flows[link.index] - (conductance * values[link.index]);
-                const nextFlow = base + (conductance * (pressures.get(link.from) - pressures.get(link.to)));
+                const rawNextFlow = base + (conductance * (pressures.get(link.from) - pressures.get(link.to)));
+                if (!Number.isFinite(rawNextFlow)) return;
+                const nextFlow = Math.abs(rawNextFlow) < 1e-12 ? 0 : rawNextFlow;
                 maxChange = Math.max(maxChange, Math.abs(nextFlow - flows[link.index]));
                 maxFlow = Math.max(maxFlow, Math.abs(nextFlow));
                 flows[link.index] = nextFlow;
@@ -773,6 +827,20 @@ export class GlobalHydraulicSolver {
             nodeState.get(nodeId).pressureBar = pressures.get(nodeId);
         });
         return { pressures, converged, iterations };
+    }
+
+    getEffectiveNodeFlowCapLps(network, node, flows) {
+        if (node.flowCapLps === null) return null;
+        if (node.boundaryKind !== 'tank-outlet' || !(network.dt > 0) || !Number.isFinite(node.flowCapLps)) {
+            return node.flowCapLps;
+        }
+        const inletId = inputNodeId(node.component);
+        const inflowLps = network.links
+            .filter((link) => link.open && link.to === inletId)
+            .reduce((sum, link) => sum + Math.max(0, flows[link.index]), 0);
+        if (!(inflowLps > EPSILON_FLOW)) return node.flowCapLps;
+        const availableAboveCushionL = Math.max(0, (node.availableVolumeL ?? 0) - TANK_OUTLET_CUSHION_L);
+        return (availableAboveCushionL / network.dt) + inflowLps;
     }
 
     // Atualiza estados ativos; retorna true se algum estado mudou e a rede precisa ser resolvida de novo.
@@ -795,7 +863,7 @@ export class GlobalHydraulicSolver {
             const toPressure = pressures.get(link.to) ?? 0;
             let drivingBar = fromPressure - toPressure;
             if (link.kind === 'connection') drivingBar += link.staticHeadBar;
-            if (link.kind === 'pump') drivingBar += this.pumpBoostBar(link, 0);
+            if (link.kind === 'pump') drivingBar += this.pumpBoostBar(link, 0, 1);
             if (drivingBar > STATUS_PRESSURE_TOLERANCE_BAR) {
                 link.open = true;
                 flows[link.index] = this.initialFlowGuess(link);
@@ -804,23 +872,27 @@ export class GlobalHydraulicSolver {
         });
 
         network.nodes.forEach((node) => {
-            if (node.flowCapLps === null) return;
+            const effectiveCapLps = this.getEffectiveNodeFlowCapLps(network, node, flows);
+            if (effectiveCapLps === null) return;
             const state = nodeState.get(node.id);
             const outflow = network.links
                 .filter((link) => link.open && link.from === node.id)
                 .reduce((sum, link) => sum + Math.max(0, flows[link.index]), 0);
 
-            if (!state.capped && outflow > node.flowCapLps + STATUS_FLOW_TOLERANCE_LPS) {
+            if (!state.capped && outflow > effectiveCapLps + STATUS_FLOW_TOLERANCE_LPS) {
                 // A fronteira não sustenta a pressão nominal com essa vazão: passa a impor a vazão máxima.
                 state.capped = true;
                 state.fixed = false;
-                state.injectionLps = node.flowCapLps;
+                state.injectionLps = effectiveCapLps;
                 changed = true;
             } else if (state.capped && state.pressureBar > node.fixedPressureBar + STATUS_PRESSURE_TOLERANCE_BAR) {
                 state.capped = false;
                 state.fixed = true;
                 state.pressureBar = node.fixedPressureBar;
                 state.injectionLps = 0;
+                changed = true;
+            } else if (state.capped && Math.abs(state.injectionLps - effectiveCapLps) > STATUS_FLOW_TOLERANCE_LPS) {
+                state.injectionLps = effectiveCapLps;
                 changed = true;
             }
         });

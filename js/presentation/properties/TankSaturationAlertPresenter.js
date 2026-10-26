@@ -41,6 +41,8 @@ function getStableComponentSignature(rootComponent, component) {
 
     if (component instanceof TanqueLogico) {
         signature.push(
+            component.tipoTanque ?? 'atmosferico',
+            formatAlertSignatureNumber(component.pressaoPreCargaBar),
             formatAlertSignatureNumber(component.setpoint),
             component.setpointAtivo ? 'sp-on' : 'sp-off',
             formatAlertSignatureNumber(component.alturaUtilMetros),

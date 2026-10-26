@@ -69,7 +69,7 @@ O último objeto apontado fica em `__GAAP.ultimoHover` — é o **objeto real** 
 | `__GAAP.find("T-01")` | O objeto do componente (para explorar campos e métodos) |
 | `__GAAP.conexoesDe("T-01")` | Tabela única das conexões do componente, com coluna `sentido` (entrada/saída); retorna `{ entradas, saidas }` |
 | `__GAAP.selecionado()` | O que está selecionado na tela (vários → tabela) |
-| `__GAAP.solver()` | Modo do solver (`push`, `nodal` ou `mixed`) e métricas de convergência |
+| `__GAAP.solver()` | Modo do solver (`global`, `push`, `nodal` ou `mixed`) e métricas de convergência |
 | `__GAAP.analise()` | Última análise topológica da rede (ilhas, malhas fechadas) |
 | `__GAAP.engine` | Acesso direto ao `SistemaSimulacao` |
 | `__GAAP.ajuda()` | Lista todos os comandos no console |
@@ -119,9 +119,9 @@ Cada `passo` mostra no console:
 1. Um resumo: ticks executados, tempo simulado e quantos valores mudaram.
 2. Um grupo fechado **"tempo por fase (ms)"**, na **ordem real** em que o tick executa:
    1. `updateHighLevelControls` — controle de nível (PID) dos tanques
-   2. `updateComponentDynamics` — rampas de bombas e curso de válvulas
-   3. `solveHydraulicNetwork` — solver hidráulico (push ou nodal)
-   4. `syncPhysicalMetrics` — inventário dos tanques e métricas dos componentes
+   2. `updateComponentDynamics` — rampas de bombas, curso de válvulas e atraso térmico do trocador
+   3. `solveHydraulicNetwork` — solver hidráulico (global simultâneo ou legado push/nodal)
+   4. `syncPhysicalMetrics` — inventário dos tanques, métricas dos componentes e monitor de regime permanente
    5. `updatePipesVisual` — visual dos canos e avisos de setpoint
    6. `notify(panelUpdate)` — descrito na tabela como "restante (evento update_painel → painéis e gráficos)": é o tempo do tick que sobra fora das fases acima
 
@@ -217,9 +217,9 @@ As tolerâncias foram calibradas com as plantas de `Testes/plantas teste/` (cent
 - **Arquivos:** `js/debug/` (código) e `Testes/*-*.test.mjs` correspondentes (`debug-console`, `event-tracer`, `tick-stepper`, `invariant-checker`, `hover-inspector`). Ativação em `js/App.js`.
 - **Sem dependência do domínio:** as ferramentas interceptam métodos de fora via `js/debug/MethodWrap.js` (camadas que podem ser ligadas/desligadas em qualquer ordem). Não importe nada de `js/debug/` nas camadas do app.
 - **Se o pipeline do tick mudar** (nova fase, outra ordem), atualize `TICK_PHASES` em `js/debug/TickProfiler.js` — um teste falha para avisar.
-- **Integração com a refatoração (`origin/Claudião`):**
-  - O pipeline ganhou `advance(dt)` e `steadyStateMonitor.update` — o medidor mostra esse tempo dentro de "restante" até `TICK_PHASES` ser atualizado.
-  - O trocador ganhou atraso térmico: a checagem da 2ª lei já usa `temperaturaSaidaAlvoC` quando existir.
-  - Novo solver global: as checagens o detectam automaticamente; se ele passar a expor vazão reversa com sinal, revisar `VAZAO_NEGATIVA` e `BALANCO_TANQUE` e rodar de novo as plantas de teste.
-  - `package.json`: juntar as listas de arquivos de teste das duas branches.
+- **Integração com a física e o solver global na `main`:**
+  - O pipeline expõe `advance(dt)` e `steadyStateMonitor.update` — o medidor contabiliza esse tempo dentro do tick.
+  - O trocador possui atraso térmico (`volumeInternoL`): a checagem da 2ª lei (`TEMPERATURA_TROCADOR`) avalia `temperaturaSaidaAlvoC` / `temperaturaSaida2AlvoC` quando disponíveis.
+  - Solver global (`GlobalHydraulicSolver.js`): as checagens o detectam automaticamente e validam conservação de massa (incluindo `vazaoTransbordoLps` em tanques abertos e `vazaoTransbordoLps = 0` em vasos fechados).
+  - `package.json`: suíte unificada com 9 arquivos de teste (incluindo `Testes/fisica-e-dwsim.test.mjs` e os 5 arquivos de teste do modo debug), totalizando 179 testes automatizados.
 - **Validação:** `npm test` e `node -c <arquivo>` em cada arquivo alterado.

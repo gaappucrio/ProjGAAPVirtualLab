@@ -27,8 +27,9 @@ A organização do código segue conceitos fundamentais do DDD:
 
 4. **Serviços de Domínio (Domain Services):**
    Operações físicas que envolvem múltiplos elementos da rede:
-   - `HydraulicNetworkSolver.js`: método sequencial push-based para propagação de vazão e pressão em redes abertas.
-   - `NodalHydraulicSolver.js`: solucionador simultâneo não linear por bisseção para circuitos fechados (anéis), com suporte a anéis flutuantes em série e resolução topológica de ramos internos para equipamentos multi-corrente (`TrocadorCalorLogico`).
+   - `GlobalHydraulicSolver.js`: solucionador simultâneo global padrão (Global Gradient Algorithm / Newton–Cholesky) para redes abertas e fechadas, com inércia física nos tubos, reconciliação de vazões históricas (`reconcilePreviousFlows`), conjuntos ativos e cavitação acoplada.
+   - `HydraulicNetworkSolver.js`: método sequencial push-based legado para propagação de vazão e pressão em redes abertas (acessível pelo toggle "Solver legado").
+   - `NodalHydraulicSolver.js`: solucionador simultâneo não linear por bisseção para circuitos fechados (anéis) no modo legado, com suporte a anéis flutuantes em série e resolução topológica de ramos internos para equipamentos multi-corrente (`TrocadorCalorLogico`).
    - `HydraulicBranchModel.js`: modelagem de capacidade de ramos, perdas de carga singulares, conservação de massa desacoplada por corrente e reconciliação de pressões.
    - `HydraulicNetworkAnalyzer.js`: análise topológica de grafos, detecção de ciclos e particionamento em ilhas hidráulicas.
    - `PipeHydraulics.js`: equações de Darcy-Weisbach, Colebrook/Swamee-Jain, regimes de Reynolds e diâmetro sugerido.
@@ -114,7 +115,7 @@ A arquitetura do GAAP Virtual Lab emprega os seguintes padrões de projeto:
     *   `LanguageManager.js` (`subscribeLanguageChanges`): notifica controladores e elementos reativos sempre que o idioma é alternado.
     *   `DisplayUnits.js` (`subscribeUnitPreferences`): notifica presenters para reexibir valores convertidos instantaneamente ao alterar unidades de medida.
 *   **Strategy Pattern (Estratégia):**
-    *   Seleção de Solvers em `HydraulicNetworkAnalyzer.js`: a topologia da malha determina dinamicamente se uma ilha hidráulica é resolvida pela estratégia push-based sequencial (`HydraulicNetworkSolver.js`) ou pela estratégia de bisseção nodal simultânea (`NodalHydraulicSolver.js`).
+    *   Seleção de Solvers em `SimulationEngine.js` e `HydraulicNetworkAnalyzer.js`: por padrão a rede é resolvida pelo solver simultâneo global (`GlobalHydraulicSolver.js`); quando o modo legado está ativo, a topologia da malha determina dinamicamente se uma ilha hidráulica é resolvida pela estratégia push-based sequencial (`HydraulicNetworkSolver.js`) ou pela estratégia de bisseção nodal simultânea (`NodalHydraulicSolver.js`).
     *   Perfis de Válvulas em `ValvulaLogica.js` (`VALVE_PROFILE_DEFINITIONS`): estratégias matemáticas intercambiáveis para a relação abertura vs vazão (linear, igual porcentagem, abertura rápida).
     *   Presenters de Painel: a estratégia de renderização e bind é selecionada em tempo de execução com base no tipo do equipamento selecionado.
 *   **Pipeline Pattern (Tubo e Filtros):**
@@ -143,7 +144,7 @@ A nomenclatura dos arquivos segue convenções que refletem sua camada e respons
 | Sufixo / Padrão de Nome | Camada | Responsabilidade do Arquivo | Exemplos no Código |
 |---|---|---|---|
 | `*Logico.js` | Domínio | Entidade de equipamento com leis físicas e balanços | `BombaLogica.js`, `TrocadorCalorLogico.js`, `ValvulaLogica.js` |
-| `*Solver.js` | Domínio | Algoritmos de solução de escoamento e pressões | `HydraulicNetworkSolver.js`, `NodalHydraulicSolver.js` |
+| `*Solver.js` | Domínio | Algoritmos de solução de escoamento e pressões | `GlobalHydraulicSolver.js`, `HydraulicNetworkSolver.js`, `NodalHydraulicSolver.js` |
 | `*Controller.js` | Apresentação | Orquestração de eventos de interface do usuário | `ToolbarController.js`, `MonitorController.js`, `PipeController.js` |
 | `*Presenter.js` | Apresentação | Geração e vinculação de conteúdo de painéis | `PumpComponentPropertiesPresenter.js`, `PropertyUnitsPresenter.js` |
 | `*Adapter.js` | Infraestrutura | Ponte de comunicação com bibliotecas ou APIs externas | `HeatExchangerChartAdapter.js`, `PropertyDomAdapter.js` |
@@ -241,7 +242,7 @@ Este módulo instancia o engine, conecta serviços de visual, cria controladores
 
 - Bombas devem ter curvas de carga, eficiência e NPSHr. A curva é definida com água de referência e preserva a altura manométrica para outros fluidos ($\Delta P = \rho g H$); a eficiência afeta somente a potência de eixo.
 - Válvulas devem ter abertura desejada, tempo de curso, perfil de característica e alerta didático de subdimensionamento hidráulico por queda de pressão.
-- Tanques devem calcular pressão hidrostática e permitir controle de set point por controlador de nível PID (com anti-windup por integração condicional e convergência ao set point sem ciclo limite) separado da dinâmica física. O tanque aberto (atmosférico) impõe apenas $\rho g h$ na saída, desacoplando a pressão de montante; o vaso fechado soma a pressão de um colchão de gás (Boyle, a partir da pré-carga configurada). Com o tanque cheio, o excedente deve sair como transbordo, exibido no painel e na exportação.
+- Tanques devem calcular pressão hidrostática e permitir controle de set point por controlador de nível PID (com anti-windup por integração condicional e convergência ao set point sem ciclo limite) separado da dinâmica física. O tanque aberto (atmosférico) impõe apenas $\rho g h$ nos bocais, desacoplando a pressão de montante, e escoa o excedente como transbordo (`vazaoTransbordoLps`, exibido no painel e na exportação) quando cheio; o vaso fechado (`'fechado'`) soma a pressão de um colchão de gás (Boyle isotérmico a partir da pré-carga configurada, com *headspace* mínimo de $2\%\,V_{\text{total}}$) aos bocais de entrada e saída, à contrapressão dos ramos e ao diagnóstico de saturação de set point, sem transbordo atmosférico ($Q_{\text{transbordo}} = 0$).
 - Tanques e tubulações devem exibir tempo de residência atual quando houver vazão suficiente.
 - Fontes devem definir fluido, pressão de alimentação e vazão máxima; alterar apenas a temperatura do fluido deve recalcular densidade, viscosidade e pressão de vapor pelas correlações do fluido; a pressão dirige a vazão resolvida e a vazão máxima limita a capacidade entregue quando a fonte satura. A vazão máxima padrão da entrada é `32 m³/h`.
 - Drenos devem manter contrapressão de saída, exibir a pressão final da rede antes da perda de entrada e explicitar a queda causada pelo `K` de entrada.
@@ -1093,7 +1094,7 @@ A seguir estão as funções/chaves de alto valor do sistema, com seus objetivos
 
 ## 9. Observações Importantes
 
-- O sistema permanece educacional. O solver push-based é adequado para a maioria dos casos didáticos e redes abertas.
+- O sistema permanece educacional. O solver global simultâneo (`GlobalHydraulicSolver.js`) é o motor padrão para redes abertas e fechadas, enquanto o solver push-based permanece disponível pelo toggle "Solver legado" para comparação didática.
 - A detecção de malhas fechadas atua como diagnóstico de aviso e protege contra uso silencioso de uma abordagem inapropriada.
 - A exportação tabular não inclui gráficos, apenas dados numéricos e estados de simulação.
 - A persistência de tema e idioma é feita via `localStorage` quando disponível.

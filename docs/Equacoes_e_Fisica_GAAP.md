@@ -100,14 +100,14 @@ Onde:
 - $P_{suc\_abs}$: Pressão absoluta no bocal de sucção da bomba (Pa)
 - $g$: Aceleração da gravidade (9.81 m/s²)
 
-**NPSH Requerido ($NPSH_r$):** Mínimo exigido pela geometria interna da bomba, dinamicamente variável em função do fluxo, modelado matematicamente com crescimento exponencial suave a partir do Ponto de Melhor Eficiência (BEP):
+**NPSH Requerido ($NPSH_r$):** Mínimo exigido pela geometria interna da bomba, dinamicamente variável em função do fluxo e do grau de acionamento ($\alpha = N / N_{max} \in [0, 1]$), modelado matematicamente em `BombaLogica.js`:
 
-$$NPSH_r = NPSH_{nominal} \cdot \left( \frac{N}{N_{max}} \right)^2 \cdot \left( 0.42 + 0.58 \left(\frac{Q}{Q_{max}}\right)^{1.8} \right)$$
+$$NPSH_r = NPSH_{nominal} \cdot \max\left(0{,}35, \; \alpha^{1{,}35}\right) \cdot \left( 0{,}72 + 0{,}78 \left(\frac{Q}{Q_{max} \cdot \alpha}\right)^{1{,}6} \right)$$
 
 Onde:
 - $NPSH_{nominal}$: NPSH exigido pela bomba no seu ponto de projeto ideal
 - $N$: Rotação ou acionamento atual ($0$ a $100\%$)
-- $N_{max}$: Rotação máxima de projeto
+- $N_{max}$: Rotação máxima de projeto ($\alpha = N / N_{max}$)
 
 Caso $NPSH_a < NPSH_r$, o sistema impõe uma penalidade logística que afunda a eficiência volumétrica e a carga da bomba, mitigando sua capacidade propulsora e replicando as bolhas de cavitação bloqueando o rotor (`fatorCavitacao`).
 
@@ -203,15 +203,14 @@ O tanque impõe as pressões dos bocais ao solver global e, por isso, desacopla 
 
 $$P_{\text{saída}} = P_{\text{gás}} + \rho g (h - z_{\text{saída}}), \qquad P_{\text{entrada}} = P_{\text{gás}} + \rho g \max(0, h - z_{\text{entrada}})$$
 
-- **Tanque aberto (atmosférico):** $P_{\text{gás}} = 0$ (manométrica).
-- **Vaso fechado (colchão de gás):** Boyle isotérmico a partir da pré-carga com o vaso vazio,
-  $$P_{\text{gás,abs}} = (P_{\text{pré}} + P_{\text{atm}}) \frac{V_{\text{total}}}{V_{\text{total}} - V_{\text{líquido}}}$$
-  O vaso enche até $P_{\text{gás}}$ equilibrar a pressão de alimentação.
-- **Transbordo:** com o tanque cheio, $Q_{\text{transbordo}} = (V_t + (\Sigma Q_{in} - \Sigma Q_{out})\Delta t - V_{\max})/\Delta t$ — a massa excedente sai pelo ladrão, sem criar pressão fictícia.
+- **Tanque aberto (`'atmosferico'`):** $P_{\text{gás}} = 0$ (manométrica). Com o tanque cheio ($V > V_{\max}$), o excedente escoa pelo ladrão atmosférico como **transbordo** ($Q_{\text{transbordo}} = (V_t + (\Sigma Q_{in} - \Sigma Q_{out})\Delta t - V_{\max})/\Delta t$), fechando o balanço de massa sem criar pressão fictícia.
+- **Vaso fechado (`'fechado'`, colchão de gás):** Boyle isotérmico a partir da pré-carga configurada com o vaso vazio (`pressaoPreCargaBar`), com fração mínima de colchão de gás $V_{\text{gás,mín}} = 0{,}02 \, V_{\text{total}}$ (`VOLUME_GAS_MINIMO_FRACAO = 0.02`) para representar o *headspace* residual de segurança:
+  $$P_{\text{gás,abs}} = (P_{\text{pré}} + P_{\text{atm}}) \frac{V_{\text{total}}}{\max(0{,}02 \, V_{\text{total}}, \; V_{\text{total}} - V_{\text{líquido}})}$$
+  Como o vaso é estanque, **não há transbordo atmosférico** ($Q_{\text{transbordo}} = 0$). A pressão do colchão de gás $P_{\text{gás}}$ soma-se às pressões dos bocais de entrada e saída (`getPressaoBocalEntradaBar`, `getPressaoBocalSaidaBar`), à contrapressão vista pelos ramos a montante (`getTargetBackPressureBar`) e ao diagnóstico de saturação de setpoint (`getResumoAjustePressaoSetpoint`), fazendo o vaso pressurizar até equilibrar a alimentação.
 - **Saída limitada pelo inventário:** $Q_{out} \le V/\Delta t$.
 
 ### Mistura de Fases e Balanceamento
-No caso de confluência de fluidos distintos, a densidade da mistura é apurada volumetricamente:
+No caso de confluência de fluidos distintos (em nós da malha ou no interior do tanque), `mixFluidos` (`Fluido.js`) apura a densidade da mistura volumetricamente, a temperatura por balanço entálpico ($\sum V_i \rho_i c_{p,i} T_i / \sum V_i \rho_i c_{p,i}$) e a viscosidade dinâmica pelo modelo logarítmico de Arrhenius ($\ln \mu_{\text{mix}} = \sum x_i \ln \mu_i$), preservando também as propriedades termofísicas de referência (`refTemperatura`, `refDensidade`, `refViscosidadeDinamicaPaS`, `refPressaoVaporBar`) para que variações térmicas subsequentes na rede mantenham a âncora de calibração de $25^\circ\text{C}$:
 
 $$\rho_{mix} = \frac{\rho_1 V_1 + \rho_2 V_2}{V_1 + V_2}$$
 
@@ -382,7 +381,7 @@ Todas as equações dos componentes são resolvidas **ao mesmo tempo** pelo Glob
 
 $$P_a - P_b = \Phi_j(Q_j) = \underbrace{\operatorname{sgn}(Q_j)\,K_j \frac{\rho Q_j^2}{2A_j^2}}_{\text{perdas}} - \underbrace{\rho g \Delta z_j}_{\text{estático}} - \underbrace{H_{\text{bomba}}(Q_j)\,c_{\text{cav}}}_{\text{bomba}} + \underbrace{\frac{I_j}{\Delta t}\left(Q_j - Q_j^{\text{ant}}\right)}_{\text{inércia}}, \qquad I_j = \frac{\rho L_j}{A_j}$$
 
-e em cada nó livre $\sum Q_{\text{entra}} - \sum Q_{\text{sai}} = 0$. O termo de inércia é Euler implícito da equação de quantidade de movimento do tubo, $\frac{\rho L}{A}\frac{dQ}{dt} = \Delta P - \Delta P_{\text{perdas}}$: a vazão acelera fisicamente e o regime é idêntico ao estacionário. Newton com $p_j = 1/\Phi_j'$ gera o sistema nodal simétrico definido positivo $\mathbf{A}\,\mathbf{P} = \mathbf{b}$ (Cholesky). Conjuntos ativos tratam válvulas de retenção/unidirecionais (sem fluxo reverso, como no DWSIM dinâmico), tetos de vazão das fontes e o inventário dos tanques; o fator de cavitação é a raiz de $g(c) = f_{\text{cav}}(c) - c$.
+e em cada nó livre $\sum Q_{\text{entra}} - \sum Q_{\text{sai}} = 0$. O termo de inércia é Euler implícito da equação de quantidade de movimento do tubo, $\frac{\rho L}{A}\frac{dQ}{dt} = \Delta P - \Delta P_{\text{perdas}}$: a vazão acelera fisicamente e o regime é idêntico ao estacionário. Antes de avaliar a inércia no passo, `reconcilePreviousFlows` projeta vazões históricas ($Q_j^{\text{ant}}$) sobre o subespaço de conservação de massa através de equipamentos passantes de volume zero (bombas, válvulas e correntes de trocador), ponderando por $1/(I_j + 10^{-6})$ para evitar picos espúrios de pressão em nós internos quando a simulação parte de snapshots não conservativos. Newton com $p_j = 1/\Phi_j'$ gera o sistema nodal simétrico definido positivo $\mathbf{A}\,\mathbf{P} = \mathbf{b}$ (Cholesky). Conjuntos ativos tratam válvulas de retenção/unidirecionais (sem fluxo reverso, como no DWSIM dinâmico), tetos de vazão das fontes e o inventário dos tanques; o fator de cavitação é a raiz de $g(c) = f_{\text{cav}}(c) - c$.
 
 **Validação contra o DWSIM dinâmico** (`Testes/fisica-e-dwsim.test.mjs`): alimentação 1 bar → válvula $K_v$ ($C_v$ 40) → tanque atmosférico 2 m³ → válvula $K_v$ ($C_v$ 100) → produto. Nível e vazão coincidem com o modelo de referência do DWSIM ($Q = K_v\sqrt{1000\,\Delta P/\rho}/3{,}6$ L/s, Euler explícito) dentro de 1% de 60 s a 600 s, e o nível de regime coincide com o analítico $h = (K_{v1}/K_{v2})^2 \Delta P/(\rho g)$.
 

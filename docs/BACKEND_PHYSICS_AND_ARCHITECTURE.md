@@ -219,9 +219,9 @@ No solver global, se a pressão estática absoluta na sucção cai abaixo de $P_
 
 O solver de ramos (`HydraulicBranchModel.js`) e o solver nodal (`NodalHydraulicSolver.js`) implementam verificações defensivas robustas: se a pressão atmosférica, a densidade ou a pressão de vapor não estiverem disponíveis no estado intermediário, são aplicados valores canônicos de fallback físico seguro ($P_{\text{atm}} = 1.01325\text{ bar}$, $\rho = 997\text{ kg/m}^3$, $P_{\text{vap}} = 0.0317\text{ bar}$), evitando a propagação de `NaN` ou descontinuidades numéricas em transientes.
 
-O NPSH requerido ($NPSH_{\text{r}}$) cresce com o quadrado da vazão de sucção:
+O NPSH requerido ($NPSH_{\text{r}}$) cresce com a vazão de sucção e com o acionamento efetivo ($\omega_{\text{ef}} \in [0, 1]$):
 
-$$NPSH_{\text{r}}(Q) = NPSH_{\text{r, base}} \cdot \omega_{\text{ef}}^2 \cdot \left( 0.42 + 0.58 \cdot \left(\frac{Q}{Q_{\text{nominal}} \cdot \omega_{\text{ef}}}\right)^{1.8} \right) \quad \text{[metros]}$$
+$$NPSH_{\text{r}}(Q) = NPSH_{\text{r, base}} \cdot \max\left(0{,}35, \; \omega_{\text{ef}}^{1{,}35}\right) \cdot \left( 0{,}72 + 0{,}78 \cdot \left(\frac{Q}{Q_{\text{nominal}} \cdot \omega_{\text{ef}}}\right)^{1{,}6} \right) \quad \text{[metros]}$$
 
 Se $NPSH_{\text{a}} < NPSH_{\text{r}}$, inicia-se a degradação de desempenho por **fator de cavitação** ($f_{\text{cav}}$), que atua reduzindo multiplicativamente a curva de pressão produzida:
 
@@ -293,11 +293,13 @@ O tanque é um nó de pressão imposta no solver global — ele **desacopla** a 
 | Saída (fundo) | $P = \rho g (h - z_{\text{saída}})$ | $P = P_{\text{gás}} + \rho g (h - z_{\text{saída}})$ |
 | Entrada | $P = \rho g \max(0, h - z_{\text{entrada}})$ | $P = P_{\text{gás}} + \rho g \max(0, h - z_{\text{entrada}})$ |
 
-O colchão de gás do vaso fechado segue Boyle isotérmico a partir da pré-carga com o vaso vazio:
+O colchão de gás do vaso fechado segue Boyle isotérmico a partir da pré-carga com o vaso vazio (`pressaoPreCargaBar`):
 
-$$P_{\text{gás,abs}} = (P_{\text{pré}} + P_{\text{atm}}) \cdot \frac{V_{\text{total}}}{V_{\text{total}} - V_{\text{líquido}}}$$
+$$P_{\text{gás,abs}} = (P_{\text{pré}} + P_{\text{atm}}) \cdot \frac{V_{\text{total}}}{\max(0{,}02 \, V_{\text{total}}, \; V_{\text{total}} - V_{\text{líquido}})}$$
 
-com volume de gás mínimo de $10^{-4} V_{\text{total}}$ para evitar a singularidade. A entrada do tanque recebe a perda de saída do jato ($K = 1$). Com o tanque cheio, o excedente sai como **transbordo** (`vazaoTransbordoLps`), fechando o balanço de massa em vez de criar pressão fictícia.
+com volume de gás mínimo de $2\% \, V_{\text{total}}$ (`VOLUME_GAS_MINIMO_FRACAO = 0.02`) para representar o *headspace* residual físico e limitar numericamente a sobrepressão em vaso cheio. A entrada do tanque recebe a perda de saída do jato ($K = 1$).
+- **Em tanque aberto (`'atmosferico'`):** com o tanque cheio ($V > V_{\max}$), o excedente escoa pelo ladrão atmosférico como **transbordo** (`vazaoTransbordoLps`), fechando o balanço de massa sem criar pressão fictícia.
+- **Em vaso fechado (`'fechado'`):** como o vaso é estanque, **não há transbordo atmosférico** (`vazaoTransbordoLps = 0`). A pressão do colchão de gás $P_{\text{gás}}$ é incluída nas pressões dos bocais (`getPressaoBocalEntradaBar`, `getPressaoBocalSaidaBar`, `getPressaoBocalEntradaParaNivelBar`, `getPressaoBocalSaidaParaNivelBar`), na contrapressão de ramos (`HydraulicBranchModel.getTargetBackPressureBar`), no diagnóstico de saturação de setpoint (`getResumoAjustePressaoSetpoint`) e na assinatura de alertas (`TankSaturationAlertPresenter`), elevando a contrapressão até equilibrar a alimentação quando o vaso se aproxima da capacidade máxima.
 
 #### Balanço Dinâmico de Inventário
 A cada tick, o volume é integrado numericamente:
@@ -306,7 +308,7 @@ $$\frac{dV}{dt} = \sum Q_{\text{entradas}} - \sum Q_{\text{saídas}}$$
 
 $$V_{\text{novo}} = \text{clamp}(V_{\text{anterior}} + (Q_{\text{in}} - Q_{\text{out}}) \cdot dt, \; 0, \; V_{\text{máx}})$$
 
-O que excede $V_{\text{máx}}$ é contabilizado como $Q_{\text{transbordo}} = (V_{\text{balanço}} - V_{\text{máx}})/dt$. A vazão de saída é limitada pelo inventário disponível no passo ($Q_{\text{out}} \le V/dt$).
+Em tanques abertos (`tipoTanque !== 'fechado'`), o que excede $V_{\text{máx}}$ é contabilizado como $Q_{\text{transbordo}} = (V_{\text{balanço}} - V_{\text{máx}})/dt$; em tanques fechados, $Q_{\text{transbordo}} = 0$. A vazão de saída é limitada pelo inventário disponível no passo ($Q_{\text{out}} \le V/dt$).
 
 #### Tempo de Residência
 O tempo de residência hidráulico médio ($\tau$) é calculado pela relação de volume útil e vazão volumétrica de saída estacionária:
@@ -335,7 +337,7 @@ Assumindo calor sensível ideal sem reação química associada:
 
 $$T_{\text{mix}} = \frac{\sum (Q_i \cdot \rho_i \cdot Cp_i \cdot T_i)}{\sum (Q_i \cdot \rho_i \cdot Cp_i)}$$
 
-Onde $Cp_i$ é o calor específico do fluido na entrada $i$ ($\text{J/(kg}\cdot\text{K)}$).
+Onde $Cp_i$ é o calor específico do fluido na entrada $i$ ($\text{J/(kg}\cdot\text{K)}$). Além das propriedades na temperatura resultante $T_{\text{mix}}$, `mixFluidos` também preserva e interpola as propriedades de referência de calibração (`refTemperatura`, `refDensidade`, `refViscosidadeDinamicaPaS`, `refPressaoVaporBar`), garantindo que aquecimentos ou resfriamentos posteriores (ex.: passagem por um trocador de calor a jusante de um nó de mistura ou tanque) recalculem $\rho(T)$, $\mu(T)$ e $P_{\text{vap}}(T)$ sem perder a âncora de $25^\circ\text{C}$.
 
 #### Termodinâmica de Fluidos Puros e Regularização de Singularidades
 Para além das misturas, as propriedades térmicas e de transporte dos componentes puros são regidas por modelos analíticos sensíveis à temperatura:
@@ -551,7 +553,7 @@ Desde a migração estrutural, toda a rede (malhas abertas e fechadas) é resolv
 *   **Incógnitas:** pressões manométricas dos nós (`${id}:in`, `${id}:out`; no trocador `in1/out1/in2/out2`) e vazões dos ramos (conexões, válvulas, bombas, correntes do trocador).
 *   **Condições de contorno:** fonte = pressão imposta com teto de vazão (`vazaoMaxima`); dreno = contrapressão imposta; tanque = pressões dos bocais (seção 4.3) com teto de saída $V/dt$.
 *   **Equação de cada ramo:** $P_{\text{de}} - P_{\text{para}} = \Phi(Q)$, com $\Phi$ = perdas (Darcy-Weisbach + $K$ locais + $K$ da válvula pelo $C_v$ efetivo) $-$ ganho estático $-$ carga da bomba $+$ **inércia**.
-*   **Inércia do fluido (Euler implícito):** cada tubo contribui $I\,(Q - Q_{\text{anterior}})/dt$ com $I = \rho L / A$ (em bar/(L/s²): $I = \rho L/(A \cdot 10^8)$). Isso substitui o relaxamento empírico do solver legado: a vazão acelera fisicamente conforme $dQ/dt = (A/\rho L)\,\Delta P$ e o golpe de partida é amortecido sem parâmetros arbitrários.
+*   **Inércia do fluido (Euler implícito):** cada tubo contribui $I\,(Q - Q_{\text{anterior}})/dt$ com $I = \rho L / A$ (em bar/(L/s²): $I = \rho L/(A \cdot 10^8)$). Isso substitui o relaxamento empírico do solver legado: a vazão acelera fisicamente conforme $dQ/dt = (A/\rho L)\,\Delta P$ e o golpe de partida é amortecido sem parâmetros arbitrários. Antes do passo de Newton, `reconcilePreviousFlows(links)` projeta vazões históricas ($Q_{\text{anterior}}$) não conservativas através de equipamentos passantes de volume zero (bombas, válvulas e correntes de trocador), ponderando por $1/(I + 10^{-6})$, o que evita picos espúrios de pressão em nós internos quando a simulação parte de snapshots não divergência-zero.
 *   **Newton:** linearização $p = 1/\Phi'(Q)$, sistema nodal SPD resolvido por Cholesky (eliminação gaussiana como reserva) e atualização $Q \leftarrow (Q - p\Phi) + p(P_{\text{de}} - P_{\text{para}})$.
 *   **Conjuntos ativos (estilo EPANET):** ramos unidirecionais (válvulas, bombas com retenção, bocais) fecham se $Q < 0$ e reabrem quando a pressão motriz volta a ser positiva — o DWSIM dinâmico também não permite fluxo reverso. Fontes que atingem `vazaoMaxima` passam a injetar vazão fixa; tanques que esvaziam limitam a saída a $V/dt$.
 *   **Diagnósticos:** `global_floating_reference` (ilha sem pressão de referência), `global_not_converged`, `global_below_vapor_pressure` e `floating_closed_loop_blocked`.
@@ -660,8 +662,8 @@ Para promover interoperabilidade com plantas reais e modelos criados no DWSIM, o
     *   `Valve` $\to$ `ValvulaLogica` (`valve`) com conversão dimensional de $C_v$ e $K_v$ ($K_v \approx 0{,}865 \cdot C_v$).
     *   `Tank` $\to$ `TanqueLogico` (`tank`) com volume e geometria úteis. Caso exista um controlador PID (`PIDController`, `Controller`) ou medidor de nível (`LevelGauge`) associado ao tanque (diretamente ou via `SelectedObjectID`), o importador extrai o SetPoint, parâmetros $K_p$, $K_i$ e $K_d$, normaliza o setpoint em porcentagem (0–100% da altura útil) e ativa o controle dinâmico de nível (`setpointAtivo: true`).
     *   `HeatExchanger`, `ShellAndTubeHeatExchanger`, `PlateHeatExchanger`, `Cooler`, `Heater`, `AirCooler`, `FiredHeater` $\to$ `TrocadorCalorLogico` (`heat_exchanger`) com recuperação do coeficiente global de troca $UA$ ($\text{W/K}$), área de troca $A$ ($\text{m}^2$), coeficiente global $U$ ($\text{W/(m}^2\cdot\text{K)}$ com $UA = U \cdot A$), temperatura de serviço/utilidade ($T_{\text{serviço}}$), coeficiente de perda localizada $K$ e efetividade máxima configurada. A conversão de temperaturas absolutas em Kelvin para Celsius é realizada automaticamente ($T_{^\circ\text{C}} = T_{\text{K}} - 273{,}15$ para $T > 150$). Tags visuais são atribuídas conforme a função (`TC` para trocadores de processo, `RF` para resfriadores/air coolers e `AQ` para aquecedores/aquecedores a fogo).
-    *   `MaterialStream` sem nó a montante $\to$ `FonteLogica` (`source`) com temperatura (convertida de Kelvin para Celsius e associada diretamente ao objeto de fluido da fonte), pressão e vazão máxima importadas. Quando a temperatura da corrente diferir de 25 °C, o `fluidoEntradaPresetId` é definido como `'custom'` para garantir consistência termodinâmica (recalculando densidade, viscosidade e pressão de vapor exatas da água na temperatura especificada).
-    *   `MaterialStream` sem nó a jusante $\to$ `DrenoLogico` (`sink`) com a contrapressão de descarga de processo (em bar manométrico).
+    *   `MaterialStream` sem nó a montante $\to$ `FonteLogica` (`source`) com temperatura (convertida de Kelvin para Celsius e associada diretamente ao objeto de fluido da fonte), pressão manométrica (convertida de Pascal absoluto do DWSIM para bar manométrico via $\max(0, P_{\text{Pa}}/10^5 - P_{\text{atm}})$), vazão máxima e propriedades termofísicas das fases da corrente ($\rho$, $\mu$, $c_p$, $P_{\text{vap}}$) importadas. Quando a temperatura da corrente diferir de 25 °C ou houver propriedades customizadas, o `fluidoEntradaPresetId` é definido como `'custom'` para garantir consistência termodinâmica.
+    *   `MaterialStream` sem nó a jusante $\to$ `DrenoLogico` (`sink`) com a contrapressão de descarga de processo convertida de Pascal absoluto para bar manométrico ($\max(0, P_{\text{Pa}}/10^5 - P_{\text{atm}})$).
     *   `Pipe` (`PipeSegment`) $\to$ Parâmetros físicos do `ConnectionModel` (diâmetro interno $D$, comprimento físico $L$, rugosidade $\varepsilon$ e perda localizada $K$) extraídos recursivamente das seções serializadas sob `Profile > Sections`.
 *   **Mapeamento de Múltiplas Correntes e Sentido de Escoamento:** Em trocadores de calor com duas correntes de processo:
     *   O importador extrai os índices locais e remotos dos conectores DWSIM (`AttachedFromConnIndex`, `AttachedToConnIndex` e posição sequencial).

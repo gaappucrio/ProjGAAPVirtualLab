@@ -286,7 +286,9 @@ export class HydraulicBranchModel {
 
     getTargetBackPressureBar(target, fluid = this.context.getComponentFluid(target)) {
         if (target instanceof TanqueLogico) {
-            return 0;
+            return target.tipoTanque === 'fechado'
+                ? target.getPressaoBocalEntradaBar(fluid, this.context.usarAlturaRelativa)
+                : 0;
         }
         if (target instanceof DrenoLogico) return target.pressaoSaidaBar;
         return 0;

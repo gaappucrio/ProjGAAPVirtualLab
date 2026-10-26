@@ -27,7 +27,7 @@ const BANDA_REATIVACAO_SETPOINT_NORMALIZADA = 0.0075;
 const TEMPO_MINIMO_ALERTA_SATURACAO_S = 1.5;
 export const TIPO_TANQUE_ATMOSFERICO = 'atmosferico';
 export const TIPO_TANQUE_FECHADO = 'fechado';
-const VOLUME_GAS_MINIMO_FRACAO = 1e-4;
+const VOLUME_GAS_MINIMO_FRACAO = 0.02;
 
 export class TanqueLogico extends ComponenteFisico {
     constructor(id, tag, x, y) {
@@ -89,11 +89,19 @@ export class TanqueLogico extends ComponenteFisico {
         return this.getAlturaLiquidoParaNivelM(this.getNivelNormalizado());
     }
 
-    temLiquidoDisponivelSaida(considerarAlturaBocal = true) {
-        if (this.volumeAtual <= EPSILON_FLOW || this.capacidadeMaxima <= 0) return false;
-        if (!considerarAlturaBocal) return true;
+    getVolumeMinimoSaidaL(considerarAlturaBocal = true) {
+        if (this.capacidadeMaxima <= 0 || !considerarAlturaBocal) return 0;
         this.normalizarAlturasBocais();
-        return this.getAlturaLiquidoM() > this.alturaBocalSaidaM;
+        return clamp(this.alturaBocalSaidaM / this.normalizarAlturaUtil(), 0, 1) * this.capacidadeMaxima;
+    }
+
+    getVolumeDisponivelSaidaL(considerarAlturaBocal = true) {
+        if (this.capacidadeMaxima <= 0) return 0;
+        return Math.max(0, this.volumeAtual - this.getVolumeMinimoSaidaL(considerarAlturaBocal));
+    }
+
+    temLiquidoDisponivelSaida(considerarAlturaBocal = true) {
+        return this.getVolumeDisponivelSaidaL(considerarAlturaBocal) > EPSILON_FLOW;
     }
 
     normalizarAlturasBocais() {
@@ -159,22 +167,37 @@ export class TanqueLogico extends ComponenteFisico {
 
     // Pressão manométrica do gás no topo. Tanque atmosférico: 0. Vaso fechado: colchão de gás
     // isotérmico (Boyle) definido pela pré-carga com o vaso vazio, como em vasos hidropneumáticos.
-    getPressaoGasBar(fluido = null) {
+    getPressaoGasParaNivelBar(fluido = null, nivelNormalizado = this.getNivelNormalizado()) {
         if (this.tipoTanque !== TIPO_TANQUE_FECHADO) return 0;
         const pressaoAtmosfericaBar = Number(this._resolverFluidoHidrostatico(fluido)?.pressaoAtmosfericaBar)
             || DEFAULT_ATMOSPHERIC_PRESSURE_BAR;
         const volumeTotalL = Math.max(EPSILON_FLOW, this.capacidadeMaxima);
-        const volumeGasL = Math.max(volumeTotalL * VOLUME_GAS_MINIMO_FRACAO, volumeTotalL - this.volumeAtual);
+        const volumeLiquidoL = clamp(Number(nivelNormalizado) || 0, 0, 1) * volumeTotalL;
+        const volumeGasL = Math.max(volumeTotalL * VOLUME_GAS_MINIMO_FRACAO, volumeTotalL - volumeLiquidoL);
         const pressaoPreCargaAbsBar = Math.max(0, (Number(this.pressaoPreCargaBar) || 0) + pressaoAtmosfericaBar);
         return (pressaoPreCargaAbsBar * (volumeTotalL / volumeGasL)) - pressaoAtmosfericaBar;
     }
 
+    getPressaoGasBar(fluido = null) {
+        return this.getPressaoGasParaNivelBar(fluido, this.getNivelNormalizado());
+    }
+
+    getPressaoBocalEntradaParaNivelBar(fluido = null, nivelNormalizado = this.getNivelNormalizado(), considerarAlturaBocal = true) {
+        return this.getPressaoGasParaNivelBar(fluido, nivelNormalizado)
+            + this.getBackPressureAtInletParaNivelBar(fluido, nivelNormalizado, considerarAlturaBocal);
+    }
+
     getPressaoBocalEntradaBar(fluido = null, considerarAlturaBocal = true) {
-        return this.getPressaoGasBar(fluido) + this.getBackPressureAtInletBar(fluido, considerarAlturaBocal);
+        return this.getPressaoBocalEntradaParaNivelBar(fluido, this.getNivelNormalizado(), considerarAlturaBocal);
+    }
+
+    getPressaoBocalSaidaParaNivelBar(fluido = null, nivelNormalizado = this.getNivelNormalizado(), considerarAlturaBocal = true) {
+        return this.getPressaoGasParaNivelBar(fluido, nivelNormalizado)
+            + this.getPressaoDisponivelSaidaParaNivelBar(fluido, nivelNormalizado, considerarAlturaBocal);
     }
 
     getPressaoBocalSaidaBar(fluido = null, considerarAlturaBocal = true) {
-        return this.getPressaoGasBar(fluido) + this.getPressaoDisponivelSaidaBar(fluido, considerarAlturaBocal);
+        return this.getPressaoBocalSaidaParaNivelBar(fluido, this.getNivelNormalizado(), considerarAlturaBocal);
     }
 
     temEntradaPressurizada() {
@@ -183,14 +206,14 @@ export class TanqueLogico extends ComponenteFisico {
 
     getPressaoConexaoSemPerdaBar(fluido, considerarAlturaBocal = true) {
         if (this.temEntradaPressurizada()) {
-            return Math.max(0, this.getPressaoEntradaBar());
+            return Math.max(this.getPressaoGasBar(fluido), this.getPressaoEntradaBar());
         }
 
         if (!this.temLiquidoDisponivelSaida(considerarAlturaBocal)) {
-            return 0;
+            return this.getPressaoGasBar(fluido);
         }
 
-        return this.getPressaoDisponivelSaidaBar(fluido, considerarAlturaBocal);
+        return this.getPressaoBocalSaidaBar(fluido, considerarAlturaBocal);
     }
 
     getFluidoConteudo() {
@@ -394,22 +417,22 @@ export class TanqueLogico extends ComponenteFisico {
         const nivelSetpoint = this.getSetpointNormalizado();
         const qEntradaAtualLps = Math.max(0, this.lastQin);
         const qSaidaAtualLps = Math.max(0, this.lastQout);
-        const pressaoSaidaAtualBar = this.getPressaoDisponivelSaidaParaNivelBar(
+        const pressaoSaidaAtualBar = this.getPressaoBocalSaidaParaNivelBar(
             fluido,
             nivelAtual,
             usarAlturaRelativa
         );
-        const pressaoSaidaSetpointBar = this.getPressaoDisponivelSaidaParaNivelBar(
+        const pressaoSaidaSetpointBar = this.getPressaoBocalSaidaParaNivelBar(
             fluido,
             nivelSetpoint,
             usarAlturaRelativa
         );
-        const pressaoBaseEntradaAtualBar = this.getBackPressureAtInletParaNivelBar(
+        const pressaoBaseEntradaAtualBar = this.getPressaoBocalEntradaParaNivelBar(
             fluido,
             nivelAtual,
             usarAlturaRelativa
         );
-        const pressaoBaseEntradaSetpointBar = this.getBackPressureAtInletParaNivelBar(
+        const pressaoBaseEntradaSetpointBar = this.getPressaoBocalEntradaParaNivelBar(
             fluido,
             nivelSetpoint,
             usarAlturaRelativa
@@ -797,7 +820,10 @@ export class TanqueLogico extends ComponenteFisico {
         const fluidoEntrada = this.getFluidoEntradaMisturado(this.getFluidoConteudo());
         const volumeBalancoL = this.volumeAtual + ((this.lastQin - this.lastQout) * dt);
         // Tanque aberto cheio transborda: o excedente sai pelo ladrão e a massa continua contabilizada.
-        this.vazaoTransbordoLps = dt > 0 && volumeBalancoL > this.capacidadeMaxima
+        // Vaso fechado é estanque e não possui transbordo para a atmosfera.
+        this.vazaoTransbordoLps = this.tipoTanque !== TIPO_TANQUE_FECHADO
+            && dt > 0
+            && volumeBalancoL > this.capacidadeMaxima
             ? (volumeBalancoL - this.capacidadeMaxima) / dt
             : 0;
         this.volumeAtual = clamp(volumeBalancoL, 0, this.capacidadeMaxima);

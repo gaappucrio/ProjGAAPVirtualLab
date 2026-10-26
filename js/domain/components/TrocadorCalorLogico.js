@@ -93,8 +93,8 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         this.riscoEbulicao1 = false;
         this.riscoEbulicao2 = false;
         // Regime alvo (ε-NTU) e temperatura que de fato sai de cada lado (estado do atraso térmico).
-        this.temperaturaSaidaAlvoC = this.temperaturaSaidaC;
-        this.temperaturaSaida2AlvoC = this.temperaturaSaida2C;
+        this.temperaturaSaidaAlvoC = null;
+        this.temperaturaSaida2AlvoC = null;
         this._temperaturaSaidaEstado = { 1: null, 2: null };
         this._dinamicaTermicaAtiva = false;
         this._ultimoEstadoNotificado = '';
@@ -654,6 +654,10 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         this.pressaoSaida2AtualBar = 0;
         this.riscoEbulicao1 = false;
         this.riscoEbulicao2 = false;
+        this.temperaturaSaidaAlvoC = null;
+        this.temperaturaSaida2AlvoC = null;
+        this._temperaturaSaidaEstado = { 1: null, 2: null };
+        this._dinamicaTermicaAtiva = false;
         this._notificarEstado(true);
     }
 }

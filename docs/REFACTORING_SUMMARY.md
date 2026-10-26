@@ -49,7 +49,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Suporte a múltiplas saídas e redes com dezenas de componentes.
 - O fluido que entra na rede é definido pela fonte de entrada, não por uma configuração global.
 - A propagação hidráulica usa as propriedades do fluido associadas ao ramo iniciado por cada entrada e mistura fluidos quando múltiplas entradas convergem.
-- Em modo sem altura relativa, os trechos mantêm a geometria esquemática base, enquanto o solver aplica correção de perdas locais por Reynolds/viscosidade para diferenciar fluidos.
+- Em modo sem altura relativa, os trechos mantêm a geometria esquemática base, enquanto a diferença entre fluidos entra fisicamente pelo fator de atrito de Darcy (função de Reynolds/viscosidade) e pela massa específica $\rho$.
 - A cor visual do fluido acompanha o preset ou a cor personalizada da entrada, afetando entrada, tubos e enchimento do tanque.
 - Misturas de fluidos preservam uma composição visual própria, evitando troca instantânea de cor no tanque quando outro fluido entra em um volume já existente.
 
@@ -88,8 +88,8 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Bocais com elevação de entrada e saída.
 - Vazão de entrada e saída.
 - Pressão hidrostática calculada pela altura de líquido.
-- Tipo de tanque: aberto (atmosférico, saída a $\rho g h$, desacoplando a pressão de montante) ou vaso fechado (colchão de gás por Boyle a partir da pré-carga).
-- Transbordo com balanço de massa quando o tanque está cheio (`vazaoTransbordoLps`).
+- Tipo de tanque: aberto (`'atmosferico'`, saída a $\rho g h$, desacoplando a pressão de montante) ou vaso fechado (`'fechado'`, colchão de gás por Boyle a partir da pré-carga com *headspace* mínimo de $2\%\,V_{\text{total}}$, somado aos bocais de entrada e saída, à contrapressão dos ramos e ao diagnóstico de saturação de set point).
+- Transbordo com balanço de massa quando o tanque aberto está cheio (`vazaoTransbordoLps`); em vasos fechados não há transbordo atmosférico (`vazaoTransbordoLps = 0`).
 - Tempo de residência atual calculado por `V/Q`, usando a vazão de saída como referência e a vazão de entrada quando não há saída.
 - Controle de nível por set point.
 - Bloqueio de ativação do controle caso não exista válvula conectada diretamente à saída do tanque.
@@ -690,8 +690,8 @@ Propriedades principais:
 Comportamento:
 
 - Volume evolui por balanço: `volume += (Qin - Qout) * dt`.
-- Pressão no fundo vem da carga hidrostática.
-- Pressão hidrostática de saída continua disponível quando o tanque atua como reservatório; com entrada pressurizada, o tanque é neutro em pressão e não cria queda entre o Cano de entrada e o Cano de saída.
+- Pressão no fundo vem da carga hidrostática (acrescida de $P_{\text{gás}}$ em vasos fechados).
+- No solver global padrão, o tanque atua como contorno de pressão nos bocais (aberto: $\rho g h$ e transbordo quando cheio; fechado: $P_{\text{gás}} + \rho g h$ sem transbordo atmosférico). Apenas no solver legado push-based o tanque com entrada pressurizada opera como conexão neutra de pressão.
 - O controle de nível atua em válvulas de entrada e saída.
 - A matemática de controle e o estado interno vivem em `domain/services/LevelController.js`; o tanque apenas fornece medição/set point e traduz a saída `u` em abertura de válvulas.
 - O set point só pode ser ativado se houver válvula diretamente conectada à saída.
@@ -853,6 +853,12 @@ Arquivos de teste:
 - `Testes/validar-calculos.mjs`
 - `Testes/topologia-e-solver.test.mjs`
 - `Testes/cenarios-aplicacao.test.mjs`
+- `Testes/fisica-e-dwsim.test.mjs`
+- `Testes/debug-console.test.mjs`
+- `Testes/event-tracer.test.mjs`
+- `Testes/tick-stepper.test.mjs`
+- `Testes/invariant-checker.test.mjs`
+- `Testes/hover-inspector.test.mjs`
 
 Coberturas importantes:
 
@@ -903,8 +909,8 @@ Coberturas importantes:
 
 Auditoria dos testes:
 
-- A suíte executada por `npm test` cobre os 3 arquivos essenciais listados acima (os outros 3 arquivos contendo testes de apresentação e mock-heavy redundantes foram removidos fisicamente).
-- A execução atual possui 79 testes passantes focados na física do domínio, termodinâmica de fluidos, equações hidráulicas, topologia e balanço de massa do solver. Os arquivos de teste contêm 470 ocorrências de `assert.*`/`approx(...)`.
+- A suíte executada por `npm test` cobre os 9 arquivos de teste listados acima (domínio físico, solver global/legado, plantas completas, validação analítica DWSIM e ferramentas do modo debug).
+- A execução atual possui **179 testes passantes (179/179)** focados na física do domínio, termodinâmica de fluidos, equações hidráulicas, equivalência com o modo dinâmico do DWSIM, topologia, balanço de massa do solver e invariantes de execução.
 - Não foi encontrado padrão trivial como `assert.ok(true)` ou similar.
 - Os testes exercitam resultados observáveis: valores numéricos de pressão, vazão, temperatura, NPSH, conservação de massa e comportamento dinâmico de rede.
 - O antigo `test-phase1.mjs` foi removido em 2026-05-27.
@@ -1206,3 +1212,19 @@ O sistema já possui suporte funcional para montagem visual, seleção múltipla
      - `teste planta.json`: com o solver global as plantas mostram o comportamento físico real. Bombas alimentadas por fontes com teto de vazão cavitam (P-01, P-02, P-05). Tanques com descarga subdimensionada transbordam (T-01c, T-06, T-07). O set point de 57% da Ilha 6 é inatingível, pois a válvula totalmente aberta escoa 17,8 L/s contra 27,8 L/s de entrada. O teste de PID passou a usar uma planta programática viável.
      - `teste_trocatroca.json`: as três vazões ficam em 1 L/s, com ε = 45,1 / 34,9 / 37,5%, iguais ao analítico e sem cruzamento térmico.
   9. **Testes:** 125/125 aprovados.
+- Resolvido em 2026-10-26: consolidação pós-merge na `main`, refinamento físico de tanques fechados vs. abertos e unificação da suíte de testes:
+  1. **Tanque Fechado vs. Tanque Aberto (`TanqueLogico.js`, `HydraulicBranchModel.js`, `TankSaturationAlertPresenter.js`):**
+     - Implementados `getPressaoGasParaNivelBar(nivelM, fluid)`, `getPressaoBocalEntradaParaNivelBar(nivelM, fluid, usarAlturaRelativa)` e `getPressaoBocalSaidaParaNivelBar(nivelM, fluid, usarAlturaRelativa)`.
+     - O diagnóstico de saturação de set point (`getResumoAjustePressaoSetpoint`) e a pressão sem perda (`getPressaoConexaoSemPerdaBar`) passaram a incluir a pressão do colchão de gás comprimido em tanques fechados (`tipoTanque === 'fechado'`), em vez de assumir sempre tanque atmosférico.
+     - Em `HydraulicBranchModel.getTargetBackPressureBar`, ramos que alimentam um tanque fechado passaram a enxergar a contrapressão real do bocal de entrada ($P_{\text{gás}} + \rho g \max(0, h - z_{\text{entrada}})$).
+     - O transbordo atmosférico (`vazaoTransbordoLps`) foi restrito exclusivamente a tanques abertos (`tipoTanque !== 'fechado'`); vasos fechados são estanques ($Q_{\text{transbordo}} = 0$) e limitados pela contrapressão de Boyle com *headspace* mínimo de $2\%$ (`VOLUME_GAS_MINIMO_FRACAO = 0.02`).
+     - Incluídos `tipoTanque` e `pressaoPreCargaBar` na assinatura de reavaliação do alerta de saturação (`getStableComponentSignature`).
+  2. **Reconciliação de Inércia em Componentes Passantes (`GlobalHydraulicSolver.js`):**
+     - Adicionado `reconcilePreviousFlows(links)` em `buildNetwork(dt)` para projetar vazões históricas (`previousFlowLps`) não divergência-zero através de equipamentos passantes de volume zero antes do cálculo do termo inercial $I(Q - Q^{\text{ant}})/dt$, eliminando picos espúrios de pressão em nós internos ao partir de snapshots não conservativos.
+  3. **Inicialização do Atraso Térmico (`TrocadorCalorLogico.js`):**
+     - `temperaturaSaidaAlvoC` e `temperaturaSaida2AlvoC` passam a iniciar como `null` (e retornam a `null` em `onSimulationStop()`), preservando temperaturas pré-configuradas até que o cálculo térmico efetivamente ocorra e garantindo compatibilidade com o verificador de invariantes da 2ª Lei (`InvariantChecker.js`).
+  4. **Preservação de Referências na Mistura e Importação DWSIM (`Fluido.js`, `DwsimImporter.js`):**
+     - `mixFluidos` preserva as propriedades de referência de calibração (`refTemperatura`, `refDensidade`, `refViscosidadeDinamicaPaS`, `refPressaoVaporBar`), mantendo a precisão de Antoine/Andrade em aquecimentos subsequentes.
+     - `DwsimImporter.js` converte pressões absolutas (Pa) do DWSIM para pressões manométricas (bar) nas fontes e drenos e extrai propriedades termofísicas das correntes.
+  5. **Suíte de Testes Unificada (`package.json`, `Testes/fisica-e-dwsim.test.mjs`):**
+     - `Testes/fisica-e-dwsim.test.mjs` integrado ao comando `npm test` junto aos 8 demais arquivos de teste, adicionando teste específico de vaso fechado hidropneumático e totalizando **179/179 testes aprovados**.
