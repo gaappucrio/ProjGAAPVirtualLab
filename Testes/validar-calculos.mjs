@@ -971,6 +971,7 @@ test('diagnóstico de saturação dimensiona bomba sem ajustar fonte de entrada'
     const fonte = new FonteLogica('F-01', 'Entrada-01', 0, 0);
     const bomba = new BombaLogica('B-01', 'Bomba-01', 80, 0);
     const tanque = new TanqueLogico('T-01', 'Tanque-01', 160, 0);
+    tanque.tipoTanque = 'atmosferico';
     const valvula = new ValvulaLogica('V-01', 'Valvula-01', 240, 0);
 
     fonte.conectarSaida(bomba);
@@ -1047,10 +1048,39 @@ test('diagnóstico de saturação dimensiona bomba sem ajustar fonte de entrada'
     approx(fonte.pressaoFonteBar, 1.5, 1e-12, 'Pressão da fonte deve permanecer manual');
 });
 
+test('diagnóstico de saturação em tanque aberto sem coluna de líquido não zera a vazão de saída', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-01', 'Entrada-01', 0, 0);
+    const tanque = new TanqueLogico('T-01', 'Tanque-01', 160, 0);
+    tanque.tipoTanque = 'atmosferico';
+    tanque.considerarColunaLiquido = false;
+    const valvula = new ValvulaLogica('V-01', 'Valvula-01', 240, 0);
+
+    fonte.conectarSaida(tanque);
+    tanque.conectarSaida(valvula);
+    [fonte, tanque, valvula].forEach((component) => engine.add(component));
+
+    tanque.capacidadeMaxima = 1000;
+    tanque.volumeAtual = 800;
+    tanque.setpoint = 50;
+    tanque.lastQin = 20;
+    tanque.lastQout = 10;
+    tanque.setpointAtivo = true;
+    tanque._ultimoEstadoControle = { u: -1, erro: -0.3 };
+    fonte.pressaoFonteBar = 1.5;
+
+    // Sem coluna, a pressão do tanque não depende do nível: a saída no setpoint segue em 10 L/s.
+    const fatorVazao = (10 * 0.98) / 20;
+    const resumo = tanque.getResumoAjustePressaoSetpoint(engine.fluidoOperante, true);
+    assert.equal(resumo.ajustesFonte.length, 1);
+    approx(resumo.ajustesFonte[0].pressaoRecomendadaBar, 1.5 * fatorVazao * fatorVazao, 1e-9, 'Fonte reduzida pela razão quadrática de vazão, não zerada');
+});
+
 test('diagnóstico de saturação ajusta pressão da fonte quando não há bomba', () => {
     const engine = createEngine();
     const fonte = new FonteLogica('F-01', 'Entrada-01', 0, 0);
     const tanque = new TanqueLogico('T-01', 'Tanque-01', 160, 0);
+    tanque.tipoTanque = 'atmosferico';
     const valvula = new ValvulaLogica('V-01', 'Valvula-01', 240, 0);
 
     fonte.conectarSaida(tanque);
@@ -1719,7 +1749,7 @@ test('importador DWSIM traduz aquecedores e resfriadores (Heater, Cooler, AirCoo
             type: 'MaterialStream',
             element: createMockSimElement({
                 Temperature: '333.15', // 60 °C
-                Pressure: '300000', // 3 bar
+                Pressure: '300000', // absoluta
                 Flow: '0.005' // 5 L/s
             })
         }]
@@ -1730,7 +1760,8 @@ test('importador DWSIM traduz aquecedores e resfriadores (Heater, Cooler, AirCoo
     // 1. Validar FeedStr (Source) com temperatura do fluido propagada
     const sourceComp = workspace.components.find(c => c.snapshot?.type === 'source');
     assert.ok(sourceComp, 'FeedStr vira source');
-    approx(sourceComp.snapshot.properties.pressaoFonteBar, 3.0, 1e-5, 'Pressão 3 bar');
+    // O DWSIM grava a pressão da corrente em Pa absolutos: 300 kPa abs = 3 − 1,01325 barg.
+    approx(sourceComp.snapshot.properties.pressaoFonteBar, 3.0 - 1.01325, 1e-5, 'Pressão 300 kPa abs em barg');
     assert.equal(sourceComp.snapshot.properties.vazaoMaxima, 5.0, 'Vazão 5 L/s');
     assert.equal(sourceComp.snapshot.properties.fluidoEntrada.temperatura, 60, '333.15 K vira 60 °C no fluido da fonte');
 

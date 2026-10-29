@@ -20,13 +20,16 @@
 //   5. Monta um workspace snapshot compatível com restoreWorkspaceSnapshot().
 
 import {
+    DEFAULT_ATMOSPHERIC_PRESSURE_BAR,
+    DEFAULT_FLUID_DENSITY_KG_M3,
     DEFAULT_PIPE_DIAMETER_M,
-    DEFAULT_PIPE_EXTRA_LENGTH_M,
     DEFAULT_PIPE_MINOR_LOSS,
     DEFAULT_PIPE_ROUGHNESS_MM,
+    DEFAULT_PIPE_SCHEMATIC_LENGTH_M,
     DEFAULT_DESIGN_VELOCITY_MPS,
     DEFAULT_SOURCE_MAX_FLOW_LPS,
-    DEFAULT_SOURCE_PRESSURE_BAR
+    DEFAULT_SOURCE_PRESSURE_BAR,
+    GRAVITY
 } from '../../domain/units/HydraulicUnits.js';
 import { createFluidoFromProperties } from '../../domain/components/Fluido.js';
 
@@ -37,6 +40,36 @@ const M3_TO_L = 1000;
 const M_TO_MM = 1000;
 const INCH_TO_M = 0.0254;
 const KV_PER_CV = 0.8649786130809; // 1 Cv = 1.156 Kv  -> Kv = Cv * 0.865
+
+// O DWSIM grava pressões de corrente em Pa ABSOLUTOS; o GAAP trabalha em bar manométrico.
+function absolutePaToGaugeBar(pressurePa) {
+    return pressurePa * PA_TO_BAR - DEFAULT_ATMOSPHERIC_PRESSURE_BAR;
+}
+
+// Rugosidade (m) por material, igual a Pipe.GetRugosity do DWSIM. Os nomes em português
+// são os da interface traduzida; "Aço Bruto" foi conferido pela perda de carga gravada
+// no template (ε = 4,57e-5 m reproduz o DpFriction). Material desconhecido ou
+// "UserDefined" usa o <PipeWallRugosity> da seção, como no DWSIM.
+const DWSIM_PIPE_MATERIAL_ROUGHNESS_M = {
+    steel: 0.0000457,
+    'aço comum': 0.0000457,
+    'aço bruto': 0.0000457,
+    carbonsteel: 0.000045,
+    'aço carbono': 0.000045,
+    castiron: 0.000259,
+    'ferro fundido': 0.000259,
+    stainlesssteel: 0.000045,
+    'aço inoxidável': 0.000045,
+    pvc: 0.0000015,
+    'pvc+pfrv': 0.0000015,
+    commercialcopper: 0.0000015,
+    'cobre comercial': 0.0000015
+};
+
+// Tipos de seção que o DWSIM trata como tubo reto (Pipe.vb); os demais são acessórios.
+const DWSIM_STRAIGHT_PIPE_SEGMENT_TYPES = new Set([
+    '', 'tubulaosimples', 'straight tube section', 'straight tube', 'tubulação simples'
+]);
 
 // ----- Offset de posicionamento (evita componentes colados no canto) -----
 const POSITION_ORIGIN_X = 120;
@@ -546,6 +579,42 @@ function findDimensionValue(simEl, dimensionName) {
     return null;
 }
 
+function childElements(element) {
+    return element?.children ? Array.from(element.children) : [];
+}
+
+function childElement(element, tag) {
+    return childElements(element).find((child) => child.tagName === tag) || null;
+}
+
+function childNumber(element, tag) {
+    const text = String(childElement(element, tag)?.textContent ?? '').trim();
+    const value = text ? Number(text) : NaN;
+    return Number.isFinite(value) ? value : null;
+}
+
+// Estado da fase 0 (mistura) de uma MaterialStream. Uma busca profunda por <VolumetricFlow>
+// acharia antes o do <Compound>, que o DWSIM grava com o dobro da vazão da corrente.
+function streamMixtureProperties(simEl) {
+    const phases = childElements(childElement(simEl, 'Phases')).filter((el) => el.tagName === 'Phase');
+    const mixture = phases.find((phase) => childNumber(phase, 'ID') === 0) || phases[0];
+    // A fase traz mais de um bloco <Properties>; os resultados ficam no que contém a pressão.
+    const props = childElements(mixture)
+        .find((child) => child.tagName === 'Properties' && childNumber(child, 'pressure') !== null);
+    if (!props) return null;
+    const density = childNumber(props, 'density');
+    const massflow = childNumber(props, 'massflow');
+    const volumetricFlow = childNumber(props, 'volumetric_flow');
+    return {
+        pressurePa: childNumber(props, 'pressure'),
+        temperatureK: childNumber(props, 'temperature'),
+        densityKgM3: density,
+        viscosityPaS: childNumber(props, 'viscosity'),
+        specificHeatKjKgK: childNumber(props, 'heatCapacityCp'),
+        flowM3s: volumetricFlow ?? (massflow !== null && density > 0 ? massflow / density : null)
+    };
+}
+
 function findDynamicProperty(simEl, propertyName) {
     if (!simEl) return null;
     const dyn = simEl.querySelector(':scope > DynamicProperties') || simEl.querySelector('DynamicProperties');
@@ -584,14 +653,19 @@ function pumpParameters(simEl) {
         || queryNumericDeep(simEl, ['CurveNPSHr', 'NPSH'], 0)
         || 0;
 
-    const pressaoMaximaBar = Math.max(0.05, pressureIncreasePa * PA_TO_BAR);
-    const vazaoNominalLps = Math.max(0.1, curveFlowM3s * M3S_TO_LPS);
-    const eficienciaHidraulica = clamp(efficiency / 100, 0.18, 0.95) || 0.78;
-    const npshRequeridoM = Math.max(0.05, curveNpshrM) || 2.5;
+    // Sem curvas, sobra o ponto de operação gravado pelo DWSIM: aproximação grosseira,
+    // porque o GAAP lê pressaoMaxima como shutoff e vazaoNominal como vazão máxima.
+    const curve = queryString(simEl, 'CalcMode') === 'Curves' ? pumpCurveParameters(simEl) : null;
+    const pressaoMaximaBar = curve?.pressaoMaximaBar ?? Math.max(0.05, pressureIncreasePa * PA_TO_BAR);
+    const vazaoNominalLps = curve?.vazaoMaximaLps ?? Math.max(0.1, curveFlowM3s * M3S_TO_LPS);
+    const eficienciaHidraulica = clamp((curve?.eficienciaMaximaPct ?? efficiency) / 100, 0.18, 0.95) || 0.78;
+    const npshRequeridoM = curve?.npshRequeridoM ?? (Math.max(0.05, curveNpshrM) || 2.5);
 
+    // A bomba do fluxograma do DWSIM está sempre operando: chega comandada a 100% e
+    // o acionamento efetivo sobe pela rampa quando a simulação começa.
     return {
         isOn: false,
-        grauAcionamento: 0,
+        grauAcionamento: 100,
         acionamentoEfetivo: 0,
         vazaoNominal: vazaoNominalLps,
         pressaoMaxima: pressaoMaximaBar,
@@ -600,8 +674,83 @@ function pumpParameters(simEl) {
         npshRequeridoM,
         npshRequeridoAtualM: npshRequeridoM,
         tempoRampaSegundos: 1.6,
-        fracaoMelhorEficiencia: 0.72
+        fracaoMelhorEficiencia: curve?.fracaoMelhorEficiencia ?? 0.72
     };
+}
+
+const PUMP_CURVE_FLOW_TO_M3S = { 'm3/s': 1, 'm3/h': 1 / 3600, 'l/s': 1e-3 };
+
+function readPumpCurve(curveSetEl, tag) {
+    const curveEl = childElement(curveSetEl, tag);
+    if (!curveEl || queryString(curveEl, 'Enabled', 'true').toLowerCase() === 'false') return null;
+    const flowFactor = PUMP_CURVE_FLOW_TO_M3S[queryString(curveEl, 'xunit', 'm3/s').toLowerCase()];
+    if (!flowFactor) return null;
+    const items = (axis) => childElements(childElement(curveEl, axis))
+        .map((item) => Number(String(item.textContent ?? '').trim()));
+    const xs = items('X');
+    const ys = items('Y');
+    const points = xs
+        .map((x, index) => ({ qM3s: x * flowFactor, y: ys[index] }))
+        .filter((p) => Number.isFinite(p.qM3s) && Number.isFinite(p.y) && p.qM3s >= 0)
+        .sort((a, b) => a.qM3s - b.qM3s);
+    return { points, yUnit: queryString(curveEl, 'yunit', '').toLowerCase() };
+}
+
+// Ajusta as curvas do DWSIM ao modelo da BombaLogica por mínimos quadrados:
+//   H(Q) = H0·(1 − (Q/Qmax)²)                 (linear em Q²)
+//   NPSHr(Q) = N·(0,42 + 0,58·(Q/Qmax)^1,8)   (linear em N)
+// e toma o ponto de melhor eficiência da curva de eficiência. Para curvas geradas pelo
+// próprio GAAP (PumpDwsimJsonExporter) o ajuste devolve os parâmetros originais.
+function pumpCurveParameters(simEl) {
+    const curveSetEl = childElement(simEl, 'PumpCurveSet');
+    const head = readPumpCurve(curveSetEl, 'CurveHead');
+    if (!head || head.yUnit !== 'm' || head.points.length < 2) return null;
+
+    // Tabelas de fabricante às vezes repetem H = 0 depois da vazão máxima; esses pontos
+    // de preenchimento puxariam a reta, então o ajuste para no primeiro H ≤ 0.
+    const firstZero = head.points.findIndex((p) => p.y <= 0);
+    const headPoints = firstZero >= 0 ? head.points.slice(0, firstZero + 1) : head.points;
+    if (headPoints.length < 2) return null;
+
+    let n = 0, sx = 0, sy = 0, sxx = 0, sxy = 0;
+    headPoints.forEach(({ qM3s, y }) => {
+        const x = qM3s * qM3s;
+        n += 1; sx += x; sy += y; sxx += x * x; sxy += x * y;
+    });
+    const denominator = n * sxx - sx * sx;
+    if (denominator <= 0) return null;
+    const slope = (n * sxy - sx * sy) / denominator;
+    const headShutoffM = (sy - slope * sx) / n;
+    if (!(headShutoffM > 0) || !(slope < 0)) return null;
+    const vazaoMaximaM3s = Math.sqrt(headShutoffM / -slope);
+
+    // pressaoMaxima é o shutoff com a água de referência do GAAP (BombaLogica escala por ρ).
+    const result = {
+        pressaoMaximaBar: headShutoffM * DEFAULT_FLUID_DENSITY_KG_M3 * GRAVITY * PA_TO_BAR,
+        vazaoMaximaLps: vazaoMaximaM3s * M3S_TO_LPS
+    };
+
+    const npshr = readPumpCurve(curveSetEl, 'CurveNPSHr');
+    if (npshr?.yUnit === 'm' && npshr.points.length > 0) {
+        let syr = 0, srr = 0;
+        npshr.points.forEach(({ qM3s, y }) => {
+            const ratio = 0.42 + 0.58 * Math.pow(clamp(qM3s / vazaoMaximaM3s, 0, 1), 1.8);
+            syr += y * ratio;
+            srr += ratio * ratio;
+        });
+        if (srr > 0 && syr > 0) result.npshRequeridoM = syr / srr;
+    }
+
+    const efficiency = readPumpCurve(curveSetEl, 'CurveEfficiency');
+    if (efficiency?.yUnit === '%' && efficiency.points.length > 0) {
+        const best = efficiency.points.reduce((a, b) => (b.y > a.y ? b : a));
+        if (best.y > 0) {
+            result.eficienciaMaximaPct = best.y;
+            result.fracaoMelhorEficiencia = clamp(best.qM3s / vazaoMaximaM3s, 0.05, 1);
+        }
+    }
+
+    return result;
 }
 
 function valveParameters(simEl) {
@@ -617,17 +766,27 @@ function valveParameters(simEl) {
     const flowCoeffUnit = queryString(simEl, 'FlowCoefficient', '')
         || queryStringDeep(simEl, ['FlowCoefficient', 'CoeffUnit'], '');
 
+    // Valve.vb: com FlowCoefficient = Cv (enum 1) o campo <Kv> guarda um Cv. O DWSIM converte
+    // com Kv = Cv/1,16; o GAAP usa 1 Cv = 1,156 Kv (diferença de 0,35%).
     let cv = 160;
     if (rawCoeff > 0) {
-        if (flowCoeffUnit.toLowerCase().includes('cv')) {
+        const unit = flowCoeffUnit.trim().toLowerCase();
+        if (unit.includes('cv') || unit === '1') {
             cv = rawCoeff;
         } else {
             cv = rawCoeff / KV_PER_CV;
         }
     }
 
-    const tipoCaracteristica = mapValveCharacteristic(characteristic);
-    const grauAbertura = clamp(openingPct, 0, 100);
+    // Sem a relação abertura/Kv habilitada, o DWSIM usa o coeficiente cheio em qualquer abertura.
+    const relationshipEnabled = queryString(simEl, 'EnableOpeningKvRelationship', 'true').toLowerCase() !== 'false';
+    const tipoCaracteristica = relationshipEnabled ? mapValveCharacteristic(characteristic) : 'linear';
+    const grauAbertura = relationshipEnabled ? clamp(openingPct, 0, 100) : 100;
+    // Na igual porcentagem o DWSIM usa <CharacteristicParameter> como rangeabilidade.
+    const characteristicParameter = queryNumeric(simEl, 'CharacteristicParameter', 0);
+    const rangeabilidade = tipoCaracteristica === 'equal_percentage' && characteristicParameter > 1
+        ? clamp(characteristicParameter, 5, 1000)
+        : 30;
 
     return {
         aberta: grauAbertura > 0.5,
@@ -639,7 +798,7 @@ function valveParameters(simEl) {
         considerarPerdaEstrangulamento: false,
         perfilCaracteristica: 'custom',
         tipoCaracteristica,
-        rangeabilidade: 30,
+        rangeabilidade,
         tempoCursoSegundos: 6.0
     };
 }
@@ -795,6 +954,9 @@ function tankParameters(simEl, tankName = '', simObjects = null, tankTag = '') {
         volumeInicial: volumeAtualL,
         alturaUtilMetros,
         coeficienteSaida: 0.82,
+        // O tanque do DWSIM estacionário é passante (P entrada = P saída); o vaso fechado do
+        // GAAP reproduz isso no regime permanente, com o nível ajustando o colchão de gás.
+        tipoTanque: 'fechado',
         alturaBocalEntradaM,
         alturaBocalSaidaM,
         setpointAtivo,
@@ -814,39 +976,48 @@ function kelvinToCelsius(kelvinOrCelsius, fallbackC = 25) {
     return val;
 }
 
+function streamPressurePa(simEl, mixture = streamMixtureProperties(simEl)) {
+    return mixture?.pressurePa
+        || findDimensionValue(simEl, 'Pressure')
+        || queryNumeric(simEl, 'Pressure', 0)
+        || queryNumericDeep(simEl, ['pressure', 'Pressure'], 0);
+}
+
 function sourceParameters(simEl) {
+    const mixture = streamMixtureProperties(simEl);
     const gaugePressurePa = findDimensionValue(simEl, 'GaugePressure')
         || queryNumeric(simEl, 'GaugePressure', 0)
         || queryNumericDeep(simEl, ['GaugePressure', 'gauge_pressure'], 0);
-    const pressurePa = findDimensionValue(simEl, 'Pressure')
-        || queryNumeric(simEl, 'Pressure', 0)
-        || queryNumericDeep(simEl, ['pressure', 'Pressure'], 0);
-    const flowM3s = findDimensionValue(simEl, 'Flow')
+    const pressurePa = streamPressurePa(simEl, mixture);
+    const flowM3s = mixture?.flowM3s
+        || findDimensionValue(simEl, 'Flow')
         || queryNumeric(simEl, 'VolumetricFlow', 0)
         || queryNumeric(simEl, 'Flow', 0)
         || queryNumericDeep(simEl, ['VolumetricFlow', 'volumetric_flow', 'Flow', 'flow'], 0);
-    const tempK = findDimensionValue(simEl, 'Temperature')
+    const tempK = mixture?.temperatureK
+        || findDimensionValue(simEl, 'Temperature')
         || queryNumeric(simEl, 'Temperature', 0)
         || queryNumericDeep(simEl, ['temperature', 'Temperature'], 0);
-    const densityKgM3 = findDimensionValue(simEl, 'Density')
+    const densityKgM3 = mixture?.densityKgM3
+        || findDimensionValue(simEl, 'Density')
         || queryNumeric(simEl, 'Density', 0)
         || queryNumericDeep(simEl, ['Density', 'density'], 0);
-    const viscosityPaS = findDimensionValue(simEl, 'Viscosity')
+    const viscosityPaS = mixture?.viscosityPaS
+        || findDimensionValue(simEl, 'Viscosity')
         || queryNumeric(simEl, 'Viscosity', 0)
         || queryNumericDeep(simEl, ['Viscosity', 'DynamicViscosity', 'viscosity'], 0);
-    const specificHeatRaw = findDimensionValue(simEl, 'SpecificHeat')
+    const specificHeatRaw = mixture?.specificHeatKjKgK
+        || findDimensionValue(simEl, 'SpecificHeat')
         || queryNumeric(simEl, 'SpecificHeat', 0)
         || queryNumeric(simEl, 'HeatCapacity', 0)
         || queryNumericDeep(simEl, ['SpecificHeat', 'HeatCapacity', 'Cp'], 0);
 
+    // Pressão manométrica pode ser negativa (fonte sob vácuo); o piso é o vácuo absoluto.
     let pressaoFonteBar = DEFAULT_SOURCE_PRESSURE_BAR;
     if (gaugePressurePa > 0) {
-        pressaoFonteBar = Math.max(0.01, gaugePressurePa * PA_TO_BAR);
+        pressaoFonteBar = gaugePressurePa * PA_TO_BAR;
     } else if (pressurePa > 0) {
-        const isStandardAtmosphericPa = Math.abs(pressurePa - 101325) <= 200;
-        pressaoFonteBar = isStandardAtmosphericPa
-            ? DEFAULT_SOURCE_PRESSURE_BAR
-            : Math.max(0.01, pressurePa * PA_TO_BAR);
+        pressaoFonteBar = absolutePaToGaugeBar(pressurePa);
     }
     const vazaoMaximaLps = flowM3s > 0
         ? Math.max(0.1, flowM3s * M3S_TO_LPS)
@@ -878,12 +1049,8 @@ function sourceParameters(simEl) {
 function sinkParameters(simEl = null) {
     let pressaoSaidaBar = 0;
     if (simEl) {
-        const pressurePa = findDimensionValue(simEl, 'Pressure')
-            || queryNumeric(simEl, 'Pressure', 0)
-            || queryNumericDeep(simEl, ['pressure', 'Pressure'], 0);
-        if (pressurePa > 101325) {
-            pressaoSaidaBar = Math.max(0, (pressurePa - 101325) * PA_TO_BAR);
-        }
+        const pressurePa = streamPressurePa(simEl);
+        if (pressurePa > 0) pressaoSaidaBar = absolutePaToGaugeBar(pressurePa);
     }
     return {
         pressaoSaidaBar,
@@ -949,11 +1116,11 @@ function heatExchangerParameters(simEl, dwsimType = '') {
         || 0;
 
     // 6. Efetividade máxima
+    // <ThermalEfficiency> e <Efficiency> são RESULTADOS do DWSIM (Q/Qmax no ponto resolvido);
+    // só viram dado de entrada no modo de cálculo em que a eficiência térmica é a especificação.
+    const efficiencyIsSpec = queryString(simEl, 'CalculationMode', '') === 'ThermalEfficiency';
     const rawEff = queryNumeric(simEl, 'MaximumEffectiveness', 0)
-        || queryNumeric(simEl, 'Effectiveness', 0)
-        || queryNumeric(simEl, 'ThermalEfficiency', 0)
-        || queryNumeric(simEl, 'Efficiency', 0)
-        || queryNumericDeep(simEl, ['MaximumEffectiveness', 'Effectiveness', 'ThermalEfficiency', 'Efficiency'], 0)
+        || (efficiencyIsSpec ? queryNumeric(simEl, 'ThermalEfficiency', 0) : 0)
         || 1.0;
     const efetividadeMaxima = clamp(rawEff > 1 ? rawEff / 100 : rawEff, 0.1, 1.0);
 
@@ -977,64 +1144,103 @@ function isCounterCurrentExchanger(simObj) {
     return norm === '0' || norm === 'countercurrent' || norm === 'counter_current' || norm === 'counter' || norm === 'contracorrente';
 }
 
-function pipeParameters(simEl) {
-    // DWSIM Pipe: seções serializadas dentro de <Sections>.
-    // Campos: <Comprimento> (m), <DI> (pol), <DE> (pol), <PipeWallRugosity> (m).
-    let totalLengthM = 0;
-    let diM = DEFAULT_PIPE_DIAMETER_M;
-    let roughnessM = DEFAULT_PIPE_ROUGHNESS_MM / M_TO_MM;
+function sectionRoughnessM(material, wallRoughnessM) {
+    // Compara sem espaços: a interface em inglês pode gravar "Carbon Steel" em vez de "CarbonSteel".
+    const key = String(material || '').toLowerCase().replace(/\s+/g, '');
+    const tabulated = Object.entries(DWSIM_PIPE_MATERIAL_ROUGHNESS_M)
+        .find(([name]) => name.replace(/\s+/g, '') === key)?.[1];
+    if (tabulated !== undefined) return tabulated;
+    return wallRoughnessM > 0 ? wallRoughnessM : DEFAULT_PIPE_ROUGHNESS_MM / M_TO_MM;
+}
 
-    if (simEl) {
-        const sectionsEl = simEl.querySelector(':scope > Sections')
-            || simEl.querySelector('Sections');
-        if (sectionsEl) {
-            const sectionEls = sectionsEl.querySelectorAll(':scope > Section')
-                || sectionsEl.querySelectorAll('Section');
-            if (sectionEls && sectionEls.length > 0) {
-                sectionEls.forEach((section) => {
-                    const compr = parseFloat(section.querySelector(':scope > Comprimento')?.textContent || section.querySelector('Comprimento')?.textContent || '0');
-                    if (Number.isFinite(compr) && compr > 0) totalLengthM += compr;
+// Seções de tubo reto de um Pipe do DWSIM, com o comprimento já multiplicado por
+// <Quantidade> (o DWSIM repete a seção). Acessórios (curvas, válvulas de linha etc.)
+// ainda não são traduzidos e ficam contados em `skippedFittings`.
+function pipeSections(simEl) {
+    const sections = [];
+    let skippedFittings = 0;
+    const addSection = (read) => {
+        const tipo = String(read('TipoSegmento') ?? '').trim().toLowerCase();
+        if (!DWSIM_STRAIGHT_PIPE_SEGMENT_TYPES.has(tipo)) {
+            skippedFittings += 1;
+            return;
+        }
+        const lengthM = Number(read('Comprimento')) * (Number(read('Quantidade')) || 1);
+        const diIn = Number(read('DI'));
+        if (!(lengthM > 0)) return;
+        sections.push({
+            lengthM,
+            diameterM: diIn > 0 ? diIn * INCH_TO_M : DEFAULT_PIPE_DIAMETER_M,
+            roughnessM: sectionRoughnessM(read('Material'), Number(read('PipeWallRugosity')))
+        });
+    };
 
-                    const di = parseFloat(section.querySelector(':scope > DI')?.textContent || section.querySelector('DI')?.textContent || '0');
-                    if (Number.isFinite(di) && di > 0) diM = di * INCH_TO_M;
-
-                    const rug = parseFloat(section.querySelector(':scope > PipeWallRugosity')?.textContent || section.querySelector('PipeWallRugosity')?.textContent || '0');
-                    if (Number.isFinite(rug) && rug > 0) roughnessM = rug;
-                });
-            } else {
-                const sectionsXml = serializeXml(sectionsEl);
-                const sectionMatches = sectionsXml.match(/<Section[\s\S]*?<\/Section>/g) || [];
-                sectionMatches.forEach((sectionXml) => {
-                    const compr = matchTag(sectionXml, 'Comprimento');
-                    const di = matchTag(sectionXml, 'DI');
-                    const rug = matchTag(sectionXml, 'PipeWallRugosity');
-                    if (compr !== null && compr > 0) totalLengthM += compr;
-                    if (di !== null && di > 0) diM = di * INCH_TO_M;
-                    if (rug !== null && rug > 0) roughnessM = rug;
-                });
-            }
+    const sectionsEl = simEl?.querySelector?.(':scope > Sections') || simEl?.querySelector?.('Sections');
+    if (sectionsEl) {
+        const sectionEls = sectionsEl.querySelectorAll?.(':scope > Section');
+        if (sectionEls && sectionEls.length > 0) {
+            sectionEls.forEach((section) => addSection((tag) => queryString(section, tag, null)));
+        } else {
+            const sectionsXml = serializeXml(sectionsEl);
+            const sectionMatches = sectionsXml.match(/<Section[\s\S]*?<\/Section>/g) || [];
+            sectionMatches.forEach((sectionXml) => addSection((tag) => {
+                const match = sectionXml.match(new RegExp(`<${tag}>([^<]*)</${tag}>`));
+                return match ? match[1].trim() : null;
+            }));
         }
     }
 
     // Fallback: campos diretos quando não há Sections.
-    if (totalLengthM === 0) {
-        totalLengthM = queryNumeric(simEl, 'TotalLength', 0)
+    if (sections.length === 0 && skippedFittings === 0 && simEl) {
+        const lengthM = queryNumeric(simEl, 'TotalLength', 0)
             || queryNumeric(simEl, 'Length', 0)
             || queryNumericDeep(simEl, ['TotalLength', 'Length'], 0)
             || 1;
-    }
-    if (diM === DEFAULT_PIPE_DIAMETER_M) {
         const directDi = queryNumeric(simEl, 'InternalDiameter', 0)
             || queryNumeric(simEl, 'Diameter', 0)
             || queryNumericDeep(simEl, ['InternalDiameter', 'Diameter'], 0);
-        if (directDi > 0) diM = directDi * INCH_TO_M;
+        sections.push({
+            lengthM,
+            diameterM: directDi > 0 ? directDi * INCH_TO_M : DEFAULT_PIPE_DIAMETER_M,
+            roughnessM: DEFAULT_PIPE_ROUGHNESS_MM / M_TO_MM
+        });
     }
 
+    return { sections, skippedFittings };
+}
+
+// Um Cano do GAAP tem um só diâmetro; os trechos em série do DWSIM entre dois equipamentos
+// viram um cano no diâmetro do trecho mais longo. Trechos de outro diâmetro entram como
+// comprimento equivalente pela escala de Darcy com f constante (ΔP ∝ L/D⁵): exato quando
+// todos os diâmetros são iguais, aproximado quando não são.
+function pipeParameters(pipeElements) {
+    const elements = Array.isArray(pipeElements) ? pipeElements : [pipeElements];
+    const sections = [];
+    let skippedFittings = 0;
+    elements.forEach((element) => {
+        const result = pipeSections(element);
+        sections.push(...result.sections);
+        skippedFittings += result.skippedFittings;
+    });
+    if (sections.length === 0) return { ...defaultPipeParams(), skippedFittings };
+
+    const reference = sections.reduce((a, b) => (b.lengthM > a.lengthM ? b : a));
+    // Rugosidade média ponderada pelo comprimento equivalente: o trecho que mais perde pesa mais.
+    let equivalentLengthM = 0;
+    let roughnessLengthSum = 0;
+    sections.forEach((section) => {
+        const sectionEquivalentM = section.lengthM * Math.pow(reference.diameterM / section.diameterM, 5);
+        equivalentLengthM += sectionEquivalentM;
+        roughnessLengthSum += section.roughnessM * sectionEquivalentM;
+    });
+
     return {
-        diameterM: Math.max(0.005, diM),
-        roughnessMm: Math.max(0.001, roughnessM * M_TO_MM),
-        extraLengthM: Math.max(0, totalLengthM),
-        perdaLocalK: 0
+        diameterM: Math.max(0.005, reference.diameterM),
+        roughnessMm: Math.max(0.001, (roughnessLengthSum / equivalentLengthM) * M_TO_MM),
+        // O GAAP soma o trecho esquemático (1 m) ao comprimento extra.
+        extraLengthM: Math.max(0, equivalentLengthM - DEFAULT_PIPE_SCHEMATIC_LENGTH_M),
+        perdaLocalK: 0,
+        skippedFittings
     };
 }
 
@@ -1156,11 +1362,13 @@ function extractPropertiesFor(gaapType, simObj, gObj = null, simObjects = null) 
     return null;
 }
 
+// Equipamentos ligados direto por corrente no DWSIM não têm perda de carga entre si;
+// no GAAP o menor cano possível é o trecho esquemático, sem comprimento extra.
 function defaultPipeParams() {
     return {
         diameterM: DEFAULT_PIPE_DIAMETER_M,
         roughnessMm: DEFAULT_PIPE_ROUGHNESS_MM,
-        extraLengthM: DEFAULT_PIPE_EXTRA_LENGTH_M,
+        extraLengthM: 0,
         perdaLocalK: DEFAULT_PIPE_MINOR_LOSS
     };
 }
@@ -1332,8 +1540,12 @@ export function translateDwsimToWorkspace(parsed) {
             visitedPairs.add(pairKey);
 
             const pipeParams = pipes.length > 0
-                ? pipeParameters(pipes[0].element)
+                ? pipeParameters(pipes.map((pipe) => pipe.element))
                 : defaultPipeParams();
+            if (pipeParams.skippedFittings > 0) {
+                stats.skipped += pipeParams.skippedFittings;
+                stats.skippedTypes.add('PipeFitting');
+            }
 
             let sourcePort = 'out';
             if (sourceType === 'heat_exchanger') {

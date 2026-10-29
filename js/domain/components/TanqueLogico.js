@@ -42,8 +42,15 @@ export class TanqueLogico extends ComponenteFisico {
         this.alturaBocalSaidaM = 0.1;
         this.volumeInicial = 0;
         this.pressaoFundoBar = 0;
-        this.tipoTanque = TIPO_TANQUE_ATMOSFERICO;
+        this.tipoTanque = TIPO_TANQUE_FECHADO;
         this.pressaoPreCargaBar = 0.5;
+        // Idealizações opcionais (aba Avançado): desligadas, o tanque se aproxima do vaso
+        // passante do DWSIM estacionário, sem coluna de líquido nem perdas singulares nos bocais.
+        // As perdas nos bocais vêm desligadas, como no DWSIM, que só as tem como acessório do cano.
+        this.considerarColunaLiquido = true;
+        this.considerarPerdasBocais = false;
+        // Aba Avançado: perdas na velocidade do bocal (diametroConexaoM) e não na do cano.
+        this.usarGeometriaBocal = false;
         this.vazaoTransbordoLps = 0;
         this.fluidoConteudo = createFluidoFromProperties();
         this.setpointAtivo = false;
@@ -100,6 +107,14 @@ export class TanqueLogico extends ComponenteFisico {
         return Math.max(0, this.volumeAtual - this.getVolumeMinimoSaidaL(considerarAlturaBocal));
     }
 
+    // Vaso fechado: o colchão de gás não comprime abaixo do piso de VOLUME_GAS_MINIMO_FRACAO. Nesse
+    // ponto o vaso está cheio de líquido (trava hidráulica) e só entra o que sai; o solver global usa
+    // este volume como parede do colchão. Tanque aberto: sem limite (o excedente transborda).
+    getVolumeMaximoLiquidoL() {
+        if (this.tipoTanque !== TIPO_TANQUE_FECHADO) return null;
+        return this.capacidadeMaxima * (1 - VOLUME_GAS_MINIMO_FRACAO);
+    }
+
     temLiquidoDisponivelSaida(considerarAlturaBocal = true) {
         return this.getVolumeDisponivelSaidaL(considerarAlturaBocal) > EPSILON_FLOW;
     }
@@ -120,9 +135,14 @@ export class TanqueLogico extends ComponenteFisico {
             || this.getFluidoConteudo();
     }
 
+    _pressaoColunaBar(alturaM, fluido) {
+        if (this.considerarColunaLiquido === false) return 0;
+        return pressureFromHeadBar(alturaM, fluido?.densidade);
+    }
+
     getPressaoHidrostaticaParaNivelBar(fluido, nivelNormalizado) {
         const fluidoAtual = this._resolverFluidoHidrostatico(fluido);
-        return pressureFromHeadBar(this.getAlturaLiquidoParaNivelM(nivelNormalizado), fluidoAtual?.densidade);
+        return this._pressaoColunaBar(this.getAlturaLiquidoParaNivelM(nivelNormalizado), fluidoAtual);
     }
 
     getPressaoHidrostaticaBar(fluido) {
@@ -136,7 +156,7 @@ export class TanqueLogico extends ComponenteFisico {
         const headDisponivelM = considerarAlturaBocal
             ? Math.max(0, alturaLiquidoM - this.alturaBocalSaidaM)
             : Math.max(0, alturaLiquidoM);
-        return pressureFromHeadBar(headDisponivelM, fluidoAtual?.densidade);
+        return this._pressaoColunaBar(headDisponivelM, fluidoAtual);
     }
 
     getPressaoDisponivelSaidaBar(fluido, considerarAlturaBocal = true) {
@@ -154,7 +174,7 @@ export class TanqueLogico extends ComponenteFisico {
 
         const alturaLiquidoM = this.getAlturaLiquidoParaNivelM(nivelNormalizado);
         const alturaSubmersaM = Math.max(0, alturaLiquidoM - this.alturaBocalEntradaM);
-        return pressureFromHeadBar(alturaSubmersaM, fluidoAtual?.densidade);
+        return this._pressaoColunaBar(alturaSubmersaM, fluidoAtual);
     }
 
     getBackPressureAtInletBar(fluido, considerarAlturaBocal = true) {
@@ -439,9 +459,11 @@ export class TanqueLogico extends ComponenteFisico {
         );
         const { fontes, bombas } = this._coletarComponentesMontanteEntrada();
         const possuiBombasMontante = bombas.length > 0;
+        // Sem pressão de saída no nível atual nem no setpoint (tanque aberto sem coluna de líquido),
+        // a vazão de saída não depende do nível e não precisa ser reduzida.
         const fatorReducaoSaida = pressaoSaidaAtualBar > EPSILON_FLOW
             ? Math.sqrt(Math.max(0, pressaoSaidaSetpointBar / pressaoSaidaAtualBar))
-            : 0;
+            : (pressaoSaidaSetpointBar > EPSILON_FLOW ? 0 : 1);
         const vazaoSaidaLimiteSetpointLps = qSaidaAtualLps * fatorReducaoSaida;
         const fatorReducaoEntrada = qEntradaAtualLps > EPSILON_FLOW
             ? clamp(vazaoSaidaLimiteSetpointLps / qEntradaAtualLps, 0, 1)

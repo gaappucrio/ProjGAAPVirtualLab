@@ -5,6 +5,8 @@ export class DrenoLogico extends ComponenteFisico {
         super(id, tag, x, y);
         this.pressaoSaidaBar = 0.0;
         this.perdaEntradaK = 0;
+        // Aba Avançado: o K incide na velocidade do bocal (diametroConexaoM) e não na do cano.
+        this.usarGeometriaBocal = false;
         this.vazaoRecebidaLps = 0;
     }
 

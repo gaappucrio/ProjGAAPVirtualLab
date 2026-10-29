@@ -31,6 +31,7 @@ import {
     valueOf
 } from '../PropertyPresenterShared.js';
 import { resolveSinkPressureProfile } from '../../monitoring/SinkPressureProfile.js';
+import { bindNozzleGeometryFields, renderNozzleGeometryFields } from './NozzleGeometryFields.js';
 
 function ensureSourceFluid(comp) {
     if (!comp.fluidoEntrada && typeof comp.atualizarFluidoEntrada === 'function') {
@@ -410,6 +411,7 @@ export const SINK_PROPERTIES_PRESENTER = {
                 ${makeLabel('Perda de entrada (K)', TOOLTIP.sinkEntryK)}
                 <input type="number" id="input-k-entrada-dreno" ${hintAttr(TOOLTIP.sinkEntryK)} value="${comp.perdaEntradaK}" step="0.1" min="0" max="50">
             </div>
+            ${renderNozzleGeometryFields(comp, 'dreno')}
         `;
 
         return renderPropertyTabs({
@@ -445,5 +447,7 @@ export const SINK_PROPERTIES_PRESENTER = {
                 }
             );
         });
+
+        bindNozzleGeometryFields(comp, 'dreno');
     }
 };

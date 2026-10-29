@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test --test-concurrency=1 --test-isolation=none Testes/validar-calculos.mjs Testes/topologia-e-solver.test.mjs Testes/cenarios-aplicacao.test.mjs Testes/fisica-e-dwsim.test.mjs Testes/debug-console.test.mjs Testes/event-tracer.test.mjs Testes/tick-stepper.test.mjs Testes/invariant-checker.test.mjs Testes/hover-inspector.test.mjs"
+    "test": "node --test --test-concurrency=1 --test-isolation=none Testes/validar-calculos.mjs Testes/topologia-e-solver.test.mjs Testes/cenarios-aplicacao.test.mjs Testes/fisica-e-dwsim.test.mjs Testes/importador-dwsim.test.mjs Testes/debug-console.test.mjs Testes/event-tracer.test.mjs Testes/tick-stepper.test.mjs Testes/invariant-checker.test.mjs Testes/hover-inspector.test.mjs",
+    "validar:dwsim": "node Testes/validar-dwsim.mjs"
   }
 }

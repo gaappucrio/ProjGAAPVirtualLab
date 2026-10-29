@@ -5,6 +5,7 @@ import { TanqueLogico } from '../components/TanqueLogico.js';
 import { TrocadorCalorLogico } from '../components/TrocadorCalorLogico.js';
 import { ValvulaLogica } from '../components/ValvulaLogica.js';
 import { clamp, pressureLossFromFlow, smoothFirstOrder } from '../components/BaseComponente.js';
+import { referenciaPerdaBocal } from '../components/BocalHidraulico.js';
 import { cloneFluido } from '../components/Fluido.js';
 import {
     BAR_TO_PA,
@@ -297,7 +298,7 @@ export class HydraulicBranchModel {
     calculateBranchLossBreakdown(conn, supply, target, baseTargetEntryLossCoeff, geometry, flowLps, fluid) {
         const pipeAreaM2 = conn.areaM2;
         const sourceAreaM2 = Math.max(1e-9, supply.hydraulicAreaM2 || pipeAreaM2);
-        const targetAreaM2 = Math.max(1e-9, this.getTargetEntranceArea(target) || pipeAreaM2);
+        const targetAreaM2 = Math.max(1e-9, this.getTargetEntranceArea(target, pipeAreaM2) || pipeAreaM2);
         const density = fluid.densidade;
         const pipeHydraulics = this.context.getPipeHydraulics(conn, geometry, pipeAreaM2, flowLps, fluid);
         // Coeficientes K de acessórios e o K equivalente do Cv valem para escoamento turbulento;
@@ -375,7 +376,11 @@ export class HydraulicBranchModel {
         return 0;
     }
 
-    getTargetEntranceArea(target) {
+    getTargetEntranceArea(target, pipeAreaM2 = areaFromDiameter(DEFAULT_PIPE_DIAMETER_M)) {
+        // Tanque e dreno: velocidade do cano, como no DWSIM, salvo com a geometria do bocal (aba Avançado).
+        if (target instanceof TanqueLogico || target instanceof DrenoLogico) {
+            return referenciaPerdaBocal(target, 0, pipeAreaM2, 'entrada').areaM2;
+        }
         if (target && typeof target.getAreaConexaoM2 === 'function') return target.getAreaConexaoM2();
         return areaFromDiameter(DEFAULT_PIPE_DIAMETER_M);
     }
@@ -667,13 +672,14 @@ export class HydraulicBranchModel {
             const pressureBar = comp.getPressaoConexaoSemPerdaBar?.(fluid, this.context.usarAlturaRelativa)
                 ?? comp.getPressaoDisponivelSaidaBar(fluid, this.context.usarAlturaRelativa);
             // 1/Cd² já inclui a energia cinética do jato no bocal; somar 1 contaria a carga de velocidade duas vezes.
-            const localLossCoeff = hasPressurizedInlet
+            const localLossCoeff = hasPressurizedInlet || comp.considerarPerdasBocais === false
                 ? 0
                 : 1.0 / Math.max(0.15, comp.coeficienteSaida * comp.coeficienteSaida);
             return {
                 availableFlowLps: availableFromInventory,
                 pressureBar,
-                hydraulicAreaM2: areaM2,
+                // Sem a geometria do bocal, a perda usa a área do cano (null cai em pipeAreaM2).
+                hydraulicAreaM2: comp.usarGeometriaBocal === true ? areaM2 : null,
                 connectionBaseLossCoeff: 0,
                 localLossCoeff,
                 fluid

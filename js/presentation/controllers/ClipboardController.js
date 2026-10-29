@@ -31,7 +31,8 @@ const CLONEABLE_PROPERTIES_BY_TYPE = {
     ],
     sink: [
         'pressaoSaidaBar',
-        'perdaEntradaK'
+        'perdaEntradaK',
+        'usarGeometriaBocal'
     ],
     pump: [
         'isOn',
@@ -64,6 +65,9 @@ const CLONEABLE_PROPERTIES_BY_TYPE = {
         'volumeAtual',
         'alturaUtilMetros',
         'coeficienteSaida',
+        'considerarPerdasBocais',
+        'considerarColunaLiquido',
+        'usarGeometriaBocal',
         'alturaBocalEntradaM',
         'alturaBocalSaidaM',
         'volumeInicial',
@@ -200,6 +204,13 @@ export function applyComponentClipboardSnapshot(snapshot, component, { tag } = {
         if (!allowedProperties.has(key)) return;
         component[key] = cloneSnapshotValue(value);
     });
+    // Arquivos anteriores ao tipo de tanque e às perdas nos bocais não os gravam;
+    // eles foram feitos com o tanque aberto e com as perdas ligadas.
+    if (snapshot.type === 'tank') {
+        const properties = snapshot.properties || {};
+        if (!('tipoTanque' in properties)) component.tipoTanque = 'atmosferico';
+        if (!('considerarPerdasBocais' in properties)) component.considerarPerdasBocais = true;
+    }
 
     if (tag !== undefined) component.tag = tag;
     component.x = Number(component.x) || 0;

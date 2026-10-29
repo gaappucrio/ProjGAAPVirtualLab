@@ -5,6 +5,7 @@ import { FonteLogica } from '../components/FonteLogica.js';
 import { TanqueLogico } from '../components/TanqueLogico.js';
 import { TrocadorCalorLogico } from '../components/TrocadorCalorLogico.js';
 import { ValvulaLogica } from '../components/ValvulaLogica.js';
+import { referenciaPerdaBocal } from '../components/BocalHidraulico.js';
 import {
     BAR_TO_PA,
     DEFAULT_ENTRY_LOSS,
@@ -634,12 +635,18 @@ export class NodalHydraulicSolver {
 
         const geometry = this.context.getConnectionGeometry(connection);
         const fluid = this.resolveComponentFluid(source) || this.context.getConnectionFluid(connection);
-        const sourceArea = positiveNumber(source.getAreaConexaoM2?.(), connection.areaM2);
-        const targetArea = positiveNumber(target.getAreaConexaoM2?.(), connection.areaM2);
+        // Tanque e dreno: área do cano, como no DWSIM, salvo com a geometria do bocal (aba Avançado).
+        const areaBocal = (component, sentido) => ((component instanceof TanqueLogico || component instanceof DrenoLogico)
+            ? referenciaPerdaBocal(component, 0, connection.areaM2, sentido).areaM2
+            : component.getAreaConexaoM2?.());
+        const sourceArea = positiveNumber(areaBocal(source, 'saida'), connection.areaM2);
+        const targetArea = positiveNumber(areaBocal(target, 'entrada'), connection.areaM2);
         const areaM2 = Math.min(connection.areaM2, sourceArea, targetArea);
         const sourceOutletLossCoeff = this.getSourceOutletLossCoeff(source);
         const targetEntryLossCoeff = this.getBoundaryTargetEntryLossCoeff(target);
-        const connectionBaseLossCoeff = (source instanceof TanqueLogico && !source.temEntradaPressurizada?.()) ? 1 : 0;
+        const connectionBaseLossCoeff = (source instanceof TanqueLogico
+            && !source.temEntradaPressurizada?.()
+            && source.considerarPerdasBocais !== false) ? 1 : 0;
         const disabled = this.isShutoffComponent(source)
             || this.isShutoffComponent(target)
             || (
@@ -772,7 +779,7 @@ export class NodalHydraulicSolver {
     getSourceOutletLossCoeff(source) {
         if (source instanceof FonteLogica) return DEFAULT_ENTRY_LOSS;
         if (source instanceof TanqueLogico) {
-            if (source.temEntradaPressurizada?.() === true) return 0;
+            if (source.temEntradaPressurizada?.() === true || source.considerarPerdasBocais === false) return 0;
             return 1.0 / Math.max(0.15, source.coeficienteSaida * source.coeficienteSaida);
         }
         return 0;

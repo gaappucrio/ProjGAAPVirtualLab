@@ -52,6 +52,7 @@ const COMPONENT_COLUMNS = [
     'Pressão final da rede (bar)',
     'Queda na entrada da saída (bar)',
     'Perda de entrada K',
+    'Geometria do bocal ativa',
     'Vazão recebida (L/s)',
     'Bomba ligada',
     'Acionamento desejado (%)',
@@ -112,6 +113,8 @@ const COMPONENT_COLUMNS = [
     'Elevação do bocal de entrada (m)',
     'Elevação do bocal de saída (m)',
     'Coeficiente de descarga do tanque',
+    'Perdas nos bocais do tanque ativas',
+    'Coluna de líquido do tanque ativa',
     'Tipo de tanque',
     'Pré-carga do gás (bar)',
     'Vazão de transbordo do tanque (L/s)',
@@ -205,6 +208,7 @@ const EXPORT_LABELS_EN = {
     'Pressão final da rede': 'Final network pressure',
     'Queda na entrada da saída': 'Outlet inlet pressure drop',
     'Perda de entrada K': 'Inlet loss K',
+    'Geometria do bocal ativa': 'Nozzle geometry active',
     'Vazão recebida': 'Received flow',
     'Bomba ligada': 'Pump on',
     'Acionamento desejado': 'Target drive',
@@ -270,6 +274,8 @@ const EXPORT_LABELS_EN = {
     'Elevação do bocal de entrada': 'Inlet nozzle elevation',
     'Elevação do bocal de saída': 'Outlet nozzle elevation',
     'Coeficiente de descarga do tanque': 'Tank discharge coefficient',
+    'Perdas nos bocais do tanque ativas': 'Tank nozzle losses active',
+    'Coluna de líquido do tanque ativa': 'Tank liquid column active',
     'Pressão no fundo do tanque': 'Tank bottom pressure',
     'Vazão de entrada do tanque': 'Tank inlet flow',
     'Vazão de saída do tanque': 'Tank outlet flow',
@@ -552,6 +558,7 @@ function buildComponentRow(component, engine = null) {
         row['Pressão final da rede (bar)'] = numberValue(pressureProfile.finalNetworkPressureBar, 5);
         row['Queda na entrada da saída (bar)'] = numberValue(pressureProfile.entryPressureDropBar, 5);
         row['Perda de entrada K'] = numberValue(component.perdaEntradaK, 5);
+        row['Geometria do bocal ativa'] = booleanValue(component.usarGeometriaBocal === true);
         row['Vazão recebida (L/s)'] = numberValue(component.vazaoRecebidaLps, 5);
     }
 
@@ -626,6 +633,9 @@ function buildComponentRow(component, engine = null) {
         row['Elevação do bocal de entrada (m)'] = numberValue(component.alturaBocalEntradaM, 5);
         row['Elevação do bocal de saída (m)'] = numberValue(component.alturaBocalSaidaM, 5);
         row['Coeficiente de descarga do tanque'] = numberValue(component.coeficienteSaida, 5);
+        row['Perdas nos bocais do tanque ativas'] = booleanValue(component.considerarPerdasBocais !== false);
+        row['Geometria do bocal ativa'] = booleanValue(component.usarGeometriaBocal === true);
+        row['Coluna de líquido do tanque ativa'] = booleanValue(component.considerarColunaLiquido !== false);
         row['Tipo de tanque'] = component.tipoTanque === 'fechado' ? 'Fechado (colchão de gás)' : 'Aberto (atmosférico)';
         row['Pré-carga do gás (bar)'] = numberValue(component.tipoTanque === 'fechado' ? component.pressaoPreCargaBar : 0, 5);
         row['Vazão de transbordo do tanque (L/s)'] = numberValue(component.vazaoTransbordoLps || 0, 5);

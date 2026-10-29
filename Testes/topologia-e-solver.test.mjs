@@ -144,6 +144,7 @@ test('agua tem maior vazao que oleo leve em ramais equivalentes para tanque', ()
         const engine = createEngine();
         const fonte = new FonteLogica(`F-${presetId}`, `inlet-${presetId}`, 0, 0);
         const tanque = new TanqueLogico(`T-${presetId}`, `tank-${presetId}`, 160, 0);
+        tanque.tipoTanque = 'atmosferico';
         const connection = new ConnectionModel({ sourceId: fonte.id, targetId: tanque.id });
 
         fonte.pressaoFonteBar = 0.5;
@@ -176,6 +177,8 @@ test('bomba ativa na saida do tanque aumenta vazao sem pressao incoerente', () =
         engine.usarAlturaRelativa = usarAlturaRelativa;
 
         const tanque = new TanqueLogico('T-01', 'T-01', 180, 120);
+        tanque.tipoTanque = 'atmosferico';
+        tanque.considerarPerdasBocais = true;
         const dreno = new DrenoLogico('D-01', 'outlet-01', 520, 260);
 
         tanque.volumeAtual = 999;
@@ -362,6 +365,7 @@ test('vazao em bomba responde a pressao de entrada sem interferencia do set poin
 test('valvula totalmente aberta com Cv alto se aproxima de tubo equivalente', () => {
     const buildTank = (id) => {
         const tanque = new TanqueLogico(id, id, 0, 0);
+        tanque.considerarPerdasBocais = true;
         tanque.volumeAtual = 999;
         tanque.capacidadeMaxima = 1000;
         tanque.alturaUtilMetros = 2.4;
@@ -907,6 +911,7 @@ test('tanque atmosferico desacopla a pressao: a saida enxerga apenas a coluna de
         const engine = createEngine();
         const fonte = new FonteLogica('F-tank-atm', 'F-tank-atm', 0, 0);
         const tanque = new TanqueLogico('T-tank-atm', 'T-tank-atm', 160, 0);
+        tanque.tipoTanque = 'atmosferico';
         const dreno = new DrenoLogico('D-tank-atm', 'D-tank-atm', 320, 0);
 
         fonte.pressaoFonteBar = pressaoFonteBar;
@@ -959,6 +964,7 @@ test('bomba alimentando tanque aberto nao transmite a pressao de descarga para a
     const fonte = new FonteLogica('F-pump-tank-neutral', 'F-pump-tank-neutral', 0, 0);
     const bomba = new BombaLogica('P-pump-tank-neutral', 'P-pump-tank-neutral', 120, 0);
     const tanque = new TanqueLogico('T-pump-tank-neutral', 'T-pump-tank-neutral', 240, 0);
+    tanque.tipoTanque = 'atmosferico';
     const dreno = new DrenoLogico('D-pump-tank-neutral', 'D-pump-tank-neutral', 360, 0);
 
     fonte.pressaoFonteBar = 1.2;
@@ -1094,8 +1100,10 @@ test('malha com tanques nao escoa por bomba desligada nem valvula fechada', () =
     const engine = createEngine();
     const fonte = new FonteLogica('F-boundary-loop', 'Entrada-boundary-loop', 0, 0);
     const tanqueA = new TanqueLogico('T-boundary-A', 'T-boundary-A', 140, 0);
+    tanqueA.tipoTanque = 'atmosferico';
     const bomba = new BombaLogica('P-boundary-off', 'P-boundary-off', 280, 0);
     const tanqueB = new TanqueLogico('T-boundary-B', 'T-boundary-B', 420, 0);
+    tanqueB.tipoTanque = 'atmosferico';
     const valvula = new ValvulaLogica('V-boundary-closed', 'V-boundary-closed', 560, 0);
 
     fonte.pressaoFonteBar = 0.5;
@@ -1595,6 +1603,7 @@ test('trocador de calor opera com duas correntes hidraulicamente independentes e
     
     // Tanque 1 com fluido quente (80°C) ligado na Corrente 2 (in2 -> out2) para Dreno 1
     const t1 = new TanqueLogico('T1', 'T-01', 0, 0);
+    t1.tipoTanque = 'atmosferico';
     t1.capacidadeMaxima = 1000;
     t1.volumeAtual = 1000;
     t1.alturaUtilMetros = 2.4;
@@ -1602,6 +1611,7 @@ test('trocador de calor opera com duas correntes hidraulicamente independentes e
 
     // Tanque 2 com fluido frio (20°C) ligado na Corrente 1 (in1 -> out1) para Tanque 3 (cheio)
     const t2 = new TanqueLogico('T2', 'T-02', 100, 0);
+    t2.tipoTanque = 'atmosferico';
     t2.capacidadeMaxima = 1000;
     t2.volumeAtual = 1000;
     t2.alturaUtilMetros = 2.4;
@@ -1609,6 +1619,7 @@ test('trocador de calor opera com duas correntes hidraulicamente independentes e
 
     // Tanque 3 (cheio, sem saída)
     const t3 = new TanqueLogico('T3', 'T-03', 300, 0);
+    t3.tipoTanque = 'atmosferico';
     t3.capacidadeMaxima = 1000;
     t3.volumeAtual = 1000; // Cheio: capacidade livre = 0
     t3.alturaUtilMetros = 2.4;

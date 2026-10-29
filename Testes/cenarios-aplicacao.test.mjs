@@ -19,6 +19,7 @@ import {
     parseFlowchartDocument,
     restoreFlowchartDocument
 } from '../js/presentation/flowchart/FlowchartPersistence.js';
+import { applyComponentClipboardSnapshot } from '../js/presentation/controllers/ClipboardController.js';
 import { HEAT_EXCHANGER_PROPERTIES_PRESENTER } from '../js/presentation/properties/component/HeatExchangerComponentPropertiesPresenter.js';
 import { buildHeatExchangerCurveDatasets } from '../js/infrastructure/charts/HeatExchangerChartAdapter.js';
 import { setLanguage, translateLiteral, t } from '../js/presentation/i18n/LanguageManager.js';
@@ -1020,6 +1021,42 @@ function simulateTicks(engine, ticks = 30, dt = 0.1) {
     }
 }
 
+test('tanque novo nasce fechado e o tipo gravado no arquivo é respeitado ao abrir', () => {
+    const novo = new TanqueLogico('T-novo', 'T-novo', 0, 0);
+    assert.equal(novo.tipoTanque, 'fechado');
+    assert.equal(novo.considerarPerdasBocais, false, 'Tanque novo sem perdas nos bocais, como no DWSIM');
+    assert.equal(novo.usarGeometriaBocal, false, 'Perdas na velocidade do cano por padrao');
+    assert.equal(new DrenoLogico('D-novo', 'D-novo', 0, 0).usarGeometriaBocal, false, 'K do dreno na velocidade do cano por padrao');
+
+    const engine = createEngine();
+    const tanque = new TanqueLogico('T-aberto', 'T-aberto', 0, 0);
+    tanque.tipoTanque = 'atmosferico';
+    tanque.considerarColunaLiquido = false;
+    tanque.considerarPerdasBocais = false;
+    tanque.usarGeometriaBocal = true;
+    tanque.diametroConexaoM = 0.05;
+    engine.add(tanque);
+    engine.add(new TanqueLogico('T-fechado', 'T-fechado', 200, 0));
+    const restaurado = createEngine();
+    assert.equal(restoreFlowchartDocument(restaurado, createFlowchartDocument(engine)).restored, true);
+    const tipoDe = (tag) => restaurado.componentes.find((c) => c.tag === tag).tipoTanque;
+    assert.equal(tipoDe('T-aberto'), 'atmosferico');
+    assert.equal(tipoDe('T-fechado'), 'fechado');
+    const aberto = restaurado.componentes.find((c) => c.tag === 'T-aberto');
+    assert.equal(aberto.considerarColunaLiquido, false, 'Check da coluna de liquido e salvo no arquivo');
+    assert.equal(aberto.considerarPerdasBocais, false, 'Check das perdas nos bocais e salvo no arquivo');
+    assert.equal(aberto.usarGeometriaBocal, true, 'Check da geometria do bocal e salvo no arquivo');
+    assert.equal(aberto.diametroConexaoM, 0.05, 'Diametro do bocal e salvo no arquivo');
+
+    // O navegador restaura pelo UndoController, que também passa por applyComponentClipboardSnapshot.
+    const legado = applyComponentClipboardSnapshot(
+        { type: 'tank', tag: 'T-legado', properties: { capacidadeMaxima: 500 } },
+        new TanqueLogico('T-legado', 'T-legado', 0, 0)
+    );
+    assert.equal(legado.tipoTanque, 'atmosferico', 'Snapshot sem tipoTanque abre aberto em qualquer caminho');
+    assert.equal(legado.considerarPerdasBocais, true, 'Snapshot sem o check abre com as perdas nos bocais ligadas, como foi feito');
+});
+
 test('importacao de planta teste: teste planta.json (6 ilhas / cenarios integrados)', () => {
     const raw = fs.readFileSync(path.join(PLANTAS_TESTE_DIR, 'teste planta.json'), 'utf8');
     const engine = createEngine();
@@ -1028,6 +1065,11 @@ test('importacao de planta teste: teste planta.json (6 ilhas / cenarios integrad
     assert.equal(restored, true);
     assert.equal(engine.componentes.length, 23);
     assert.equal(engine.conexoes.length, 17);
+    engine.componentes.filter((c) => c instanceof TanqueLogico).forEach((tanque) => {
+        assert.equal(tanque.tipoTanque, 'atmosferico', `${tanque.tag}: arquivo sem tipoTanque abre com o tanque aberto`);
+        assert.equal(tanque.considerarColunaLiquido, true, `${tanque.tag}: arquivo antigo mantem a coluna de liquido`);
+        assert.equal(tanque.considerarPerdasBocais, true, `${tanque.tag}: arquivo antigo mantem as perdas nos bocais`);
+    });
 
     simulateTicks(engine, 35, 0.1);
     const byTag = (tag) => engine.componentes.find((c) => c.tag === tag);
@@ -1106,6 +1148,7 @@ test('controle de nivel PID estabiliza o tanque no set point sem ciclo limite', 
     const engine = createEngine();
     const fonte = new FonteLogica('F-PID', 'Entrada-PID', 0, 0);
     const tanque = new TanqueLogico('T-PID', 'T-PID', 120, 0);
+    tanque.tipoTanque = 'atmosferico';
     const valvula = new ValvulaLogica('V-PID', 'V-PID', 240, 0);
     const dreno = new DrenoLogico('D-PID', 'Saida-PID', 360, 0);
     fonte.pressaoFonteBar = 0.5;

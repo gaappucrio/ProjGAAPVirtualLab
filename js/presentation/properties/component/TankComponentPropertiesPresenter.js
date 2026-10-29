@@ -21,6 +21,7 @@ import {
     validateInputWithFeedback
 } from '../PropertyPresenterShared.js';
 import { translateLiteral } from '../../i18n/LanguageManager.js';
+import { bindNozzleGeometryFields, renderNozzleGeometryFields } from './NozzleGeometryFields.js';
 import { formatResidenceTime } from '../PropertyValueFormatters.js';
 import { calculateTankResidenceTimeS } from '../../../domain/services/ResidenceTime.js';
 
@@ -162,7 +163,20 @@ export const TANK_PROPERTIES_PRESENTER = {
             </div>
             <div class="prop-group">
                 ${makeLabel('Coeficiente de descarga (Cd)', TOOLTIP.tankCd)}
-                <input type="number" id="input-cd-tanque" ${hintAttr(TOOLTIP.tankCd)} value="${comp.coeficienteSaida}" step="0.01" min="0.1" max="1">
+                <input type="number" id="input-cd-tanque" ${hintAttr(TOOLTIP.tankCd)} value="${comp.coeficienteSaida}" step="0.01" min="0.1" max="1" ${comp.considerarPerdasBocais === false ? 'disabled' : ''}>
+            </div>
+            <div class="prop-group">
+                <label ${hintAttr(TOOLTIP.tankNozzleLosses)} class="checkbox-label">
+                    <input type="checkbox" id="input-perdas-bocais-tanque" ${hintAttr(TOOLTIP.tankNozzleLosses)} ${comp.considerarPerdasBocais !== false ? 'checked' : ''}>
+                    <span>Considerar perdas nos bocais</span>
+                </label>
+            </div>
+            ${renderNozzleGeometryFields(comp, 'tanque')}
+            <div class="prop-group">
+                <label ${hintAttr(TOOLTIP.tankLiquidColumn)} class="checkbox-label">
+                    <input type="checkbox" id="input-coluna-liquido-tanque" ${hintAttr(TOOLTIP.tankLiquidColumn)} ${comp.considerarColunaLiquido !== false ? 'checked' : ''}>
+                    <span>Considerar coluna de líquido</span>
+                </label>
             </div>
             <div class="prop-group" id="group-ctrl-params" style="display:${mostrarSintoniaPid ? 'block' : 'none'};">
                 ${makeLabel('Ganho proporcional (Kp)', TOOLTIP.tankKp)}
@@ -181,7 +195,7 @@ export const TANK_PROPERTIES_PRESENTER = {
         return renderPropertyTabs({
             basicContent,
             advancedContent,
-            advancedDescription: 'Aqui ficam os parâmetros de bocais e sintonia do controlador PID. Eles refinam a dinâmica do tanque e costumam ser ajustados só em estudos mais detalhados.'
+            advancedDescription: 'Aqui ficam os parâmetros de bocais e sintonia do controlador PID. Eles refinam a dinâmica do tanque e costumam ser ajustados só em estudos mais detalhados. Desligar as perdas nos bocais e a coluna de líquido aproxima o tanque do vaso ideal dos simuladores estacionários, como o DWSIM.'
         });
     },
     bind: (comp) => {
@@ -360,6 +374,22 @@ export const TANK_PROPERTIES_PRESENTER = {
                 'Coeficiente de descarga',
                 (validated) => { comp.coeficienteSaida = validated; }
             );
+        });
+
+        bind('input-perdas-bocais-tanque', 'change', (event) => {
+            comp.considerarPerdasBocais = event.target.checked;
+            const cdInput = byId('input-cd-tanque');
+            if (cdInput) cdInput.disabled = !event.target.checked;
+            notifyPanelRefresh();
+        });
+
+        bindNozzleGeometryFields(comp, 'tanque');
+
+        bind('input-coluna-liquido-tanque', 'change', (event) => {
+            comp.considerarColunaLiquido = event.target.checked;
+            comp.sincronizarMetricasFisicas();
+            setValue('disp-pressao-tanque', displayUnitValue('pressure', comp.pressaoFundoBar, 2));
+            notifyPanelRefresh();
         });
 
         bind('input-sp-ativo', 'change', (event) => {

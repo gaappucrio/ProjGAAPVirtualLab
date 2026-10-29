@@ -102,7 +102,9 @@ Onde:
 
 **NPSH Requerido ($NPSH_r$):** Mínimo exigido pela geometria interna da bomba, dinamicamente variável em função do fluxo e do grau de acionamento ($\alpha = N / N_{max} \in [0, 1]$), modelado matematicamente em `BombaLogica.js`:
 
-$$NPSH_r = NPSH_{nominal} \cdot \max\left(0{,}35, \; \alpha^{1{,}35}\right) \cdot \left( 0{,}72 + 0{,}78 \left(\frac{Q}{Q_{max} \cdot \alpha}\right)^{1{,}6} \right)$$
+$$NPSH_r = NPSH_{nominal} \cdot \max\left(0{,}05, \; \alpha^{2}\right) \cdot \left( 0{,}42 + 0{,}58 \left(\frac{Q}{Q_{max} \cdot \alpha}\right)^{1{,}8} \right)$$
+
+com $Q / (Q_{max} \cdot \alpha)$ limitado a $[0, 1]$ e $NPSH_r \geq 0{,}02\text{ m}$.
 
 Onde:
 - $NPSH_{nominal}$: NPSH exigido pela bomba no seu ponto de projeto ideal
@@ -208,6 +210,26 @@ $$P_{\text{saída}} = P_{\text{gás}} + \rho g (h - z_{\text{saída}}), \qquad P
   $$P_{\text{gás,abs}} = (P_{\text{pré}} + P_{\text{atm}}) \frac{V_{\text{total}}}{\max(0{,}02 \, V_{\text{total}}, \; V_{\text{total}} - V_{\text{líquido}})}$$
   Como o vaso é estanque, **não há transbordo atmosférico** ($Q_{\text{transbordo}} = 0$). A pressão do colchão de gás $P_{\text{gás}}$ soma-se às pressões dos bocais de entrada e saída (`getPressaoBocalEntradaBar`, `getPressaoBocalSaidaBar`), à contrapressão vista pelos ramos a montante (`getTargetBackPressureBar`) e ao diagnóstico de saturação de setpoint (`getResumoAjustePressaoSetpoint`), fazendo o vaso pressurizar até equilibrar a alimentação.
 - **Saída limitada pelo inventário:** $Q_{out} \le V/\Delta t$.
+- **Vaso fechado cheio (trava hidráulica):** o colchão de gás tem um piso numérico de 2% do volume (proteção contra divisão por zero em Boyle), o que limita a pressão do gás a $(P_{\text{pré}} + P_{\text{atm}})\cdot 50 - P_{\text{atm}}$ (74,65 barg com pré-carga de 0,5 bar). Se a alimentação passa disso, o líquido para em 98% e o vaso só recebe o que sai: $Q_{in} \le (0{,}98\,V_{\text{total}} - V)/\Delta t + Q_{out}$. A entrada passa a ter a pressão que a rede impõe, e a massa é conservada (antes, o excedente era cortado em 100% sem ser contabilizado).
+  - Na trava, os dois bocais ficam na pressão que a rede impõe (o vaso é passante).
+- **Colchão implícito (vaso fechado, solver global):** a pressão do gás usada no passo é a do fim do passo, $P_{\text{gás}}(V_0 + (Q_{in} - Q_{out})\,\Delta t)$ (Euler implícito). No explícito, um passo de 0,1 s a 50 L/s passava do equilíbrio de Boyle (+6% a 5 bar, +19% a 50 bar) e, sem fluxo reverso, a pressão ficava presa acima da alimentação. A ultrapassagem que sobra é física: a inércia da água no cano comprime o gás além do equilíbrio (massa-mola) e cresce com a vazão; sem fluxo reverso (como no DWSIM), ela fica retida.
+- **Padrão:** tanque novo e tanque importado do DWSIM nascem fechados; arquivos salvos antes da existência de `tipoTanque` abrem como abertos. No regime permanente, o vaso fechado é **passante**: o nível se ajusta até $P_{\text{gás}}$ igualar a pressão da rede, como o tanque do DWSIM estacionário.
+- **Idealizações opcionais (aba Avançado):** a coluna de líquido vem ligada e as perdas nos bocais vêm desligadas, como no DWSIM, onde entrada e saída só existem como acessórios do cano. Arquivos salvos antes de `considerarPerdasBocais` abrem com as perdas ligadas.
+  - `considerarColunaLiquido = false` zera o termo $\rho g h$ nos dois bocais e no fundo: $P_{\text{entrada}} = P_{\text{saída}} = P_{\text{gás}}$. Um tanque aberto assim não escoa por gravidade.
+  - `considerarPerdasBocais = false` zera as perdas singulares dos bocais ($K = 1/C_d^2$ na saída e $K = 1$ na entrada, onde a energia cinética do jato se dissipa no líquido).
+  - Com as duas desligadas, o tanque reproduz o vaso ideal do DWSIM estacionário (`Testes/fisica-e-dwsim.test.mjs`).
+
+### Referência das perdas nos bocais (tanque e dreno)
+No DWSIM, correntes não têm diâmetro, e entrada e saída só existem como acessórios do cano ("Entrada Borda" K = 0,25, "Saída" K = 1), com o K aplicado à velocidade do próprio segmento (`Pipe.vb`, `Kfit`). O GAAP segue essa convenção por padrão: o $1/C_d^2$ e o $K = 1$ do tanque e o $K$ de entrada do dreno usam $v_{\text{cano}} = Q/A_{\text{cano}}$.
+
+Na aba Avançado, `usarGeometriaBocal` dá ao bocal o diâmetro próprio `diametroConexaoM` (experimento, `BocalHidraulico.js`). As perdas passam a usar $v_{\text{bocal}}$, e a mudança brusca de seção soma uma perda de transição:
+- expansão (Borda-Carnot): $K = (1 - A_1/A_2)^2$ na velocidade de montante;
+- contração: $K \approx 0{,}5\,(1 - A_2/A_1)$ na velocidade de jusante.
+
+Na saída do tanque, o $1/C_d^2$ inclui a energia cinética que segue no cano (parcela 1). Com a geometria do bocal, essa parcela passa a ser a carga cinética do cano:
+$$\Delta P = \frac{\rho}{2}\left[\left(\frac{1}{C_d^2} - 1\right)v_b^2 + v_c^2 + K_{\text{transição}}\,v_{\text{ref}}^2\right]$$
+($v_b$: velocidade no bocal; $v_c$: no cano; $v_{\text{ref}}$: a velocidade de referência da transição, acima).
+Assim a energia cinética não é cobrada duas vezes. A transição só existe no solver global; os solvers legados apenas trocam a área de referência.
 
 ### Mistura de Fases e Balanceamento
 No caso de confluência de fluidos distintos (em nós da malha ou no interior do tanque), `mixFluidos` (`Fluido.js`) apura a densidade da mistura volumetricamente, a temperatura por balanço entálpico ($\sum V_i \rho_i c_{p,i} T_i / \sum V_i \rho_i c_{p,i}$) e a viscosidade dinâmica pelo modelo logarítmico de Arrhenius ($\ln \mu_{\text{mix}} = \sum x_i \ln \mu_i$), preservando também as propriedades termofísicas de referência (`refTemperatura`, `refDensidade`, `refViscosidadeDinamicaPaS`, `refPressaoVaporBar`) para que variações térmicas subsequentes na rede mantenham a âncora de calibração de $25^\circ\text{C}$:

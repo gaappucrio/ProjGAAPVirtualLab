@@ -17,6 +17,7 @@ import { FonteLogica } from '../components/FonteLogica.js';
 import { TanqueLogico } from '../components/TanqueLogico.js';
 import { TrocadorCalorLogico } from '../components/TrocadorCalorLogico.js';
 import { ValvulaLogica } from '../components/ValvulaLogica.js';
+import { referenciaPerdaBocal } from '../components/BocalHidraulico.js';
 import { cloneFluido, mixFluidos } from '../components/Fluido.js';
 import {
     BAR_TO_PA,
@@ -42,6 +43,13 @@ const CAVITATION_LOCAL_BRACKET = 0.05;
 // Coeficiente de perda na entrada de um tanque: a energia cinética do jato é dissipada no reservatório.
 const TANK_INLET_EXIT_LOSS_K = 1;
 const TANK_OUTLET_CUSHION_L = EPSILON_FLOW * 10;
+// Vaso fechado: resistência desprezível dos ramos internos bocal ↔ gás (só para manter o sistema
+// nodal regular).
+const TANK_INTERNAL_RESISTANCE_BAR_PER_LPS = 1e-6;
+// Resistência da retenção da bomba ao fluxo reverso durante o Newton (bar por L/s).
+const PUMP_REVERSE_RESISTANCE_BAR_PER_LPS = 1e3;
+// Inclinação mínima da curva do colchão fora da faixa de volume (bar/L), para ela nunca ficar plana.
+const MIN_TANK_GAS_SLOPE_BAR_PER_L = 1e-3;
 
 function isStream2Port(portId) {
     return portId === 'in2' || portId === 'out2' || portId === '2';
@@ -178,7 +186,7 @@ export class GlobalHydraulicSolver {
         this.reportBlockedFloatingLoops(network, analysis);
 
         network.links.forEach((link) => {
-            if (link.kind !== 'connection') this.previousComponentLinkFlows.set(link.id, Math.max(0, solution.flows[link.index]));
+            if (link.kind !== 'connection' && !link.tankInternal) this.previousComponentLinkFlows.set(link.id, Math.max(0, solution.flows[link.index]));
         });
         network.nodes.forEach((node) => {
             this.previousNodePressures.set(node.id, solution.pressures.get(node.id));
@@ -239,10 +247,18 @@ export class GlobalHydraulicSolver {
                 inputNode.boundaryKind = 'sink';
             } else if (component instanceof TanqueLogico) {
                 const fluid = component.getFluidoConteudo?.() || this.context.fluidoOperante;
-                inputNode.fixedPressureBar = component.getPressaoBocalEntradaBar(fluid, usarAlturaRelativa);
+                const inletPressureBar = component.getPressaoBocalEntradaBar(fluid, usarAlturaRelativa);
+                const outletPressureBar = component.getPressaoBocalSaidaBar(fluid, usarAlturaRelativa);
                 inputNode.boundaryKind = 'tank-inlet';
-                outputNode.fixedPressureBar = component.getPressaoBocalSaidaBar(fluid, usarAlturaRelativa);
                 outputNode.boundaryKind = 'tank-outlet';
+                if (component.tipoTanque === 'fechado' && dt > 0) {
+                    this.addClosedTankCushion(component, fluid, inputNode, outputNode, {
+                        addNode, addLink, dt, usarAlturaRelativa, inletPressureBar, outletPressureBar
+                    });
+                    return;
+                }
+                inputNode.fixedPressureBar = inletPressureBar;
+                outputNode.fixedPressureBar = outletPressureBar;
                 const availableVolumeL = component.getVolumeDisponivelSaidaL?.(usarAlturaRelativa)
                     ?? Math.max(0, component.volumeAtual);
                 outputNode.availableVolumeL = availableVolumeL;
@@ -268,11 +284,86 @@ export class GlobalHydraulicSolver {
         return { nodes, links, componentById, dt };
     }
 
+    // Vaso fechado: em vez de pressões fixas no início do passo, os bocais se ligam a um nó de gás cuja
+    // pressão é a de Boyle no FIM do passo, P_gás(V₀ + Q_líquido·Δt) (Euler implícito). Assim o colchão
+    // endurece dentro do próprio passo e a vazão para no equilíbrio, sem ultrapassá-lo. Os limites de
+    // inventário (gás no piso, líquido no bocal de saída) são tetos de vazão desse ramo (updateStatuses).
+    addClosedTankCushion(tank, fluid, inputNode, outputNode, options) {
+        const { addNode, addLink, dt, usarAlturaRelativa, inletPressureBar, outletPressureBar } = options;
+        const gasPressureBar = tank.getPressaoGasBar(fluid);
+        const gasNode = addNode(`${tank.id}:gas`, tank, 'gas');
+        const referenceNode = addNode(`${tank.id}:gas-ref`, tank, 'gas-ref');
+        referenceNode.fixedPressureBar = gasPressureBar;
+
+        const baseLink = (id, from, to) => ({
+            id: `${id}:${tank.id}`,
+            component: tank,
+            from,
+            to,
+            fluid,
+            tankInternal: true,
+            bidirectional: true,
+            previousFlowLps: 0,
+            forcedClosed: false,
+            open: true
+        });
+        // P_bocal − P_gás = coluna de líquido no bocal (entrada: bocal → gás; saída: gás → bocal).
+        const inletLink = addLink({ ...baseLink('tank-in', inputNode.id, gasNode.id), kind: 'tank-offset', offsetBar: inletPressureBar - gasPressureBar });
+        addLink({
+            ...baseLink('tank-out', gasNode.id, outputNode.id),
+            kind: 'tank-offset',
+            offsetBar: gasPressureBar - outletPressureBar,
+            // Teto de saída (como no tanque aberto): o disponível acima do bocal mais o que entra.
+            inletLink,
+            availableVolumeL: tank.getVolumeDisponivelSaidaL?.(usarAlturaRelativa) ?? Math.max(0, tank.volumeAtual)
+        });
+
+        const volumeL = Math.max(0, finiteNumber(tank.volumeAtual, 0));
+        const maxVolumeL = tank.getVolumeMaximoLiquidoL?.() ?? tank.capacidadeMaxima;
+        const minVolumeL = tank.getVolumeMinimoSaidaL?.(usarAlturaRelativa) ?? 0;
+        // Limites relativos ao volume atual: o vaso não é forçado a sair de onde já está.
+        const highVolumeL = Math.max(maxVolumeL, volumeL);
+        addLink({
+            ...baseLink('tank-gas', gasNode.id, referenceNode.id),
+            kind: 'tank-gas',
+            dt,
+            volumeL,
+            highVolumeL,
+            maxVolumeL,
+            lowVolumeL: Math.min(minVolumeL, volumeL),
+            maxNetInflowLps: (highVolumeL - volumeL) / dt,
+            basePressureBar: gasPressureBar
+        });
+    }
+
+    // Subida P_gás(fim do passo) − P_gás(início) para a vazão líquida que entra no vaso. Fora da faixa
+    // de volume, a curva segue pela tangente da borda (sempre crescente): um patamar plano faria o Newton
+    // saltar entre os dois lados da borda sem convergir. O limite em si é o teto de vazão do ramo.
+    tankGasPressureRiseBar(link, netInflowLps) {
+        const tank = link.component;
+        const capacityL = Math.max(EPSILON_FLOW, finiteNumber(tank.capacidadeMaxima, 0));
+        const gasAt = (volumeL) => tank.getPressaoGasParaNivelBar(link.fluid, volumeL / capacityL);
+        const endVolumeL = link.volumeL + (netInflowLps * link.dt);
+        const edgeVolumeL = Math.min(link.highVolumeL, Math.max(link.lowVolumeL, endVolumeL));
+        const edgePressureBar = gasAt(edgeVolumeL);
+        if (edgeVolumeL === endVolumeL) return edgePressureBar - link.basePressureBar;
+
+        // A tangente é medida dentro da faixa física: acima de maxVolumeL a curva já está no piso do gás.
+        const stepL = Math.max(1e-3, capacityL * 1e-6);
+        const slopeVolumeL = Math.min(edgeVolumeL, link.maxVolumeL);
+        const insideVolumeL = endVolumeL > edgeVolumeL ? slopeVolumeL - stepL : slopeVolumeL + stepL;
+        const slopeBarPerL = Math.max(
+            MIN_TANK_GAS_SLOPE_BAR_PER_L,
+            Math.abs(gasAt(slopeVolumeL) - gasAt(insideVolumeL)) / stepL
+        );
+        return edgePressureBar + (slopeBarPerL * (endVolumeL - edgeVolumeL)) - link.basePressureBar;
+    }
+
     // Garante que as vazões anteriores (usadas no termo de inércia dQ/dt) respeitem a continuidade
     // através de equipamentos passantes sem volume acumulado, evitando picos artificiais de golpe de
     // aríete quando um snapshot legado ou uma edição de topologia traz vazões em série incompatíveis.
     reconcilePreviousFlows(links) {
-        const internalLinks = links.filter((link) => link.kind !== 'connection');
+        const internalLinks = links.filter((link) => link.kind !== 'connection' && !link.tankInternal);
         if (internalLinks.length === 0) return;
 
         const scalePreviousFlows = (group, targetSum) => {
@@ -362,16 +453,24 @@ export class GlobalHydraulicSolver {
         const pipeAreaM2 = positiveNumber(connection.areaM2, 1e-6);
         const lengthM = Math.max(0, finiteNumber(geometry?.lengthM, 0));
 
-        let sourceLossCoeff = 0;
-        if (source instanceof FonteLogica) sourceLossCoeff = Math.max(0, DEFAULT_ENTRY_LOSS);
+        // Bocais de tanque e dreno: K na velocidade do cano (DWSIM) ou do bocal (aba Avançado).
+        let sourceLoss = { areaM2: pipeAreaM2, lossCoeff: 0 };
+        if (source instanceof FonteLogica) sourceLoss.lossCoeff = Math.max(0, DEFAULT_ENTRY_LOSS);
         if (source instanceof TanqueLogico) {
             const cd = Math.max(0.15, finiteNumber(source.coeficienteSaida, 1));
-            sourceLossCoeff = 1 / (cd * cd);
+            const kBocal = source.considerarPerdasBocais !== false ? 1 / (cd * cd) : 0;
+            // 1/Cd² = 1 (energia cinética que segue no cano) + perda no bocal.
+            sourceLoss = referenciaPerdaBocal(source, kBocal, pipeAreaM2, 'saida', { kEnergiaCinetica: kBocal > 0 ? 1 : 0 });
         }
 
-        let targetLossCoeff = 0;
-        if (target instanceof DrenoLogico) targetLossCoeff = Math.max(0, finiteNumber(target.perdaEntradaK, 0));
-        if (target instanceof TanqueLogico) targetLossCoeff = TANK_INLET_EXIT_LOSS_K;
+        let targetLoss = { areaM2: pipeAreaM2, lossCoeff: 0 };
+        if (target instanceof DrenoLogico) {
+            targetLoss = referenciaPerdaBocal(target, finiteNumber(target.perdaEntradaK, 0), pipeAreaM2, 'entrada');
+        }
+        if (target instanceof TanqueLogico) {
+            const kBocal = target.considerarPerdasBocais !== false ? TANK_INLET_EXIT_LOSS_K : 0;
+            targetLoss = referenciaPerdaBocal(target, kBocal, pipeAreaM2, 'entrada');
+        }
 
         const inertanceBarPerLpsPerS = (density * lengthM) / (pipeAreaM2 * 1e8);
         const forcedClosed = (source instanceof TanqueLogico
@@ -390,10 +489,10 @@ export class GlobalHydraulicSolver {
             fluid,
             density,
             pipeAreaM2,
-            sourceAreaM2: positiveNumber(source.getAreaConexaoM2?.(), pipeAreaM2),
-            targetAreaM2: positiveNumber(target.getAreaConexaoM2?.(), pipeAreaM2),
-            sourceLossCoeff,
-            targetLossCoeff,
+            sourceAreaM2: positiveNumber(sourceLoss.areaM2, pipeAreaM2),
+            targetAreaM2: positiveNumber(targetLoss.areaM2, pipeAreaM2),
+            sourceLossCoeff: sourceLoss.lossCoeff,
+            targetLossCoeff: targetLoss.lossCoeff,
             staticHeadBar: pressureFromHeadBar(finiteNumber(geometry?.headGainM, 0), density),
             inertanceBarPerLpsPerS,
             inertiaCoeff: dt > 0 ? inertanceBarPerLpsPerS / dt : 0,
@@ -525,7 +624,14 @@ export class GlobalHydraulicSolver {
                 - link.staticHeadBar
                 + (link.inertiaCoeff * (flowLps - link.previousFlowLps));
         }
-        if (link.kind === 'pump') return -this.pumpBoostBar(link, flowLps);
+        if (link.kind === 'pump') {
+            // Abaixo de zero a curva é plana (derivada nula) e o Newton trataria a bomba como um curto;
+            // a retenção da bomba resiste ao fluxo reverso (o ramo ainda fecha por status se Q < 0).
+            if (flowLps < 0) return -this.pumpBoostBar(link, 0) + (PUMP_REVERSE_RESISTANCE_BAR_PER_LPS * flowLps);
+            return -this.pumpBoostBar(link, flowLps);
+        }
+        if (link.kind === 'tank-offset') return link.offsetBar + (TANK_INTERNAL_RESISTANCE_BAR_PER_LPS * flowLps);
+        if (link.kind === 'tank-gas') return this.tankGasPressureRiseBar(link, flowLps);
         return Math.sign(flowLps) * link.lossCoeff * kineticPressureBar(Math.abs(flowLps), link.areaM2, link.density);
     }
 
@@ -538,6 +644,7 @@ export class GlobalHydraulicSolver {
     }
 
     initialFlowGuess(link) {
+        if (link.tankInternal) return 0;
         if (link.previousFlowLps > EPSILON_FLOW) return link.previousFlowLps;
         if (link.kind === 'pump') {
             return Math.max(EPSILON_FLOW, 0.5 * link.component.vazaoNominal * link.drive);
@@ -564,6 +671,17 @@ export class GlobalHydraulicSolver {
                 injectionLps: 0,
                 capped: false
             });
+        });
+        // Vaso fechado já no limite (gás no piso): sem espaço, o colchão começa travado. Partir dele
+        // aberto deixa o Newton, linearizado em canos quase parados, achar fluxo reverso e alternar a
+        // bomba entre aberta e fechada. O teto solta se a rede puxar líquido do vaso.
+        network.links.forEach((link) => {
+            if (link.kind !== 'tank-gas' || link.maxNetInflowLps > STATUS_FLOW_TOLERANCE_LPS) return;
+            link.appliedCapLps = link.maxNetInflowLps;
+            link.open = false;
+            flows[link.index] = 0;
+            nodeState.get(link.from).injectionLps -= link.appliedCapLps;
+            nodeState.get(link.to).injectionLps += link.appliedCapLps;
         });
 
         let pressures = new Map();
@@ -848,10 +966,10 @@ export class GlobalHydraulicSolver {
         let changed = false;
 
         network.links.forEach((link) => {
-            if (link.forcedClosed) return;
+            if (link.forcedClosed || link.appliedCapLps != null) return;
             const flow = flows[link.index];
             if (link.open) {
-                if (flow < -STATUS_FLOW_TOLERANCE_LPS) {
+                if (!link.bidirectional && flow < -STATUS_FLOW_TOLERANCE_LPS) {
                     link.open = false;
                     flows[link.index] = 0;
                     changed = true;
@@ -897,6 +1015,137 @@ export class GlobalHydraulicSolver {
             }
         });
 
+        if (this.updateTankCushionCaps(network, flows, pressures, nodeState)) changed = true;
+        if (this.releaseConflictingCaps(network, flows, nodeState)) changed = true;
+        return changed;
+    }
+
+    // Num grupo de nós ligados sem nenhuma pressão fixa, as vazões impostas pelos tetos (fonte injetando
+    // 50 L/s, vaso travado absorvendo 0) precisam fechar o balanço, senão não há solução. Se sobra entrada
+    // imposta, soltam-se os tetos que impõem entrada no grupo (fontes, saída de um vaso a montante); se
+    // sobra saída, os que impõem saída. Os soltos são reavaliados no passe seguinte. Grupos com alguma
+    // pressão fixa não são mexidos, o que evita ping-pong entre ramos independentes.
+    releaseConflictingCaps(network, flows, nodeState) {
+        const hasCaps = network.links.some((link) => link.appliedCapLps != null)
+            || [...nodeState.values()].some((state) => state.capped);
+        if (!hasCaps) return false;
+        const neighbors = new Map();
+        const connect = (a, b) => {
+            if (!neighbors.has(a)) neighbors.set(a, []);
+            neighbors.get(a).push(b);
+        };
+        network.links.forEach((link) => {
+            if (!link.open) return;
+            connect(link.from, link.to);
+            connect(link.to, link.from);
+        });
+        const visited = new Set();
+        let changed = false;
+
+        network.nodes.forEach((startNode) => {
+            if (visited.has(startNode.id)) return;
+            const group = new Set();
+            const queue = [startNode.id];
+            visited.add(startNode.id);
+            while (queue.length > 0) {
+                const nodeId = queue.pop();
+                group.add(nodeId);
+                (neighbors.get(nodeId) || []).forEach((nextId) => {
+                    if (visited.has(nextId)) return;
+                    visited.add(nextId);
+                    queue.push(nextId);
+                });
+            }
+            if ([...group].some((nodeId) => nodeState.get(nodeId).fixed)) return;
+
+            // Tetos de nó só impõem entrada no grupo (fontes, saída de tanque aberto). Ramo no teto
+            // impõe entrada no grupo da ponta "to" e saída no da ponta "from" (só se a outra ponta é de fora).
+            const cappedNodeIds = [...group].filter((nodeId) => nodeState.get(nodeId).capped);
+            const cappedLinks = network.links.filter((link) => link.appliedCapLps != null);
+            const inflowLinks = cappedLinks.filter((link) =>
+                group.has(link.to) && !group.has(link.from) && link.appliedCapLps > 0);
+            const outflowLinks = cappedLinks.filter((link) =>
+                group.has(link.from) && !group.has(link.to) && link.appliedCapLps > 0);
+            const releaseNodes = (nodeIds) => nodeIds.forEach((nodeId) => {
+                const state = nodeState.get(nodeId);
+                state.capped = false;
+                state.fixed = true;
+                state.pressureBar = network.nodes.get(nodeId).fixedPressureBar;
+                state.injectionLps = 0;
+                changed = true;
+            });
+            const releaseLinks = (links) => links.forEach((link) => {
+                nodeState.get(link.from).injectionLps += link.appliedCapLps;
+                nodeState.get(link.to).injectionLps -= link.appliedCapLps;
+                flows[link.index] = link.appliedCapLps;
+                link.appliedCapLps = null;
+                link.open = true;
+                changed = true;
+            });
+
+            const imbalanceLps = [...group].reduce((sum, nodeId) => sum + nodeState.get(nodeId).injectionLps, 0);
+            if (imbalanceLps > STATUS_FLOW_TOLERANCE_LPS) {
+                releaseNodes(cappedNodeIds);
+                releaseLinks(inflowLinks);
+            } else if (imbalanceLps < -STATUS_FLOW_TOLERANCE_LPS) {
+                releaseLinks(outflowLinks);
+            } else if (cappedNodeIds.length > 0 || inflowLinks.length > 0) {
+                // O balanço fecha, mas os tetos deixam o grupo sem referência de pressão (dois tetos
+                // iguais, por exemplo): solta-se quem impõe entrada.
+                releaseNodes(cappedNodeIds);
+                releaseLinks(inflowLinks);
+            } else {
+                // Vaso travado que ficou isolado: sem quem empurre, o colchão volta à pressão do gás,
+                // em vez de guardar a pressão da trava do passo anterior.
+                releaseLinks(cappedLinks.filter((link) => link.kind === 'tank-gas' && group.has(link.from)));
+            }
+        });
+        return changed;
+    }
+
+    // Teto de vazão dos ramos internos do vaso fechado: no colchão (gás no piso: só entra o que sai,
+    // trava hidráulica) e no bocal de saída (líquido no bocal: sai no máximo o disponível mais o que
+    // entra). Ramo no teto vira vazão imposta (injeções iguais e opostas nas pontas, sem criar nem perder
+    // massa) e a pressão sai livre da rede. Solta quando a queda da rede ficaria abaixo da do teto.
+    getTankLinkFlowCapLps(link, flows, dt) {
+        if (link.kind === 'tank-gas') return link.maxNetInflowLps;
+        if (link.kind !== 'tank-offset' || !link.inletLink) return null;
+        const availableAboveCushionL = Math.max(0, link.availableVolumeL - TANK_OUTLET_CUSHION_L);
+        return (availableAboveCushionL / dt) + Math.max(0, flows[link.inletLink.index]);
+    }
+
+    updateTankCushionCaps(network, flows, pressures, nodeState) {
+        let changed = false;
+        const applyInjection = (link, flowLps) => {
+            nodeState.get(link.from).injectionLps -= flowLps;
+            nodeState.get(link.to).injectionLps += flowLps;
+        };
+        network.links.forEach((link) => {
+            if (!link.tankInternal || !(network.dt > 0)) return;
+            const capLps = this.getTankLinkFlowCapLps(link, flows, network.dt);
+            if (capLps === null) return;
+            if (link.appliedCapLps == null) {
+                if (!(flows[link.index] > capLps + STATUS_FLOW_TOLERANCE_LPS)) return;
+                link.appliedCapLps = capLps;
+                link.open = false;
+                flows[link.index] = 0;
+                applyInjection(link, capLps);
+                changed = true;
+                return;
+            }
+            const dropBar = (pressures.get(link.from) ?? 0) - (pressures.get(link.to) ?? 0);
+            if (dropBar < this.evaluateLink(link, link.appliedCapLps) - STATUS_PRESSURE_TOLERANCE_BAR) {
+                applyInjection(link, -link.appliedCapLps);
+                flows[link.index] = link.appliedCapLps;
+                link.appliedCapLps = null;
+                link.open = true;
+                changed = true;
+            } else if (Math.abs(link.appliedCapLps - capLps) > STATUS_FLOW_TOLERANCE_LPS) {
+                applyInjection(link, capLps - link.appliedCapLps);
+                link.appliedCapLps = capLps;
+                changed = true;
+            }
+        });
         return changed;
     }
 
