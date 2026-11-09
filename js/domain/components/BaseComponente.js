@@ -131,7 +131,7 @@ export class ComponenteFisico extends Observable {
     }
 
     // Sem escoamento, usa a pressão nodal resolvida pelo solver global (pressão estática, como um
-    // manômetro na porta); no solver legado esse valor não existe e a leitura volta a 0.
+    // manômetro na porta); antes do 1º resolve esse valor não existe e a leitura volta a 0.
     getPressaoNoPortaBar(port) {
         const pressureBar = this.estadoHidraulico.pressaoNoPorta?.[port];
         return Number.isFinite(pressureBar) ? pressureBar : 0;
@@ -231,10 +231,11 @@ export class ComponenteFisico extends Observable {
         const totalFlow = matches.reduce((acc, c) => acc + c.flowLps, 0);
         if (totalFlow <= EPSILON_FLOW) {
             const staticPressureBar = this.estadoHidraulico.pressaoNoEntradaPorCorrente?.[targetStream];
-            return Number.isFinite(staticPressureBar) && staticPressureBar > 0 ? staticPressureBar : 0;
+            return Number.isFinite(staticPressureBar) ? staticPressureBar : 0;
         }
         const weightedPressure = matches.reduce((acc, c) => acc + (Number(c.pressureBar) || 0) * c.flowLps, 0) / totalFlow;
-        return Number.isFinite(weightedPressure) && weightedPressure > 0 ? weightedPressure : 0;
+        // Manométrica: abaixo da atmosfera é negativa.
+        return Number.isFinite(weightedPressure) ? weightedPressure : 0;
     }
 
     resetEstadoHidraulicoStream(streamId = 1) {

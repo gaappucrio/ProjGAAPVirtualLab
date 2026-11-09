@@ -60,12 +60,28 @@ export class BombaLogica extends ComponenteFisico {
         return Number.isFinite(densidade) && densidade > 0 ? densidade / DEFAULT_FLUID_DENSITY_KG_M3 : 1;
     }
 
+    getVazaoMaximaCurvaLps(drive = 1) {
+        return Math.max(EPSILON_FLOW, this.vazaoNominal * Math.max(clamp(drive, 0, 1), 0.05));
+    }
+
     getCurvaPressaoBar(flowLps, drive = 1, densidadeKgM3 = this.densidadeOperacaoKgM3) {
+        return Math.max(0, this.getCurvaPressaoEstendidaBar(Math.min(flowLps, this.getVazaoMaximaCurvaLps(drive)), drive, densidadeKgM3));
+    }
+
+    // Acima do qMax a parábola continua negativa: além do fim da curva a bomba não soma carga, ela
+    // dissipa, como uma resistência (o EPANET também estende a curva; o DWSIM interrompe o cálculo).
+    getCurvaPressaoEstendidaBar(flowLps, drive = 1, densidadeKgM3 = this.densidadeOperacaoKgM3) {
         const driveClamped = clamp(drive, 0, 1);
-        const qMax = Math.max(EPSILON_FLOW, this.vazaoNominal * Math.max(driveClamped, 0.05));
-        const curveFrac = 1 - Math.pow(clamp(flowLps / qMax, 0, 1), 2);
+        const qMax = this.getVazaoMaximaCurvaLps(driveClamped);
+        const curveFrac = 1 - Math.pow(Math.max(0, flowLps) / qMax, 2);
         return this.pressaoMaxima * this.getFatorDensidadeCurva(densidadeKgM3)
-            * driveClamped * driveClamped * Math.max(0, curveFrac);
+            * driveClamped * driveClamped * curveFrac;
+    }
+
+    // Carga que a bomba impõe ao escoamento: a cavitação só reduz a parte positiva da curva.
+    getCargaEfetivaBar(flowLps, drive = 1, densidadeKgM3 = this.densidadeOperacaoKgM3, fatorCavitacao = 1) {
+        const carga = this.getCurvaPressaoEstendidaBar(flowLps, drive, densidadeKgM3);
+        return carga > 0 ? carga * fatorCavitacao : carga;
     }
 
     getEficienciaInstantanea(flowLps = this.fluxoReal) {
@@ -143,7 +159,7 @@ export class BombaLogica extends ComponenteFisico {
         }
         this.margemNpshM = this.npshDisponivelM - this.npshRequeridoAtualM;
         this.cargaGeradaBar = drive > 0
-            ? this.getCurvaPressaoBar(this.fluxoReal, drive) * this.fatorCavitacaoAtual
+            ? this.getCargaEfetivaBar(this.fluxoReal, drive, this.densidadeOperacaoKgM3, this.fatorCavitacaoAtual)
             : 0;
         this.pressaoDescargaAtualBar = this.pressaoSucaoAtualBar + this.cargaGeradaBar;
         this.pressaoSaidaAtualBar = this.pressaoDescargaAtualBar;

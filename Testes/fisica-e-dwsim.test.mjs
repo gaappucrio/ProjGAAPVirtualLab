@@ -18,6 +18,7 @@ import { TrocadorCalorLogico } from '../js/domain/components/TrocadorCalorLogico
 import { ValvulaLogica, cvToKv } from '../js/domain/components/ValvulaLogica.js';
 import { referenciaPerdaBocal } from '../js/domain/components/BocalHidraulico.js';
 import { restoreFlowchartDocument } from '../js/presentation/flowchart/FlowchartPersistence.js';
+import { resolvePipePressureProfile } from '../js/presentation/monitoring/PipePressureProfile.js';
 import { parseDwsimXml, readDwsimFile, translateDwsimToWorkspace } from '../js/presentation/import/DwsimImporter.js';
 
 const RHO_AGUA = 997;
@@ -1048,4 +1049,132 @@ test('bomba succionando de tanque alimentado a 32 m3/h estabiliza em 32 m3/h sem
     }
 
     approx(bomba.fluxoReal * 3.6, 32, 0.05, 'Bomba estabiliza na vazao de entrada do tanque (32 m3/h)');
+});
+
+// Fonte → bomba (qMax 45 L/s, 5 bar) → válvula Cv 400 → dreno, com canos desprezíveis.
+function montarBombaValvula(pressaoFonteBar) {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-qmax', 'F-qmax', 0, 0);
+    const bomba = new BombaLogica('P-qmax', 'P-qmax', 0, 0);
+    const valvula = criarValvula('V-qmax', 400);
+    const dreno = new DrenoLogico('D-qmax', 'D-qmax', 0, 0);
+    fonte.pressaoFonteBar = pressaoFonteBar;
+    fonte.vazaoMaxima = 1000;
+    bomba.vazaoNominal = 45;
+    bomba.pressaoMaxima = 5;
+    bomba.grauAcionamento = 100;
+    bomba.acionamentoEfetivo = 100;
+    [fonte, bomba, valvula, dreno].forEach((c) => engine.add(c));
+    conectar(engine, fonte, bomba, TUBO_DESPREZIVEL);
+    conectar(engine, bomba, valvula, TUBO_DESPREZIVEL);
+    conectar(engine, valvula, dreno, TUBO_DESPREZIVEL);
+    return { engine, fonte, bomba, valvula, dreno };
+}
+
+test('bomba acima do qMax dissipa pela parabola estendida em vez de virar um cano sem perda', () => {
+    const { engine, bomba } = montarBombaValvula(10);
+    simular(engine, 30);
+
+    // 10 + 5·(1 − (Q/45)²) = ΔP_valvula(Q): a fonte empurra além do fim da curva.
+    const kv = cvToKv(400);
+    const desbalanco = (q) => 10 + (5 * (1 - ((q / 45) ** 2))) - ((((3.6 * q) / kv) ** 2) * (RHO_AGUA / 999.016));
+    let baixo = 0;
+    let alto = 500;
+    for (let i = 0; i < 80; i += 1) {
+        const meio = (baixo + alto) / 2;
+        if (desbalanco(meio) > 0) baixo = meio;
+        else alto = meio;
+    }
+    assert.ok(baixo > 45, `A referencia tem de estar acima do qMax: ${baixo}`);
+    approx(bomba.fluxoReal, baixo, 0.005 * baixo, 'Vazao com a curva estendida');
+    assert.ok(bomba.cargaGeradaBar < 0, `Acima do qMax a carga e negativa: ${bomba.cargaGeradaBar}`);
+    const codigos = engine.globalHydraulicSolver.getMetrics().lastDiagnostics.map((d) => d.code);
+    assert.ok(codigos.includes('pump_beyond_curve'), `Aviso de fora da curva: ${codigos}`);
+});
+
+test('estados ativos sem estabilizar: o ultimo passe resolve a rede e devolve vazoes consistentes', () => {
+    const { engine, bomba, valvula } = montarBombaValvula(0.5);
+    simular(engine, 10);
+    const solver = engine.globalHydraulicSolver;
+    const original = solver.updateStatuses.bind(solver);
+    // Força o pior caso: a cada passe a retenção da válvula alterna, e nunca estabiliza.
+    solver.updateStatuses = (network, flows, pressures, nodeState) => {
+        original(network, flows, pressures, nodeState);
+        const link = network.links.find((l) => l.component === valvula);
+        link.open = !link.open;
+        flows[link.index] = link.open ? solver.initialFlowGuess(link) : 0;
+        return true;
+    };
+    passo(engine);
+
+    const metricas = solver.getMetrics();
+    assert.ok(metricas.lastDiagnostics.some((d) => d.code === 'global_status_not_settled'), 'Aviso de estados sem estabilizar');
+    // Ramo em série: bomba e válvula têm de carregar a mesma vazão (a massa fecha em cada nó).
+    approx(bomba.fluxoReal, valvula.fluxoReal, 1e-6, 'Vazao da bomba = vazao da valvula');
+});
+
+test('caches do solver global: componente apagado nao deixa estado antigo e clear zera o ponto de partida', () => {
+    const { engine, bomba } = montarBombaValvula(0.5);
+    simular(engine, 5);
+    const solver = engine.globalHydraulicSolver;
+    assert.ok(solver.previousComponentLinkFlows.has(`pump:${bomba.id}`));
+
+    engine.removeComponent(bomba);
+    simular(engine, 1);
+    assert.ok(!solver.previousComponentLinkFlows.has(`pump:${bomba.id}`), 'Vazao da bomba apagada sai do cache');
+    assert.ok(![...solver.previousNodePressures.keys()].some((id) => id.startsWith(`${bomba.id}:`)), 'Pressoes da bomba apagada saem do cache');
+
+    engine.clear();
+    assert.equal(solver.previousComponentLinkFlows.size, 0);
+    assert.equal(solver.previousNodePressures.size, 0);
+});
+
+test('pressao manometrica abaixo da atmosfera fica negativa na valvula e no perfil do cano, como no DWSIM', async () => {
+    const arquivo = path.resolve('Testes/plantas dwsim/entrada cano valve cano saida.dwxmz');
+    const buffer = fs.readFileSync(arquivo);
+    const xml = await readDwsimFile({
+        arrayBuffer: async () => buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
+    });
+    const engine = new SistemaSimulacao();
+    restoreFlowchartDocument(engine, translateDwsimToWorkspace(parseDwsimXml(xml)).workspace);
+    engine.isRunning = true;
+    for (let i = 0; i < 300; i += 1) engine.tickPipeline.advance(0.1);
+
+    // DWSIM: fonte a -0,513 barg, saída da válvula a -0,6048 barg, dreno a -0,6078 barg.
+    const valvula = engine.componentes.find((c) => c.tag === 'VALVE-1');
+    approx(valvula.pressaoSaidaAtualBar, -0.6048, 0.005, 'P de saida da valvula');
+    approx(valvula.pressaoSaidaAtualBar, valvula.pressaoEntradaAtualBar - valvula.deltaPAtualBar, 1e-9, 'P saida = P entrada - deltaP');
+
+    engine.conexoes.filter((conn) => conn.sourceId === valvula.id || conn.targetId === valvula.id).forEach((conn) => {
+        const state = engine.getConnectionState(conn);
+        const source = engine.componentes.find((c) => c.id === conn.sourceId);
+        const perfil = resolvePipePressureProfile({ state, source });
+        assert.ok(perfil.endPressureBar < -0.5, `Fim do cano abaixo da atmosfera: ${perfil.endPressureBar}`);
+        approx(perfil.endPressureBar, state.pressureBar, 1e-6, `Perfil do cano ${source.tag} chega na pressao resolvida`);
+    });
+});
+
+test('trocador em vacuo: pressoes de saida negativas e risco de ebulicao pela pressao absoluta', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-vac', 'F-vac', 0, 0);
+    const trocador = new TrocadorCalorLogico('HX-vac', 'HX-vac', 0, 0);
+    const dreno = new DrenoLogico('D-vac', 'D-vac', 0, 0);
+    fonte.pressaoFonteBar = -0.5;
+    fonte.vazaoMaxima = 1;
+    dreno.pressaoSaidaBar = -0.6;
+    trocador.temperaturaServicoC = 85;
+    trocador.uaWPorK = 40000;
+    trocador.setVolumeInterno(0);
+    [fonte, trocador, dreno].forEach((c) => engine.add(c));
+    conectar(engine, fonte, trocador, { ...TUBO_DESPREZIVEL, targetEndpoint: { portId: 'in1', portType: 'in' } });
+    const saida = conectar(engine, trocador, dreno, { ...TUBO_DESPREZIVEL, sourceEndpoint: { portId: 'out1', portType: 'out' } });
+    for (let i = 0; i < 50; i += 1) engine.tickPipeline.advance(0.1);
+
+    assert.ok(trocador.vazao1Lps > 0.1, `Escoa da fonte ao dreno: ${trocador.vazao1Lps}`);
+    assert.ok(trocador.pressaoSaidaAtualBar < -0.5, `Saida abaixo da atmosfera: ${trocador.pressaoSaidaAtualBar}`);
+    approx(trocador.pressaoSaidaAtualBar, engine.getConnectionState(saida).sourcePressureBar, 0.005, 'Saida do trocador = inicio do cano');
+    // A ~85 °C a pressão de vapor da água (~0,58 bar abs) passa da pressão absoluta na saída (~0,41 bar):
+    // a 0 barg (pressão cortada) a mesma água não ferveria.
+    assert.ok(trocador.temperaturaSaidaC > 80, `Agua quente na saida: ${trocador.temperaturaSaidaC}`);
+    assert.equal(trocador.riscoEbulicao1, true, 'Risco de ebulicao na saida em vacuo');
 });

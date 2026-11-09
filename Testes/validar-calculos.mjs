@@ -275,7 +275,7 @@ test('calculos hidraulicos toleram fluido e geometria ausentes sem NaN', () => {
     assert.ok(Number.isFinite(hidraulica.distributedLossCoeff), 'Coeficiente distribuido deve ficar finito sem geometria');
     assert.ok(Number.isFinite(hidraulica.reynolds), 'Reynolds deve ficar finito sem fluido explicito');
     assert.ok(Number.isFinite(tempoResposta), 'Tempo de resposta deve ficar finito sem fluido/geometria');
-    assert.ok(Number.isFinite(tanque.getPressaoConexaoSemPerdaBar()), 'Pressao do tanque deve ficar finita sem fluido explicito');
+    assert.ok(Number.isFinite(tanque.getPressaoBocalSaidaBar()), 'Pressao do tanque deve ficar finita sem fluido explicito');
     assert.equal(pressureFromHeadBar(1, undefined), 0, 'Pressao por altura invalida deve ser zerada, nao NaN');
 });
 

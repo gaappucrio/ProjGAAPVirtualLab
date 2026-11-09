@@ -28,9 +28,7 @@ A organização do código segue conceitos fundamentais do DDD:
 4. **Serviços de Domínio (Domain Services):**
    Operações físicas que envolvem múltiplos elementos da rede:
    - `GlobalHydraulicSolver.js`: solucionador simultâneo global padrão (Global Gradient Algorithm / Newton–Cholesky) para redes abertas e fechadas, com inércia física nos tubos, reconciliação de vazões históricas (`reconcilePreviousFlows`), conjuntos ativos e cavitação acoplada.
-   - `HydraulicNetworkSolver.js`: método sequencial push-based legado para propagação de vazão e pressão em redes abertas (acessível pelo toggle "Solver legado").
-   - `NodalHydraulicSolver.js`: solucionador simultâneo não linear por bisseção para circuitos fechados (anéis) no modo legado, com suporte a anéis flutuantes em série e resolução topológica de ramos internos para equipamentos multi-corrente (`TrocadorCalorLogico`).
-   - `HydraulicBranchModel.js`: modelagem de capacidade de ramos, perdas de carga singulares, conservação de massa desacoplada por corrente e reconciliação de pressões.
+   - `HydraulicBranchModel.js`: ponte entre o estado das conexões resolvido pelo solver global e o estado hidráulico de cada componente (`ensureConnectionProperties`, `rebuildComponentHydraulicStateFromConnections`, `componentCanSupplyLiquidToPump`).
    - `HydraulicNetworkAnalyzer.js`: análise topológica de grafos, detecção de ciclos e particionamento em ilhas hidráulicas.
    - `PipeHydraulics.js`: equações de Darcy-Weisbach, Colebrook/Swamee-Jain, regimes de Reynolds e diâmetro sugerido.
    - `ResidenceTime.js`: cálculo de tempo de residência hidráulico de tanques e trechos de tubulação.
@@ -66,7 +64,7 @@ A organização do código segue conceitos fundamentais do DDD:
 4. **I — Interface Segregation Principle (Princípio da Segregação de Interfaces):**
    Interfaces e contratos focados evitam dependências desnecessárias:
    - `Observable` em `BaseComponente.js` provê apenas a interface de subscrição (`subscribe`, `notify`).
-   - `HydraulicScopedNetworkContext` disponibiliza apenas os métodos necessários para a execução do solver.
+   - `HydraulicNetworkContext` disponibiliza ao solver apenas as consultas de topologia, estado e fluido de que ele precisa.
    - Presenters expõem somente os métodos `render` e `bind`.
 
 5. **D — Dependency Inversion Principle (Princípio da Inversão de Dependência):**
@@ -115,7 +113,7 @@ A arquitetura do GAAP Virtual Lab emprega os seguintes padrões de projeto:
     *   `LanguageManager.js` (`subscribeLanguageChanges`): notifica controladores e elementos reativos sempre que o idioma é alternado.
     *   `DisplayUnits.js` (`subscribeUnitPreferences`): notifica presenters para reexibir valores convertidos instantaneamente ao alterar unidades de medida.
 *   **Strategy Pattern (Estratégia):**
-    *   Seleção de Solvers em `SimulationEngine.js` e `HydraulicNetworkAnalyzer.js`: por padrão a rede é resolvida pelo solver simultâneo global (`GlobalHydraulicSolver.js`); quando o modo legado está ativo, a topologia da malha determina dinamicamente se uma ilha hidráulica é resolvida pela estratégia push-based sequencial (`HydraulicNetworkSolver.js`) ou pela estratégia de bisseção nodal simultânea (`NodalHydraulicSolver.js`).
+    *   Análise de rede em `HydraulicNetworkAnalyzer.js`: a topologia (ilhas, ciclos dirigidos) alimenta o diagnóstico de malhas fechadas; a solução é sempre do solver simultâneo global (`GlobalHydraulicSolver.js`).
     *   Perfis de Válvulas em `ValvulaLogica.js` (`VALVE_PROFILE_DEFINITIONS`): estratégias matemáticas intercambiáveis para a relação abertura vs vazão (linear, igual porcentagem, abertura rápida).
     *   Presenters de Painel: a estratégia de renderização e bind é selecionada em tempo de execução com base no tipo do equipamento selecionado.
 *   **Pipeline Pattern (Tubo e Filtros):**
@@ -144,7 +142,7 @@ A nomenclatura dos arquivos segue convenções que refletem sua camada e respons
 | Sufixo / Padrão de Nome | Camada | Responsabilidade do Arquivo | Exemplos no Código |
 |---|---|---|---|
 | `*Logico.js` | Domínio | Entidade de equipamento com leis físicas e balanços | `BombaLogica.js`, `TrocadorCalorLogico.js`, `ValvulaLogica.js` |
-| `*Solver.js` | Domínio | Algoritmos de solução de escoamento e pressões | `GlobalHydraulicSolver.js`, `HydraulicNetworkSolver.js`, `NodalHydraulicSolver.js` |
+| `*Solver.js` | Domínio | Algoritmos de solução de escoamento e pressões | `GlobalHydraulicSolver.js` |
 | `*Controller.js` | Apresentação | Orquestração de eventos de interface do usuário | `ToolbarController.js`, `MonitorController.js`, `PipeController.js` |
 | `*Presenter.js` | Apresentação | Geração e vinculação de conteúdo de painéis | `PumpComponentPropertiesPresenter.js`, `PropertyUnitsPresenter.js` |
 | `*Adapter.js` | Infraestrutura | Ponte de comunicação com bibliotecas ou APIs externas | `HeatExchangerChartAdapter.js`, `PropertyDomAdapter.js` |
@@ -167,7 +165,7 @@ Responsabilidade: conter a regra física, modelos de componentes e serviços hid
 Principais módulos:
 - `domain/components/` — classes lógicas de componentes, como bomba, tanque, válvula, trocador de calor, fonte e dreno.
 - `domain/models/ConnectionModel.js` — definição de conexão lógica entre componentes.
-- `domain/services/` — solver hidráulico global (`GlobalHydraulicSolver.js`, padrão) e solvers legados, cálculo de perdas, análise de rede, hidráulica de tubulação, tempo de residência e controle de nível PID.
+- `domain/services/` — solver hidráulico global (`GlobalHydraulicSolver.js`), cálculo de perdas, análise de rede, hidráulica de tubulação, tempo de residência e controle de nível PID.
 - `domain/context/SimulationContext.js` — contexto de simulação com parâmetros físicos e unidades.
 
 Interface com outros módulos:
@@ -232,7 +230,6 @@ Este módulo instancia o engine, conecta serviços de visual, cria controladores
 
 - O sistema deve iniciar e pausar o motor de simulação.
 - O motor deve calcular pressões, vazões e perdas hidráulicas resolvendo a rede inteira simultaneamente (solver global), incluindo a inércia do fluido nos tubos; a pressão em cada dreno deve fechar com a contrapressão configurada.
-- O solver legado (push-based) deve continuar acessível por um toggle na toolbar, apenas para comparação.
 - O sistema deve aplicar altura relativa quando habilitada.
 - Deve detectar malhas fechadas e notificar o usuário.
 - O sistema deve indicar quando a planta atinge regime permanente (vazões, volumes e temperaturas estáveis por 10 s simulados) e voltar a "transiente" a qualquer perturbação.
@@ -316,7 +313,7 @@ A seguir estão as funções/chaves de alto valor do sistema, com seus objetivos
 ### 5.3 `setupToolbar({ engine, onClearCanvas, onTopologyVisualChange, onThemeChange, undoManager })`
 
 - Módulo: `js/presentation/controllers/ToolbarController.js`
-- Objetivo: configurar a toolbar principal, incluindo controle de simulação, exportação de dados, tema, idioma, altura relativa, toggle do solver legado e indicador de regime permanente.
+- Objetivo: configurar a toolbar principal, incluindo controle de simulação, exportação de dados, tema, idioma, altura relativa e indicador de regime permanente.
 - Pré-condições: o DOM deve ter os botões e controles esperados.
 - Entrada:
   - `engine`: instância do motor.
@@ -330,9 +327,8 @@ A seguir estão as funções/chaves de alto valor do sistema, com seus objetivos
   - O botão de exportação aciona `exportSimulationData(engine)`.
   - O tema persistido em `localStorage` é aplicado e o botão atualiza o estado visual.
   - O idioma atual é aplicado aos rótulos da toolbar.
-  - O toggle "Solver legado" chama `engine.setModoSolver('legado' | 'global')` e registra a ação no histórico.
   - O indicador `#steady-state-indicator` reflete `engine.getSteadyStateStatus()` a cada `PANEL_UPDATE`, alterando estilos só na troca de estado.
-- Interface com o usuário: botões de simulação, limpar, exportar dados, alternar idioma, alternar tema, altura relativa, solver legado e indicador de regime.
+- Interface com o usuário: botões de simulação, limpar, exportar dados, alternar idioma, alternar tema, altura relativa e indicador de regime.
 
 ### 5.4 `createFlowchartDocument(engine, options)`
 
@@ -1094,7 +1090,7 @@ A seguir estão as funções/chaves de alto valor do sistema, com seus objetivos
 
 ## 9. Observações Importantes
 
-- O sistema permanece educacional. O solver global simultâneo (`GlobalHydraulicSolver.js`) é o motor padrão para redes abertas e fechadas, enquanto o solver push-based permanece disponível pelo toggle "Solver legado" para comparação didática.
+- O sistema permanece educacional. O solver global simultâneo (`GlobalHydraulicSolver.js`) é o único motor hidráulico, para redes abertas e fechadas (o solver legado push-based foi removido em 2026-11-09).
 - A detecção de malhas fechadas atua como diagnóstico de aviso e protege contra uso silencioso de uma abordagem inapropriada.
 - A exportação tabular não inclui gráficos, apenas dados numéricos e estados de simulação.
 - A persistência de tema e idioma é feita via `localStorage` quando disponível.
@@ -1109,7 +1105,7 @@ A seguir, a lista completa de módulos e símbolos exportados.
 
 - `js/VirtualLabRuntime.js`: setupVirtualLabRuntime
 - `js/application/config/FluidPresets.js`: FLUID_PRESETS
-- `js/application/engine/HydraulicNetworkContext.js`: HydraulicNetworkContext, HydraulicScopedNetworkContext
+- `js/application/engine/HydraulicNetworkContext.js`: HydraulicNetworkContext
 - `js/application/engine/SimulationEngine.js`: ComponenteFisico, ENGINE, EPSILON_FLOW, FLUID_PRESETS, MAX_NETWORK_FLOW_LPS, Observable, SistemaSimulacao, clamp, flowFromBernoulli, pressureFromHeadBar, pressureLossFromFlow, setComponentVisualCleanupHooks, setComponentVisualPositionResolver, setConnectionVisualUpdater, setPortStateUpdater, smoothFirstOrder
 - `js/application/engine/SimulationTickPipeline.js`: SimulationTickPipeline
 - `js/application/engine/SteadyStateMonitor.js`: STEADY_STATE_FLOW_RATE_TOLERANCE_LPS_PER_S, STEADY_STATE_HOLD_TIME_S, STEADY_STATE_TEMPERATURE_RATE_TOLERANCE_C_PER_S, STEADY_STATE_VOLUME_RATE_TOLERANCE_LPS, SteadyStateMonitor
@@ -1131,16 +1127,14 @@ A seguir, a lista completa de módulos e símbolos exportados.
 - `js/domain/components/TanqueLogico.js`: TIPO_TANQUE_ATMOSFERICO, TIPO_TANQUE_FECHADO, TanqueLogico
 - `js/domain/components/TrocadorCalorLogico.js`: TrocadorCalorLogico, calcularLmtd
 - `js/domain/components/ValvulaLogica.js`: VALVE_PROFILE_DEFINITIONS, ValvulaLogica
-- `js/domain/context/SimulationContext.js`: MODO_SOLVER_GLOBAL, MODO_SOLVER_LEGADO, createSimulationContext, mergeSimulationContext, normalizarModoSolver
+- `js/domain/context/SimulationContext.js`: createSimulationContext, mergeSimulationContext
 - `js/domain/events/ComponentEventPayloads.js`: ComponentEventPayloads
 - `js/domain/events/ComponentEventTypes.js`: COMPONENT_EVENTS
 - `js/domain/models/ConnectionModel.js`: ConnectionModel
 - `js/domain/services/GlobalHydraulicSolver.js`: GlobalHydraulicSolver
 - `js/domain/services/HydraulicBranchModel.js`: HydraulicBranchModel
 - `js/domain/services/HydraulicNetworkAnalyzer.js`: analyzeHydraulicNetwork
-- `js/domain/services/HydraulicNetworkSolver.js`: HydraulicNetworkSolver
 - `js/domain/services/LevelController.js`: DEFAULT_LEVEL_CONTROLLER_CONFIG, calculateLevelControl, calculatePidLevelControl, createLevelControllerState, resetLevelControllerState
-- `js/domain/services/NodalHydraulicSolver.js`: NodalHydraulicSolver
 - `js/domain/services/PipeHydraulics.js`: classifyFlowRegime, darcyFrictionFactor, diameterFromFlowVelocity, diameterFromM3sVelocity, ensureConnectionDesignFlowLps, ensureConnectionProperties, getConnectionResponseTimeS, getCurrentDesignFlowCandidateLps, getPipeHydraulics, getSuggestedDiameterForConnection, reynoldsFromFlow
 - `js/domain/services/ResidenceTime.js`: calculateConnectionResidenceTimeS, calculateResidenceTimeS, calculateTankResidenceTimeS, getTankResidenceFlowBasis
 - `js/domain/services/ValveSizingDiagnostics.js`: aplicarAjusteDimensionamentoValvula, diagnosticarDimensionamentoValvula

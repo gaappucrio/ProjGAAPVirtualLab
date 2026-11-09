@@ -30,9 +30,6 @@ export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange, on
     const btnRun = document.getElementById('btn-run');
     const btnClear = document.getElementById('btn-clear');
     const relativeHeightToggle = document.getElementById('toggle-relative-height');
-    const legacySolverToggle = document.getElementById('toggle-legacy-solver');
-    const legacySolverLabel = legacySolverToggle?.closest('label');
-    const legacySolverText = legacySolverLabel?.querySelector('span');
     const relativeHeightNote = document.getElementById('toolbar-height-note');
     const steadyStateIndicator = document.getElementById('steady-state-indicator');
     const relativeHeightLabel = relativeHeightToggle?.closest('label');
@@ -179,8 +176,6 @@ export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange, on
         if (exportDataText) exportDataText.textContent = t('toolbar.exportData');
         if (btnExportData) btnExportData.title = t('toolbar.exportDataTitle');
         if (languageToggle) languageToggle.checked = isEnglishLanguage();
-        if (legacySolverText) legacySolverText.textContent = t('toolbar.legacySolver');
-        if (legacySolverLabel) legacySolverLabel.title = t('toolbar.legacySolverTitle');
         if (languageLabel) languageLabel.title = t('toolbar.languageTitle');
         if (languageText) languageText.textContent = t('toolbar.language');
         if (themeButton) {
@@ -195,7 +190,6 @@ export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange, on
     updateRunButtonUI(engine.isRunning);
     relativeHeightToggle.checked = engine.usarAlturaRelativa;
     updateRelativeHeightUI(engine.usarAlturaRelativa);
-    if (legacySolverToggle) legacySolverToggle.checked = engine.isSolverLegado?.() === true;
     updateLanguageUI();
     updateSteadyStateUI(true);
 
@@ -210,13 +204,6 @@ export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange, on
         undoManager?.record('toggle-relative-height');
         engine.setUsarAlturaRelativa(e.target.checked);
         updateRelativeHeightUI(engine.usarAlturaRelativa);
-        onTopologyVisualChange?.();
-    });
-
-    // Solver legado (push-based) só para comparação durante a migração; o padrão é o solver global.
-    legacySolverToggle?.addEventListener('change', (event) => {
-        undoManager?.record('toggle-legacy-solver');
-        engine.setModoSolver?.(event.target.checked ? 'legado' : 'global');
         onTopologyVisualChange?.();
     });
 
@@ -252,7 +239,6 @@ export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange, on
         if (dados.tipo === ENGINE_EVENTS.SIMULATION_CONFIG) {
             relativeHeightToggle.checked = dados.usarAlturaRelativa;
             updateRelativeHeightUI(dados.usarAlturaRelativa);
-            if (legacySolverToggle) legacySolverToggle.checked = engine.isSolverLegado?.() === true;
         }
     });
 

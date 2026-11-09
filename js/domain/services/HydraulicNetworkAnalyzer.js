@@ -192,7 +192,6 @@ export function analyzeHydraulicNetwork({ componentes = [], conexoes = [] } = {}
 
     return {
         hasDirectedCycle: cyclicIslands.length > 0,
-        shouldUseNodalSolver: cyclicIslands.length > 0,
         cyclicComponentIds: [...cyclicComponentIds],
         islands,
         cyclicIslands,
@@ -205,7 +204,7 @@ export function analyzeHydraulicNetwork({ componentes = [], conexoes = [] } = {}
                 severity: island.hasActivePump ? 'warning' : 'info',
                 componentIds: [...island.componentIds],
                 message: island.hasActivePump
-                    ? 'Malha fechada sem fonte, dreno ou tanque: o solver nodal usa uma referencia manometrica de 0 bar para calcular apenas pressoes relativas.'
+                    ? 'Malha fechada sem fonte, dreno ou tanque: o solver usa uma referencia manometrica de 0 bar para calcular apenas pressoes relativas.'
                     : 'Malha fechada passiva sem fronteira de pressao: sem bomba ativa ou desnivel imposto, a solucao fisica e vazao zero.'
             }))
         ]

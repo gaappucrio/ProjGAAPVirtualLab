@@ -9,22 +9,16 @@ import {
 import { createFluidoFromProperties } from '../../domain/components/Fluido.js';
 import { HydraulicBranchModel } from '../../domain/services/HydraulicBranchModel.js';
 import { analyzeHydraulicNetwork } from '../../domain/services/HydraulicNetworkAnalyzer.js';
-import { HydraulicNetworkSolver } from '../../domain/services/HydraulicNetworkSolver.js';
-import { NodalHydraulicSolver } from '../../domain/services/NodalHydraulicSolver.js';
 import { GlobalHydraulicSolver } from '../../domain/services/GlobalHydraulicSolver.js';
 import { ensureConnectionProperties as ensurePipeConnectionProperties } from '../../domain/services/PipeHydraulics.js';
 import { TanqueLogico } from '../../domain/components/TanqueLogico.js';
-import {
-    MODO_SOLVER_LEGADO,
-    createSimulationContext,
-    normalizarModoSolver
-} from '../../domain/context/SimulationContext.js';
+import { createSimulationContext } from '../../domain/context/SimulationContext.js';
 import {
     DEFAULT_PIPE_FRICTION
 } from '../../domain/units/HydraulicUnits.js';
 import { FLUID_PRESETS } from '../config/FluidPresets.js';
 import { EngineEventPayloads } from '../events/EventPayloads.js';
-import { HydraulicNetworkContext, HydraulicScopedNetworkContext } from './HydraulicNetworkContext.js';
+import { HydraulicNetworkContext } from './HydraulicNetworkContext.js';
 import { SimulationTickPipeline } from './SimulationTickPipeline.js';
 import { SteadyStateMonitor } from './SteadyStateMonitor.js';
 import { ConnectionGeometryService } from '../services/ConnectionGeometryService.js';
@@ -33,7 +27,6 @@ import { SelectionStore } from '../stores/SelectionStore.js';
 import { SimulationConfigStore } from '../stores/SimulationConfigStore.js';
 import { TopologyGraph } from '../stores/TopologyGraph.js';
 
-const LIVE_CONNECTION_STARTUP_RAMP_SECONDS = 1.2;
 
 let portStateUpdater = null;
 let connectionVisualUpdater = null;
@@ -84,12 +77,8 @@ export class SistemaSimulacao extends Observable {
         });
         this.hydraulicContext = new HydraulicNetworkContext(this);
         this.hydraulicBranchModel = new HydraulicBranchModel(this.hydraulicContext);
-        this.hydraulicSolver = new HydraulicNetworkSolver(this.hydraulicContext, this.hydraulicBranchModel);
-        this.nodalHydraulicSolver = new NodalHydraulicSolver(this.hydraulicContext, this.hydraulicBranchModel);
         this.globalHydraulicSolver = new GlobalHydraulicSolver(this.hydraulicContext, this.hydraulicBranchModel);
         this.lastHydraulicAnalysis = null;
-        this.lastScopedSolverMetrics = null;
-        this.activeHydraulicSolverMode = 'global';
         this.tickPipeline = new SimulationTickPipeline({ engine: this });
         this.steadyStateMonitor = new SteadyStateMonitor();
         this.isRunning = false;
@@ -114,18 +103,6 @@ export class SistemaSimulacao extends Observable {
 
     set usarAlturaRelativa(value) {
         this.configStore.usarAlturaRelativa = value !== false;
-    }
-
-    get modoSolver() {
-        return this.configStore.modoSolver;
-    }
-
-    set modoSolver(value) {
-        this.configStore.modoSolver = normalizarModoSolver(value);
-    }
-
-    isSolverLegado() {
-        return this.modoSolver === MODO_SOLVER_LEGADO;
     }
 
     get componentes() {
@@ -174,7 +151,6 @@ export class SistemaSimulacao extends Observable {
             isRunning: this.isRunning,
             fluidoOperante: this.fluidoOperante,
             usarAlturaRelativa: this.usarAlturaRelativa,
-            modoSolver: this.modoSolver,
             elapsedTime: this.elapsedTime,
             queries: {
                 isBombaBloqueadaPorSetpoint: (bomba) => this.isBombaBloqueadaPorSetpoint(bomba),
@@ -205,19 +181,7 @@ export class SistemaSimulacao extends Observable {
         this.attachComponentContext(comp);
     }
 
-    primeLiveConnectionStartupRamp(connection) {
-        if (!connection || !this.isRunning || this.elapsedTime <= 0) return;
-
-        connection.startupRampDurationS = Math.max(
-            connection.startupRampDurationS || 0,
-            LIVE_CONNECTION_STARTUP_RAMP_SECONDS
-        );
-        connection.startupRampElapsedS = 0;
-        connection.transientFlowLps = 0;
-    }
-
     addConnection(connection) {
-        this.primeLiveConnectionStartupRamp(connection);
         this.topology.addConnection(connection);
         this.notify(EngineEventPayloads.connectionCommitted(connection));
         return connection;
@@ -261,30 +225,10 @@ export class SistemaSimulacao extends Observable {
     }
 
     getSolverMetrics() {
-        if (this.activeHydraulicSolverMode === 'global') {
-            return {
-                networkAnalysis: this.lastHydraulicAnalysis,
-                ...this.globalHydraulicSolver.getMetrics(),
-                mode: 'global'
-            };
-        }
-
-        if (this.lastScopedSolverMetrics) {
-            return {
-                mode: this.activeHydraulicSolverMode,
-                networkAnalysis: this.lastHydraulicAnalysis,
-                ...this.lastScopedSolverMetrics
-            };
-        }
-
-        const activeSolver = this.activeHydraulicSolverMode === 'nodal'
-            ? this.nodalHydraulicSolver
-            : this.hydraulicSolver;
-
         return {
-            mode: this.activeHydraulicSolverMode,
             networkAnalysis: this.lastHydraulicAnalysis,
-            ...activeSolver.getMetrics()
+            ...this.globalHydraulicSolver.getMetrics(),
+            mode: 'global'
         };
     }
 
@@ -304,6 +248,7 @@ export class SistemaSimulacao extends Observable {
         this.topology.clear();
         clearComponentVisualRegistryHandler?.();
         this.connectionStateStore.clear();
+        this.globalHydraulicSolver.reset();
         this.isRunning = false;
         this.elapsedTime = 0;
         this.steadyStateMonitor.reset();
@@ -357,17 +302,6 @@ export class SistemaSimulacao extends Observable {
         this.notify(EngineEventPayloads.simulationConfig(this.usarAlturaRelativa));
     }
 
-    setModoSolver(modo) {
-        const proximoModo = normalizarModoSolver(modo);
-        if (proximoModo === this.modoSolver) return;
-        this.modoSolver = proximoModo;
-        this.clearConnectionDynamics();
-        this.steadyStateMonitor.reset();
-        this.resetHydraulicState();
-        this.updatePipesVisual();
-        this.notify(EngineEventPayloads.simulationConfig(this.usarAlturaRelativa));
-    }
-
     tick(timestamp) {
         if (!this.isRunning) return;
 
@@ -377,6 +311,7 @@ export class SistemaSimulacao extends Observable {
 
     resetHydraulicState() {
         this.connectionStateStore.clear();
+        this.globalHydraulicSolver.reset();
         this.componentes.forEach(c => c.resetEstadoHidraulico());
     }
 
@@ -475,102 +410,13 @@ export class SistemaSimulacao extends Observable {
         return this.connectionGeometryService.getConnectionGeometry(conn);
     }
 
-    resolvePushBasedNetwork(dt) {
-        this.lastScopedSolverMetrics = null;
-        this.activeHydraulicSolverMode = 'push';
-        return this.hydraulicSolver.resolve(dt);
-    }
-
-    resolveNodalNetwork(dt, analysis = null) {
-        this.lastScopedSolverMetrics = null;
-        this.activeHydraulicSolverMode = 'nodal';
-        return this.nodalHydraulicSolver.resolve(dt, analysis);
-    }
-
-    resolveScopedHydraulicIslands(dt, analysis) {
-        const islandMetrics = [];
-        let hasNodalIsland = false;
-        let hasPushIsland = false;
-
-        analysis.islands.forEach((island) => {
-            const scopedContext = new HydraulicScopedNetworkContext(this.hydraulicContext, {
-                componentIds: island.componentIds,
-                connectionIds: island.connectionIds
-            });
-            const scopedModel = new HydraulicBranchModel(scopedContext);
-            const scopedAnalysis = analyzeHydraulicNetwork({
-                componentes: scopedContext.componentes,
-                conexoes: scopedContext.conexoes
-            });
-            const useNodalSolver = scopedAnalysis.shouldUseNodalSolver;
-            const scopedSolver = useNodalSolver
-                ? new NodalHydraulicSolver(scopedContext, scopedModel)
-                : new HydraulicNetworkSolver(scopedContext, scopedModel);
-
-            if (useNodalSolver) {
-                hasNodalIsland = true;
-                scopedSolver.resolve(dt, scopedAnalysis);
-            } else {
-                hasPushIsland = true;
-                scopedSolver.resolve(dt);
-            }
-
-            islandMetrics.push({
-                mode: useNodalSolver ? 'nodal' : 'push',
-                componentIds: [...island.componentIds],
-                connectionIds: [...island.connectionIds],
-                ...scopedSolver.getMetrics()
-            });
-        });
-
-        this.activeHydraulicSolverMode = hasNodalIsland && hasPushIsland
-            ? 'mixed'
-            : (hasNodalIsland ? 'nodal' : 'push');
-        this.lastScopedSolverMetrics = {
-            lastIterations: islandMetrics.reduce((sum, metrics) => sum + (metrics.lastIterations || 0), 0),
-            lastError: islandMetrics.reduce((maxError, metrics) => Math.max(maxError, metrics.lastError || 0), 0),
-            maxIterationsHit: islandMetrics.reduce((sum, metrics) => sum + (metrics.maxIterationsHit || 0), 0),
-            convergedCount: islandMetrics.reduce((sum, metrics) => sum + (metrics.convergedCount || 0), 0),
-            totalSolverCalls: islandMetrics.reduce((sum, metrics) => sum + (metrics.totalSolverCalls || 0), 0),
-            lastDiagnostics: islandMetrics.flatMap((metrics) => metrics.lastDiagnostics || []),
-            islandMetrics
-        };
-
-        if (hasNodalIsland) {
-            this.hydraulicBranchModel.rebuildComponentHydraulicStateFromConnections();
-            this.hydraulicBranchModel.reconcileConnectionPressureStatesFromComponentDrops();
-        }
-    }
-
     resolveHydraulicNetwork(dt) {
         const analysis = analyzeHydraulicNetwork({
             componentes: this.componentes,
             conexoes: this.conexoes
         });
         this.lastHydraulicAnalysis = analysis;
-
-        if (!this.isSolverLegado()) {
-            this.lastScopedSolverMetrics = null;
-            this.activeHydraulicSolverMode = 'global';
-            return this.globalHydraulicSolver.resolve(dt, analysis);
-        }
-
-        if (analysis.shouldUseNodalSolver) {
-            if (analysis.islands.length > 1) {
-                return this.resolveScopedHydraulicIslands(dt, analysis);
-            }
-
-            return this.resolveNodalNetwork(dt, analysis);
-        }
-
-        return this.resolvePushBasedNetwork(dt);
-    }
-
-    reconcileConnectionPressureStatesFromComponentDrops() {
-        // O solver global já entrega pressões consistentes em todos os nós; a reconciliação só
-        // existe para corrigir o estado aproximado do solver legado.
-        if (!this.isSolverLegado()) return;
-        this.hydraulicBranchModel.reconcileConnectionPressureStatesFromComponentDrops();
+        return this.globalHydraulicSolver.resolve(dt, analysis);
     }
 
     updatePipesVisual() {

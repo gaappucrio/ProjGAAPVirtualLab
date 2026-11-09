@@ -909,7 +909,7 @@ Coberturas importantes:
 
 Auditoria dos testes:
 
-- A suíte executada por `npm test` cobre os 9 arquivos de teste listados acima (domínio físico, solver global/legado, plantas completas, validação analítica DWSIM e ferramentas do modo debug).
+- A suíte executada por `npm test` cobre os 9 arquivos de teste listados acima (domínio físico, solver global, plantas completas, validação analítica DWSIM e ferramentas do modo debug).
 - A execução atual possui **179 testes passantes (179/179)** focados na física do domínio, termodinâmica de fluidos, equações hidráulicas, equivalência com o modo dinâmico do DWSIM, topologia, balanço de massa do solver e invariantes de execução.
 - Não foi encontrado padrão trivial como `assert.ok(true)` ou similar.
 - Os testes exercitam resultados observáveis: valores numéricos de pressão, vazão, temperatura, NPSH, conservação de massa e comportamento dinâmico de rede.
@@ -1228,3 +1228,8 @@ O sistema já possui suporte funcional para montagem visual, seleção múltipla
      - `DwsimImporter.js` converte pressões absolutas (Pa) do DWSIM para pressões manométricas (bar) nas fontes e drenos e extrai propriedades termofísicas das correntes.
   5. **Suíte de Testes Unificada (`package.json`, `Testes/fisica-e-dwsim.test.mjs`):**
      - `Testes/fisica-e-dwsim.test.mjs` integrado ao comando `npm test` junto aos 8 demais arquivos de teste, adicionando teste específico de vaso fechado hidropneumático e totalizando **179/179 testes aprovados**.
+- Resolvido em 2026-11-09: remoção do solver legado.
+  1. **Removidos:** `HydraulicNetworkSolver.js` (push-based), `NodalHydraulicSolver.js`, `HydraulicScopedNetworkContext`, o toggle **Solver legado** da toolbar, a configuração `modoSolver` (`MODO_SOLVER_*`, `normalizarModoSolver`, `setModoSolver`), a rampa de partida de conexões criadas com a simulação rodando, os campos `transientFlowLps`, `lastResolvedFlowLps` e `startupRamp*` da conexão e `reconcileConnectionPressureStatesFromComponentDrops`.
+  2. **`HydraulicBranchModel.js`** ficou reduzido à ponte usada pelo solver global: `ensureConnectionProperties`, `rebuildComponentHydraulicStateFromConnections` e `componentCanSupplyLiquidToPump`.
+  3. **Compatibilidade:** arquivos e históricos de desfazer com `config.modoSolver` abrem no solver global (o campo é ignorado). A linha "Solver hidráulico" saiu da exportação.
+  4. **Motivo:** o legado não tinha as correções dos passos de validação contra o DWSIM (transição de bocal, teto de entrada do vaso fechado, colchão de gás implícito e pressão negativa).

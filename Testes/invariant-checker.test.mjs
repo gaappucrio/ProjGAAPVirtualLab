@@ -127,14 +127,12 @@ test('checagens: detecta trocador violando a 2ª lei', () => {
     assert.deepEqual(rulesOf(checkInvariants(engine)), ['TEMPERATURA_TROCADOR@hx-01']);
 });
 
-test('checagens: contagem do solver é por instância, independente de troca de modo', () => {
-    const state = (push, nodal, scopedHits = null) => ({ instances: { hydraulicSolver: push, nodalHydraulicSolver: nodal }, scopedHits });
+test('checagens: contagem do solver é o delta do acumulado de cada instância', () => {
+    const state = (hits) => ({ instances: { globalHydraulicSolver: hits } });
 
-    assert.equal(solverHitsDuringTick(state(3, 0), state(5, 0)), 2, 'rede única push: delta do acumulado');
-    assert.equal(solverHitsDuringTick(state(3, 0), state(3, 0)), 0);
-    assert.equal(solverHitsDuringTick(state(0, 0), state(0, 1)), 1, '1º tick nodal (push → nodal) não é perdido');
-    assert.equal(solverHitsDuringTick(state(4, 2), state(4, 2, 1)), 1, 'ilhas: contagem do próprio tick');
-    assert.equal(solverHitsDuringTick({ instances: {}, scopedHits: null }, state(9, 9)), 0, 'solver novo começa sem histórico');
+    assert.equal(solverHitsDuringTick(state(3), state(5)), 2, 'delta do acumulado');
+    assert.equal(solverHitsDuringTick(state(3), state(3)), 0);
+    assert.equal(solverHitsDuringTick({ instances: {} }, state(9)), 0, 'solver novo começa sem histórico');
 });
 
 test('checagens: solver que atinge o limite durante o tick é reportado', () => {
@@ -143,7 +141,7 @@ test('checagens: solver que atinge o limite durante o tick é reportado', () => 
     const originalSolve = engine.tickPipeline.solveHydraulicNetwork.bind(engine.tickPipeline);
     engine.tickPipeline.solveHydraulicNetwork = (dt) => {
         originalSolve(dt);
-        engine.nodalHydraulicSolver.metrics.maxIterationsHit += 1;
+        engine.globalHydraulicSolver.metrics.maxIterationsHit += 1;
     };
 
     monitor.start();

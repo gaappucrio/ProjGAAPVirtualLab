@@ -9,7 +9,7 @@ import { wrapMethod } from './MethodWrap.js';
 export const TICK_PHASES = Object.freeze([
     { owner: 'pipeline', method: 'updateHighLevelControls', descricao: 'controle de nível (PID) dos tanques' },
     { owner: 'pipeline', method: 'updateComponentDynamics', descricao: 'rampas de bombas e curso de válvulas' },
-    { owner: 'pipeline', method: 'solveHydraulicNetwork', descricao: 'solver hidráulico (push ou nodal)' },
+    { owner: 'pipeline', method: 'solveHydraulicNetwork', descricao: 'solver hidráulico global' },
     { owner: 'pipeline', method: 'syncPhysicalMetrics', descricao: 'inventário dos tanques e métricas dos componentes' },
     { owner: 'engine', method: 'updatePipesVisual', descricao: 'visual dos canos + avisos de setpoint' }
 ]);

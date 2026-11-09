@@ -26,8 +26,9 @@ const VOLUME_INTERNO_MAXIMO_L = 10000;
 function avaliarRiscoEbulicao(fluidoEntrada, temperaturaSaidaC, pressaoSaidaBar, vazaoLps) {
     if (!fluidoEntrada || !(vazaoLps > EPSILON_FLOW) || !Number.isFinite(temperaturaSaidaC)) return false;
     const fluidoSaida = cloneFluido(fluidoEntrada, { temperatura: temperaturaSaidaC });
-    const pressaoAbsolutaBar = Math.max(0, numeroSeguro(pressaoSaidaBar, 0))
-        + numeroSeguro(fluidoSaida.pressaoAtmosfericaBar, DEFAULT_ATMOSPHERIC_PRESSURE_BAR);
+    // O piso é o vácuo absoluto: abaixo da atmosfera a água ferve mais cedo.
+    const pressaoAbsolutaBar = Math.max(0, numeroSeguro(pressaoSaidaBar, 0)
+        + numeroSeguro(fluidoSaida.pressaoAtmosfericaBar, DEFAULT_ATMOSPHERIC_PRESSURE_BAR));
     return numeroSeguro(fluidoSaida.pressaoVaporBar, 0) >= pressaoAbsolutaBar;
 }
 
@@ -620,14 +621,15 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         );
         this.pressaoEntrada1AtualBar = this.getPressaoEntradaPortaBar('in1');
         this.pressaoEntrada2AtualBar = this.getPressaoEntradaPortaBar('in2');
-        const p1In = Number.isFinite(this.pressaoEntrada1AtualBar) && this.pressaoEntrada1AtualBar > 0
+        // Pressões manométricas (negativas abaixo da atmosfera); 0 na porta significa sem leitura.
+        const p1In = Number.isFinite(this.pressaoEntrada1AtualBar) && this.pressaoEntrada1AtualBar !== 0
             ? this.pressaoEntrada1AtualBar
-            : (this.vazao1Lps > EPSILON_FLOW && Number.isFinite(this.pressaoEntradaAtualBar) && this.pressaoEntradaAtualBar > 0 ? this.pressaoEntradaAtualBar : 0);
-        const p2In = Number.isFinite(this.pressaoEntrada2AtualBar) && this.pressaoEntrada2AtualBar > 0
+            : (this.vazao1Lps > EPSILON_FLOW && Number.isFinite(this.pressaoEntradaAtualBar) ? this.pressaoEntradaAtualBar : 0);
+        const p2In = Number.isFinite(this.pressaoEntrada2AtualBar) && this.pressaoEntrada2AtualBar !== 0
             ? this.pressaoEntrada2AtualBar
-            : (this.vazao2Lps > EPSILON_FLOW && Number.isFinite(this.pressaoEntradaAtualBar) && this.pressaoEntradaAtualBar > 0 ? this.pressaoEntradaAtualBar : 0);
-        this.pressaoSaidaAtualBar = this.vazao1Lps > EPSILON_FLOW ? Math.max(0, p1In - this.deltaPAtualBar) : 0;
-        this.pressaoSaida2AtualBar = this.vazao2Lps > EPSILON_FLOW ? Math.max(0, p2In - this.deltaP2AtualBar) : 0;
+            : (this.vazao2Lps > EPSILON_FLOW && Number.isFinite(this.pressaoEntradaAtualBar) ? this.pressaoEntradaAtualBar : 0);
+        this.pressaoSaidaAtualBar = this.vazao1Lps > EPSILON_FLOW ? p1In - this.deltaPAtualBar : 0;
+        this.pressaoSaida2AtualBar = this.vazao2Lps > EPSILON_FLOW ? p2In - this.deltaP2AtualBar : 0;
         this.riscoEbulicao1 = avaliarRiscoEbulicao(f1, this.temperaturaSaidaC, this.pressaoSaidaAtualBar, this.vazao1Lps);
         this.riscoEbulicao2 = avaliarRiscoEbulicao(f2, this.temperaturaSaida2C, this.pressaoSaida2AtualBar, this.vazao2Lps);
         this._notificarEstado();

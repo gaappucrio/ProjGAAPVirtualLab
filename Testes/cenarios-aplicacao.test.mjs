@@ -1008,17 +1008,9 @@ test('ao abrir 2 gráficos na versão expandida e fechar um deles, o seletor de 
 
 const PLANTAS_TESTE_DIR = path.resolve('Testes/plantas teste');
 
+// Usa o mesmo passo da aplicação (inclui o PID dos tanques e o monitor de regime permanente).
 function simulateTicks(engine, ticks = 30, dt = 0.1) {
-    for (let i = 0; i < ticks; i += 1) {
-        engine.componentes.forEach((c) => c.atualizarDinamica(dt, engine.hydraulicContext.getComponentFluid(c) || engine.fluidoOperante));
-        engine.resolveHydraulicNetwork(dt);
-        engine.componentes.forEach((c) => {
-            const fluid = engine.hydraulicContext.getComponentFluid(c) || engine.fluidoOperante;
-            if (c instanceof TanqueLogico) c.atualizarFisica(dt, fluid);
-            else c.sincronizarMetricasFisicas(fluid);
-        });
-        engine.reconcileConnectionPressureStatesFromComponentDrops();
-    }
+    for (let i = 0; i < ticks; i += 1) engine.tickPipeline.advance(dt);
 }
 
 test('tanque novo nasce fechado e o tipo gravado no arquivo é respeitado ao abrir', () => {
@@ -1132,10 +1124,16 @@ test('importacao de planta teste: teste planta.json (6 ilhas / cenarios integrad
     const vazaoIdealLps = (kvEfetivo * Math.sqrt(0.5 / (997 / 999.016))) / 3.6;
     approx(v2.fluxoReal, vazaoIdealLps, 0.02 * vazaoIdealLps, `V-02 deve seguir a equacao do Cv (ideal ${vazaoIdealLps} L/s)`);
 
-    // Ilha 6: controle de nível ativo no arquivo (sem executar o PID neste teste).
+    // Ilha 6: controle de nível ativo no arquivo. O tanque está acima do set point, então o PID
+    // abre a válvula de saída na proporção do sinal (o arquivo grava 34,4%; só o PID a move) e a
+    // bomba de alimentação fica travada pelo controle de nível.
     const t7 = byTag('T-07');
     assert.equal(t7.setpointAtivo, true);
     assert.equal(t7.setpoint, 57);
+    const controleT7 = t7._ultimoEstadoControle;
+    assert.ok(controleT7 && controleT7.u < 0, `PID da T-07 deve pedir saida: ${controleT7?.u}`);
+    approx(byTag('V-05').grauAbertura, -controleT7.u * 100, 1e-9, 'V-05 segue o sinal do PID');
+    assert.equal(byTag('P-05').estaBloqueadaPorSetpoint(), true, 'P-05 travada pelo controle de nivel');
 
     const activeConns = engine.conexoes.filter((c) => engine.getConnectionState(c).flowLps > 0.001);
     assert.equal(activeConns.length, 17, 'Todas as 17 conexoes de teste planta.json devem estar ativas');
@@ -1168,10 +1166,7 @@ test('controle de nivel PID estabiliza o tanque no set point sem ciclo limite', 
     tanque.setpoint = 57;
     assert.equal(tanque.setSetpointAtivo(true).ativado, true);
 
-    const tick = () => {
-        engine.tickPipeline.updateHighLevelControls(0.1);
-        simulateTicks(engine, 1, 0.1);
-    };
+    const tick = () => simulateTicks(engine, 1, 0.1);
     for (let i = 0; i < 3500; i += 1) tick();
     const volumes = [];
     for (let i = 0; i < 300; i += 1) {

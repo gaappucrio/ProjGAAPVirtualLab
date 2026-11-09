@@ -17,7 +17,6 @@ import { formatUnitValue, getUnitPreferences, getUnitSymbol } from '../units/Dis
 const EXPORT_METADATA_COLUMNS = [
     'Data da exportação',
     'Altura relativa',
-    'Solver hidráulico',
     'Tempo simulado (s)',
     'Regime permanente',
     'Regime permanente desde (s)'
@@ -348,7 +347,6 @@ const EXPORT_VALUE_TRANSLATIONS_EN = {
 
 const LOCALIZED_VALUE_COLUMNS = new Set([
     'Altura relativa',
-    'Solver hidráulico',
     'Regime permanente',
     'Tipo de tanque',
     'Tipo do componente',
@@ -490,7 +488,6 @@ function buildExportMetadataRows(engine, timestamp) {
     return [{
         'Data da exportação': timestamp.toLocaleString('pt-BR'),
         'Altura relativa': heightModeValue(engine?.usarAlturaRelativa === true),
-        'Solver hidráulico': engine?.isSolverLegado?.() === true ? 'Legado (push)' : 'Global (simultâneo)',
         'Tempo simulado (s)': numberValue(engine?.elapsedTime || 0, 3),
         'Regime permanente': booleanValue(steadyState?.steady === true),
         'Regime permanente desde (s)': steadyState?.steady === true ? numberValue(steadyState.steadySinceS, 3) : ''

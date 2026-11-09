@@ -217,7 +217,7 @@ $$NPSH_{\text{a}} = \frac{P_{\text{sucção, abs}} - P_{\text{vapor}}}{\rho \cdo
 
 No solver global, se a pressão estática absoluta na sucção cai abaixo de $P_{\text{vapor}}$, a coluna líquida se separa e $NPSH_{\text{a}} = 0$ (a carga cinética não é somada): é o limite físico de uma bomba alimentada por uma fonte com vazão insuficiente. O fator de cavitação $c$ é resolvido junto com a rede como raiz de $g(c) = f_{\text{cav}}(c) - c$ (regula falsi com intervalo inicial em torno do passo anterior), evitando a oscilação de um ponto fixo.
 
-O solver de ramos (`HydraulicBranchModel.js`) e o solver nodal (`NodalHydraulicSolver.js`) implementam verificações defensivas robustas: se a pressão atmosférica, a densidade ou a pressão de vapor não estiverem disponíveis no estado intermediário, são aplicados valores canônicos de fallback físico seguro ($P_{\text{atm}} = 1.01325\text{ bar}$, $\rho = 997\text{ kg/m}^3$, $P_{\text{vap}} = 0.0317\text{ bar}$), evitando a propagação de `NaN` ou descontinuidades numéricas em transientes.
+O solver global (`GlobalHydraulicSolver.js`) aplica verificações defensivas: se a pressão atmosférica ou a pressão de vapor do fluido do ramo não estiverem disponíveis, usa $P_{\text{atm}} = 1.01325\text{ bar}$ (`DEFAULT_ATMOSPHERIC_PRESSURE_BAR`) e $P_{\text{vap}} = 0$, evitando a propagação de `NaN` em transientes.
 
 O NPSH requerido ($NPSH_{\text{r}}$) cresce com a vazão de sucção e com o acionamento efetivo ($\omega_{\text{ef}} \in [0, 1]$):
 
@@ -489,14 +489,10 @@ O trocador de calor opera com segregação hidráulica independente entre a Corr
 - A Corrente 2 determina sua pressão de entrada específica $P_{2,\text{in}}$ a partir das contribuições na porta `in2` (ou `out2` em contracorrente) e fornece pressão de saída na porta de descarga correspondente:
   $$P_{2,\text{out}} = \max(0, P_{2,\text{in}} - \Delta P_2)$$
 
-O método `getPressaoEntradaPortaBar(portId)` em `BaseComponente.js` calcula a pressão média ponderada de escoamento filtrada exclusivamente pela porta e corrente selecionada. Em `HydraulicBranchModel.js`, o método `getPhysicalOutletPressureBar(source, portId)` e a reconciliação de pressões das conexões associam a descarga do trocador diretamente à respectiva corrente física, prevenindo que uma corrente de menor pressão contamine a pressão motriz de uma corrente de maior pressão e evitando reduções artificiais de vazão.
+O método `getPressaoEntradaPortaBar(portId)` em `BaseComponente.js` calcula a pressão média ponderada de escoamento filtrada exclusivamente pela porta e corrente selecionada. No solver global, cada conexão do trocador é ligada ao nó da própria corrente (`resolveConnectionSourceNodeId` / `resolveConnectionTargetNodeId`), prevenindo que uma corrente de menor pressão contamine a pressão motriz de uma corrente de maior pressão e evitando reduções artificiais de vazão.
 
 #### Representação Nodal em Grafos Hidráulicos
-No solucionador nodal simultâneo (`NodalHydraulicSolver.js`), o trocador de calor é modelado como **4 nós lógicos distintos** interconectados por **2 ramos internos independentes**:
-- **Corrente 1:** nó de entrada `${id}:in1` conectado ao nó de saída `${id}:out1` pelo ramo `internal:${id}:1`.
-- **Corrente 2:** nós `${id}:in2` e `${id}:out2` conectados pelo ramo `internal:${id}:2`. A orientação deste ramo depende estritamente do modo de escoamento:
-  - Em **Contracorrente** (`isContracorrente(engine) === true`), o ramo interno é orientado de `${id}:out2` para `${id}:in2`, respeitando a convenção de que a porta `out2` atua fisicamente como a admissão da Corrente 2.
-  - Em **Co-corrente / Paralelo**, o ramo interno é orientado de `${id}:in2` para `${id}:out2`.
+No solver global simultâneo (`GlobalHydraulicSolver.js`), o trocador de calor é modelado como **4 nós lógicos distintos** (`${id}:in1`, `${id}:out1`, `${id}:in2`, `${id}:out2`) interconectados por **2 ramos internos independentes**, um por corrente. O sentido de cada ramo vem das portas efetivamente ligadas (`resolveHeatExchangerInletPort`): a porta que recebe uma conexão de entrada é a admissão, de modo que, em **contracorrente**, a Corrente 2 entra por `out2` e sai por `in2`; em **co-corrente / paralelo**, entra por `in2`.
 
 Essa representação garante continuidade topológica nos nós de conexão e viabiliza a solução simultânea de circuitos fechados onde uma ou ambas as correntes pertençam a anéis de recirculação.
 
@@ -563,60 +559,7 @@ Desde a migração estrutural, toda a rede (malhas abertas e fechadas) é resolv
 Depois da solução, as vazões e pressões são escritas nas conexões (`writeConnectionStates`), o fluido é propagado em ordem topológica (mistura nos nós, conteúdo dos tanques, saída do trocador com o atraso térmico) e as métricas de bomba (NPSH, eficiência, fator de cavitação) são atualizadas.
 
 > [!NOTE]
-> O solver push-based descrito em 5.1–5.4 continua disponível pelo toggle **Solver legado** da toolbar (`modoSolver = 'legado'`), apenas para comparação durante a migração.
-
-### Solver legado (push-based, `HydraulicNetworkSolver.js`)
-
-O solver em `HydraulicNetworkSolver.js` opera resolvendo localmente as pressões e estimando fluxos que são propagados sequencialmente a partir de emissores primários (Fontes e Tanques com inventário).
-
-### 5.1 Processo de Visita Nodal por Fila
-O solver utiliza um percurso push-based orientado a filas com controle de visitas por componente (limite de $8$ visitas por nó para prevenir loops em circuitos complexos ou retropropagações infinitas):
-
-1.  Enfileira todas as `FonteLogica` da planta.
-2.  Enfileira todos os `TanqueLogico` contendo líquido.
-3.  Processa a fila: para cada componente, constrói seu estado de suprimento (`buildSupplyState`), contendo pressão disponível e vazão máxima remanescente.
-4.  Identifica as conexões de saída ativas desse componente.
-5.  Para cada ramo de saída, estima a capacidade de vazão associada (`estimateBranch`).
-6.  Distribui proporcionalmente a vazão total do componente de origem conforme as capacidades relativas dos ramos receptores.
-7.  Aplica o fluxo relaxado no ramo (`applyBranchFlow`) e enfileira o componente de destino se ele for um pass-through ativo (Bomba, Válvula, Trocador).
-
----
-
-### 5.2 Relaxamento Dinâmico de Fluxo
-Para estabilizar transientes e evitar saltos abruptos de vazão entre passos, as conexões não assumem instantaneamente a vazão de equilíbrio estacionário resolvida pelo solver ($Q_{\text{estacionária}}$). O fluxo transiente ($Q_{\text{transiente}}$) é suavizado por uma dinâmica de primeira ordem governada pela inércia hidráulica do ramo:
-
-$$\tau_{\text{resposta}} = \text{getConnectionResponseTimeS}(L_{\text{tubo}}, \; \rho, \; \mu)$$
-
-$$Q_{\text{transiente}}^{t + dt} = Q_{\text{transiente}}^{t} + (Q_{\text{estacionária}} - Q_{\text{transiente}}^{t}) \cdot \left(1 - e^{-dt / \tau_{\text{resposta}}}\right)$$
-
----
-
-### 5.3 Conservação de Massa em Componentes Passantes (Pass-Through)
-Componentes pass-through lógicos (Válvulas, Bombas e Trocadores de Calor) não acumulam inventário. Portanto, o solver estabelece:
-
-$$Q_{\text{entrada}} = Q_{\text{saída}}$$
-
-Ao final de cada tick de simulação, o método `balancePassThroughMass()` é executado. Ele percorre a rede de jusante para montante e, caso detecte um desbalanceamento volumétrico $\Delta Q = Q_{\text{in}} - Q_{\text{out}} > 0.0001\text{ L/s}$ (causado por restrições a jusante, como uma válvula fechando), ele reduz proporcionalmente a vazão das conexões de entrada do componente até que a conservação seja plenamente satisfeita.
-
-No caso especial do **Trocador de Calor com Duas Correntes** (`TrocadorCalorLogico`), o algoritmo de conservação de massa trata as conexões e o cálculo de resíduos de forma estritamente desacoplada por corrente:
-*   **Corrente 1:** balanceia as conexões associadas às portas da Corrente 1 (`in1` e `out1`), impondo $Q_{1,\text{in}} = Q_{1,\text{out}}$.
-*   **Corrente 2:** balanceia as conexões associadas às portas da Corrente 2 (`in2` e `out2`), impondo $Q_{2,\text{in}} = Q_{2,\text{out}}$.
-*   **Critério de Convergência Residual:** o erro residual do componente é avaliado individualmente para cada corrente, calculando-se o desbalanço como o máximo dos resíduos independentes:
-    $$\Delta Q_{\text{residual}} = \max\left(|Q_{1,\text{in}} - Q_{1,\text{out}}|, \; |Q_{2,\text{in}} - Q_{2,\text{out}}|\right)$$
-
-Essa independência evita que o somatório global das vazões mascare restrições locais (onde um desbalanço positivo em uma corrente pudesse anular aritmeticamente um desbalanço negativo na outra) e garante que flutuações ou estrangulamentos em uma das correntes de processo não afetem indevidamente a vazão da outra.
-
----
-
-### 5.4 Solução Simultânea em Malhas Fechadas (`NodalHydraulicSolver.js`)
-Para ilhas hidráulicas contendo circuitos fechados (anéis de recirculação), o solver sequencial push-based não é capaz de definir as condições de contorno de montante. Nesses casos, o sistema delega a resolução para o **Solucionador Nodal**:
-1. **Montagem do Grafo Nodal:** o método `buildNetwork()` mapeia cada conexão em um ramo hidráulico com impedância e cada equipamento em seus nós correspondentes.
-2. **Orientação Dinâmica de Ramos Internos:** para componentes com múltiplas vias e modos operacionais (como o trocador de calor), a orientação dos nós internos respeita dinamicamente a topologia de conexão. Em contracorrente (`isContracorrente(engine)`), o ramo interno da Corrente 2 conecta `${id}:out2` $\to$ `${id}:in2`, alinhando-se perfeitamente com a direção do escoamento externo.
-3. **Resolução de Anéis Flutuantes em Série (`buildFloatingSeriesLoop`):**
-   - Quando um circuito fechado não possui conexões com reservatórios abertos, o loop em série é resolvido por busca de raiz via bisseção sobre a função de resíduo de carga $\varepsilon(Q) = 0$.
-   - O mapeamento interno de ramos indexa componentes multi-via pela chave composta `${branch.component.id}:${streamId}`, permitindo que correntes distintas do mesmo equipamento pertençam simultaneamente a loops fechados independentes sem sobrescrita mútua de ramos internos.
-   - A validação de topologia em série filtra estritamente as conexões pertencentes à ilha em resolução (`island.connectionIds`), evitando que conexões de outras ilhas abertas ou nós compartilhados invalidem o grau topológico da malha fechada.
-   - O traçado e cálculo da perda de carga do loop utiliza os identificadores exatos dos nós dos ramos internos (`internalBranch.fromNodeId` e `internalBranch.toNodeId`), garantindo estabilidade e convergência numérica para qualquer combinação de portas conectadas.
+> O solver legado (push-based + nodal por ilhas) e o toggle **Solver legado** foram removidos em 2026-11-09; o solver global é o único motor hidráulico.
 
 ---
 

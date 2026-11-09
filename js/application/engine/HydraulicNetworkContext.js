@@ -3,7 +3,6 @@ import {
     getPipeHydraulics
 } from '../../domain/services/PipeHydraulics.js';
 import { mixFluidos } from '../../domain/components/Fluido.js';
-import { TrocadorCalorLogico } from '../../domain/components/TrocadorCalorLogico.js';
 
 export class HydraulicNetworkContext {
     constructor(engine) {
@@ -117,99 +116,5 @@ export class HydraulicNetworkContext {
             resolvedFluid.densidade,
             resolvedFluid.viscosidadeDinamicaPaS
         );
-    }
-}
-
-export class HydraulicScopedNetworkContext {
-    constructor(parentContext, { componentIds = [], connectionIds = [] } = {}) {
-        this.parentContext = parentContext;
-        this.componentIdSet = new Set(componentIds);
-        this.connectionIdSet = new Set(connectionIds);
-    }
-
-    get engine() {
-        return this.parentContext.engine;
-    }
-
-    get componentes() {
-        return this.parentContext.componentes.filter((component) =>
-            this.componentIdSet.has(component.id)
-        );
-    }
-
-    get conexoes() {
-        return this.parentContext.conexoes.filter((connection) =>
-            this.connectionIdSet.has(connection.id)
-        );
-    }
-
-    get fluidoOperante() {
-        return this.parentContext.fluidoOperante;
-    }
-
-    get usarAlturaRelativa() {
-        return this.parentContext.usarAlturaRelativa;
-    }
-
-    resetHydraulicState() {
-        this.conexoes.forEach((connection) => {
-            this.engine.connectionStateStore.delete(connection);
-        });
-        this.componentes.forEach((component) => {
-            if (component instanceof TrocadorCalorLogico && typeof component.resetEstadoHidraulicoStream === 'function') {
-                const conns = this.conexoes;
-                const isStream2 = (portId) => portId === 'in2' || portId === 'out2' || portId === '2';
-                const hasStream1 = conns.some((c) => !isStream2(c.targetEndpoint?.portId) && !isStream2(c.sourceEndpoint?.portId));
-                const hasStream2 = conns.some((c) => isStream2(c.targetEndpoint?.portId) || isStream2(c.sourceEndpoint?.portId));
-                if (hasStream1 && !hasStream2) {
-                    component.resetEstadoHidraulicoStream(1);
-                    return;
-                }
-                if (hasStream2 && !hasStream1) {
-                    component.resetEstadoHidraulicoStream(2);
-                    return;
-                }
-            }
-            component.resetEstadoHidraulico();
-        });
-    }
-
-    getComponentFluid(component) {
-        return this.parentContext.getComponentFluid(component);
-    }
-
-    getConnectionFluid(connection) {
-        return this.parentContext.getConnectionFluid(connection);
-    }
-
-    getComponentById(id) {
-        if (!this.componentIdSet.has(id)) return null;
-        return this.parentContext.getComponentById(id);
-    }
-
-    getOutputConnections(component) {
-        return this.parentContext.getOutputConnections(component)
-            .filter((connection) => this.connectionIdSet.has(connection.id));
-    }
-
-    getInputConnections(component) {
-        return this.parentContext.getInputConnections(component)
-            .filter((connection) => this.connectionIdSet.has(connection.id));
-    }
-
-    getConnectionState(connection) {
-        return this.parentContext.getConnectionState(connection);
-    }
-
-    getConnectionGeometry(connection) {
-        return this.parentContext.getConnectionGeometry(connection);
-    }
-
-    ensureConnectionProperties(connection) {
-        return this.parentContext.ensureConnectionProperties(connection);
-    }
-
-    getPipeHydraulics(connection, geometry, areaM2, flowLps, fluid = this.getConnectionFluid(connection)) {
-        return this.parentContext.getPipeHydraulics(connection, geometry, areaM2, flowLps, fluid);
     }
 }

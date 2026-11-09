@@ -88,7 +88,7 @@ A cavitação é modelada dinamicamente através do balanço de energia na linha
 
 $$NPSH_a = \frac{P_{atm} + P_{hid} - \Delta P_{suc} - P_{vap}}{\rho \cdot g} + \frac{v^2}{2g}$$
 
-Na prática algébrica do motor (`NodalHydraulicSolver.js`), ele recupera a pressão resultante do nó e simplifica para:
+Na prática algébrica do motor (`GlobalHydraulicSolver.js`), ele recupera a pressão resultante do nó e simplifica para:
 
 $$NPSH_a = \frac{P_{suc\_abs} - P_{vap}}{\rho \cdot g} + \frac{v^2}{2g}$$
 
@@ -229,7 +229,7 @@ Na aba Avançado, `usarGeometriaBocal` dá ao bocal o diâmetro próprio `diamet
 Na saída do tanque, o $1/C_d^2$ inclui a energia cinética que segue no cano (parcela 1). Com a geometria do bocal, essa parcela passa a ser a carga cinética do cano:
 $$\Delta P = \frac{\rho}{2}\left[\left(\frac{1}{C_d^2} - 1\right)v_b^2 + v_c^2 + K_{\text{transição}}\,v_{\text{ref}}^2\right]$$
 ($v_b$: velocidade no bocal; $v_c$: no cano; $v_{\text{ref}}$: a velocidade de referência da transição, acima).
-Assim a energia cinética não é cobrada duas vezes. A transição só existe no solver global; os solvers legados apenas trocam a área de referência.
+Assim a energia cinética não é cobrada duas vezes.
 
 ### Mistura de Fases e Balanceamento
 No caso de confluência de fluidos distintos (em nós da malha ou no interior do tanque), `mixFluidos` (`Fluido.js`) apura a densidade da mistura volumetricamente, a temperatura por balanço entálpico ($\sum V_i \rho_i c_{p,i} T_i / \sum V_i \rho_i c_{p,i}$) e a viscosidade dinâmica pelo modelo logarítmico de Arrhenius ($\ln \mu_{\text{mix}} = \sum x_i \ln \mu_i$), preservando também as propriedades termofísicas de referência (`refTemperatura`, `refDensidade`, `refViscosidadeDinamicaPaS`, `refPressaoVaporBar`) para que variações térmicas subsequentes na rede mantenham a âncora de calibração de $25^\circ\text{C}$:
@@ -398,7 +398,7 @@ Para garantir a estabilidade da malha, o algoritmo embute proteção *Anti-Windu
 
 ## 7. Arquitetura do Solucionador (Solver)
 
-### 7.0 Solver Global Simultâneo (padrão)
+### 7.0 Solver Global Simultâneo
 Todas as equações dos componentes são resolvidas **ao mesmo tempo** pelo Global Gradient Algorithm (Todini–Pilati, base do EPANET), em `GlobalHydraulicSolver.js`. Para cada ramo $j$ entre os nós $a$ e $b$:
 
 $$P_a - P_b = \Phi_j(Q_j) = \underbrace{\operatorname{sgn}(Q_j)\,K_j \frac{\rho Q_j^2}{2A_j^2}}_{\text{perdas}} - \underbrace{\rho g \Delta z_j}_{\text{estático}} - \underbrace{H_{\text{bomba}}(Q_j)\,c_{\text{cav}}}_{\text{bomba}} + \underbrace{\frac{I_j}{\Delta t}\left(Q_j - Q_j^{\text{ant}}\right)}_{\text{inércia}}, \qquad I_j = \frac{\rho L_j}{A_j}$$
@@ -407,77 +407,13 @@ e em cada nó livre $\sum Q_{\text{entra}} - \sum Q_{\text{sai}} = 0$. O termo d
 
 **Validação contra o DWSIM dinâmico** (`Testes/fisica-e-dwsim.test.mjs`): alimentação 1 bar → válvula $K_v$ ($C_v$ 40) → tanque atmosférico 2 m³ → válvula $K_v$ ($C_v$ 100) → produto. Nível e vazão coincidem com o modelo de referência do DWSIM ($Q = K_v\sqrt{1000\,\Delta P/\rho}/3{,}6$ L/s, Euler explícito) dentro de 1% de 60 s a 600 s, e o nível de regime coincide com o analítico $h = (K_{v1}/K_{v2})^2 \Delta P/(\rho g)$.
 
-### Solver legado (híbrido push-based + nodal)
-O solver anterior continua acessível pelo toggle **Solver legado** apenas para comparação. Ele utiliza uma **Arquitetura de Solução Híbrida**, operando dois motores matemáticos: o **Solver Sequencial (Push-Based)** e o **Solver Nodal Simultâneo**.
+#### Trocador de calor na rede
+O trocador entra na rede como 4 nós lógicos (`in1`, `out1`, `in2`, `out2`) e um ramo interno por corrente. O sentido de cada ramo vem das portas efetivamente ligadas: em contracorrente, a Corrente 2 entra por `out2` e sai por `in2`; em co-corrente / paralelo, entra por `in2`. Assim, correntes distintas do mesmo equipamento podem pertencer a circuitos diferentes, inclusive a anéis fechados.
 
-A cada *tick* da simulação, o sistema fatia a malha geral em "Ilhas Hidráulicas" independentes (`HydraulicNetworkAnalyzer.js`), avaliando a topologia de grafos. Dependendo da estrutura de cada ilha, o motor delega a resolução para o algoritmo mais adequado:
-
-### 7.1 Ilhas Acíclicas: Solver Sequencial (Push-Based)
-Para trechos de malha aberta (ex: Fonte -> Bomba -> Válvula -> Tanque -> Dreno), o sistema detecta a ausência de ciclos fechados (`cyclicIslands.length == 0`) e invoca o `HydraulicNetworkSolver.js`.
-
-O método computacional *push-based* propaga a vazão sequencialmente de montante para jusante utilizando as seguintes etapas e equações:
-
-**A. Distribuição Proporcional em Bifurcações:**
-Quando um fluxo encontra múltiplos caminhos (paralelos), a vazão disponível é dividida proporcionalmente à capacidade hidráulica de cada ramo ($\text{Capacidade}_i$), que é estimada resolvendo a equação de Bernoulli para a pressão local disponível:
-
-$$Q_{\text{ramo } i} = Q_{\text{total disponível}} \cdot \left( \frac{\text{Capacidade}_i}{\sum \text{Capacidade}_{\text{todos os ramos}}} \right)$$
-
-Onde:
-- $Q_{\text{ramo } i}$: Vazão volumétrica alocada para o ramo $i$ ($L/s$ ou $m^3/s$)
-- $Q_{\text{total disponível}}$: Vazão volumétrica total suprida pelo nó de montante ($L/s$ ou $m^3/s$)
-- $\text{Capacidade}_i$: Capacidade de condução estimada do ramo $i$ ($L/s$), função da pressão motriz disponível e perdas acumuladas
-
-**B. Relaxamento Dinâmico de Transientes:**
-Para evitar descontinuidades e saltos instantâneos (que gerariam instabilidade visual e numérica), os fluxos calculados ($Q_{\text{estacionária}}$) não são aplicados abruptamente. Eles sofrem uma suavização de primeira ordem baseada na inércia da tubulação ($\tau_{\text{resposta}}$):
-
-$$Q_{\text{transiente}}^{t + \Delta t} = Q_{\text{transiente}}^{t} + (Q_{\text{estacionária}} - Q_{\text{transiente}}^{t}) \cdot \left(1 - e^{-\Delta t / \tau_{\text{resposta}}}\right)$$
-
-Onde:
-- $Q_{\text{transiente}}^{t + \Delta t}$: Vazão transiente do trecho no instante atual ($L/s$)
-- $Q_{\text{transiente}}^{t}$: Vazão transiente do trecho no instante anterior ($L/s$)
-- $Q_{\text{estacionária}}$: Vazão estacionária calculada pelo solucionador hidráulico ($L/s$)
-- $\Delta t$: Passo temporal de integração ($s$)
-- $\tau_{\text{resposta}}$: Constante de tempo de resposta inercial do trecho ($s$, calculada em função do comprimento $L$, densidade $\rho$ e viscosidade $\mu$)
-
-**C. Conservação de Massa Retroativa (Back-propagation):**
-Componentes *pass-through* (Válvulas, Bombas e Trocadores) não podem acumular líquido. Se após a propagação a vazão que conseguiu sair for menor do que a que entrou ($Q_{\text{out}} < Q_{\text{in}}$), o *solver* aciona a rotina `balancePassThroughMass()`, que retropropaga o bloqueio matemático reduzindo as vazões de entrada a montante até satisfazer:
-
-$$\sum Q_{\text{in}} = \sum Q_{\text{out}}$$
-
-Para equipamentos multi-via como o **Trocador de Calor de Duas Correntes** (`TrocadorCalorLogico`), o balanço de massa é executado de forma estritamente independente para cada corrente ($Q_{1,\text{in}} = Q_{1,\text{out}}$ e $Q_{2,\text{in}} = Q_{2,\text{out}}$), e o resíduo de convergência do componente é avaliado sem acoplamento mútuo:
-
-$$\Delta Q_{\text{residual}} = \max\left(|Q_{1,\text{in}} - Q_{1,\text{out}}|, \; |Q_{2,\text{in}} - Q_{2,\text{out}}|\right)$$
-
-Isso impede que uma restrição hidráulica em uma corrente mascare o balanço de massa da outra por compensação algébrica global.
-
-### 7.2 Ilhas Cíclicas (Loops): Solver Nodal Simultâneo
-Se a ilha contém um ciclo fechado de tubulações (ex: uma tubulação que retorna para a própria sucção da bomba ou forma um anel), a propagação linear falha. Para esses casos, o sistema delega o cálculo ao `NodalHydraulicSolver.js`.
-A malha é tratada como um circuito fechado e o motor aplica um esquema de busca de raiz via **Bisseção Numérica** avaliando a função residual ($\varepsilon$) no intervalo do fluxo viável:
-
-$$\varepsilon(Q) = P_{in} + P_{Bomba}(Q) - \Delta P_{Perdas}(Q) - P_{out}$$
-
-Onde:
-- $\varepsilon(Q)$: Resíduo de fechamento de pressão na malha (bar ou Pa), com convergência para $\varepsilon(Q) \approx 0$
-- $Q$: Vazão iterativa avaliada no loop fechado ($L/s$)
-- $P_{in}$: Pressão de contorno na entrada da linha (bar)
-- $P_{Bomba}(Q)$: Carga manométrica ativa adicionada pela bomba na vazão $Q$ (bar)
-- $\Delta P_{Perdas}(Q)$: Somatório das perdas de carga contínuas e localizadas em todo o anel na vazão $Q$ (bar)
-- $P_{out}$: Pressão de contorno no ponto de fechamento do nó (bar)
-
-#### Representação Nodal de Componentes Passantes e Loops em Série
-Para componentes multi-corrente (`TrocadorCalorLogico`), a rede nodal instancia 4 nós lógicos (`in1`, `out1`, `in2`, `out2`) e ramos internos direcionados:
-$$\text{Ramo Interno Corrente 1: } \text{in1} \to \text{out1}$$
-$$\text{Ramo Interno Corrente 2: } \begin{cases} \text{out2} \to \text{in2} & (\text{contracorrente, } \text{isContracorrente} = \text{true}) \\ \text{in2} \to \text{out2} & (\text{co-corrente / paralelo}) \end{cases}$$
-
-Na resolução de anéis fechados em série (`buildFloatingSeriesLoop`):
-1. Os ramos internos são indexados pela tupla `${component.id}:${streamId}`, permitindo que correntes distintas do mesmo equipamento componham circuitos fechados independentes simultâneos.
-2. A validação dos graus de nó (`inDegree === 1 && outDegree === 1`) filtra estritamente as conexões associadas à ilha cíclica em resolução (`island.connectionIds`), isolando o circuito fechado de nós de processo adjacentes.
-3. A integração da função de resíduo $\varepsilon(Q)$ utiliza os nós de fronteira exatos dos ramos (`internalBranch.fromNodeId` e `internalBranch.toNodeId`), garantindo convergência robusta para qualquer orientação de montagem.
-
-O fluxo da malha cíclica converge iterativamente garantindo que a diferença entre a carga provida e as perdas seja $\varepsilon(Q) \approx 0$ em toda a volta do circuito.
+> O solver legado (push-based + nodal por ilhas) foi removido em 2026-11-09; o solver global é o único motor.
 
 ### 7.3 Restrições Físicas e Balanceamento de Massa
-Ambos os motores operam sob limites físicos definidos. Limites de conservação de massa e restrições de nível (ex. *Over/Underflow* dos tanques) são impostos via matrizes de corte topológicas, acionando uma etapa de balanceamento a jusante caso os componentes não suportem escoar a vazão transiente, garantindo estabilidade do modelo em qualquer um dos *solvers*.
+A conservação de massa é uma equação do sistema: em cada nó livre, $\sum Q_{\text{entra}} = \sum Q_{\text{sai}}$. Os limites dos tanques entram como tetos por ramo: a saída fica limitada ao volume disponível no passo ($V/dt$), e a entrada do vaso fechado fica limitada ao espaço livre. No tanque aberto e cheio, o excedente vira transbordo, contabilizado no balanço do tanque.
 
 ### 7.4 Critério de Regime Permanente
 O simulador declara regime permanente quando, por $10\text{ s}$ seguidos, $|dQ/dt| \le 10^{-3}\text{ L/s}^2$ em todas as conexões, $|dV/dt| \le 10^{-3}\text{ L/s}$ em todos os tanques e $|dT/dt| \le 10^{-3}\text{ °C/s}$ em tanques e saídas de trocadores (`SteadyStateMonitor.js`). Num tanque que se aproxima do nível de equilíbrio com constante de tempo $\tau_{\text{tanque}} \approx 2Ah/Q$, isso exige alguns $\tau$ — tanques grandes levam de fato vários minutos para estabilizar.

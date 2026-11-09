@@ -26,7 +26,6 @@ function safeFileNamePart(value) {
 function summarizeNetworkAnalysis(analysis) {
     return {
         hasDirectedCycle: analysis.hasDirectedCycle,
-        shouldUseNodalSolver: analysis.shouldUseNodalSolver,
         cyclicComponentIds: [...analysis.cyclicComponentIds],
         islands: analysis.islands.map((island) => ({
             componentIds: [...island.componentIds],
@@ -108,7 +107,6 @@ function loadWorkspaceIntoEngine(engine, workspace) {
     if (engine.isRunning) engine.stop();
     engine.clear();
     engine.setUsarAlturaRelativa?.(workspace.config?.usarAlturaRelativa === true);
-    engine.setModoSolver?.(workspace.config?.modoSolver);
 
     const componentsById = new Map();
 

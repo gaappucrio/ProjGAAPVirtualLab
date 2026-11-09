@@ -69,7 +69,7 @@ O último objeto apontado fica em `__GAAP.ultimoHover` — é o **objeto real** 
 | `__GAAP.find("T-01")` | O objeto do componente (para explorar campos e métodos) |
 | `__GAAP.conexoesDe("T-01")` | Tabela única das conexões do componente, com coluna `sentido` (entrada/saída); retorna `{ entradas, saidas }` |
 | `__GAAP.selecionado()` | O que está selecionado na tela (vários → tabela) |
-| `__GAAP.solver()` | Modo do solver (`global`, `push`, `nodal` ou `mixed`) e métricas de convergência |
+| `__GAAP.solver()` | Métricas de convergência do solver global (`mode` é sempre `global`) e a última análise da rede |
 | `__GAAP.analise()` | Última análise topológica da rede (ilhas, malhas fechadas) |
 | `__GAAP.engine` | Acesso direto ao `SistemaSimulacao` |
 | `__GAAP.ajuda()` | Lista todos os comandos no console |
@@ -120,7 +120,7 @@ Cada `passo` mostra no console:
 2. Um grupo fechado **"tempo por fase (ms)"**, na **ordem real** em que o tick executa:
    1. `updateHighLevelControls` — controle de nível (PID) dos tanques
    2. `updateComponentDynamics` — rampas de bombas, curso de válvulas e atraso térmico do trocador
-   3. `solveHydraulicNetwork` — solver hidráulico (global simultâneo ou legado push/nodal)
+   3. `solveHydraulicNetwork` — solver hidráulico global simultâneo
    4. `syncPhysicalMetrics` — inventário dos tanques, métricas dos componentes e monitor de regime permanente
    5. `updatePipesVisual` — visual dos canos e avisos de setpoint
    6. `notify(panelUpdate)` — descrito na tabela como "restante (evento update_painel → painéis e gráficos)": é o tempo do tick que sobra fora das fases acima

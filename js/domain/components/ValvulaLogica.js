@@ -446,15 +446,16 @@ export class ValvulaLogica extends ComponenteFisico {
         const context = this.getSimulationContext();
         const fluid = context.queries.getComponentFluid?.(this) || context.fluidoOperante;
 
+        // Pressões manométricas: abaixo da atmosfera ficam negativas, como no nó resolvido pela rede.
         if (parametros.opening <= 0) {
-            const pDownstream = Math.max(0, this.getPressaoSaidaBar());
+            const pDownstream = this.getPressaoSaidaBar();
             this.pressaoSaidaAtualBar = pDownstream;
             this.deltaPAtualBar = Math.max(0, this.pressaoEntradaAtualBar - pDownstream);
         } else {
             this.deltaPAtualBar = fluid
                 ? pressureLossFromFlow(this.fluxoReal, parametros.hydraulicAreaM2, fluid.densidade, parametros.localLossCoeff)
                 : 0;
-            this.pressaoSaidaAtualBar = Math.max(0, this.pressaoEntradaAtualBar - this.deltaPAtualBar);
+            this.pressaoSaidaAtualBar = this.pressaoEntradaAtualBar - this.deltaPAtualBar;
         }
     }
 

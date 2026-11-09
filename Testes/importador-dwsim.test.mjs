@@ -11,6 +11,8 @@ import {
     readDwsimFile,
     translateDwsimToWorkspace
 } from '../js/presentation/import/DwsimImporter.js';
+import { BombaLogica } from '../js/domain/components/BombaLogica.js';
+import { buildPumpDwsimJsonData } from '../js/presentation/export/PumpDwsimJsonExporter.js';
 
 const TEMPLATE_BOMBA_TANQUE = path.resolve('Testes/plantas dwsim/entradaBombaTanqueValvulaSPsaidacompipes.dwxmz');
 
@@ -288,4 +290,36 @@ test('bomba: pontos H = 0 depois da vazão máxima não puxam o ajuste da curva'
     const bomba = componentePorTag(workspace, 'B');
     approx(bomba.vazaoNominal, 40, 1e-6, 'vazão máxima (L/s)');
     approx(bomba.pressaoMaxima, 40 * 997 * 9.81 * 1e-5, 1e-9, 'shutoff (bar)');
+});
+
+// Interpolante racional de 1ª ordem (Berrut, Floater-Hormann com d = 0): reproduz a carga, a
+// eficiência e a potência que o DWSIM grava para as bombas em modo Curves.
+function interpolarComoDwsim(xs, ys, x) {
+    let numerador = 0;
+    let denominador = 0;
+    for (let k = 0; k < xs.length; k += 1) {
+        if (x === xs[k]) return ys[k];
+        const termo = (k % 2 === 0 ? 1 : -1) / (x - xs[k]);
+        numerador += termo * ys[k];
+        denominador += termo;
+    }
+    return numerador / denominador;
+}
+
+test('curva exportada para o DWSIM tem pontos suficientes para a interpolacao dele seguir a parabola do GAAP', () => {
+    const bomba = new BombaLogica('P-exp', 'P-exp', 0, 0);
+    bomba.vazaoNominal = 45;
+    bomba.pressaoMaxima = 5;
+    const dados = buildPumpDwsimJsonData(null, bomba);
+    const { X, Y } = dados.CurveHead;
+    const cargaShutoffM = Y[0];
+
+    // Até metade da vazão máxima (faixa usual de operação), a cada 0,1 L/s.
+    let erroMaximo = 0;
+    for (let vazaoLps = 0.1; vazaoLps <= 22.5; vazaoLps += 0.1) {
+        const vazaoM3s = vazaoLps / 1000;
+        const exata = cargaShutoffM * (1 - ((vazaoLps / 45) ** 2));
+        erroMaximo = Math.max(erroMaximo, Math.abs(interpolarComoDwsim(X, Y, vazaoM3s) - exata) / exata);
+    }
+    assert.ok(erroMaximo < 1e-3, `Erro da carga interpolada pelo DWSIM: ${(erroMaximo * 100).toFixed(3)}%`);
 });

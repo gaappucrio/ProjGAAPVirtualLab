@@ -1,7 +1,10 @@
 import { BombaLogica } from '../../domain/components/BombaLogica.js';
 import { BAR_TO_PA, GRAVITY, lpsToM3s } from '../../domain/units/HydraulicUnits.js';
 
-const PUMP_CURVE_POINT_COUNT = 32;
+// O DWSIM interpola as curvas com um interpolante racional de 1ª ordem (resultado igual ao
+// Floater-Hormann com d = 0), que ondula entre os nós. Até metade da vazão máxima, a carga erra
+// até 1,3% com 33 pontos (numa curva plana, ~7% de vazão) e até 0,08% com 513 (arquivo de ~70 KB).
+const PUMP_CURVE_POINT_COUNT = 512;
 const FALLBACK_FLUID_DENSITY_KG_M3 = 1000;
 const DEFAULT_IMPELLER_DIAMETER_MM = 200;
 const DEFAULT_IMPELLER_SPEED_RPM = 1450;
@@ -84,7 +87,7 @@ function buildPumpJsonFilename(pump) {
     return `gaap-dwsim-pump-${buildSafeFilenamePart(pump?.tag || pump?.id)}-${stamp}.json`;
 }
 
-function buildPumpDwsimJsonData(engine, pump) {
+export function buildPumpDwsimJsonData(engine, pump) {
     if (!(pump instanceof BombaLogica)) return null;
 
     const fluid = resolvePumpFluid(engine, pump);

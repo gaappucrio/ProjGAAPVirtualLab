@@ -48,6 +48,8 @@ const TANK_OUTLET_CUSHION_L = EPSILON_FLOW * 10;
 const TANK_INTERNAL_RESISTANCE_BAR_PER_LPS = 1e-6;
 // Resistência da retenção da bomba ao fluxo reverso durante o Newton (bar por L/s).
 const PUMP_REVERSE_RESISTANCE_BAR_PER_LPS = 1e3;
+// Folga relativa sobre o fim da curva da bomba antes de avisar (a mesma do DWSIM: 0,01% da faixa).
+const PUMP_CURVE_RANGE_TOLERANCE = 1e-4;
 // Inclinação mínima da curva do colchão fora da faixa de volume (bar/L), para ela nunca ficar plana.
 const MIN_TANK_GAS_SLOPE_BAR_PER_L = 1e-3;
 
@@ -185,12 +187,22 @@ export class GlobalHydraulicSolver {
         this.reportVaporPressureViolations(network, solution);
         this.reportBlockedFloatingLoops(network, analysis);
 
+        // Os mapas são refeitos a cada passo (a rede é sempre a planta inteira): componentes apagados
+        // não deixam vazões nem pressões antigas para trás.
+        this.previousComponentLinkFlows = new Map();
+        this.previousNodePressures = new Map();
         network.links.forEach((link) => {
             if (link.kind !== 'connection' && !link.tankInternal) this.previousComponentLinkFlows.set(link.id, Math.max(0, solution.flows[link.index]));
         });
         network.nodes.forEach((node) => {
             this.previousNodePressures.set(node.id, solution.pressures.get(node.id));
         });
+    }
+
+    // Esquece o ponto de partida do passo anterior (planta limpa, troca de solver, altura relativa).
+    reset() {
+        this.previousComponentLinkFlows.clear();
+        this.previousNodePressures.clear();
     }
 
     // ------------------------------------------------------------------
@@ -615,7 +627,7 @@ export class GlobalHydraulicSolver {
     }
 
     pumpBoostBar(link, flowLps, cavitationFactor = link.cavitationFactor) {
-        return link.component.getCurvaPressaoBar(Math.max(0, flowLps), link.drive, link.density) * cavitationFactor;
+        return link.component.getCargaEfetivaBar(Math.max(0, flowLps), link.drive, link.density, cavitationFactor);
     }
 
     evaluateLink(link, flowLps) {
@@ -687,9 +699,10 @@ export class GlobalHydraulicSolver {
         let pressures = new Map();
         let totalIterations = 0;
         let converged = false;
+        let settled = false;
         let passes = 0;
 
-        for (; passes < MAX_STATUS_PASSES; passes += 1) {
+        const solvePass = () => {
             network.links.forEach((link) => {
                 if (link.kind === 'pump') link.cavitationFactor = link.initialCavitationFactor;
             });
@@ -703,12 +716,30 @@ export class GlobalHydraulicSolver {
             references.forEach((nodeId) => {
                 nodeState.get(nodeId).fixed = false;
             });
+            passes += 1;
+        };
 
-            if (!this.updateStatuses(network, flows, pressures, nodeState)) break;
+        while (passes < MAX_STATUS_PASSES) {
+            solvePass();
+            if (!this.updateStatuses(network, flows, pressures, nodeState)) {
+                settled = true;
+                break;
+            }
+        }
+        if (!settled) {
+            // O updateStatuses deixou vazões de partida (zero nos ramos fechados, chute nos abertos);
+            // um último passe resolve a rede com os estados finais para devolver vazões e pressões
+            // consistentes entre si (massa fechando em cada nó).
+            solvePass();
+            this.metrics.lastDiagnostics.push({
+                code: 'global_status_not_settled',
+                severity: 'warning',
+                message: 'Os estados ativos (retenções, tetos de vazão) não se estabilizaram no limite de passes; a rede foi resolvida com os últimos estados.'
+            });
         }
 
         this.metrics.lastIterations = totalIterations;
-        this.metrics.lastStatusPasses = passes + 1;
+        this.metrics.lastStatusPasses = passes;
         this.metrics.lastError = this.calculateMassResidual(network, flows, nodeState);
         if (converged) {
             this.metrics.convergedCount += 1;
@@ -1353,6 +1384,7 @@ export class GlobalHydraulicSolver {
     }
 
     applyPumpMetrics(network, solution) {
+        const beyondCurve = [];
         network.links.forEach((link) => {
             if (link.kind !== 'pump') return;
             const pump = link.component;
@@ -1368,7 +1400,18 @@ export class GlobalHydraulicSolver {
             else pump.fatorCavitacaoAtual = link.open ? link.cavitationFactor : suction.cavitationFactor;
             pump.eficienciaAtual = pump.getEficienciaInstantanea(flowLps);
             if (flowLps > EPSILON_FLOW) pump.limparSucaoSemLiquido?.();
+            if (flowLps > pump.getVazaoMaximaCurvaLps(link.drive) * (1 + PUMP_CURVE_RANGE_TOLERANCE)) beyondCurve.push(pump.tag || pump.id);
         });
+        // O DWSIM interrompe o cálculo quando a vazão sai da faixa da curva; aqui a curva é estendida
+        // (a bomba passa a dissipar) e o motivo é sinalizado.
+        if (beyondCurve.length > 0) {
+            this.metrics.lastDiagnostics.push({
+                code: 'pump_beyond_curve',
+                severity: 'warning',
+                componentTags: beyondCurve,
+                message: `Vazão acima do fim da curva em ${beyondCurve.join(', ')}: a bomba não soma carga, ela dissipa como uma resistência.`
+            });
+        }
     }
 
     reportBlockedFloatingLoops(network, analysis) {

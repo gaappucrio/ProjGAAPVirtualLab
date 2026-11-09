@@ -37,6 +37,12 @@ const PRESSAO_ATMOSFERICA_BAR = PRESSAO_ATMOSFERICA_PA * 1e-5;
 const VAZAO_NULA_LPS = 0.01;
 // Densidade abaixo da qual a corrente do DWSIM é gás/vapor (líquidos usuais ficam acima de 500 kg/m³).
 const DENSIDADE_MINIMA_LIQUIDO_KG_M3 = 100;
+// Erro de interpolação da carga no DWSIM acima do qual a ilha da bomba tem vazões não comparáveis
+// (com curva plana, 0,05% de carga já move a vazão perto de 1%).
+const LIMIAR_ERRO_INTERPOLACAO = 5e-4;
+// Grandezas que o erro de carga desloca: as vazões da ilha, o ΔP da bomba e o NPSH (que depende
+// da vazão). As pressões continuam julgadas, pois as fronteiras são as mesmas do DWSIM.
+const GRANDEZAS_AFETADAS_PELA_CURVA = new Set(['vazaoLps', 'vazaoSaidaLps', 'deltaPBar', 'npshDisponivelM']);
 const TOLERANCIA_ABSOLUTA = {
     'L/s': 0.01,
     bar: 0.005,
@@ -88,6 +94,74 @@ function estadoCorrente(simObjects, streamName) {
     };
 }
 
+// ------------------------------------------------------------------
+// Erro de interpolação da curva da bomba no próprio DWSIM
+// ------------------------------------------------------------------
+// O DWSIM avalia a curva tabelada com um interpolante racional de 1ª ordem (os valores gravados
+// batem com o Floater-Hormann de d = 0, o de Berrut), que ondula entre os pontos: com os 33 pontos
+// do exportador antigo do GAAP, a carga sai ~0,6% acima da curva e, numa curva plana, a vazão
+// muda ~7%. O placar compara essa avaliação com uma interpolação suave (d = 3) dos mesmos pontos.
+
+function interpolarFloaterHormann(xs, ys, d, x) {
+    const n = xs.length;
+    let numerador = 0;
+    let denominador = 0;
+    for (let k = 0; k < n; k += 1) {
+        if (x === xs[k]) return ys[k];
+        let soma = 0;
+        for (let i = Math.max(0, k - d); i <= Math.min(k, n - 1 - d); i += 1) {
+            let produto = 1;
+            for (let j = i; j <= i + d; j += 1) {
+                if (j !== k) produto /= Math.abs(xs[k] - xs[j]);
+            }
+            soma += produto;
+        }
+        const termo = ((k - d) % 2 === 0 ? 1 : -1) * soma / (x - xs[k]);
+        numerador += termo * ys[k];
+        denominador += termo;
+    }
+    return numerador / denominador;
+}
+
+function itensCurva(curva, tag) {
+    return (filho(curva, tag)?.children || []).map((item) => Number(String(item.textContent).trim()));
+}
+
+// Erro relativo da carga avaliada pelo DWSIM na vazão de operação, ou null sem curva utilizável.
+function erroInterpolacaoBomba(sim) {
+    const curva = filho(filho(sim, 'PumpCurveSet'), 'CurveHead');
+    if (String(filho(curva, 'Enabled')?.textContent).trim() !== 'true') return null;
+    if (String(filho(curva, 'xunit')?.textContent).trim() !== 'm3/s') return null;
+    const xs = itensCurva(curva, 'X');
+    const ys = itensCurva(curva, 'Y');
+    const vazaoM3s = numeroFilho(sim, 'CurveFlow');
+    if (xs.length < 5 || xs.length !== ys.length || !(vazaoM3s > 0)) return null;
+    const ordem = xs.map((_, indice) => indice).sort((a, b) => xs[a] - xs[b]);
+    const x = ordem.map((indice) => xs[indice]);
+    const y = ordem.map((indice) => ys[indice]);
+    const suave = interpolarFloaterHormann(x, y, 3, vazaoM3s);
+    return suave > 0 ? (interpolarFloaterHormann(x, y, 0, vazaoM3s) - suave) / suave : null;
+}
+
+// Ilhas do fluxograma: nomes de objetos ligados por conectores (correntes, canos, equipamentos).
+function ilhasDwsim(graphicObjects) {
+    const pai = new Map();
+    const raiz = (nome) => {
+        if (!pai.has(nome)) pai.set(nome, nome);
+        while (pai.get(nome) !== nome) nome = pai.get(nome);
+        return nome;
+    };
+    const unir = (a, b) => {
+        if (a && b) pai.set(raiz(a), raiz(b));
+    };
+    graphicObjects.forEach((gObj) => {
+        raiz(gObj.name);
+        gObj.inputs.forEach((input) => unir(gObj.name, input.sourceName));
+        gObj.outputs.forEach((output) => unir(gObj.name, output.targetName));
+    });
+    return raiz;
+}
+
 function tipoEquipamento(gObj) {
     const norm = String(gObj.objectType || '').toLowerCase();
     if (norm === 'pump') return 'pump';
@@ -115,12 +189,14 @@ function referenciasDwsim(parsed) {
         const entrada = (indice = 0) => estadoCorrente(simObjects, gObj.inputs[indice]?.sourceName);
         const saida = (indice = 0) => estadoCorrente(simObjects, gObj.outputs[indice]?.targetName);
         const valores = {};
+        let erroInterpolacao = null;
 
         if (tipo === 'pump') {
             valores.vazaoLps = entrada()?.vazaoLps;
             valores.deltaPBar = escalar(numeroFilho(sim, 'PressureIncrease'), PA_TO_BAR);
             valores.npshDisponivelM = numeroFilho(sim, 'NPSH');
             valores.pressaoSaidaBarg = saida()?.pressaoBarg;
+            erroInterpolacao = erroInterpolacaoBomba(sim);
         } else if (tipo === 'valve') {
             valores.vazaoLps = entrada()?.vazaoLps;
             valores.deltaPBar = escalar(numeroFilho(sim, 'DeltaP'), PA_TO_BAR);
@@ -160,7 +236,7 @@ function referenciasDwsim(parsed) {
             return densidade !== null && densidade !== undefined && densidade < DENSIDADE_MINIMA_LIQUIDO_KG_M3;
         });
 
-        referencias.push({ tag: gObj.tag, tipo, valores, faseVapor });
+        referencias.push({ nome: gObj.name, tag: gObj.tag, tipo, valores, faseVapor, erroInterpolacao });
     });
 
     return referencias;
@@ -182,7 +258,6 @@ function valoresGaap(tipo, comp) {
     if (tipo === 'valve') {
         return {
             vazaoLps: comp.fluxoReal,
-            // pressaoSaidaAtualBar é limitada a 0 barg; o ΔP próprio da válvula não sofre esse corte.
             deltaPBar: comp.deltaPAtualBar,
             pressaoSaidaBarg: comp.pressaoSaidaAtualBar
         };
@@ -310,7 +385,7 @@ function formatar(valor) {
 // o GAAP rodou (por exemplo, o PID do DWSIM vira controle de nível ativo no GAAP, enquanto o
 // modo estacionário do DWSIM mantém a abertura gravada da válvula).
 function imprimirConfiguracao(engine) {
-    console.log(`Solver: ${engine.modoSolver} | altura relativa: ${engine.usarAlturaRelativa ? 'sim' : 'não'}`);
+    console.log(`Altura relativa: ${engine.usarAlturaRelativa ? 'sim' : 'não'}`);
     engine.componentes.forEach((comp) => {
         if (comp instanceof TanqueLogico) {
             const controle = comp.setpointAtivo ? `controle de nível ATIVO (SP ${comp.setpoint}%)` : 'sem controle de nível';
@@ -338,7 +413,21 @@ async function validarTemplate(arquivo) {
 
     const linhas = [];
     const comparados = new Set();
-    referenciasDwsim(parsed).forEach(({ tag, tipo, valores, faseVapor }) => {
+    const referencias = referenciasDwsim(parsed);
+    const ilhaDe = ilhasDwsim(parsed.graphicObjects);
+    const curvaImprecisaPorIlha = new Map();
+    // Só a ilha cuja vazão diverge é marcada: se a vazão da bomba bate (fonte no teto, por exemplo),
+    // o erro da curva não explica as outras diferenças e elas continuam ❌.
+    referencias.forEach(({ nome, tag, tipo, valores, erroInterpolacao }) => {
+        // A forma negada também descarta null e NaN (curva com vazões repetidas).
+        if (tipo !== 'pump' || !(Math.abs(erroInterpolacao) > LIMIAR_ERRO_INTERPOLACAO)) return;
+        const bomba = engine.componentes.filter((comp) => comp.tag === tag);
+        if (bomba.length !== 1 || avaliar(bomba[0].fluxoReal, valores.vazaoLps, 'L/s').ok) return;
+        const sinal = erroInterpolacao > 0 ? '+' : '';
+        curvaImprecisaPorIlha.set(ilhaDe(nome), `interpolação da curva de ${tag} no DWSIM (${sinal}${(erroInterpolacao * 100).toFixed(2)}% de carga)`);
+        console.log(`⚠ ${tag}: o DWSIM avalia a carga ${sinal}${(erroInterpolacao * 100).toFixed(2)}% fora da curva suave e a vazão diverge; vazões, ΔP e NPSH divergentes dessa ilha ficam ❓.`);
+    });
+    referencias.forEach(({ nome: nomeObjeto, tag, tipo, valores, faseVapor }) => {
         const candidatos = engine.componentes.filter((comp) => comp.tag === tag);
         if (candidatos.length !== 1) {
             linhas.push({ Equipamento: `${tag} (${tipo})`, Dado: '—', Grandeza: `(${candidatos.length} componentes com esta tag no GAAP)`, GAAP: '—', DWSIM: '—', Erro: '—', OK: '❓' });
@@ -348,8 +437,14 @@ async function validarTemplate(arquivo) {
         const gaap = valoresGaap(tipo, candidatos[0]);
         Object.entries(valores).forEach(([chave, referencia]) => {
             const [nome, unidade, dado] = GRANDEZAS[chave];
-            const motivo = motivoIncomparavel(chave, gaap, valores, faseVapor);
-            const { erro, ok } = motivo ? { erro: motivo, ok: false } : avaliar(gaap[chave], referencia, unidade);
+            let motivo = motivoIncomparavel(chave, gaap, valores, faseVapor);
+            let { erro, ok } = motivo ? { erro: motivo, ok: false } : avaliar(gaap[chave], referencia, unidade);
+            const motivoCurva = curvaImprecisaPorIlha.get(ilhaDe(nomeObjeto));
+            const afetadaPelaCurva = GRANDEZAS_AFETADAS_PELA_CURVA.has(chave) && (chave !== 'deltaPBar' || tipo === 'pump');
+            if (!motivo && !ok && motivoCurva && afetadaPelaCurva) {
+                motivo = motivoCurva;
+                erro = `${erro} (${motivoCurva})`;
+            }
             linhas.push({
                 Equipamento: `${tag} (${tipo})`,
                 Dado: dado,

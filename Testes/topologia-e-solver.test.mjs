@@ -31,7 +31,6 @@ function runSinglePhysicsStep(engine, dt = 0.1) {
     engine.componentes.forEach((component) => {
         component.sincronizarMetricasFisicas(engine.hydraulicContext.getComponentFluid(component) || engine.fluidoOperante);
     });
-    engine.reconcileConnectionPressureStatesFromComponentDrops();
 }
 
 function runPhysicsSteps(engine, steps = 120, dt = 0.1) {
@@ -50,7 +49,6 @@ function runAutomaticPhysicsStep(engine, dt = 0.1) {
         if (component instanceof TanqueLogico) component.atualizarFisica(dt, fluid);
         else component.sincronizarMetricasFisicas(fluid);
     });
-    engine.reconcileConnectionPressureStatesFromComponentDrops();
 }
 
 function runAutomaticPhysicsSteps(engine, steps = 60, dt = 0.1) {
@@ -59,18 +57,9 @@ function runAutomaticPhysicsSteps(engine, steps = 60, dt = 0.1) {
     }
 }
 
+// Passo real da aplicação (inclui o PID dos tanques).
 function runControlledAutomaticPhysicsStep(engine, dt = 0.1) {
-    engine.tickPipeline.updateHighLevelControls(dt);
-    engine.componentes.forEach((component) => {
-        component.atualizarDinamica(dt, engine.hydraulicContext.getComponentFluid(component) || engine.fluidoOperante);
-    });
-    engine.resolveHydraulicNetwork(dt);
-    engine.componentes.forEach((component) => {
-        const fluid = engine.hydraulicContext.getComponentFluid(component) || engine.fluidoOperante;
-        if (component instanceof TanqueLogico) component.atualizarFisica(dt, fluid);
-        else component.sincronizarMetricasFisicas(fluid);
-    });
-    engine.reconcileConnectionPressureStatesFromComponentDrops();
+    engine.tickPipeline.advance(dt);
 }
 
 function runControlledAutomaticPhysicsSteps(engine, steps = 60, dt = 0.1) {
@@ -581,72 +570,24 @@ test('valvula controlada quase fechada nao vaza quando exibida como 0.0%', () =>
     assert.equal(tanque.volumeAtual, volumeInicial);
 });
 
-test('conexoes adicionadas com simulacao em andamento entram em rampa hidraulica', () => {
+test('mudar a configuracao zera a memoria de inercia dos canos usada pelo solver global', () => {
+    // O termo inercial do solver global usa a vazao do passo anterior gravada na conexao
+    // (transientFlowLps); sem zerar, a nova configuracao partiria da vazao antiga.
     const engine = createEngine();
-    // A rampa artificial de partida existe só no solver legado; no solver global a partida é
-    // governada pela inércia física do fluido (teste dedicado em validar-calculos).
-    engine.modoSolver = 'legado';
-    engine.elapsedTime = 5;
+    const fonte = new FonteLogica('F-inercia', 'F-inercia', 0, 0);
+    const dreno = new DrenoLogico('D-inercia', 'D-inercia', 120, 0);
+    fonte.pressaoFonteBar = 1;
+    [fonte, dreno].forEach((component) => engine.add(component));
+    fonte.conectarSaida(dreno);
+    const conexao = new ConnectionModel({ sourceId: fonte.id, targetId: dreno.id });
+    engine.addConnection(conexao);
 
-    const tanque = new TanqueLogico('T-live-ramp', 'T-live-ramp', 0, 0);
-    tanque.volumeAtual = 500;
-    tanque.capacidadeMaxima = 1000;
-    tanque.fluidoConteudo = { ...FLUID_PRESETS.agua };
-    engine.add(tanque);
+    runControlledAutomaticPhysicsSteps(engine, 20, 0.1);
+    assert.ok(conexao.transientFlowLps > 0, `Cano deve guardar a vazao do passo: ${conexao.transientFlowLps}`);
 
-    const conexoes = [];
-    for (let index = 0; index < 10; index += 1) {
-        const valvula = new ValvulaLogica(`V-live-${index}`, `V-live-${index}`, 120, index * 20);
-        const dreno = new DrenoLogico(`D-live-${index}`, `D-live-${index}`, 240, index * 20);
-
-        valvula.aplicarPerfilCaracteristica('custom');
-        valvula.setCoeficienteVazao(250);
-        valvula.setCoeficientePerda(0);
-        valvula.setTipoCaracteristica('linear');
-        valvula.setAbertura(100);
-        valvula.aberturaEfetiva = 100;
-
-        engine.add(valvula);
-        engine.add(dreno);
-        tanque.conectarSaida(valvula);
-        valvula.conectarSaida(dreno);
-
-        const entradaValvula = new ConnectionModel({ sourceId: tanque.id, targetId: valvula.id, extraLengthM: 0 });
-        const saidaValvula = new ConnectionModel({ sourceId: valvula.id, targetId: dreno.id, extraLengthM: 0 });
-        engine.addConnection(entradaValvula);
-        engine.addConnection(saidaValvula);
-        conexoes.push(entradaValvula, saidaValvula);
-    }
-
-    assert.ok(
-        conexoes.every((connection) => connection.startupRampDurationS > 0),
-        'Conexoes criadas durante a simulacao devem receber rampa inicial'
-    );
-
-    const volumeInicial = tanque.volumeAtual;
-    runAutomaticPhysicsStep(engine, 0.1);
-    const primeiraVazaoSaida = tanque.lastQout;
-    const primeiraQuedaL = volumeInicial - tanque.volumeAtual;
-
-    assert.ok(
-        primeiraQuedaL < 1,
-        `A rampa deve evitar queda brusca no primeiro tick: queda=${primeiraQuedaL} L`
-    );
-    assert.ok(
-        primeiraVazaoSaida < 5,
-        `A vazao inicial deve ser suavizada antes de atingir o regime: qout=${primeiraVazaoSaida} L/s`
-    );
-
-    runAutomaticPhysicsSteps(engine, 14, 0.1);
-
-    assert.ok(
-        conexoes.every((connection) => connection.startupRampDurationS === 0),
-        'A rampa deve terminar apos o periodo de partida'
-    );
-    assert.ok(
-        tanque.lastQout > 20,
-        `A rede deve atingir vazao normal apos a rampa: qout=${tanque.lastQout} L/s`
-    );
+    engine.setUsarAlturaRelativa(true);
+    assert.equal(conexao.transientFlowLps, 0);
+    assert.equal(conexao.lastResolvedFlowLps, 0);
 });
 
 test('valvula mistura fluidos de multiplas entradas e entrega composicao ao tanque', () => {

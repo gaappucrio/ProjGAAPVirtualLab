@@ -5,6 +5,12 @@ import { getGridColors, formatAxisTick } from './ChartTheme.js';
 
 const PIPE_PRESSURE_POINT_COUNT = 32;
 
+// Cano inteiro abaixo da atmosfera: o eixo encosta em 0 em vez de reservar uma faixa positiva vazia.
+function pressureAxisMaxFor(minPressure, maxPressure) {
+    if (minPressure < 0 && maxPressure <= 0) return 0;
+    return Math.max(1, maxPressure * 1.08);
+}
+
 const PIPE_CHART_COLORS = Object.freeze({
     pressure: '#1abc9c',
     pressureFill: 'rgba(26, 188, 156, 0.14)',
@@ -47,10 +53,7 @@ function getPressureProfileEndpointBar(state = {}, overrides = {}) {
         overrides.pressureDropBar,
         fallbackPressureDropBar
     );
-    const estimatedEndPressureBar = Math.max(
-        0,
-        sourcePressureBar - Math.max(0, pressureDropBar)
-    );
+    const estimatedEndPressureBar = sourcePressureBar - Math.max(0, pressureDropBar);
     const endPressureBar = hasFiniteNumber(overrides.sourcePressureBar)
         ? estimatedEndPressureBar
         : finiteNumber(state.pressureBar, finiteNumber(state.outletPressureBar, estimatedEndPressureBar));
@@ -105,7 +108,7 @@ function buildPipePressureProfile(connection, state = {}, geometry = {}, options
         lengthUnit,
         pressureUnit,
         lengthAxisMax: toDisplayValue('length', lengthM),
-        pressureAxisMax: Math.max(1, maxPressure * 1.08),
+        pressureAxisMax: pressureAxisMaxFor(minPressure, maxPressure),
         pressureAxisMin: minPressure < 0 ? minPressure * 1.08 : 0
     };
 }
@@ -164,7 +167,7 @@ function buildCompositePipePressureProfile(sections = []) {
         lengthUnit,
         pressureUnit,
         lengthAxisMax,
-        pressureAxisMax: Math.max(1, maxPressure * 1.08),
+        pressureAxisMax: pressureAxisMaxFor(minPressure, maxPressure),
         pressureAxisMin: minPressure < 0 ? minPressure * 1.08 : 0
     };
 }

@@ -122,15 +122,14 @@ export function checkInvariants(engine, { solverHitsThisTick = 0 } = {}) {
     });
 
     if (solverHitsThisTick > 0) {
-        report('SOLVER_NAO_CONVERGIU', `solver ${engine.activeHydraulicSolverMode}`, 'maxIterationsHit', 'chamadas no limite neste tick', solverHitsThisTick);
+        report('SOLVER_NAO_CONVERGIU', 'solver global', 'maxIterationsHit', 'chamadas no limite neste tick', solverHitsThisTick);
     }
 
     return violations;
 }
 
 // Lê o contador acumulado de cada solver persistente do engine (qualquer
-// propriedade *Solver com getMetrics, então um solver novo entra sozinho) e o
-// contador das ilhas, cujos solvers são recriados a cada tick.
+// propriedade *Solver com getMetrics, então um solver novo entra sozinho).
 export function readSolverIterationState(engine) {
     const instances = {};
     Object.entries(engine).forEach(([key, value]) => {
@@ -138,17 +137,13 @@ export function readSolverIterationState(engine) {
             instances[key] = value.getMetrics().maxIterationsHit || 0;
         }
     });
-    return {
-        instances,
-        scopedHits: engine.lastScopedSolverMetrics ? (engine.lastScopedSolverMetrics.maxIterationsHit || 0) : null
-    };
+    return { instances };
 }
 
-// Delta por instância: independe de o modo ter mudado (push → nodal, rede única ↔ ilhas).
+// Delta por instância: um solver que aparece no meio da sessão começa sem histórico.
 export function solverHitsDuringTick(before, after) {
-    const persistentHits = Object.entries(after.instances).reduce((sum, [key, hits]) =>
+    return Object.entries(after.instances).reduce((sum, [key, hits]) =>
         sum + Math.max(0, hits - (before.instances[key] ?? hits)), 0);
-    return persistentHits + (after.scopedHits ?? 0);
 }
 
 // Com o atraso térmico (branch de refatoração), a saída real pode ficar fora da

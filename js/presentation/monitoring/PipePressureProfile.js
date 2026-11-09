@@ -12,7 +12,7 @@ function resolveSourceOutletPressureBar(source) {
     const inletPressureBar = finiteNumber(source?.pressaoEntradaAtualBar);
     const componentPressureDropBar = finiteNumber(source?.deltaPAtualBar);
     if (inletPressureBar !== null && componentPressureDropBar !== null && componentPressureDropBar > 0) {
-        return Math.max(0, inletPressureBar - componentPressureDropBar);
+        return inletPressureBar - componentPressureDropBar;
     }
 
     return null;
@@ -61,6 +61,6 @@ export function resolvePipePressureProfile({ state = {}, source = null } = {}) {
     return {
         sourcePressureBar,
         pressureDropBar,
-        endPressureBar: Math.max(0, sourcePressureBar - pressureDropBar)
+        endPressureBar: sourcePressureBar - pressureDropBar
     };
 }

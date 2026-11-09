@@ -160,7 +160,7 @@ export function createDebugApi({ engine, runtime = {}, logger = console } = {}) 
                 { comando: '__GAAP.find("tag ou id")', descricao: 'retorna o objeto do componente' },
                 { comando: '__GAAP.conexoesDe("tag ou id")', descricao: 'conexões de entrada e saída do componente' },
                 { comando: '__GAAP.selecionado()', descricao: 'componente ou conexão selecionado na tela (vários → tabela)' },
-                { comando: '__GAAP.solver()', descricao: 'modo do solver (push/nodal) e métricas de convergência' },
+                { comando: '__GAAP.solver()', descricao: 'métricas de convergência do solver global' },
                 { comando: '__GAAP.analise()', descricao: 'última análise topológica da rede (ilhas, malhas)' },
                 { comando: '__GAAP.rastrear()', descricao: 'liga o rastreio de eventos (mostra ações fora do tick, com pilha)' },
                 { comando: '__GAAP.rastrear({ incluirTick: true })', descricao: 'registra e mostra também os eventos de cada tick (sem isso, eles só entram na contagem)' },

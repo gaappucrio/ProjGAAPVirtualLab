@@ -5,7 +5,6 @@ import { FonteLogica } from './FonteLogica.js';
 import { ValvulaLogica } from './ValvulaLogica.js';
 import { cloneFluido, createFluidoFromProperties, mixFluidos } from './Fluido.js';
 import { DEFAULT_ATMOSPHERIC_PRESSURE_BAR, EPSILON_FLOW, pressureFromHeadBar } from '../units/HydraulicUnits.js';
-import { MODO_SOLVER_LEGADO } from '../context/SimulationContext.js';
 import {
     calculateLevelControl,
     createLevelControllerState,
@@ -218,22 +217,6 @@ export class TanqueLogico extends ComponenteFisico {
 
     getPressaoBocalSaidaBar(fluido = null, considerarAlturaBocal = true) {
         return this.getPressaoBocalSaidaParaNivelBar(fluido, this.getNivelNormalizado(), considerarAlturaBocal);
-    }
-
-    temEntradaPressurizada() {
-        return (this.estadoHidraulico?.entradaVazaoLps ?? 0) > EPSILON_FLOW;
-    }
-
-    getPressaoConexaoSemPerdaBar(fluido, considerarAlturaBocal = true) {
-        if (this.temEntradaPressurizada()) {
-            return Math.max(this.getPressaoGasBar(fluido), this.getPressaoEntradaBar());
-        }
-
-        if (!this.temLiquidoDisponivelSaida(considerarAlturaBocal)) {
-            return this.getPressaoGasBar(fluido);
-        }
-
-        return this.getPressaoBocalSaidaBar(fluido, considerarAlturaBocal);
     }
 
     getFluidoConteudo() {
@@ -872,13 +855,6 @@ export class TanqueLogico extends ComponenteFisico {
         const context = this.getSimulationContext();
         const fluidoAtual = fluido || context.queries.getComponentFluid?.(this) || context.fluidoOperante;
         this.pressaoFundoBar = this.getPressaoGasBar(fluidoAtual) + this.getPressaoHidrostaticaBar(fluidoAtual);
-
-        if (context.modoSolver === MODO_SOLVER_LEGADO) {
-            if (this.temEntradaPressurizada()) {
-                this.pressaoSaidaAtualBar = this.getPressaoConexaoSemPerdaBar(fluidoAtual, context.usarAlturaRelativa);
-            }
-            return;
-        }
 
         // O tanque é uma fronteira de pressão: os bocais enxergam o gás do topo mais a coluna de líquido.
         this.pressaoEntradaAtualBar = this.getPressaoBocalEntradaBar(fluidoAtual, context.usarAlturaRelativa);
