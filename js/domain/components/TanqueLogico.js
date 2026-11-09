@@ -857,10 +857,21 @@ export class TanqueLogico extends ComponenteFisico {
         this.pressaoFundoBar = this.getPressaoGasBar(fluidoAtual) + this.getPressaoHidrostaticaBar(fluidoAtual);
 
         // O tanque é uma fronteira de pressão: os bocais enxergam o gás do topo mais a coluna de líquido.
-        this.pressaoEntradaAtualBar = this.getPressaoBocalEntradaBar(fluidoAtual, context.usarAlturaRelativa);
-        this.pressaoSaidaAtualBar = this.temLiquidoDisponivelSaida(context.usarAlturaRelativa)
-            ? this.getPressaoBocalSaidaBar(fluidoAtual, context.usarAlturaRelativa)
-            : this.getPressaoGasBar(fluidoAtual);
+        // Exceção: no vaso travado (gás no piso de 2%), os bocais ficam na pressão que a rede impõe, e não
+        // no Boyle do piso; aí vale a pressão que o solver resolveu. Fora da trava, a fórmula com o nível
+        // do fim do passo (a nodal viria do início do passo e, com a saída no teto, seria a da rede).
+        const volumeMaximoLiquidoL = this.getVolumeMaximoLiquidoL();
+        const travado = volumeMaximoLiquidoL !== null && this.volumeAtual >= volumeMaximoLiquidoL - 1e-6;
+        const pressaoResolvida = (porta) => {
+            const pressaoBar = travado ? this.estadoHidraulico.pressaoNoPorta?.[porta] : null;
+            return Number.isFinite(pressaoBar) ? pressaoBar : null;
+        };
+        this.pressaoEntradaAtualBar = pressaoResolvida('in')
+            ?? this.getPressaoBocalEntradaBar(fluidoAtual, context.usarAlturaRelativa);
+        this.pressaoSaidaAtualBar = pressaoResolvida('out')
+            ?? (this.temLiquidoDisponivelSaida(context.usarAlturaRelativa)
+                ? this.getPressaoBocalSaidaBar(fluidoAtual, context.usarAlturaRelativa)
+                : this.getPressaoGasBar(fluidoAtual));
     }
 
     destroy() {

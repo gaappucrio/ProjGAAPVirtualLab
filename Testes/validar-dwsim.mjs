@@ -251,7 +251,9 @@ function valoresGaap(tipo, comp) {
         return {
             vazaoLps: comp.fluxoReal,
             deltaPBar: comp.cargaGeradaBar,
-            npshDisponivelM: comp.npshDisponivelM,
+            // O GAAP segue o Hydraulic Institute (soma v²/2g na sucção); o DWSIM (Pump.vb) usa só a
+            // parcela estática (Pi − Pvap)/(ρg). Compara-se a mesma parcela.
+            npshDisponivelM: comp.npshDisponivelM - (comp.npshCargaVelocidadeM || 0),
             pressaoSaidaBarg: comp.pressaoDescargaAtualBar
         };
     }
@@ -304,7 +306,7 @@ const GRANDEZAS = {
     vazaoCorrente1Lps: ['Vazão corrente 1', 'L/s', 'resultado'],
     vazaoCorrente2Lps: ['Vazão corrente 2', 'L/s', 'resultado'],
     deltaPBar: ['ΔP', 'bar', 'resultado'],
-    npshDisponivelM: ['NPSH disponível', 'm', 'resultado'],
+    npshDisponivelM: ['NPSHa sem v²/2g', 'm', 'resultado'],
     pressaoEntradaBarg: ['P entrada', 'barg', 'resultado'],
     pressaoSaidaBarg: ['P saída', 'barg', 'resultado'],
     cargaTermicaKw: ['Carga térmica', 'kW', 'resultado'],

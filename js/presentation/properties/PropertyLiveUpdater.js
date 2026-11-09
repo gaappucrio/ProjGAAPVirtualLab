@@ -147,7 +147,8 @@ function updatePumpSuctionAlert(component) {
     const btnAjuste = byId('btn-ajustar-npshr-bomba');
     const feedbackAjuste = byId('texto-acao-alerta-npsh');
     if (btnAjuste) {
-        if (margin < 0 && component.npshDisponivelM > 0) {
+        // Bomba parada também tem NPSHa (estático), mas não há o que ajustar enquanto ela não bombeia.
+        if (condition !== 'Sem bombeamento' && margin < 0 && component.npshDisponivelM > 0) {
             btnAjuste.style.display = 'inline-flex';
             const isDark = document.body.classList.contains('theme-dark');
             btnAjuste.style.borderColor = isDark ? '#e74c3c' : '#c0392b';

@@ -291,6 +291,7 @@ export class GlobalHydraulicSolver {
             addLink(this.createConnectionLink(connection, source, target, dt));
         });
 
+        this.assignPumpSuctionAreas(links);
         this.reconcilePreviousFlows(links);
 
         return { nodes, links, componentById, dt };
@@ -600,22 +601,39 @@ export class GlobalHydraulicSolver {
             + (link.targetLossCoeff * kineticPressureBar(q, link.targetAreaM2, link.density));
     }
 
+    // O v²/2g do NPSHa usa a velocidade do cano de sucção, que chega ao flange da bomba. Com mais de
+    // um cano chegando, vale o de maior área (menor carga cinética: lado conservador); sem cano, o bocal.
+    // Cano bloqueado (tanque vazio, fonte sem vazão) não alimenta a bomba e não entra.
+    assignPumpSuctionAreas(links) {
+        links.forEach((pumpLink) => {
+            if (pumpLink.kind !== 'pump') return;
+            const areas = links
+                .filter((link) => link.kind === 'connection' && link.to === pumpLink.from && !link.forcedClosed)
+                .map((link) => link.pipeAreaM2);
+            pumpLink.suctionAreaM2 = areas.length > 0 ? Math.max(...areas) : pumpLink.areaM2;
+        });
+    }
+
     // NPSH disponível na sucção e o fator de cavitação que ele impõe à curva da bomba.
+    // Definição do Hydraulic Institute: carga total absoluta no bocal de sucção (estática + v²/2g)
+    // menos a carga da pressão de vapor. O DWSIM (Pump.vb) não soma o v²/2g.
     evaluatePumpSuction(link, flowLps, suctionPressureBar) {
         const pump = link.component;
         const q = Math.max(0, flowLps);
         const atmosphericBar = finiteNumber(link.fluid?.pressaoAtmosfericaBar, DEFAULT_ATMOSPHERIC_PRESSURE_BAR);
         const vaporBar = Math.max(0, finiteNumber(link.fluid?.pressaoVaporBar, 0));
-        const velocityMps = lpsToM3s(q) / link.areaM2;
+        const velocityMps = lpsToM3s(q) / (link.suctionAreaM2 ?? link.areaM2);
         // A pressão estática não pode cair abaixo da pressão de vapor: abaixo dela o líquido vaporiza
         // na própria linha de sucção (separação de coluna) e não sobra NPSH algum, mesmo com carga cinética.
         const staticMarginBar = atmosphericBar + suctionPressureBar - vaporBar;
+        const velocityHeadM = staticMarginBar > 0 ? (velocityMps * velocityMps) / (2 * GRAVITY) : 0;
         const npshAvailableM = staticMarginBar > 0
-            ? ((staticMarginBar * BAR_TO_PA) / (link.density * GRAVITY)) + ((velocityMps * velocityMps) / (2 * GRAVITY))
+            ? ((staticMarginBar * BAR_TO_PA) / (link.density * GRAVITY)) + velocityHeadM
             : 0;
         const npshRequiredM = pump.getCurvaNpshRequeridoM(q, link.drive);
         return {
             npshAvailableM,
+            velocityHeadM,
             npshRequiredM,
             cavitationFactor: pump.calcularFatorCavitacao(npshAvailableM, npshRequiredM)
         };
@@ -758,7 +776,7 @@ export class GlobalHydraulicSolver {
     // A carga da bomba depende do NPSH disponível, que depende da pressão de sucção resolvida pela rede.
     // Para cada bomba, o fator de cavitação c é a raiz de g(c) = f(c) − c, em que f(c) é o fator
     // implicado pela sucção quando a rede é resolvida com c. Como g é monótona (g(0) ≥ 0, g(1) ≤ 0),
-    // a bisseção converge sempre — iteração de ponto fixo simples oscilaria entre 0 e 1.
+    // um método de intervalo (regula falsi Illinois) converge sempre — ponto fixo simples oscilaria entre 0 e 1.
     resolvePumpCavitation(network, flows, nodeState, initialResult) {
         let result = initialResult;
         let extraIterations = 0;
@@ -1391,10 +1409,18 @@ export class GlobalHydraulicSolver {
             const flowLps = link.open ? Math.max(0, solution.flows[link.index]) : 0;
             const suctionPressureBar = solution.pressures.get(link.from) ?? 0;
             pump.densidadeOperacaoKgM3 = link.density;
-            if (link.forcedClosed) return;
+            if (link.forcedClosed) {
+                // Bomba parada: sem vazão, o NPSHa é só a parcela estática da instalação.
+                const parada = this.evaluatePumpSuction(link, 0, suctionPressureBar);
+                pump.npshDisponivelM = this.pumpHasOpenSupply(network, link) ? parada.npshAvailableM : 0;
+                pump.npshCargaVelocidadeM = 0;
+                pump.fatorCavitacaoAtual = 1;
+                return;
+            }
             const suction = this.evaluatePumpSuction(link, flowLps, suctionPressureBar);
             const hasSupply = this.pumpHasOpenSupply(network, link);
             pump.npshDisponivelM = hasSupply ? suction.npshAvailableM : 0;
+            pump.npshCargaVelocidadeM = hasSupply ? suction.velocityHeadM : 0;
             pump.npshRequeridoAtualM = suction.npshRequiredM;
             if (!hasSupply) pump.fatorCavitacaoAtual = 0;
             else pump.fatorCavitacaoAtual = link.open ? link.cavitationFactor : suction.cavitationFactor;

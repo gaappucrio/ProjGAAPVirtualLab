@@ -15,6 +15,7 @@ export class BombaLogica extends ComponenteFisico {
         this.npshRequeridoM = 2.5;
         this.npshRequeridoAtualM = this.npshRequeridoM;
         this.npshDisponivelM = 0;
+        this.npshCargaVelocidadeM = 0;
         this.margemNpshM = 0;
         this.fatorCavitacaoAtual = 1;
         this.tempoRampaSegundos = 1.6;
@@ -28,7 +29,8 @@ export class BombaLogica extends ComponenteFisico {
     }
 
     calcularFatorCavitacao(npshDisponivelM, npshRequeridoM = this.npshRequeridoAtualM ?? this.npshRequeridoM) {
-        const npshRequeridoSeguroM = Math.max(0.05, npshRequeridoM);
+        // Mesmo piso da curva de NPSHr: com piso maior, a bomba cavitaria com margem positiva.
+        const npshRequeridoSeguroM = Math.max(0.02, npshRequeridoM);
         const npshDisponivelSeguroM = Number.isFinite(Number(npshDisponivelM))
             ? Math.max(0, Number(npshDisponivelM))
             : 0;
@@ -84,15 +86,9 @@ export class BombaLogica extends ComponenteFisico {
         return carga > 0 ? carga * fatorCavitacao : carga;
     }
 
+    // Mesma curva do gráfico e do exportador, no acionamento atual.
     getEficienciaInstantanea(flowLps = this.fluxoReal) {
-        const drive = this.getDriveAtual();
-        const qMax = this.vazaoNominal * drive;
-        if (qMax <= EPSILON_FLOW) return Math.max(0.2, this.eficienciaHidraulica * 0.6);
-
-        const qBep = Math.max(EPSILON_FLOW, qMax * this.fracaoMelhorEficiencia);
-        const deviation = (flowLps - qBep) / qBep;
-        const efficiencyShape = 1 - (0.32 * deviation * deviation);
-        return clamp(this.eficienciaHidraulica * efficiencyShape, 0.22, this.eficienciaHidraulica);
+        return this.getCurvaEficiencia(flowLps, this.getDriveAtual());
     }
 
     getCurvaEficiencia(flowLps, drive = 1) {
@@ -101,7 +97,9 @@ export class BombaLogica extends ComponenteFisico {
         const qBep = Math.max(EPSILON_FLOW, qMax * this.fracaoMelhorEficiencia);
         const deviation = (flowLps - qBep) / qBep;
         const efficiencyShape = 1 - (0.32 * deviation * deviation);
-        return clamp(this.eficienciaHidraulica * efficiencyShape, 0.18, this.eficienciaHidraulica);
+        // O piso nunca passa do máximo: bomba de baixa eficiência não reporta η acima do próprio η máx.
+        const pisoEficiencia = Math.min(0.18, this.eficienciaHidraulica);
+        return clamp(this.eficienciaHidraulica * efficiencyShape, pisoEficiencia, this.eficienciaHidraulica);
     }
 
     getCurvaNpshRequeridoM(flowLps, drive = 1) {
@@ -131,6 +129,7 @@ export class BombaLogica extends ComponenteFisico {
     marcarSucaoSemLiquido() {
         this.sucaoSemLiquido = true;
         this.npshDisponivelM = 0;
+        this.npshCargaVelocidadeM = 0;
         this.fatorCavitacaoAtual = 0;
     }
 
@@ -150,6 +149,7 @@ export class BombaLogica extends ComponenteFisico {
         if (this.sucaoSemLiquido && drive > 0.01) {
             this.eficienciaAtual = 0;
             this.npshDisponivelM = 0;
+            this.npshCargaVelocidadeM = 0;
             this.margemNpshM = -this.npshRequeridoAtualM;
             this.fatorCavitacaoAtual = 0;
             this.cargaGeradaBar = 0;
@@ -222,6 +222,7 @@ export class BombaLogica extends ComponenteFisico {
         this.sucaoSemLiquido = false;
         this.npshRequeridoAtualM = this.npshRequeridoM;
         this.npshDisponivelM = 0;
+        this.npshCargaVelocidadeM = 0;
         this.margemNpshM = 0;
         this.fatorCavitacaoAtual = 1;
         this.notify(ComponentEventPayloads.state({

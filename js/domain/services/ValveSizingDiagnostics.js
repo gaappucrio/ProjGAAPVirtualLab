@@ -1,5 +1,5 @@
 import { clamp } from '../components/BaseComponente.js';
-import { EPSILON_FLOW } from '../units/HydraulicUnits.js';
+import { DEFAULT_ATMOSPHERIC_PRESSURE_BAR, EPSILON_FLOW } from '../units/HydraulicUnits.js';
 
 const CV_MIN = 0.05;
 const CV_MAX = 800;
@@ -39,10 +39,23 @@ function getPressureDropBar(valve) {
     return Math.max(0, inletPressureBar - outletPressureBar);
 }
 
+// Pressão ABSOLUTA na entrada (P1 da razão x = ΔP/P1 da IEC 60534-2-1). As leituras da válvula são
+// manométricas; sem leitura de entrada, vale a de saída + ΔP.
+function inletAbsolutePressureBar(valve, deltaPBar) {
+    const inletGaugeBar = finiteNumber(valve?.pressaoEntradaAtualBar, NaN);
+    const outletGaugeBar = finiteNumber(valve?.pressaoSaidaAtualBar, NaN);
+    const inletFromOutletBar = Number.isFinite(outletGaugeBar) ? outletGaugeBar + deltaPBar : NaN;
+    const gaugeBar = Math.max(
+        Number.isFinite(inletGaugeBar) ? inletGaugeBar : -Infinity,
+        Number.isFinite(inletFromOutletBar) ? inletFromOutletBar : -Infinity
+    );
+    return Number.isFinite(gaugeBar)
+        ? Math.max(deltaPBar, gaugeBar + DEFAULT_ATMOSPHERIC_PRESSURE_BAR)
+        : Math.max(deltaPBar, DEFAULT_ATMOSPHERIC_PRESSURE_BAR);
+}
+
 function pressureDropFraction(valve, deltaPBar) {
-    const inletPressureBar = Math.max(0, finiteNumber(valve?.pressaoEntradaAtualBar, 0));
-    const outletPressureBar = Math.max(0, finiteNumber(valve?.pressaoSaidaAtualBar, 0));
-    const availablePressureBar = Math.max(inletPressureBar, outletPressureBar + deltaPBar, deltaPBar);
+    const availablePressureBar = inletAbsolutePressureBar(valve, deltaPBar);
     if (availablePressureBar <= EPSILON_FLOW) return 0;
     return clamp(deltaPBar / availablePressureBar, 0, 1);
 }
@@ -70,7 +83,7 @@ function severityFrom({ flowLps, openingPercent, deltaPBar, fraction, adjustable
 function buildSuggestions(valve, deltaPBar, fraction) {
     const currentCv = Math.max(CV_MIN, finiteNumber(valve?.cv, CV_MIN));
     const currentK = clamp(finiteNumber(valve?.perdaLocalK, 0), K_MIN, K_MAX);
-    const inletPressureBar = Math.max(0, finiteNumber(valve?.pressaoEntradaAtualBar, deltaPBar));
+    const inletPressureBar = inletAbsolutePressureBar(valve, deltaPBar);
     const targetDeltaPBar = Math.max(
         MIN_TARGET_DELTA_P_BAR,
         Math.min(deltaPBar, inletPressureBar * TARGET_PRESSURE_FRACTION)

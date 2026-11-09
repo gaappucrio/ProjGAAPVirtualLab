@@ -78,7 +78,7 @@ export function getSuggestedDiameterForConnection(conn, state = {}) {
  */
 function classifyFlowRegime(reynolds) {
     if (reynolds <= 0) return 'sem fluxo';
-    if (reynolds < 2300) return 'laminar';
+    if (reynolds < 2100) return 'laminar';
     if (reynolds < 4000) return 'transição';
     return 'turbulento';
 }
@@ -95,26 +95,37 @@ function reynoldsFromFlow(flowLps, diameterM, areaM2, density, viscosityPaS) {
 }
 
 /**
- * Fator de friccao de Darcy usando correlacao de Swamee-Jain, com
- * interpolacao suave na faixa de transicao.
+ * Fator de atrito de Churchill (1977), válido em todos os regimes. Usado
+ * na transição, com os mesmos limites do DWSIM
+ * (FlowPackageBaseClass.FrictionFactor: 64/Re < 2100, Churchill até 4000).
+ */
+function churchillFrictionFactor(reynolds, relativeRoughness) {
+    const a = Math.pow(8 / reynolds, 12);
+    const b = Math.pow(
+        2.457 * Math.log(1 / (Math.pow(7 / reynolds, 0.9) + (0.27 * relativeRoughness))),
+        16
+    );
+    const c = Math.pow(37530 / reynolds, 16);
+    return 8 * Math.pow(a + (1 / Math.pow(b + c, 1.5)), 1 / 12);
+}
+
+/**
+ * Fator de atrito de Darcy: 64/Re no laminar, Churchill na transição e
+ * Swamee-Jain no turbulento (em Re = 4000 os dois diferem < 0,1%).
  */
 export function darcyFrictionFactor(reynolds, relativeRoughness) {
     if (!Number.isFinite(reynolds) || !(reynolds > 1e-9)) return DEFAULT_PIPE_FRICTION;
-    if (reynolds < 2300) return 64 / reynolds;
+    if (reynolds < 2100) return 64 / reynolds;
+
+    if (reynolds < 4000) {
+        return Math.min(churchillFrictionFactor(reynolds, relativeRoughness), 0.15);
+    }
 
     const turbulent = 0.25 / Math.pow(
         Math.log10((relativeRoughness / 3.7) + (5.74 / Math.pow(reynolds, 0.9))),
         2
     );
-
-    if (reynolds < 4000) {
-        const laminar = 64 / reynolds;
-        const blend = (reynolds - 2300) / (4000 - 2300);
-        const lerp = (start, end, t) => start + ((end - start) * t);
-        return clamp(lerp(laminar, turbulent, blend), 0.008, 0.15);
-    }
-
-    return clamp(turbulent, 0.008, 0.15);
+    return Math.min(turbulent, 0.15);
 }
 
 /**

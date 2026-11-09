@@ -153,6 +153,48 @@ test('bomba seguida de valvula opera na intersecao das curvas da bomba e do sist
     assert.equal(bomba.fatorCavitacaoAtual, 1, 'Sucao pressurizada nao cavita');
 });
 
+test('NPSHa segue o Hydraulic Institute: carga estatica absoluta + v^2/2g na velocidade do cano de succao', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-npsh', 'F-npsh', 0, 0);
+    const bomba = new BombaLogica('P-npsh', 'P-npsh', 0, 0);
+    const valvula = criarValvula('V-npsh', 160);
+    const dreno = new DrenoLogico('D-npsh', 'D-npsh', 0, 0);
+    fonte.pressaoFonteBar = 0.5;
+    fonte.vazaoMaxima = 500;
+    bomba.vazaoNominal = 45;
+    bomba.pressaoMaxima = 5;
+    bomba.grauAcionamento = 100;
+    bomba.acionamentoEfetivo = 100;
+    [fonte, bomba, valvula, dreno].forEach((c) => engine.add(c));
+    const diametroSucaoM = 0.05; // diferente do bocal fixo de 0,08 m da bomba
+    conectar(engine, fonte, bomba, { extraLengthM: 0, diameterM: diametroSucaoM });
+    conectar(engine, bomba, valvula, TUBO_DESPREZIVEL);
+    conectar(engine, valvula, dreno, TUBO_DESPREZIVEL);
+
+    simular(engine, 30);
+
+    const g = 9.81;
+    const fluido = engine.hydraulicContext.getComponentFluid(bomba) || engine.fluidoOperante;
+    const velocidade = (bomba.fluxoReal / 1000) / (Math.PI * (diametroSucaoM ** 2) / 4);
+    const cargaVelocidadeM = (velocidade ** 2) / (2 * g);
+    const cargaEstaticaM = ((fluido.pressaoAtmosfericaBar + bomba.pressaoSucaoAtualBar - fluido.pressaoVaporBar) * 1e5)
+        / (fluido.densidade * g);
+    assert.ok(bomba.fluxoReal > 10, `A bomba precisa estar bombeando: ${bomba.fluxoReal}`);
+    approx(bomba.npshCargaVelocidadeM, cargaVelocidadeM, 1e-6 * cargaVelocidadeM, 'v^2/2g no cano de succao (m)');
+    approx(bomba.npshDisponivelM, cargaEstaticaM + cargaVelocidadeM, 1e-3, 'NPSHa (m)');
+
+    // Desligada com a simulação rodando: sem vazão, sobra só a parcela estática (nada de valor velho).
+    bomba.grauAcionamento = 0;
+    bomba.acionamentoEfetivo = 0;
+    bomba.fatorCavitacaoAtual = 0.3; // como se viesse cavitando
+    simular(engine, 3);
+    assert.equal(bomba.fatorCavitacaoAtual, 1, 'Bomba parada nao fica com fator de cavitacao velho');
+    const cargaEstaticaParadaM = ((fluido.pressaoAtmosfericaBar + bomba.pressaoSucaoAtualBar - fluido.pressaoVaporBar) * 1e5)
+        / (fluido.densidade * g);
+    assert.equal(bomba.npshCargaVelocidadeM, 0, 'Bomba parada nao tem carga cinetica na succao');
+    approx(bomba.npshDisponivelM, cargaEstaticaParadaM, 1e-3, 'NPSHa da bomba parada (m)');
+});
+
 test('tanque aberto atinge o nivel de regime de Torricelli', () => {
     const engine = createEngine();
     const fonte = new FonteLogica('F-torr', 'F-torr', 0, 0);
@@ -293,6 +335,10 @@ test('vaso fechado cheio trava sem perder massa: com a saida fechada, para de en
     approx(vaso.volumeAtual, 980, 1e-6, 'O liquido para onde o gas atinge o piso de 2%');
     approx(vaso.lastQin, 0, 1e-9, 'Sem saida, nao entra mais nada');
     approx(engine.getConnectionState(entrada).outletPressureBar, 100, 1e-6, 'Trava hidraulica: a entrada fica na pressao da fonte');
+    // O que o tanque reporta (painel, exportação, perfil do cano) é o que o solver resolveu,
+    // e não o Boyle do piso de 2% (74,65 bar com pré-carga de 0,5 bar).
+    approx(vaso.pressaoEntradaAtualBar, 100, 1e-6, 'Pressao reportada no bocal de entrada travado');
+    approx(vaso.pressaoSaidaAtualBar, vaso.getPressaoNoPortaBar('out'), 1e-9, 'Pressao reportada no bocal de saida travado');
 });
 
 test('vaso fechado cheio com a saida aberta fica passante: entra o que sai, sem perder massa', () => {

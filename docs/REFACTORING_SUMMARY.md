@@ -481,9 +481,9 @@ h_f = f * (L / D) * (v² / 2g)
 
 No código, a parcela `f * L / D` entra como `distributedLossCoeff`. O fator de atrito é calculado com:
 
-- Regime laminar: `64 / Re`.
-- Regime turbulento: aproximação de Swamee-Jain.
-- Regime de transição: interpolação suave.
+- Regime laminar (`Re < 2100`): `64 / Re`.
+- Regime de transição (`2100 <= Re < 4000`): correlação de Churchill, como no DWSIM.
+- Regime turbulento (`Re >= 4000`): aproximação de Swamee-Jain, sem piso e com teto de 0,15.
 
 ### 6.4 Viscosidade
 
@@ -629,7 +629,8 @@ Comportamento:
 - Acionamento efetivo igual a zero representa a bomba parada como bloqueio hidráulico ideal no simulador; o limite de vazão fica nulo e as conexões vizinhas são zeradas para não criar escoamento em nós mortos.
 - A pressão gerada depende do acionamento e da vazão.
 - A eficiência varia ao redor do ponto de melhor eficiência.
-- O NPSHr varia com vazão e acionamento.
+- O NPSHr varia com vazão e acionamento; o valor configurado (`npshRequeridoM`) é o NPSHr na vazão máxima da curva.
+- O NPSHa segue a definição do Hydraulic Institute: carga estática absoluta + v²/2g − carga da pressão de vapor, com a velocidade do cano de sucção. A parcela v²/2g fica em `npshCargaVelocidadeM`. Com a bomba parada, sobra só a parcela estática.
 - Se NPSHa for menor que NPSHr, o fator de cavitação reduz desempenho. Quando NPSHa colapsa para zero, não existe mais piso artificial de desempenho: a bomba não deve sustentar vazão apenas por estar acionada.
 - Quando instalada na saída de um tanque, a bomba pode produzir pressão de sucção manométrica negativa; isso é esperado em cenários de sucção e é limitado por NPSH/cavitação.
 - Em sucção com líquido disponível, mas NPSHa abaixo do NPSHr e fator de cavitação menor que 100%, a condição passa a indicar `Cavitando`, diferenciando falha física de um aviso preventivo.
@@ -664,7 +665,7 @@ Com abertura efetiva zero, a válvula retorna área hidráulica e `Cv` nulos. O 
 
 O coeficiente de vazão da válvula é armazenado internamente como `Cv`. A UI pode exibir e editar o mesmo coeficiente como `Cv` ou `Kv`; ao digitar `Kv`, o valor é convertido para `Cv` antes de entrar no modelo hidráulico. Alternar a unidade não altera `Cv`, `K`, abertura, curva característica nem queda de pressão calculada. Exportação, clipboard/snapshots e gráfico de válvula preservam a unidade escolhida, mantendo também a coluna canônica de `Cv` para auditoria.
 
-O diagnóstico de dimensionamento fica em `domain/services/ValveSizingDiagnostics.js`. Ele avalia abertura efetiva, vazão, queda de pressão e perdas ajustáveis (`K` manual e estrangulamento aplicado) para identificar quando uma válvula manual está virando gargalo hidráulico. O painel da válvula exibe um alerta didático quando a abertura está alta e a queda de pressão ainda é relevante, com ação para colocar o perfil em `custom`, aumentar Cv e reduzir K dentro dos limites do simulador. Válvulas sob controle de set point suprimem esse alerta local; nesses casos, saturação real da malha aparece pelo alerta global do tanque. O diagnóstico não implementa ainda verificação de classe pressão-temperatura ou material da válvula.
+O diagnóstico de dimensionamento fica em `domain/services/ValveSizingDiagnostics.js`. A razão ΔP/P1 usa a pressão de entrada ABSOLUTA (como o x da IEC 60534-2-1). Ele avalia abertura efetiva, vazão, queda de pressão e perdas ajustáveis (`K` manual e estrangulamento aplicado) para identificar quando uma válvula manual está virando gargalo hidráulico. O painel da válvula exibe um alerta didático quando a abertura está alta e a queda de pressão ainda é relevante, com ação para colocar o perfil em `custom`, aumentar Cv e reduzir K dentro dos limites do simulador. Válvulas sob controle de set point suprimem esse alerta local; nesses casos, saturação real da malha aparece pelo alerta global do tanque. O diagnóstico não implementa ainda verificação de classe pressão-temperatura ou material da válvula.
 O ajuste de dimensionamento atua somente na instância selecionada e fica separado do controlador de nível; clicar para ajustar uma válvula não altera outras válvulas da mesma ilha ou de ilhas hidráulicas independentes.
 
 ### 8.5 `TanqueLogico`
@@ -1233,3 +1234,35 @@ O sistema já possui suporte funcional para montagem visual, seleção múltipla
   2. **`HydraulicBranchModel.js`** ficou reduzido à ponte usada pelo solver global: `ensureConnectionProperties`, `rebuildComponentHydraulicStateFromConnections` e `componentCanSupplyLiquidToPump`.
   3. **Compatibilidade:** arquivos e históricos de desfazer com `config.modoSolver` abrem no solver global (o campo é ignorado). A linha "Solver hidráulico" saiu da exportação.
   4. **Motivo:** o legado não tinha as correções dos passos de validação contra o DWSIM (transição de bocal, teto de entrada do vaso fechado, colchão de gás implícito e pressão negativa).
+- Resolvido em 2026-11-09: auditoria de fórmulas (doc ↔ código ↔ referência), atrito e bomba. Referência: código-fonte do DWSIM (`FlowPackageBaseClass.vb`, `Pump.vb`).
+  1. **Atrito (`PipeHydraulics.js`):** a transição 2100–4000 passou a usar Churchill (como o DWSIM), e não mais a interpolação linear, que ficava 28% abaixo em Re = 3000. O laminar vai até 2100. Saiu o piso f ≥ 0,008, que deixava f 35% acima do Colebrook em tubo liso com Re = 1e8; ficou o teto de 0,15. No turbulento, Swamee-Jain × DWSIM nos templates: +0,14%.
+  2. **NPSHa (`GlobalHydraulicSolver.js`):** mantida a definição do HI (com v²/2g); a velocidade agora é a do cano de sucção, e não a do bocal fixo de 0,08 m. O DWSIM não soma v²/2g, por isso o placar `validar:dwsim` compara NPSHa − v²/2g. Bomba parada: NPSHa estático e fator de cavitação 1, sem valor velho.
+  3. **`BombaLogica.js`:** a eficiência reportada usa a mesma curva do gráfico e do exportador, com piso min(0,18, ηmax). Antes, com ηmax 0,20, a bomba reportava 0,22. O piso do NPSHr na cavitação caiu de 0,05 para 0,02 (o mesmo da curva), então margem positiva não cavita mais.
+  4. **Importador DWSIM:** o `<NPSH>` do DWSIM é o NPSH disponível e era lido como NPSHr; além disso, o padrão de 2,5 m nunca entrava (`Math.max(0.05, x) || 2.5`). Os dois foram corrigidos.
+  5. **UI:** o botão "Ajustar NPSHr" não aparece mais com a bomba em "Sem bombeamento".
+  6. **Docs:** `Equacoes_e_Fisica_GAAP.md` e `BACKEND_PHYSICS_AND_ARCHITECTURE.md` alinhadas ao código: curva H sem o α inexistente, curva de eficiência, cavitação por potência 1,7 (não logística) e NPSHr nominal em Qmax.
+  7. **Testes:** 4 testes novos (atrito, NPSHa no cano de sucção e com bomba parada, η ≤ ηmax, NPSHr do importador); `npm test` 217/217; placar 52/81.
+- Resolvido em 2026-11-09: auditoria da válvula (`ValvulaLogica.js`, `ValveSizingDiagnostics.js`), com referência no `Valve.vb` do DWSIM e na amostra oficial da IEC 60534-2-1:1998.
+  1. **Característica:** linear, √x e igual-% conferem com o DWSIM. A forma da igual-% no código é algebricamente idêntica a R^(x−1); a divergência anotada no passo 3 não era bug. Diferença que fica: no GAAP a válvula veda abaixo de 0,05%, enquanto a igual-% do DWSIM deixa passar Kv/R em 0%.
+  2. **Cv → K:** a área se cancela, então o ΔP do Cv não depende do bocal fixo da válvula. O ρ de referência é 999,016 kg/m³ (60 °F), a 0,008% da água a 15 °C da IEC e do DWSIM estacionário (999,1, `P2Liquid`); o DWSIM dinâmico usa 1000 (+0,1% no ΔP). Decisão: manter.
+  3. **Diagnóstico de dimensionamento:** a razão ΔP/P1 e a meta de 18% passaram a usar a pressão de entrada absoluta. Antes, com a manométrica cortada em 0, uma linha a 0,1 barg dava 100% e em vácuo a entrada virava 0.
+  4. **Docs:** a constante K·Cv²/D⁴ estava errada em `Equacoes_e_Fisica_GAAP.md` (0,001197; o certo é 0,002139); a rangeabilidade padrão é 30 no perfil igual-%, e não 50. Ficou registrado que o GAAP não modela o escoamento engasgado (choked flow); o DWSIM estacionário interrompe o cálculo quando a vazão passa da capacidade engasgada, e o dinâmico não verifica.
+  5. **Testes:** 1 teste novo (diagnóstico com P absoluta e em vácuo); `npm test` 218/218.
+- Resolvido em 2026-11-09: auditoria do tanque (`TanqueLogico.js`), com referência no `Tank.vb` do DWSIM.
+  0. **Bug corrigido (achado pelo agy):** `sincronizarMetricasFisicas` sobrescrevia as pressões dos bocais com a fórmula (Boyle + ρgh). No vaso travado, o solver resolve 100,0/100,23 bar (pressão da rede), mas o tanque reportava 74,65/74,88 bar (Boyle no piso de 2%) ao painel, à exportação e ao perfil do cano. Agora, só no vaso travado (líquido em 98%), vale a pressão nodal resolvida. Fora da trava continua a fórmula com o nível do fim do passo, porque a nodal viria do início do passo e, com a saída no teto do inventário, seria a pressão da rede (revisão do agy).
+  1. **Conferido:** nível prismático h = V/Vmax·H (igual ao DWSIM); ρgh nos bocais com max(0, h − z); Boyle isotérmico com piso de gás de 2% (74,65 barg com pré-carga de 0,5 bar); fórmula do transbordo; teto de saída pelo volume acima do bocal.
+  2. **Massa:** o inventário é volumétrico, mas a mistura ideal conserva massa. Com entrada de ρ = 800 em conteúdo de ρ = 1000, o erro é ~1e-13, e a mistura do conteúdo é o Euler de um CSTR (0,002% do integrado fino). O DWSIM acumula massa diretamente; no estacionário, o tanque é passante.
+  3. **Diferenças anotadas:** o DWSIM usa g = 9,8 no ρgh (o GAAP usa 9,81, diferença de 0,1%), e o tanque dinâmico do DWSIM é sempre aberto (101325 Pa + ρgh).
+  4. **Docs:** saída com max(0, h − z); comportamento sem altura relativa (a saída vê ρgh inteiro e a entrada só P_gás); teto de saída pelo volume disponível; o K = 1 da entrada só vale com `considerarPerdasBocais` ligado.
+  5. **Testes:** 1 teste novo (massa + CSTR, pega a mutação "mistura ignora o que saiu") e asserções novas no teste do vaso travado (pressão reportada = resolvida; falham no código antigo). `npm test` 219/219; placar 52/81.
+  6. **Docs:** as referências a `getTargetBackPressureBar`, do solver legado, viraram `GlobalHydraulicSolver.getTargetBoundaryPressureBar`.
+- Resolvido em 2026-11-09: auditoria termodinâmica (`Fluido.js`, `TrocadorCalorLogico.js`), com referência na IAPWS (pacote Python `iapws`: IAPWS-95 e IF97).
+  1. **Pvap da água:** o Antoine (B = 1730,63; válido até 100 °C) foi trocado pela equação de saturação da IAPWS-IF97 (região 4), ancorada no Pvap de referência. Antes: +3,1% a 200 °C e +4,4% a 250 °C (cerca de 22 m de NPSHa). Agora o desvio é ≤ 0,01% até o ponto crítico. Coeficientes conferidos contra a IF97 da biblioteca `iapws` (desvio < 1e-14, depois de corrigir o n2 que o agy pegou).
+  2. **Conferidos sem mudança:** ρ(T) da água ≤ 0,21% até 250 °C; μ(T) (Vogel, que a doc chamava de "Andrade") ≤ 1,2% até 250 °C; ε-NTU nos 3 modos com Q = UA·F_T·LMTD (erro de 3e-13, inclusive com Cr ≈ 1).
+  3. **Limitações documentadas (decisão do usuário):** o cp é constante (água +7,5% a 200 °C e +16% a 250 °C), e o cp(T) fica para o passo 9. As misturas ponderam ln μ e Pvap pela fração volumétrica, o que é uma aproximação: o comentário dizia "Lei de Raoult", que usa fração molar.
+  4. **Testes:** 1 teste novo (ρ, μ e Pvap da água × IAPWS de 5 a 250 °C; falha no código antigo).
+- Resolvido em 2026-11-09: auditoria do PID (`LevelController.js`) e do solver (`GlobalHydraulicSolver.js`, `SteadyStateMonitor.js`). Com isso o passo 8 (auditoria de fórmulas) está completo.
+  0. **Bug corrigido (achado pelo agy e reproduzido):** sem zona morta (tanque com válvula só de um lado), `errorAbs <= deadband` com deadband 0 entrava em repouso quando o erro era exatamente 0. Isso zerava a integral que sustentava a abertura (ex.: u = −0,12) e fechava a válvula na hora. Agora o repouso exige deadband > 0. 1 teste novo, que falha no código antigo; `npm test` 221/221.
+  0b. **Doc falsa corrigida:** `reconcilePreviousFlows` não pondera por 1/(I + 1e-6); ele reescala proporcionalmente o lado que excede min(ΣQin, ΣQout) e zera os dois lados com o equipamento fechado. Também corrigidos: erro do PID como fração do volume (SP/100 − V/Vmax), a resistência de 1e-6 só nos ramos bocal↔gás do vaso fechado, c_cav só na parte positiva da curva e a lista completa de diagnósticos.
+  1. **PID:** a forma discreta (integral retangular, derivada regressiva) e o anti-windup conferem. As docs passaram a descrever a faixa dividida (u > 0 abre a entrada, u < 0 a saída; bombas em 100%), a zona morta com histerese (0,25%/0,75%, que zera a integral e fecha as válvulas) e o chute derivativo da derivada sobre o erro (não aparece com o Kd = 0 padrão). A comparação com o PID do DWSIM continua adiada.
+  2. **Solver:** conferidos Cholesky com Gauss como reserva, tolerâncias do regime permanente (1e-3 por 10 s) e conjuntos ativos. Fato que a doc deixava ambíguo: todos os ramos, canos inclusive, são unidirecionais (exceto os internos do vaso fechado), e a válvula do DWSIM dinâmico também zera o fluxo reverso (`Valve.vb`). As regularizações numéricas (1e-6 bar por L/s no tanque, 1e3 na retenção da bomba) e os avisos do solver foram documentados. As seções da doc foram renumeradas para 7.1 a 7.3, e o rodapé "arquitetura híbrida" (do solver legado) foi trocado.

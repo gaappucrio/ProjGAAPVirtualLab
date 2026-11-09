@@ -106,8 +106,8 @@ Onde:
 *   $D$ é o diâmetro interno do tubo ($\text{m}$).
 
 **Classificação do Regime no Simulador:**
-*   $Re \le 2300$: **Laminar** (escoamento ordenado por forças viscosas).
-*   $2300 < Re < 4000$: **Regime de Transição** (interpolação numérica).
+*   $Re < 2100$: **Laminar** (escoamento ordenado por forças viscosas).
+*   $2100 \le Re < 4000$: **Regime de Transição** (correlação de Churchill, como no DWSIM).
 *   $Re \ge 4000$: **Turbulento** (escoamento dominado por forças inerciais e vórtices).
 
 ---
@@ -115,7 +115,7 @@ Onde:
 ### 3.3 Fator de Atrito de Darcy
 O cálculo do fator de atrito ($f$) é implementado em `PipeHydraulics.js` e varia de acordo com o regime de escoamento:
 
-#### Regime Laminar ($Re \le 2300$)
+#### Regime Laminar ($Re < 2100$)
 É utilizada a equação clássica derivada da lei de Poiseuille:
 
 $$f = \frac{64}{Re}$$
@@ -127,12 +127,14 @@ $$f = \frac{0.25}{\left[ \log_{10} \left( \frac{\varepsilon}{3.7 \cdot D} + \fra
 
 Onde $\varepsilon$ é a rugosidade absoluta da tubulação ($\text{m}$).
 
-#### Regime de Transição ($2300 < Re < 4000$)
-Para evitar descontinuidades numéricas que desestabilizariam o solver, o simulador faz uma interpolação linear suave dos coeficientes de atrito calculados para os extremos da faixa ($f_{\text{laminar}}(2300)$ e $f_{\text{turbulento}}(4000)$):
+#### Regime de Transição ($2100 \le Re < 4000$)
+É usada a correlação de **Churchill (1977)**, com os mesmos limites do DWSIM (`FlowPackageBaseClass.FrictionFactor`):
 
-$$f = (1 - t) \cdot f_{\text{laminar}} + t \cdot f_{\text{turbulento}} \quad \text{onde } t = \frac{Re - 2300}{4000 - 2300}$$
+$$f = 8\left[\left(\frac{8}{Re}\right)^{12} + \frac{1}{(A+B)^{1.5}}\right]^{1/12},\quad A = \left[2.457\,\ln\frac{1}{(7/Re)^{0.9} + 0.27\,\varepsilon/D}\right]^{16},\quad B = \left(\frac{37530}{Re}\right)^{16}$$
 
-Em todos os casos, o fator de atrito resultante é limitado por segurança a uma faixa física realista: $f \in [0.008, \; 0.15]$.
+Em $Re = 4000$ ela difere menos de 0,1% do Swamee-Jain, e em $Re = 2100$ o salto em relação a $64/Re$ é de cerca de 0,8%.
+
+Na transição e no turbulento, o fator de atrito tem apenas um teto de segurança, $f \le 0{,}15$. Não há piso: o antigo piso de 0,008 deixava $f$ 35% acima do Colebrook em tubo liso com $Re = 10^8$.
 
 ---
 
@@ -199,6 +201,8 @@ Calculada por uma curva parabólica em torno do ponto de melhor eficiência (BEP
 
 $$\eta(Q) = \eta_{\text{nominal}} \cdot \left( 1 - 0.32 \cdot \left(\frac{Q - Q_{\text{BEP}}}{Q_{\text{BEP}}}\right)^2 \right)$$
 
+limitada a $[\min(0.18, \eta_{\text{nominal}}), \; \eta_{\text{nominal}}]$. `getEficienciaInstantanea` (ponto de operação) e `getCurvaEficiencia` (gráfico, exportador) usam a mesma curva.
+
 #### Potência Hidráulica e Potência de Eixo
 A energia líquida transmitida ao fluido na descarga da bomba é calculada por:
 
@@ -215,6 +219,8 @@ O NPSH disponível no flange de sucção ($NPSH_{\text{a}}$) é avaliado conside
 
 $$NPSH_{\text{a}} = \frac{P_{\text{sucção, abs}} - P_{\text{vapor}}}{\rho \cdot g} + \frac{v_{\text{sucção}}^2}{2 \cdot g} \quad \text{[metros]}$$
 
+É a definição do Hydraulic Institute (carga total no bocal de sucção). $v_{\text{sucção}}$ é a velocidade no cano que chega à sucção (`assignPumpSuctionAreas`: com mais de um cano, o de maior área; sem cano, o bocal da bomba). A parcela $v^2/2g$ fica exposta em `npshCargaVelocidadeM`. O DWSIM (`Pump.vb`) grava só a parcela estática; por isso o placar `validar:dwsim` compara $NPSH_{\text{a}} - v^2/2g$.
+
 No solver global, se a pressão estática absoluta na sucção cai abaixo de $P_{\text{vapor}}$, a coluna líquida se separa e $NPSH_{\text{a}} = 0$ (a carga cinética não é somada): é o limite físico de uma bomba alimentada por uma fonte com vazão insuficiente. O fator de cavitação $c$ é resolvido junto com a rede como raiz de $g(c) = f_{\text{cav}}(c) - c$ (regula falsi com intervalo inicial em torno do passo anterior), evitando a oscilação de um ponto fixo.
 
 O solver global (`GlobalHydraulicSolver.js`) aplica verificações defensivas: se a pressão atmosférica ou a pressão de vapor do fluido do ramo não estiverem disponíveis, usa $P_{\text{atm}} = 1.01325\text{ bar}$ (`DEFAULT_ATMOSPHERIC_PRESSURE_BAR`) e $P_{\text{vap}} = 0$, evitando a propagação de `NaN` em transientes.
@@ -223,13 +229,15 @@ O NPSH requerido ($NPSH_{\text{r}}$) cresce com a vazão de sucção e com o aci
 
 $$NPSH_{\text{r}}(Q) = NPSH_{\text{r, base}} \cdot \max\left(0.05, \; \omega_{\text{ef}}^{2}\right) \cdot \left( 0.42 + 0.58 \cdot \left(\frac{Q}{Q_{\text{nominal}} \cdot \omega_{\text{ef}}}\right)^{1.8} \right) \quad \text{[metros]}$$
 
-com $Q / (Q_{\text{nominal}} \cdot \omega_{\text{ef}})$ limitado a $[0, 1]$ e $NPSH_{\text{r}} \geq 0.02\text{ m}$ (`BombaLogica.getCurvaNpshRequeridoM`).
+com $Q / (Q_{\text{nominal}} \cdot \omega_{\text{ef}})$ limitado a $[0, 1]$ e $NPSH_{\text{r}} \geq 0.02\text{ m}$ (`BombaLogica.getCurvaNpshRequeridoM`). $NPSH_{\text{r, base}}$ (`npshRequeridoM`) é o valor na vazão máxima da curva, e não no BEP; no BEP padrão vale cerca de $0{,}74 \cdot NPSH_{\text{r, base}}$. Na importação do DWSIM, ele vem do ajuste da curva NPSHr ou do `CurveNPSHr`; o `<NPSH>` do DWSIM é o NPSH **disponível** e não é usado como requerido.
 
 Se $NPSH_{\text{a}} < NPSH_{\text{r}}$, inicia-se a degradação de desempenho por **fator de cavitação** ($f_{\text{cav}}$), que atua reduzindo multiplicativamente a curva de pressão produzida:
 
-$$f_{\text{cav}} = \text{clamp}\left( \left(\frac{NPSH_{\text{a}}}{NPSH_{\text{r}}}\right)^{1.7}, \; 0, \; 1 \right)$$
+$$f_{\text{cav}} = \text{clamp}\left( \left(\frac{NPSH_{\text{a}}}{\max(0.02, \; NPSH_{\text{r}})}\right)^{1.7}, \; 0, \; 1 \right)$$
 
-$$H(Q)_{\text{efetivo}} = H(Q) \cdot f_{\text{cav}}$$
+$$H(Q)_{\text{efetivo}} = H(Q) \cdot f_{\text{cav}} \quad \text{(só na parte positiva da curva, } H > 0\text{)}$$
+
+O piso de 0,02 m é o mesmo da curva de $NPSH_{\text{r}}$, de modo que margem positiva nunca cavita. Com a bomba parada (ramo bloqueado), o $NPSH_{\text{a}}$ reportado é só a parcela estática.
 
 ---
 
@@ -250,7 +258,7 @@ A partir do $Cv$ efetivo na abertura atual, a válvula é convertida internament
 
 $$K_{\text{válvula}} = \frac{2 \, A^2 \cdot 10^5}{\rho_{\text{ref}} \cdot \left(K_v / 3600\right)^2} \approx 2{,}14 \cdot 10^{-3} \, \frac{d_{\text{mm}}^4}{C_v^2}$$
 
-Onde $A = \pi d^2/4$ é a área do flange (m²), $K_v$ está em m³/h e $\rho_{\text{ref}}$ é a densidade da água de referência da norma. $K_{\text{válvula}}$ é adimensional e **não** depende da densidade do fluido: a gravidade específica entra em $\Delta P = K \rho v^2 / 2$, reproduzindo $\Delta P = SG \cdot (Q/K_v)^2$. Com abertura de $100\%$ e $Cv$ elevado, $K_{\text{válvula}}$ se aproxima de zero. Abertura efetiva igual a $0.0\%$ zera o $Cv$ e impõe $K_{\text{válvula}} = 10^6$ (bloqueio hidráulico ideal).
+Onde $A = \pi d^2/4$ é a área do flange (m²), $K_v$ está em m³/h e $\rho_{\text{ref}} = 999{,}016$ kg/m³ é a densidade da água a 60 °F (base do $C_v$). Ela fica a 0,008% da água a 15 °C, que é a referência $\rho_0$ da IEC 60534-2-1, eq. (1), verificada na amostra oficial da norma. O DWSIM usa 999,1 kg/m³ no estacionário (`Valve.vb`, `P2Liquid`) e 1000 no dinâmico (diferença de 0,1% no $\Delta P$). O escoamento engasgado (choked flow) não é modelado no GAAP; o DWSIM estacionário interrompe o cálculo quando a vazão passa da capacidade engasgada. Como a área se cancela, o $\Delta P$ do $C_v$ não depende do bocal da válvula. $K_{\text{válvula}}$ é adimensional e **não** depende da densidade do fluido: a gravidade específica entra em $\Delta P = K \rho v^2 / 2$, reproduzindo $\Delta P = SG \cdot (Q/K_v)^2$. Com abertura de $100\%$ e $Cv$ elevado, $K_{\text{válvula}}$ se aproxima de zero. Abertura efetiva igual a $0.0\%$ zera o $Cv$ e impõe $K_{\text{válvula}} = 10^6$ (bloqueio hidráulico ideal).
 
 #### Características Inerentes da Válvula
 A fração de vazão máxima ($f(x)$) em função da abertura fracionária ($x \in [0, 1]$) depende do perfil selecionado:
@@ -261,7 +269,7 @@ A fração de vazão máxima ($f(x)$) em função da abertura fracionária ($x \
 | **Equal Percentage** (Igual Perc.) | $f(x) = R^{(x - 1)}$ | Controle de pressão, vazão e trocadores de calor |
 | **Abertura Rápida** | $f(x) = \sqrt{x}$ | Válvulas de alívio de segurança e bloqueio (on/off) |
 
-Onde $R$ é a rangeabilidade inerente da válvula (padrão $50.0$). O $Cv$ efetivo é:
+Onde $R$ é a rangeabilidade inerente da válvula (padrão 30 no perfil igual-%; o DWSIM usa 50). O código calcula a igual-% como $\frac{1}{R} + (1-\frac{1}{R})\frac{R^x-1}{R-1}$, algebricamente idêntico a $R^{x-1}$. O $Cv$ efetivo é:
 
 $$Cv_{\text{efetivo}} = Cv_{\text{máximo}} \cdot f(x)$$
 
@@ -292,16 +300,18 @@ O tanque é um nó de pressão imposta no solver global — ele **desacopla** a 
 
 | Bocal | Tanque aberto (`'atmosferico'`) | Vaso fechado (`'fechado'`) |
 |---|---|---|
-| Saída (fundo) | $P = \rho g (h - z_{\text{saída}})$ | $P = P_{\text{gás}} + \rho g (h - z_{\text{saída}})$ |
+| Saída (fundo) | $P = \rho g \max(0, h - z_{\text{saída}})$ | $P = P_{\text{gás}} + \rho g \max(0, h - z_{\text{saída}})$ |
 | Entrada | $P = \rho g \max(0, h - z_{\text{entrada}})$ | $P = P_{\text{gás}} + \rho g \max(0, h - z_{\text{entrada}})$ |
+
+Os $z$ só valem com altura relativa ligada; sem ela, a saída vê $\rho g h$ inteiro e a entrada vê só $P_{\text{gás}}$ (descarga acima do nível).
 
 O colchão de gás do vaso fechado segue Boyle isotérmico a partir da pré-carga com o vaso vazio (`pressaoPreCargaBar`):
 
 $$P_{\text{gás,abs}} = (P_{\text{pré}} + P_{\text{atm}}) \cdot \frac{V_{\text{total}}}{\max(0{,}02 \, V_{\text{total}}, \; V_{\text{total}} - V_{\text{líquido}})}$$
 
-com volume de gás mínimo de $2\% \, V_{\text{total}}$ (`VOLUME_GAS_MINIMO_FRACAO = 0.02`) para representar o *headspace* residual físico e limitar numericamente a sobrepressão em vaso cheio. A entrada do tanque recebe a perda de saída do jato ($K = 1$).
+com volume de gás mínimo de $2\% \, V_{\text{total}}$ (`VOLUME_GAS_MINIMO_FRACAO = 0.02`) para representar o *headspace* residual físico e limitar numericamente a sobrepressão em vaso cheio. Com `considerarPerdasBocais` ligado, a entrada do tanque recebe a perda de saída do jato ($K = 1$).
 - **Em tanque aberto (`'atmosferico'`):** com o tanque cheio ($V > V_{\max}$), o excedente escoa pelo ladrão atmosférico como **transbordo** (`vazaoTransbordoLps`), fechando o balanço de massa sem criar pressão fictícia.
-- **Em vaso fechado (`'fechado'`):** como o vaso é estanque, **não há transbordo atmosférico** (`vazaoTransbordoLps = 0`). A pressão do colchão de gás $P_{\text{gás}}$ é incluída nas pressões dos bocais (`getPressaoBocalEntradaBar`, `getPressaoBocalSaidaBar`, `getPressaoBocalEntradaParaNivelBar`, `getPressaoBocalSaidaParaNivelBar`), na contrapressão de ramos (`HydraulicBranchModel.getTargetBackPressureBar`), no diagnóstico de saturação de setpoint (`getResumoAjustePressaoSetpoint`) e na assinatura de alertas (`TankSaturationAlertPresenter`), elevando a contrapressão até equilibrar a alimentação quando o vaso se aproxima da capacidade máxima.
+- **Em vaso fechado (`'fechado'`):** como o vaso é estanque, **não há transbordo atmosférico** (`vazaoTransbordoLps = 0`). A pressão do colchão de gás $P_{\text{gás}}$ é incluída nas pressões dos bocais (`getPressaoBocalEntradaBar`, `getPressaoBocalSaidaBar`, `getPressaoBocalEntradaParaNivelBar`, `getPressaoBocalSaidaParaNivelBar`), na contrapressão de ramos (`GlobalHydraulicSolver.getTargetBoundaryPressureBar`), no diagnóstico de saturação de setpoint (`getResumoAjustePressaoSetpoint`) e na assinatura de alertas (`TankSaturationAlertPresenter`), elevando a contrapressão até equilibrar a alimentação quando o vaso se aproxima da capacidade máxima.
 
 #### Balanço Dinâmico de Inventário
 A cada tick, o volume é integrado numericamente:
@@ -310,7 +320,9 @@ $$\frac{dV}{dt} = \sum Q_{\text{entradas}} - \sum Q_{\text{saídas}}$$
 
 $$V_{\text{novo}} = \text{clamp}(V_{\text{anterior}} + (Q_{\text{in}} - Q_{\text{out}}) \cdot dt, \; 0, \; V_{\text{máx}})$$
 
-Em tanques abertos (`tipoTanque !== 'fechado'`), o que excede $V_{\text{máx}}$ é contabilizado como $Q_{\text{transbordo}} = (V_{\text{balanço}} - V_{\text{máx}})/dt$; em tanques fechados, $Q_{\text{transbordo}} = 0$. A vazão de saída é limitada pelo inventário disponível no passo ($Q_{\text{out}} \le V/dt$).
+Em tanques abertos (`tipoTanque !== 'fechado'`), o que excede $V_{\text{máx}}$ é contabilizado como $Q_{\text{transbordo}} = (V_{\text{balanço}} - V_{\text{máx}})/dt$; em tanques fechados, $Q_{\text{transbordo}} = 0$. A vazão de saída é limitada pelo inventário disponível no passo ($Q_{\text{out}} \le V_{\text{disponível}}/dt$, o volume acima do bocal de saída quando há altura relativa).
+
+O inventário é volumétrico, mas a massa é conservada: o conteúdo é um CSTR com densidade de mistura ideal (`atualizarMisturaConteudo`: a saída do passo leva o conteúdo anterior e a entrada fica retida, que é o Euler do CSTR). O teste `tanque conserva MASSA...` verifica isso com entrada de outra densidade. O DWSIM dinâmico acumula massa diretamente (`Tank.vb`).
 
 #### Tempo de Residência
 O tempo de residência hidráulico médio ($\tau$) é calculado pela relação de volume útil e vazão volumétrica de saída estacionária:
@@ -346,10 +358,11 @@ Para além das misturas, as propriedades térmicas e de transporte dos component
 1. **Densidade da Água (Polinômio Racional):**
    $$f_{\text{dens}}(T) = \max\left(0.1, \; 1 - \frac{(T - 3.98)^2 \cdot (T + 286.9)}{508929.2 \cdot (T + 68.12)}\right)$$
    Para prevenir a singularidade matemática em $T = -68.12^\circ\text{C}$ (onde o denominador se anula gerando divisão por zero e divergência para $\pm\infty$), a temperatura de entrada é delimitada entre $[-30^\circ\text{C}, 350^\circ\text{C}]$. Ademais, impõe-se cota mínima de densidade líquida ($\rho \ge 100\text{ kg/m}^3$), impedindo que condições criogênicas extremas colapsem numericamente o líquido em valores de gás.
-2. **Viscosidade Dinâmica e Equação de Andrade:**
-   A viscosidade é modelada por correlação exponencial de Andrade em função da temperatura absoluta $T_K$, com salvaguarda estrita contra temperaturas abaixo do zero absoluto ($T_K \ge 1\text{ K}$).
-3. **Pressão de Vapor e Equação de Antoine:**
-   A pressão de saturação $P_{\text{vap}}(T)$ para água utiliza a equação de Antoine ajustada em relação ao estado de referência padrão ($T_{\text{ref}} = 25^\circ\text{C}$, $P_{\text{vap,ref}} = 0.0317\text{ bar}$). O simulador preserva $T_{\text{ref}}$ em fluidos puros quando a temperatura operacional varia, garantindo que em temperaturas elevadas (ex: $250^\circ\text{C}$ na saída do trocador) a pressão de vapor atinja $\approx 41.5\text{ bar}$, detectando imediatamente o risco de flashing e cavitação severa em bombas a jusante.
+2. **Viscosidade Dinâmica (Vogel / Arrhenius):**
+   Água: $\mu = \mu_{\text{ref}} \cdot 10^{247{,}8/(T_K-140) - 247{,}8/(T_{K,\text{ref}}-140)}$ (Vogel), a ≤ 1,2% da IAPWS de 5 a 250 °C. Óleo, glicol e personalizados: Arrhenius $e^{E(1/T_K - 1/T_{K,\text{ref}})}$. Há salvaguarda $T_K \ge 1\text{ K}$.
+3. **Pressão de Vapor (IAPWS-IF97):**
+   Para a água, $P_{\text{vap}}(T) = P_{\text{vap,ref}} \cdot P_{\text{sat}}^{\text{IF97}}(T)/P_{\text{sat}}^{\text{IF97}}(T_{\text{ref}})$, com a equação de saturação da IF97 (região 4) e referência de 25 °C e 0,0317 bar. É exata de 0 °C ao ponto crítico; a 250 °C dá 39,76 bar, contra os 41,5 bar do Antoine antigo, que só valia até 100 °C. O simulador preserva $T_{\text{ref}}$ em fluidos puros quando a temperatura operacional varia, o que permite detectar flashing e cavitação a jusante de trocadores quentes.
+4. **Limitações:** o $c_p$ é constante (a água real tem +7,5% a 200 °C), e as misturas ponderam $\ln\mu$ e $P_{\text{vap}}$ pela fração volumétrica (aproximação; Raoult usaria fração molar). Ver `Equacoes_e_Fisica_GAAP.md` §5.1.
 
 ---
 
@@ -531,7 +544,9 @@ Os tanques contam com controladores de nível PID discretos que calculam ações
 #### Erro Normalizado
 O erro de controle $e(t)$ é normalizado em relação à altura útil para manter os ganhos independentes das dimensões do tanque:
 
-$$e(t) = \frac{SP - L_{\text{nível}}}{H_{\text{útil}}} \quad \in [-1, \; 1]$$
+$$e(t) = \frac{SP}{100} - \frac{V}{V_{\max}} \quad \in [-1, \; 1]$$
+
+(SP em %, nível como fração do volume; como o tanque é prismático, é o mesmo que a fração da altura útil).
 
 #### Equação do Sinal de Controle
 O sinal de saída calculado $u(t)$ é a soma clássica das parcelas Proporcional, Integral e Derivativa:
@@ -540,6 +555,9 @@ $$u(t) = K_p \cdot e(t) + K_i \cdot \int_{0}^{t} e(\tau)d\tau + K_d \cdot \frac{
 
 *   **Anti-Windup (Integração Condicional):** A parcela integral deixa de acumular enquanto a saída está saturada e o erro empurraria o atuador ainda mais para o limite, com teto de segurança $|K_i \cdot \text{integral}| \le 1$. A integral **não** é zerada quando o erro troca de sinal: em regime ela sustenta a abertura de equilíbrio da válvula (com entrada constante e só válvula de saída, $u < 0$ precisa de integral persistente). O reset por troca de sinal, removido em 2026-10-08, causava um ciclo limite permanente (ex.: `T-07` oscilando entre 572 e 622 L com a válvula entre 3 % e 38 %).
 *   **Ganhos Padrão do Lab:** Reescalados para erro normalizado ($K_p = 4.0$, $K_i = 0.6$, $K_d = 0.0$ - efetivamente um controlador **PI** estável e suave).
+*   **Faixa dividida (split range):** $u \in [-1, 1]$. Com $u > 0$, as válvulas de entrada abrem em $u \cdot 100\%$; com $u < 0$, as de saída abrem em $-u \cdot 100\%$. Bombas da perna controlada ficam em 100% enquanto o set point está ativo.
+*   **Zona morta com histerese (só com válvulas de entrada e de saída):** com $|e| \le 0{,}25\%$, o controlador entra em repouso ($u = 0$, integral zerada, válvulas fechadas na hora) e só volta a atuar com $|e| > 0{,}75\%$.
+*   **Derivada:** é diferença regressiva sobre o **erro**; com $K_d \ne 0$, um degrau no set point gera um chute derivativo. A forma usual deriva só a medição. Como o padrão tem $K_d = 0$, isso não aparece.
 
 ---
 
@@ -551,10 +569,10 @@ Desde a migração estrutural, toda a rede (malhas abertas e fechadas) é resolv
 *   **Incógnitas:** pressões manométricas dos nós (`${id}:in`, `${id}:out`; no trocador `in1/out1/in2/out2`) e vazões dos ramos (conexões, válvulas, bombas, correntes do trocador).
 *   **Condições de contorno:** fonte = pressão imposta com teto de vazão (`vazaoMaxima`); dreno = contrapressão imposta; tanque = pressões dos bocais (seção 4.3) com teto de saída $V/dt$.
 *   **Equação de cada ramo:** $P_{\text{de}} - P_{\text{para}} = \Phi(Q)$, com $\Phi$ = perdas (Darcy-Weisbach + $K$ locais + $K$ da válvula pelo $C_v$ efetivo) $-$ ganho estático $-$ carga da bomba $+$ **inércia**.
-*   **Inércia do fluido (Euler implícito):** cada tubo contribui $I\,(Q - Q_{\text{anterior}})/dt$ com $I = \rho L / A$ (em bar/(L/s²): $I = \rho L/(A \cdot 10^8)$). Isso substitui o relaxamento empírico do solver legado: a vazão acelera fisicamente conforme $dQ/dt = (A/\rho L)\,\Delta P$ e o golpe de partida é amortecido sem parâmetros arbitrários. Antes do passo de Newton, `reconcilePreviousFlows(links)` projeta vazões históricas ($Q_{\text{anterior}}$) não conservativas através de equipamentos passantes de volume zero (bombas, válvulas e correntes de trocador), ponderando por $1/(I + 10^{-6})$, o que evita picos espúrios de pressão em nós internos quando a simulação parte de snapshots não divergência-zero.
+*   **Inércia do fluido (Euler implícito):** cada tubo contribui $I\,(Q - Q_{\text{anterior}})/dt$ com $I = \rho L / A$ (em bar/(L/s²): $I = \rho L/(A \cdot 10^8)$). Isso substitui o relaxamento empírico do solver legado: a vazão acelera fisicamente conforme $dQ/dt = (A/\rho L)\,\Delta P$ e o golpe de partida é amortecido sem parâmetros arbitrários. Antes do passo de Newton, `reconcilePreviousFlows(links)` torna conservativas as vazões históricas ($Q_{\text{anterior}}$) nos equipamentos passantes de volume zero (bombas, válvulas e correntes de trocador): aberto, o lado que excede $\min(\sum Q_{\text{in}}, \sum Q_{\text{out}})$ é reescalado proporcionalmente; fechado, os dois lados vão a zero. Isso evita picos espúrios de pressão em nós internos quando a simulação parte de snapshots não divergência-zero.
 *   **Newton:** linearização $p = 1/\Phi'(Q)$, sistema nodal SPD resolvido por Cholesky (eliminação gaussiana como reserva) e atualização $Q \leftarrow (Q - p\Phi) + p(P_{\text{de}} - P_{\text{para}})$.
-*   **Conjuntos ativos (estilo EPANET):** ramos unidirecionais (válvulas, bombas com retenção, bocais) fecham se $Q < 0$ e reabrem quando a pressão motriz volta a ser positiva — o DWSIM dinâmico também não permite fluxo reverso. Fontes que atingem `vazaoMaxima` passam a injetar vazão fixa; tanques que esvaziam limitam a saída a $V/dt$; vasos fechados têm um colchão implícito (nó de gás ligado aos bocais, com a pressão de Boyle no fim do passo, $P_{\text{gás}}(V_0 + Q_{\text{líq}}\,\Delta t)$) e tetos de vazão nos ramos internos: no colchão, gás no piso (trava hidráulica, só entra o que sai); no bocal de saída, o disponível $/dt$ mais o que entra (`addClosedTankCushion`, `updateTankCushionCaps`). Ramo no teto vira injeções iguais e opostas nas pontas, sem criar nem perder massa. Se um teto de fonte e um do vaso ficam num mesmo grupo de nós sem nenhuma pressão fixa (fonte injetando 50 L/s, vaso absorvendo 0), a massa imposta não fecha: `releaseConflictingCaps` soma as vazões impostas em cada grupo sem pressão fixa e solta os tetos do lado que sobra (entrada ou saída) para o passe seguinte. Um vaso já no limite começa o passo com o colchão travado, e a bomba resiste ao fluxo reverso durante o Newton ($-\Delta P_{\text{bomba}}(0) + 10^3\,Q$ para $Q < 0$): com a curva plana abaixo de zero, ela viraria um curto, e com os nós do vaso livres isso criava massa. Grupos com alguma pressão fixa não são mexidos, o que evita ping-pong entre ramos independentes.
-*   **Diagnósticos:** `global_floating_reference` (ilha sem pressão de referência), `global_not_converged`, `global_below_vapor_pressure` e `floating_closed_loop_blocked`.
+*   **Conjuntos ativos (estilo EPANET):** todos os ramos (canos, válvulas, bombas e correntes de trocador) são unidirecionais, exceto os ramos internos do vaso fechado (`bidirectional: true`). Eles fecham se $Q < 0$ e reabrem quando a pressão motriz volta a ser positiva. A válvula do DWSIM dinâmico também não permite fluxo reverso (`Valve.vb`: com $P_2 > P_1$, `Wi` vira 0). Fontes que atingem `vazaoMaxima` passam a injetar vazão fixa; tanques que esvaziam limitam a saída a $V/dt$; vasos fechados têm um colchão implícito (nó de gás ligado aos bocais, com a pressão de Boyle no fim do passo, $P_{\text{gás}}(V_0 + Q_{\text{líq}}\,\Delta t)$) e tetos de vazão nos ramos internos: no colchão, gás no piso (trava hidráulica, só entra o que sai); no bocal de saída, o disponível $/dt$ mais o que entra (`addClosedTankCushion`, `updateTankCushionCaps`). Ramo no teto vira injeções iguais e opostas nas pontas, sem criar nem perder massa. Se um teto de fonte e um do vaso ficam num mesmo grupo de nós sem nenhuma pressão fixa (fonte injetando 50 L/s, vaso absorvendo 0), a massa imposta não fecha: `releaseConflictingCaps` soma as vazões impostas em cada grupo sem pressão fixa e solta os tetos do lado que sobra (entrada ou saída) para o passe seguinte. Um vaso já no limite começa o passo com o colchão travado, e a bomba resiste ao fluxo reverso durante o Newton ($-\Delta P_{\text{bomba}}(0) + 10^3\,Q$ para $Q < 0$): com a curva plana abaixo de zero, ela viraria um curto, e com os nós do vaso livres isso criava massa. Grupos com alguma pressão fixa não são mexidos, o que evita ping-pong entre ramos independentes.
+*   **Diagnósticos:** `global_floating_reference` (ilha sem pressão de referência), `global_not_converged`, `global_status_not_settled` (passes de estado esgotados), `global_singular_matrix`, `pump_beyond_curve`, `global_below_vapor_pressure` e `floating_closed_loop_blocked`.
 
 Depois da solução, as vazões e pressões são escritas nas conexões (`writeConnectionStates`), o fluido é propagado em ordem topológica (mistura nos nós, conteúdo dos tanques, saída do trocador com o atraso térmico) e as métricas de bomba (NPSH, eficiência, fator de cavitação) são atualizadas.
 

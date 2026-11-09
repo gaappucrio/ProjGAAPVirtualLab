@@ -52,7 +52,9 @@ export function calculatePidLevelControl({
     const outputMax = Number.isFinite(config.outputMax)
         ? config.outputMax
         : DEFAULT_LEVEL_CONTROLLER_CONFIG.outputMax;
-    const shouldEnterRest = errorAbs <= deadband;
+    // Sem zona morta (deadband 0) não há repouso: com erro exatamente 0, a integral precisa continuar
+    // sustentando a abertura de equilíbrio (antes, 0 <= 0 zerava a integral e fechava a válvula).
+    const shouldEnterRest = deadband > 0 && errorAbs <= deadband;
     const shouldMaintainRest = state.resting && errorAbs <= reactivationBand;
 
     if (shouldEnterRest || shouldMaintainRest) {

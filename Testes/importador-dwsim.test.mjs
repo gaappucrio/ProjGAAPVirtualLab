@@ -292,6 +292,23 @@ test('bomba: pontos H = 0 depois da vazão máxima não puxam o ajuste da curva'
     approx(bomba.pressaoMaxima, 40 * 997 * 9.81 * 1e-5, 1e-9, 'shutoff (bar)');
 });
 
+test('bomba sem curva de NPSHr: o <NPSH> do DWSIM é o disponível e não vira NPSHr', () => {
+    const planta = (corpoBomba) => importarXml(documento([
+        grafico('F', 'MaterialStream', { saidas: [['B']] }),
+        grafico('B', 'Pump', { entradas: [['F']], saidas: [['D']] }),
+        grafico('D', 'MaterialStream', { entradas: [['B']] })
+    ], [
+        corrente('F'),
+        simulacao('B', 'DWSIM.UnitOperations.UnitOperations.Pump', corpoBomba),
+        corrente('D')
+    ]));
+    // Pump.vb: NPSH = (Pi − Pbub)/(ρ·9,81); sem curva habilitada, CurveNPSHr = 0.
+    const semCurva = componentePorTag(planta('<CalcMode>Delta_P</CalcMode><NPSH>10.3</NPSH><CurveNPSHr>0</CurveNPSHr>').workspace, 'B');
+    approx(semCurva.npshRequeridoM, 2.5, 1e-9, 'NPSHr padrão quando o DWSIM não tem NPSHr');
+    const comCurva = componentePorTag(planta('<CalcMode>Delta_P</CalcMode><NPSH>10.3</NPSH><CurveNPSHr>3.2</CurveNPSHr>').workspace, 'B');
+    approx(comCurva.npshRequeridoM, 3.2, 1e-9, 'NPSHr do CurveNPSHr');
+});
+
 // Interpolante racional de 1ª ordem (Berrut, Floater-Hormann com d = 0): reproduz a carga, a
 // eficiência e a potência que o DWSIM grava para as bombas em modo Curves.
 function interpolarComoDwsim(xs, ys, x) {

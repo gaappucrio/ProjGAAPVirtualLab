@@ -154,13 +154,36 @@ function calculateViscosityAtTemp(fluido, T) {
     return totalFraction > 0 ? Math.exp(logViscSum / totalFraction) : DEFAULT_FLUID_VISCOSITY_PA_S;
 }
 
+// IAPWS-IF97, região 4 (eq. 30): pressão de saturação da água em bar, explícita em T (K).
+// Válida de 273,15 K ao ponto crítico (647,096 K); abaixo de 0 °C, extrapolação suave.
+const IF97_N = Object.freeze([
+    0,
+    0.11670521452767e4, -0.72421316703206e6, -0.17073846940092e2,
+    0.12020824702470e5, -0.32325550322333e7, 0.14915108613530e2,
+    -0.48232657361591e4, 0.40511340542057e6, -0.23855557567849,
+    0.65017534844798e3
+]);
+
+function waterSaturationPressureBar(Tk) {
+    const T = Math.min(647.096, Math.max(233.15, Tk));
+    const n = IF97_N;
+    const theta = T + (n[9] / (T - n[10]));
+    const A = (theta * theta) + (n[1] * theta) + n[2];
+    const B = (n[3] * theta * theta) + (n[4] * theta) + n[5];
+    const C = (n[6] * theta * theta) + (n[7] * theta) + n[8];
+    const pMPa = Math.pow((2 * C) / (-B + Math.sqrt((B * B) - (4 * A * C))), 4);
+    return pMPa * 10;
+}
+
 /**
  * Calcula a pressão de vapor saturado (Pvap) do fluido na temperatura T (°C), retornando o valor em bar.
  * Essa grandeza é essencial para o cálculo de NPSHa e previsão de cavitação em bombas centrífugas.
  *
  * Modelos empregados:
- * 1. Misturas: aproximação linear pela Lei de Raoult (Pvap = Σ xi * Pvap,i).
- * 2. Água: Equação de Antoine diferencial com constantes canônicas (B = 1730.63, C = 233.426).
+ * 1. Misturas: média ponderada pela fração VOLUMÉTRICA da composição (Pvap = Σ φi * Pvap,i). É uma
+ *    aproximação: Raoult usaria fração molar (só para miscíveis) e imiscíveis somariam as pressões.
+ * 2. Água: equação de saturação da IAPWS-IF97 (região 4), ancorada no Pvap de referência:
+ *    Pvap(T) = Pvap,ref · Psat(T) / Psat(Tref).
  * 3. Óleos: Relação empírica tipo Clausius-Clapeyron base 10 (ΔHvap/R*ln(10) ≈ 2033.7, baixa volatilidade).
  * 4. Glicol: Modelo substituto com constantes de Antoine adaptadas ao Pvap de referência.
  * 5. Outros fluidos: Equação de Clausius-Clapeyron integrada com -ΔHvap/R ≈ -4000 K (padrão Trouton).
@@ -188,14 +211,11 @@ function calculateVaporPressureAtTemp(fluido, T) {
 
         let compVap = refVap;
         switch (family) {
-            case FLUID_FAMILY.WATER: {
-                // Equação de Antoine diferencial para água (log10(P/Pref) = B/(Tref+C) - B/(T+C)):
-                // B = 1730.63, C = 233.426 válidos para a faixa de 1 °C a 100 °C.
-                const expRef = 1730.63 / Math.max(10, refT + 233.426);
-                const expT = 1730.63 / Math.max(10, safeT + 233.426);
-                compVap = refVap * Math.pow(10, expRef - expT);
+            case FLUID_FAMILY.WATER:
+                // IAPWS-IF97: exata de 0 °C ao ponto crítico (o Antoine B = 1730,63 só valia até 100 °C
+                // e errava +4,4% a 250 °C).
+                compVap = refVap * (waterSaturationPressureBar(Tk) / waterSaturationPressureBar(refTk));
                 break;
-            }
             case FLUID_FAMILY.OIL:
                 // Correlação tipo Clausius-Clapeyron na base 10 para hidrocarbonetos/óleos de baixa volatilidade:
                 // O fator 2033.7 corresponde a ΔHvap / (R * ln(10)), implicando ΔHvap ≈ 39 kJ/mol.
@@ -216,7 +236,7 @@ function calculateVaporPressureAtTemp(fluido, T) {
                 break;
         }
 
-        // Ponderação pela Lei de Raoult com piso mínimo de segurança de 0.0001 bar (10 Pa) contra valores não-físicos
+        // Ponderação pela fração volumétrica, com piso de segurança de 0.0001 bar (10 Pa) contra valores não-físicos
         vaporPressureSum += fraction * Math.max(0.0001, compVap);
     });
 

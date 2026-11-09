@@ -648,9 +648,10 @@ function pumpParameters(simEl) {
         || findDimensionValue(simEl, 'Efficiency')
         || queryNumericDeep(simEl, ['Efficiency', 'CurveEff', 'Eficiencia'], 0)
         || 0;
+    // Só o CurveNPSHr é requerido: o <NPSH> do DWSIM é o NPSH DISPONÍVEL, (Pi − Pvap)/(ρg)
+    // (Pump.vb), e lido como requerido faria a bomba cavitar à toa.
     const curveNpshrM = queryNumeric(simEl, 'CurveNPSHr', 0)
-        || queryNumeric(simEl, 'NPSH', 0)
-        || queryNumericDeep(simEl, ['CurveNPSHr', 'NPSH'], 0)
+        || queryNumericDeep(simEl, ['CurveNPSHr'], 0)
         || 0;
 
     // Sem curvas, sobra o ponto de operação gravado pelo DWSIM: aproximação grosseira,
@@ -659,7 +660,7 @@ function pumpParameters(simEl) {
     const pressaoMaximaBar = curve?.pressaoMaximaBar ?? Math.max(0.05, pressureIncreasePa * PA_TO_BAR);
     const vazaoNominalLps = curve?.vazaoMaximaLps ?? Math.max(0.1, curveFlowM3s * M3S_TO_LPS);
     const eficienciaHidraulica = clamp((curve?.eficienciaMaximaPct ?? efficiency) / 100, 0.18, 0.95) || 0.78;
-    const npshRequeridoM = curve?.npshRequeridoM ?? (Math.max(0.05, curveNpshrM) || 2.5);
+    const npshRequeridoM = curve?.npshRequeridoM ?? (curveNpshrM > 0 ? Math.max(0.05, curveNpshrM) : 2.5);
 
     // A bomba do fluxograma do DWSIM está sempre operando: chega comandada a 100% e
     // o acionamento efetivo sobe pela rampa quando a simulação começa.

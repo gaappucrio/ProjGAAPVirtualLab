@@ -4,7 +4,7 @@ import test from 'node:test';
 import { FLUID_PRESETS, SistemaSimulacao } from '../js/application/engine/SimulationEngine.js';
 import { BombaLogica } from '../js/domain/components/BombaLogica.js';
 import { DrenoLogico } from '../js/domain/components/DrenoLogico.js';
-import { cloneFluido, createFluidoFromProperties, mixFluidos } from '../js/domain/components/Fluido.js';
+import { cloneFluido, createFluidoFromProperties, mixFluidos, updateFluidoProperties } from '../js/domain/components/Fluido.js';
 import { FonteLogica } from '../js/domain/components/FonteLogica.js';
 import { TanqueLogico } from '../js/domain/components/TanqueLogico.js';
 import {
@@ -205,6 +205,21 @@ test('controlador PID de nivel calcula saida continua com estado separado do tan
     assert.ok(wrapperResult.u < 0, 'Erro negativo deve abrir atuadores de saida');
 });
 
+test('PID sem zona morta nao entra em repouso com erro exatamente zero (integral sustenta a abertura)', () => {
+    const state = createLevelControllerState();
+    const config = { deadband: 0, reactivationBand: 0, outputMin: -1, outputMax: 1 };
+    for (let i = 0; i < 200; i += 1) {
+        calculatePidLevelControl({ setpoint: 0.5, measurement: 0.51, dt: 0.1, kp: 4, ki: 0.6, state, config });
+    }
+    const integralAntes = state.integral;
+    assert.ok(integralAntes < 0, `A integral deve estar sustentando a saida: ${integralAntes}`);
+
+    const resultado = calculatePidLevelControl({ setpoint: 0.5, measurement: 0.5, dt: 0.1, kp: 4, ki: 0.6, state, config });
+    assert.equal(resultado.inRest, false, 'Sem zona morta nao ha repouso');
+    approx(state.integral, integralAntes, 1e-12, 'Integral preservada com erro zero');
+    approx(resultado.u, 0.6 * integralAntes, 1e-12, 'Saida = Ki * integral');
+});
+
 test('propriedades hidraulicas de conexao preservam zero fisico e reparam invalidos', () => {
     const semPerdas = new ConnectionModel({
         sourceId: 'F-01',
@@ -261,6 +276,33 @@ test('perda de pressao preserva coeficiente zero e atrito laminar Darcy', () => 
         1e-12,
         'Fator de Darcy laminar proximo da transicao'
     );
+});
+
+test('fator de Darcy segue o DWSIM na transicao e o Colebrook no turbulento', () => {
+    // Referencias da transicao: Churchill calculado pela rotina do DWSIM
+    // (FlowPackageBaseClass.FrictionFactor, 2100 <= Re <= 4000).
+    approx(darcyFrictionFactor(3000, 0), 0.042974656, 1e-8, 'Transicao Re 3000, tubo liso');
+    approx(darcyFrictionFactor(3000, 4.57e-5 / 0.08), 0.043391324, 1e-8, 'Transicao Re 3000, aco bruto 80 mm');
+
+    const colebrook = (re, rr) => {
+        let f = 0.02;
+        for (let i = 0; i < 100; i++) f = Math.pow(-2 * Math.log10((rr / 3.7) + (2.51 / (re * Math.sqrt(f)))), -2);
+        return f;
+    };
+    // Sem piso artificial: tubo liso em Re alto fica no Colebrook (antes, 0,008 contra 0,0059).
+    // 2%: no limite da faixa do Swamee-Jain (Re 1e8, liso) o desvio medido e +1,4%.
+    for (const [re, rr] of [[1e8, 0], [1e7, 0], [1.4e5, 4.57e-5 / 0.08], [1e4, 1e-3]]) {
+        const f = darcyFrictionFactor(re, rr);
+        assert.ok(Math.abs(f / colebrook(re, rr) - 1) < 0.02, `Re ${re}, e/D ${rr}: ${f} vs Colebrook ${colebrook(re, rr)}`);
+    }
+
+    // Quase continuo nas fronteiras de regime (salto de ~0,8% em 2100, como no DWSIM).
+    for (const rr of [0, 1e-3, 1e-2]) {
+        const salto2100 = darcyFrictionFactor(2100, rr) / darcyFrictionFactor(2099.999, rr) - 1;
+        const salto4000 = darcyFrictionFactor(4000, rr) / darcyFrictionFactor(3999.999, rr) - 1;
+        assert.ok(Math.abs(salto2100) < 0.01, `Salto em Re 2100 (e/D ${rr}): ${salto2100}`);
+        assert.ok(Math.abs(salto4000) < 0.01, `Salto em Re 4000 (e/D ${rr}): ${salto4000}`);
+    }
 });
 
 test('calculos hidraulicos toleram fluido e geometria ausentes sem NaN', () => {
@@ -440,6 +482,62 @@ test('mistura do tanque considera volume que saiu no mesmo passo', () => {
     approx(tanque.fluidoConteudo.densidade, densidadeEsperada, 1e-9, 'Densidade apos entrada e saida simultaneas');
     approx(tanque.fluidoConteudo.composicao[agua.nome], 20 / 70, 1e-12, 'Fracao retida de agua no tanque');
     approx(tanque.fluidoConteudo.composicao[oleo.nome], 50 / 70, 1e-12, 'Fracao retida de oleo no tanque');
+});
+
+test('propriedades da agua seguem a IAPWS de 5 a 250 C (Pvap pela IF97, rho e mu pelas correlacoes)', () => {
+    // Referências calculadas com o pacote Python iapws (IAPWS-95 para rho e mu; IF97 para Psat).
+    const iapws = [
+        // [T °C, rho kg/m³, mu mPa·s, Psat bar]
+        [5, 999.967, 1.51817, 0.008725749],
+        [25, 997.048, 0.89002, 0.031697469],
+        [50, 988.035, 0.54652, 0.123512704],
+        [100, 958.349, 0.28158, 1.014179779],
+        [150, 917.008, 0.18261, 4.761013811],
+        [200, 864.658, 0.13458, 15.54671868],
+        [250, 798.894, 0.10628, 39.75939071]
+    ];
+    iapws.forEach(([temperatura, rho, muMPaS, psatBar]) => {
+        const agua = createFluidoFromProperties({ ...FLUID_PRESETS.agua });
+        updateFluidoProperties(agua, { temperatura });
+        // Pvap ancorado em 0,0317 bar a 25 °C (IF97: 0,031697): sobra 0,008% de deslocamento.
+        approx(agua.pressaoVaporBar / psatBar, 1, 3e-4, `Pvap a ${temperatura} C`);
+        approx(agua.densidade / rho, 1, 2.5e-3, `rho a ${temperatura} C`);
+        approx((agua.viscosidadeDinamicaPaS * 1000) / muMPaS, 1, 1.2e-2, `mu a ${temperatura} C`);
+    });
+});
+
+test('tanque conserva MASSA com entrada de outra densidade e mistura como um CSTR', () => {
+    // O DWSIM acumula massa (Tank.vb); o GAAP integra volume com mistura ideal, que conserva massa.
+    const tanque = new TanqueLogico('T-MASSA', 'T-MASSA', 0, 0);
+    tanque.tipoTanque = 'atmosferico';
+    tanque.volumeAtual = 500;
+    tanque.fluidoConteudo = createFluidoFromProperties({ densidade: 1000, temperatura: 25 });
+    const entrada = createFluidoFromProperties({ densidade: 800, temperatura: 25 });
+    tanque.getFluidoEntradaMisturado = () => entrada;
+    const massaKg = () => tanque.volumeAtual * tanque.getFluidoConteudo().densidade / 1000;
+
+    const dt = 0.1;
+    const qin = 5;
+    const qout = 3;
+    let massaEsperadaKg = massaKg();
+    for (let i = 0; i < 1000; i += 1) {
+        massaEsperadaKg += (qin * dt * 0.8) - (qout * dt * tanque.getFluidoConteudo().densidade / 1000);
+        tanque.estadoHidraulico.entradaVazaoLps = qin;
+        tanque.estadoHidraulico.saidaVazaoLps = qout;
+        tanque.atualizarFisica(dt, tanque.getFluidoConteudo());
+    }
+    approx(massaKg(), massaEsperadaKg, 1e-9 * massaEsperadaKg, 'Massa no tanque (kg)');
+
+    // CSTR: d(xV)/dt = Qin - Qout·x, com V = 500 + 2t, integrado fino (fração x do fluido de entrada).
+    let x = 0;
+    let volumeL = 500;
+    const passos = 200000;
+    const h = 100 / passos;
+    for (let i = 0; i < passos; i += 1) {
+        x += (h * (qin - (qout * x) - (x * (qin - qout)))) / volumeL;
+        volumeL += h * (qin - qout);
+    }
+    approx(tanque.getFluidoConteudo().densidade, (1000 * (1 - x)) + (800 * x), 0.05, 'Densidade do conteudo (CSTR)');
 });
 
 test('fonte preserva preset custom mesmo com propriedades iguais a um preset', () => {
@@ -725,6 +823,32 @@ test('diagnostico da valvula nao confunde perda fisica do Cv com K manual', () =
     assert.ok(diagnostico.perdaLocalTotalK > diagnostico.perdaLocalAjustavelK);
 });
 
+test('diagnostico da valvula usa a pressao ABSOLUTA de entrada na razao dP/P1 (IEC 60534-2-1)', () => {
+    const diagnosticar = (entradaBarg, saidaBarg) => {
+        const valvula = new ValvulaLogica('V-sizing-abs', 'V-sizing-abs', 0, 0);
+        valvula.aplicarPerfilCaracteristica('linear');
+        valvula.setCoeficientePerda(0);
+        valvula.setAbertura(90);
+        valvula.aberturaEfetiva = 90;
+        valvula.fluxoReal = 5;
+        valvula.pressaoEntradaAtualBar = entradaBarg;
+        valvula.pressaoSaidaAtualBar = saidaBarg;
+        valvula.deltaPAtualBar = entradaBarg - saidaBarg;
+        return valvula.getDiagnosticoDimensionamento();
+    };
+    const patm = 1.01325;
+
+    // Linha de baixa pressao: 0,1 bar de queda sobre 1,11 bar absolutos (antes: 0,1/0,1 = 100%).
+    const baixa = diagnosticar(0.1, 0);
+    approx(baixa.fracaoQuedaPressao, 0.1 / (0.1 + patm), 1e-12, 'Fracao com entrada a 0,1 barg');
+    assert.equal(baixa.status, 'attention');
+
+    // Vacuo: entrada a -0,5 barg (0,513 bar abs); antes a entrada era cortada em 0.
+    const vacuo = diagnosticar(-0.5, -0.8);
+    approx(vacuo.fracaoQuedaPressao, 0.3 / (patm - 0.5), 1e-12, 'Fracao com entrada em vacuo');
+    approx(vacuo.quedaPressaoAlvoBar, Math.max(0.03, (patm - 0.5) * 0.18), 1e-12, 'Queda alvo sobre a pressao absoluta');
+});
+
 test('diagnostico da valvula fica silencioso quando a abertura alta vem do set point', () => {
     const valvula = new ValvulaLogica('V-sizing-sp', 'V-sizing-sp', 0, 0);
 
@@ -929,6 +1053,25 @@ test('fator de cavitação da bomba permanece finito com NPSHa inválido', () =>
     approx(bomba.calcularFatorCavitacao(3, 2.5), 1, 1e-12, 'NPSHa suficiente não limita a bomba');
     approx(bomba.calcularFatorCavitacao(-1, 2.5), 0, 1e-12, 'NPSHa negativo deve zerar sem NaN');
     approx(bomba.calcularFatorCavitacao(Number.NaN, 2.5), 0, 1e-12, 'NPSHa inválido deve zerar sem NaN');
+    // Piso igual ao da curva de NPSHr (0,02 m): margem positiva não cavita.
+    approx(bomba.calcularFatorCavitacao(0.04, 0.03), 1, 1e-12, 'NPSHa acima de NPSHr pequeno não cavita');
+});
+
+test('eficiencia reportada pela bomba e a da curva do grafico, sem passar do eta maximo', () => {
+    const bomba = new BombaLogica('B-eta', 'B-eta', 0, 0);
+    bomba.acionamentoEfetivo = 100;
+    for (const etaMax of [0.78, 0.30, 0.20, 0.15]) {
+        bomba.eficienciaHidraulica = etaMax;
+        for (const acionamento of [100, 3, 0]) {
+            bomba.acionamentoEfetivo = acionamento;
+            for (const q of [0, 10, 32.4, 45, 90]) {
+                const eta = bomba.getEficienciaInstantanea(q);
+                approx(eta, bomba.getCurvaEficiencia(q, acionamento / 100), 1e-12,
+                    `eta(${q} L/s, ${acionamento}%) com eta max ${etaMax}`);
+                assert.ok(eta <= etaMax + 1e-12, `eta ${eta} acima do maximo ${etaMax} em ${q} L/s, ${acionamento}%`);
+            }
+        }
+    }
 });
 
 test('carga instantanea da bomba segue a mesma curva usada pelo solver', () => {
