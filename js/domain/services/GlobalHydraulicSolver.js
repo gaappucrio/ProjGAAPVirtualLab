@@ -305,6 +305,8 @@ export class GlobalHydraulicSolver {
         const { addNode, addLink, dt, usarAlturaRelativa, inletPressureBar, outletPressureBar } = options;
         const gasPressureBar = tank.getPressaoGasBar(fluid);
         const gasNode = addNode(`${tank.id}:gas`, tank, 'gas');
+        // PSV ideal: acima do set o nó de gás vira pressão fixa (updateStatuses); o que ele absorve é o alívio.
+        gasNode.reliefPressureBar = tank.getPressaoAlivioEfetivaBar?.() ?? null;
         const referenceNode = addNode(`${tank.id}:gas-ref`, tank, 'gas-ref');
         referenceNode.fixedPressureBar = gasPressureBar;
 
@@ -1065,7 +1067,46 @@ export class GlobalHydraulicSolver {
         });
 
         if (this.updateTankCushionCaps(network, flows, pressures, nodeState)) changed = true;
+        if (this.updateReliefValves(network, flows, pressures, nodeState)) changed = true;
         if (this.releaseConflictingCaps(network, flows, nodeState)) changed = true;
+        return changed;
+    }
+
+    // Vazão que um nó deixa de equilibrar (entra − sai + injeção). Num nó de pressão fixa é o que a
+    // fronteira absorve; no gás de um vaso fechado com PSV aberta, é a vazão de alívio.
+    nodeImbalanceLps(network, nodeId, flows, state) {
+        let imbalance = state.injectionLps;
+        network.links.forEach((link) => {
+            if (!link.open) return;
+            if (link.to === nodeId) imbalance += flows[link.index];
+            if (link.from === nodeId) imbalance -= flows[link.index];
+        });
+        return imbalance;
+    }
+
+    // PSV ideal do vaso fechado (estado ativo, como o teto da fonte): quando o gás passaria do set, o nó
+    // fica preso no set e o excedente sai como alívio; fecha quando o alívio ficaria negativo (a rede
+    // passaria a tirar líquido do vaso, e a pressão cai abaixo do set).
+    updateReliefValves(network, flows, pressures, nodeState) {
+        let changed = false;
+        network.nodes.forEach((node) => {
+            if (node.reliefPressureBar === null || node.reliefPressureBar === undefined) return;
+            const state = nodeState.get(node.id);
+            if (!state.relieving) {
+                if ((pressures.get(node.id) ?? state.pressureBar) > node.reliefPressureBar + STATUS_PRESSURE_TOLERANCE_BAR) {
+                    state.relieving = true;
+                    state.fixed = true;
+                    state.pressureBar = node.reliefPressureBar;
+                    changed = true;
+                }
+                return;
+            }
+            if (this.nodeImbalanceLps(network, node.id, flows, state) < -STATUS_FLOW_TOLERANCE_LPS) {
+                state.relieving = false;
+                state.fixed = false;
+                changed = true;
+            }
+        });
         return changed;
     }
 

@@ -24,6 +24,7 @@ import { translateLiteral } from '../../i18n/LanguageManager.js';
 import { bindNozzleGeometryFields, renderNozzleGeometryFields } from './NozzleGeometryFields.js';
 import { formatResidenceTime } from '../PropertyValueFormatters.js';
 import { calculateTankResidenceTimeS } from '../../../domain/services/ResidenceTime.js';
+import { PRESSAO_ALIVIO_PADRAO_BAR } from '../../../domain/components/TanqueLogico.js';
 
 function getTankControlVisualState(active, available) {
     if (active) return 'active';
@@ -68,6 +69,8 @@ export const TANK_PROPERTIES_PRESENTER = {
         const fluidoConteudo = comp.getFluidoConteudo?.() || comp.fluidoConteudo;
         const residence = calculateTankResidenceTimeS(comp);
         const mostrarSintoniaPid = comp.setpointAtivo;
+        const fechado = comp.tipoTanque === 'fechado';
+        const psvAtiva = comp.pressaoAlivioBar !== null && comp.pressaoAlivioBar !== undefined && comp.pressaoAlivioBar !== '';
 
         const basicContent = `
             <div class="prop-group">
@@ -81,22 +84,6 @@ export const TANK_PROPERTIES_PRESENTER = {
             <div class="prop-group">
                 ${makeUnitLabel('Altura útil', 'length', TOOLTIP.tankHeight)}
                 <input type="number" id="input-altura-tanque" ${hintAttr(TOOLTIP.tankHeight)} value="${displayEditableUnitValue('length', comp.alturaUtilMetros, 3)}" step="${displayStep('length', 0.05)}" min="${displayBound('length', 0.5)}" max="${displayBound('length', 10)}">
-            </div>
-            <div class="prop-group">
-                ${makeLabel('Tipo de tanque', TOOLTIP.tankType)}
-                ${renderCustomSelectHtml({
-                    id: 'input-tipo-tanque',
-                    value: comp.tipoTanque === 'fechado' ? 'fechado' : 'atmosferico',
-                    title: TOOLTIP.tankType,
-                    options: [
-                        { value: 'atmosferico', label: translateLiteral('Aberto (atmosférico)') },
-                        { value: 'fechado', label: translateLiteral('Fechado (colchão de gás)') }
-                    ]
-                })}
-            </div>
-            <div class="prop-group" id="grp-precarga-tanque" style="display:${comp.tipoTanque === 'fechado' ? 'block' : 'none'};">
-                ${makeUnitLabel('Pré-carga do gás (vaso vazio)', 'pressure', TOOLTIP.tankPrecharge)}
-                <input type="number" id="input-precarga-tanque" ${hintAttr(TOOLTIP.tankPrecharge)} value="${displayEditableUnitValue('pressure', comp.pressaoPreCargaBar, 3)}" step="${displayStep('pressure', 0.1)}" min="${displayBound('pressure', 0)}" max="${displayBound('pressure', 20)}">
             </div>
             <div class="prop-group">
                 ${makeUnitLabel('Pressão no fundo', 'pressure', TOOLTIP.tankBottomPressure)}
@@ -113,6 +100,10 @@ export const TANK_PROPERTIES_PRESENTER = {
             <div class="prop-group">
                 ${makeUnitLabel('Vazão de saída', 'flow', TOOLTIP.tankOutletFlow)}
                 <input type="text" id="disp-qout-tanque" ${hintAttr(TOOLTIP.tankOutletFlow)} value="${displayUnitValue('flow', comp.lastQout, 2)}" disabled>
+            </div>
+            <div class="prop-group" id="grp-alivio-display-tanque" style="display:${fechado ? 'block' : 'none'};">
+                ${makeUnitLabel('Vazão de alívio (PSV)', 'flow', TOOLTIP.tankReliefFlow)}
+                <input type="text" id="disp-alivio-tanque" ${hintAttr(TOOLTIP.tankReliefFlow)} value="${displayUnitValue('flow', comp.vazaoAlivioLps || 0, 2)}" disabled>
             </div>
             <div class="prop-group">
                 ${makeUnitLabel('Vazão de transbordo', 'flow', TOOLTIP.tankOverflow)}
@@ -153,6 +144,34 @@ export const TANK_PROPERTIES_PRESENTER = {
         `;
 
         const advancedContent = `
+            <div class="prop-group">
+                ${makeLabel('Tipo de tanque', TOOLTIP.tankType)}
+                ${renderCustomSelectHtml({
+                    id: 'input-tipo-tanque',
+                    value: comp.tipoTanque === 'fechado' ? 'fechado' : 'atmosferico',
+                    title: TOOLTIP.tankType,
+                    options: [
+                        { value: 'atmosferico', label: translateLiteral('Aberto (atmosférico)') },
+                        { value: 'fechado', label: translateLiteral('Fechado (colchão de gás)') }
+                    ]
+                })}
+            </div>
+            <div class="prop-group" id="grp-precarga-tanque" style="display:${fechado ? 'block' : 'none'};">
+                ${makeUnitLabel('Pré-carga do gás (vaso vazio)', 'pressure', TOOLTIP.tankPrecharge)}
+                <input type="number" id="input-precarga-tanque" ${hintAttr(TOOLTIP.tankPrecharge)} value="${displayEditableUnitValue('pressure', comp.pressaoPreCargaBar, 3)}" step="${displayStep('pressure', 0.1)}" min="${displayBound('pressure', 0)}" max="${displayBound('pressure', 20)}">
+            </div>
+            <div id="grp-psv-tanque" style="display:${fechado ? 'block' : 'none'};">
+            <div class="prop-group">
+                <label ${hintAttr(TOOLTIP.tankRelief)} class="checkbox-label">
+                    <input type="checkbox" id="input-psv-ativa-tanque" ${hintAttr(TOOLTIP.tankRelief)} ${psvAtiva ? 'checked' : ''}>
+                    <span>Válvula de alívio (PSV)</span>
+                </label>
+            </div>
+            <div class="prop-group">
+                ${makeUnitLabel('Pressão de alívio (PSV)', 'pressure', TOOLTIP.tankRelief)}
+                <input type="number" id="input-pressao-alivio-tanque" ${hintAttr(TOOLTIP.tankRelief)} value="${displayEditableUnitValue('pressure', psvAtiva ? comp.pressaoAlivioBar : PRESSAO_ALIVIO_PADRAO_BAR, 3)}" step="${displayStep('pressure', 0.1)}" min="${displayBound('pressure', 0)}" max="${displayBound('pressure', 100)}" ${psvAtiva ? '' : 'disabled'}>
+            </div>
+            </div>
             <div class="prop-group">
                 ${makeUnitLabel('Elevação do bocal de entrada', 'length', TOOLTIP.tankInletHeight)}
                 <input type="number" id="input-altura-entrada-tanque" ${hintAttr(TOOLTIP.tankInletHeight)} value="${displayEditableUnitValue('length', comp.alturaBocalEntradaM, 3)}" step="${displayStep('length', 0.01)}" min="${displayBound('length', 0)}" max="${displayBound('length', comp.alturaUtilMetros)}">
@@ -195,7 +214,7 @@ export const TANK_PROPERTIES_PRESENTER = {
         return renderPropertyTabs({
             basicContent,
             advancedContent,
-            advancedDescription: 'Aqui ficam os parâmetros de bocais e sintonia do controlador PID. Eles refinam a dinâmica do tanque e costumam ser ajustados só em estudos mais detalhados. Desligar as perdas nos bocais e a coluna de líquido aproxima o tanque do vaso ideal dos simuladores estacionários, como o DWSIM.'
+            advancedDescription: 'Aqui ficam o tipo de tanque (aberto ou fechado, com pré-carga e válvula de alívio), os parâmetros de bocais e a sintonia do controlador PID. Eles refinam a dinâmica do tanque e costumam ser ajustados só em estudos mais detalhados. Desligar as perdas nos bocais e a coluna de líquido aproxima o tanque do vaso ideal dos simuladores estacionários, como o DWSIM.'
         });
     },
     bind: (comp) => {
@@ -347,8 +366,13 @@ export const TANK_PROPERTIES_PRESENTER = {
         bindCustomSelect('input-tipo-tanque');
         bind('input-tipo-tanque', 'change', (event) => {
             comp.tipoTanque = event.target.value === 'fechado' ? 'fechado' : 'atmosferico';
-            const grupoPreCarga = byId('grp-precarga-tanque');
-            if (grupoPreCarga) grupoPreCarga.style.display = comp.tipoTanque === 'fechado' ? 'block' : 'none';
+            const display = comp.tipoTanque === 'fechado' ? 'block' : 'none';
+            // Aberto não tem PSV: zera a vazão de alívio que ficaria na tela e na exportação com a simulação pausada.
+            if (comp.tipoTanque !== 'fechado') comp.vazaoAlivioLps = 0;
+            ['grp-precarga-tanque', 'grp-psv-tanque', 'grp-alivio-display-tanque'].forEach((id) => {
+                const grupo = byId(id);
+                if (grupo) grupo.style.display = display;
+            });
             comp.sincronizarMetricasFisicas();
             setValue('disp-pressao-tanque', displayUnitValue('pressure', comp.pressaoFundoBar, 2));
             notifyPanelRefresh();
@@ -363,6 +387,32 @@ export const TANK_PROPERTIES_PRESENTER = {
                     comp.pressaoPreCargaBar = validated;
                     comp.sincronizarMetricasFisicas();
                     setValue('disp-pressao-tanque', displayUnitValue('pressure', comp.pressaoFundoBar, 2));
+                }
+            );
+        });
+
+        bind('input-psv-ativa-tanque', 'change', (event) => {
+            const campo = byId('input-pressao-alivio-tanque');
+            if (event.target.checked) {
+                const valor = baseFromDisplay('pressure', campo?.value);
+                comp.pressaoAlivioBar = Number.isFinite(valor) && valor >= 0 ? valor : PRESSAO_ALIVIO_PADRAO_BAR;
+            } else {
+                comp.pressaoAlivioBar = null;
+            }
+            if (campo) campo.disabled = !event.target.checked;
+            comp.sincronizarMetricasFisicas();
+            notifyPanelRefresh();
+        });
+
+        bind('input-pressao-alivio-tanque', 'change', (event) => {
+            validateInputWithFeedback(
+                event.target,
+                // O set abaixo da pré-carga aliviaria o próprio gás, e o GAAP não modela o inventário de gás.
+                (value, name) => InputValidator.validateNumber(baseFromDisplay('pressure', value), Math.max(0, Number(comp.pressaoPreCargaBar) || 0), 100, name),
+                'Pressão de alívio',
+                (validated) => {
+                    comp.pressaoAlivioBar = validated;
+                    comp.sincronizarMetricasFisicas();
                 }
             );
         });

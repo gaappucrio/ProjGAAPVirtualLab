@@ -12,6 +12,7 @@ import {
     translateDwsimToWorkspace
 } from '../js/presentation/import/DwsimImporter.js';
 import { BombaLogica } from '../js/domain/components/BombaLogica.js';
+import { ValvulaLogica } from '../js/domain/components/ValvulaLogica.js';
 import { buildPumpDwsimJsonData } from '../js/presentation/export/PumpDwsimJsonExporter.js';
 
 const TEMPLATE_BOMBA_TANQUE = path.resolve('Testes/plantas dwsim/entradaBombaTanqueValvulaSPsaidacompipes.dwxmz');
@@ -164,11 +165,35 @@ test('bug 4: Kv e Cv seguem <FlowCoefficient> como no Valve.vb do DWSIM', async 
         + '<CharacteristicParameter>50</CharacteristicParameter><EnableOpeningKvRelationship>true</EnableOpeningKvRelationship>'));
     const v1 = componentePorTag(emKv.workspace, 'V');
     approx(v1.cv, 190.3 / 0.8649786130809, 1e-9, 'Kv convertido para Cv');
+    assert.equal(v1.unidadeCoeficienteVazao, 'kv', 'arquivo em Kv: o painel mostra Kv');
+    assert.equal(valvula.unidadeCoeficienteVazao, 'cv', 'arquivo em Cv: o painel mostra Cv');
+    const restaurada = Object.assign(new ValvulaLogica('V', 'V', 0, 0), { cv: v1.cv, unidadeCoeficienteVazao: v1.unidadeCoeficienteVazao });
+    approx(restaurada.getCoeficienteVazaoNaUnidade(), 190.3, 1e-9, 'o painel mostra o mesmo Kv do arquivo');
     assert.equal(v1.tipoCaracteristica, 'equal_percentage');
     assert.equal(v1.rangeabilidade, 50, 'rangeabilidade = CharacteristicParameter do DWSIM');
 
     const enumNumerico = importarXml(plantaValvula('<Kv>100</Kv><OpeningPct>40</OpeningPct><FlowCoefficient>1</FlowCoefficient>'));
     assert.equal(componentePorTag(enumNumerico.workspace, 'V').cv, 100, 'FlowCoefficient = 1 é Cv');
+    assert.equal(componentePorTag(enumNumerico.workspace, 'V').unidadeCoeficienteVazao, 'cv');
+    const semUnidade = componentePorTag(importarXml(plantaValvula('<Kv>100</Kv><OpeningPct>40</OpeningPct>')).workspace, 'V');
+    assert.equal(semUnidade.unidadeCoeficienteVazao, 'kv', 'sem <FlowCoefficient>, o número é tratado como Kv');
+    // Valve.vb: EnableOpeningKvRelationship = False e CharacteristicParameter = 50 quando a tag falta.
+    assert.equal(semUnidade.grauAbertura, 100, 'sem <EnableOpeningKvRelationship>, o DWSIM usa o coeficiente cheio');
+    const semParametro = componentePorTag(importarXml(plantaValvula('<Kv>100</Kv><OpeningPct>40</OpeningPct>'
+        + '<DefinedOpeningKvRelationShipType>EqualPercentage</DefinedOpeningKvRelationShipType>'
+        + '<EnableOpeningKvRelationship>true</EnableOpeningKvRelationship>')).workspace, 'V');
+    assert.equal(semParametro.grauAbertura, 40);
+    assert.equal(semParametro.rangeabilidade, 50, 'sem <CharacteristicParameter>, a rangeabilidade do DWSIM é 50');
+
+    // `aberta` segue o limiar de vedação do domínio (0,05%), e não 0,5%.
+    const comRelacao = (abertura) => componentePorTag(importarXml(plantaValvula(`<Kv>100</Kv><OpeningPct>${abertura}</OpeningPct>`
+        + '<FlowCoefficient>Kv</FlowCoefficient><EnableOpeningKvRelationship>true</EnableOpeningKvRelationship>')).workspace, 'V');
+    const quaseFechada = comRelacao(0.3);
+    assert.equal(quaseFechada.grauAbertura, 0.3);
+    assert.equal(quaseFechada.aberta, true, 'a 0,3% a válvula já deixa passar vazão');
+    const vedada = comRelacao(0.03);
+    assert.equal(vedada.grauAbertura, 0, 'abaixo de 0,05% a abertura é zerada, como em setAbertura');
+    assert.equal(vedada.aberta, false);
 
     const semRelacao = importarXml(plantaValvula('<Kv>100</Kv><OpeningPct>40</OpeningPct><FlowCoefficient>Cv</FlowCoefficient>'
         + '<DefinedOpeningKvRelationShipType>EqualPercentage</DefinedOpeningKvRelationShipType>'
@@ -209,7 +234,8 @@ test('canos: trechos em série somam, Quantidade multiplica, rugosidade sai do m
         corrente('F'),
         cano('P1', [
             secao({ TipoSegmento: 'Tubulaosimples', Quantidade: 3, Material: 'Aço Bruto', Comprimento: 1, DI: 3.149608, PipeWallRugosity: 0 }),
-            secao({ TipoSegmento: 'Curva 90 graus, raio curto [1]', Quantidade: 1, Material: 'Aço Bruto', Comprimento: 0.1, DI: 3.149608 })
+            secao({ TipoSegmento: 'Curva Normal 45° [1]', Quantidade: 2, Material: 'Aço Bruto', Comprimento: 0.1, DI: 3.149608 }),
+            secao({ TipoSegmento: 'Delta P fixo [27]', Quantidade: 1, Material: 'Aço Bruto', Comprimento: 0.1, DI: 0.2 })
         ]),
         corrente('S1'),
         cano('P2', [
@@ -225,14 +251,99 @@ test('canos: trechos em série somam, Quantidade multiplica, rugosidade sai do m
     const fonteValvula = workspace.connections.find((c) => c.sourceId === idFonte && c.targetId === idValvula);
     const valvulaDreno = workspace.connections.find((c) => c.sourceId === idValvula && c.targetId === idDreno);
 
-    // 3 m (P1) + 2 m (P2) = 5 m de tubo; o GAAP já soma 1 m de trecho esquemático.
-    approx(fonteValvula.extraLengthM, 4, 1e-9, 'comprimento extra (m)');
+    // 3 m (P1) + 2 curvas 45° com L/D = 16 (Pipe.vb, Kfit [1]) + 2 m (P2); o GAAP já soma 1 m esquemático.
+    const curvaM = 2 * 16 * 3.149608 * 0.0254;
+    approx(fonteValvula.extraLengthM, 3 + curvaM + 2 - 1, 1e-9, 'comprimento extra (m)');
     approx(fonteValvula.diameterM, 0.08, 1e-6, 'diâmetro (m)');
-    approx(fonteValvula.roughnessMm, (3 * 0.0457 + 2 * 0.1) / 5, 1e-9, 'rugosidade média ponderada (mm)');
+    approx(fonteValvula.roughnessMm, ((3 + curvaM) * 0.0457 + 2 * 0.1) / (5 + curvaM), 1e-9, 'rugosidade média ponderada (mm)');
+    assert.equal(fonteValvula.perdaLocalK, 0, 'acessório L/D não vira K');
+    assert.equal(stats.skipped, 1, 'só o ΔP fixo [27] fica sem tradução');
     assert.ok(stats.skippedTypes.has('PipeFitting'), 'acessório não traduzido fica registrado');
 
     // Ligação direta por corrente: no DWSIM não há perda; no GAAP sobra só o trecho esquemático.
     assert.equal(valvulaDreno.extraLengthM, 0);
+});
+
+test('canos: acessórios K do DWSIM viram perda local na velocidade do cano, com Quantidade', () => {
+    const planta = (secoes) => importarXml(documento([
+        grafico('F', 'MaterialStream', { saidas: [['P1']] }),
+        grafico('P1', 'Pipe', { entradas: [['F']], saidas: [['D']] }),
+        grafico('D', 'MaterialStream', { entradas: [['P1']] })
+    ], [corrente('F'), cano('P1', secoes), corrente('D')]));
+    const conexao = ({ workspace }) => workspace.connections[0];
+
+    // Cano de 4" com entrada normal (K 0,78, Kfit [18]) e 2 saídas normais (K 1, [26]) no mesmo 4",
+    // mais uma redução 2:1 (K 5,67, [23]) de 2": na velocidade do cano de 4" ela pesa (4/2)⁴ = 16×.
+    const comK = planta([
+        secao({ TipoSegmento: 'Tubulaosimples', Quantidade: 1, Material: 'Steel', Comprimento: 10, DI: 4 }),
+        secao({ TipoSegmento: 'Entrada Normal [18]', Quantidade: 1, Material: 'Steel', Comprimento: 0.1, DI: 4 }),
+        secao({ TipoSegmento: 'Saida Normal [26]', Quantidade: 2, Material: 'Steel', Comprimento: 0.1, DI: 4 }),
+        secao({ TipoSegmento: 'Reducao Normal 2:1 [23]', Quantidade: 1, Material: 'Steel', Comprimento: 0.1, DI: 2 })
+    ]);
+    approx(conexao(comK).perdaLocalK, 0.78 + (2 * 1) + (5.67 * 16), 1e-9, 'Σ K na velocidade do cano');
+    approx(conexao(comK).extraLengthM, 10 - 1, 1e-9, 'acessório K não soma comprimento');
+    assert.equal(comK.stats.skipped, 0);
+
+    // Só acessórios K, sem tubo reto: o cano fica com o diâmetro do acessório e o K dele.
+    const soK = planta([secao({ TipoSegmento: 'Saida Borda [25]', Quantidade: 1, Material: 'Steel', Comprimento: 0.1, DI: 2 })]);
+    approx(conexao(soK).perdaLocalK, 1, 1e-9);
+    approx(conexao(soK).diameterM, 2 * 0.0254, 1e-9);
+
+    // Válvula globo de 2" (L/D 340 → 17,3 m) num cano de 4" com 1 m de tubo reto: o diâmetro
+    // continua o do tubo reto, e a válvula entra como comprimento equivalente em 4" (× (4/2)⁵).
+    const globo = planta([
+        secao({ TipoSegmento: 'Tubulaosimples', Quantidade: 1, Material: 'Steel', Comprimento: 1, DI: 4 }),
+        secao({ TipoSegmento: 'Valvula Globo [7]', Quantidade: 1, Material: 'Steel', Comprimento: 0.1, DI: 2 })
+    ]);
+    approx(conexao(globo).diameterM, 4 * 0.0254, 1e-9, 'referência no tubo reto, não no acessório');
+    approx(conexao(globo).extraLengthM, 1 + (340 * 2 * 0.0254 * 32) - 1, 1e-9);
+
+    // Índice desconhecido não é inventado.
+    const desconhecido = planta([
+        secao({ TipoSegmento: 'Tubulaosimples', Quantidade: 1, Material: 'Steel', Comprimento: 5, DI: 4 }),
+        secao({ TipoSegmento: 'Acessorio novo [99]', Quantidade: 1, Material: 'Steel', Comprimento: 0.1, DI: 4 })
+    ]);
+    assert.equal(desconhecido.stats.skipped, 1);
+    assert.equal(conexao(desconhecido).perdaLocalK, 0);
+});
+
+test('canos: elevação do DWSIM não é importada, mas fica registrada para o aviso da importação', async () => {
+    const { setLanguage, t } = await import('../js/presentation/i18n/LanguageManager.js');
+    const planta = (secoes) => importarXml(documento([
+        grafico('F', 'MaterialStream', { saidas: [['P1']] }),
+        grafico('P1', 'Pipe', { entradas: [['F']], saidas: [['D']] }),
+        grafico('D', 'MaterialStream', { entradas: [['P1']] })
+    ], [corrente('F'), cano('P1', secoes), corrente('D')]));
+
+    // Elevação × Quantidade só no tubo reto; o DWSIM zera a do acessório (Pipe.vb).
+    const { stats, workspace } = planta([
+        secao({ TipoSegmento: 'Tubulaosimples', Quantidade: 2, Material: 'Steel', Comprimento: 5, DI: 4, Elevacao: 1.5 }),
+        secao({ TipoSegmento: 'Joelho em 90° [22]', Quantidade: 1, Material: 'Steel', Comprimento: 0.1, DI: 4, Elevacao: 9 })
+    ]);
+    assert.equal(stats.ignoredElevations.length, 1);
+    assert.deepEqual(stats.ignoredElevations[0].pipeTags, ['P1']);
+    approx(stats.ignoredElevations[0].elevationM, 3, 1e-12);
+    assert.equal(workspace.config.usarAlturaRelativa, false, 'a importação segue sem altura relativa');
+
+    setLanguage('pt');
+    const aviso = t('toolbar.importDwsimElevationIgnored', { pipes: 'P1', elevationM: 3, headBar: 0.294 });
+    // A suíte roda num processo só: um teste anterior deixa o PropertyPanelController inscrito na troca
+    // de idioma, com o DOM falso já removido. setLanguage troca o idioma antes de avisar os inscritos,
+    // então o erro desse inscrito é tolerado e o idioma volta a PT no finally.
+    const trocarIdioma = (idioma) => { try { setLanguage(idioma); } catch { /* inscrito vazado de outro teste */ } };
+    try {
+        trocarIdioma('en');
+        assert.match(t('toolbar.importDwsimElevationIgnored', { pipes: 'P1', elevationM: -2, headBar: 0.196 }),
+            /Pipe P1.*drops 2\.00 m.*0\.196 bar.*lower/);
+        assert.match(t('toolbar.importDwsimElevationHint'), /Relative Height/);
+        assert.doesNotThrow(() => t('toolbar.importDwsimElevationIgnored'), 'parâmetros ausentes não quebram o alerta');
+    } finally {
+        trocarIdioma('pt');
+    }
+    assert.match(aviso, /P1.*sobe 3\.00 m.*0\.294 bar.*mais alta/);
+
+    const plano = planta([secao({ TipoSegmento: 'Tubulaosimples', Quantidade: 1, Material: 'Steel', Comprimento: 5, DI: 4, Elevacao: 0 })]);
+    assert.equal(plano.stats.ignoredElevations.length, 0, 'sem desnível, sem aviso');
 });
 
 test('canos em série com diâmetros diferentes viram comprimento equivalente no diâmetro do trecho mais longo', () => {

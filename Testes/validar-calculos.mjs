@@ -345,17 +345,19 @@ test('trocador de calor usa efetividade NTU e conserva sentido termico', () => {
     const trocador = new TrocadorCalorLogico('HX-NTU', 'TC-NTU', 0, 0);
     trocador.uaWPorK = 4182;
     trocador.temperaturaServicoC = 80;
-    // C = 1 L/s * 1000 kg/m3 * 4182 J/kg.K = 4182 W/K, logo NTU = 1 em modo utilidade.
+    // C = 1 L/s * 1000 kg/m3 * 4182 J/kg.K = 4182 W/K, logo NTU = 1 em modo utilidade. Fluido
+    // personalizado: cp constante (a água teria cp(T) e o NTU deixaria de ser exatamente 1).
     const capacidadeTermicaWPorK = 4182;
+    const fluidoCpConstante = (temperatura) => ({ nome: 'Fluido de teste', temperatura, densidade: 1000, calorEspecificoJkgK: 4182 });
 
-    const aquecimento = trocador.calcularTrocaTermicaGlobal({ temperatura: 20, densidade: 1000, calorEspecificoJkgK: 4182 }, 1, null, 0);
+    const aquecimento = trocador.calcularTrocaTermicaGlobal(fluidoCpConstante(20), 1, null, 0);
     const efetividadeEsperada = 1 - Math.exp(-1);
     approx(aquecimento.ef, efetividadeEsperada, 1e-12, 'Efetividade NTU');
     approx(aquecimento.t1Out, 20 + (efetividadeEsperada * 60), 1e-9, 'Temperatura de saida aquecida');
     approx(aquecimento.duty, capacidadeTermicaWPorK * (aquecimento.t1Out - 20), 1e-6, 'Carga termica por m_dot cp dT');
 
     trocador.temperaturaServicoC = 20;
-    const resfriamento = trocador.calcularTrocaTermicaGlobal({ temperatura: 80, densidade: 1000, calorEspecificoJkgK: 4182 }, 1, null, 0);
+    const resfriamento = trocador.calcularTrocaTermicaGlobal(fluidoCpConstante(80), 1, null, 0);
     assert.ok(resfriamento.t1Out < 80, 'Servico frio deve resfriar o fluido');
     assert.ok(resfriamento.t1Out > 20, 'Utilidade fria nao pode resfriar abaixo da temperatura de servico');
     approx(resfriamento.duty, capacidadeTermicaWPorK * (80 - resfriamento.t1Out), 1e-6, 'Carga de resfriamento por m_dot cp dT');

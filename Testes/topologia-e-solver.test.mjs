@@ -219,8 +219,10 @@ test('bomba ativa na saida do tanque aumenta vazao sem pressao incoerente', () =
         const direct = measureTankDrainFlow(usarAlturaRelativa, false);
         const pumped = measureTankDrainFlow(usarAlturaRelativa, true);
 
+        // A bomba (qMax 45 L/s) satura perto de 43 L/s. Com altura relativa o cano direto tem só o
+        // desnível (1,75 m; o dx é layout) e já escoa ~33 L/s, então a razão fica em ~1,32 (43,47/32,86).
         assert.ok(
-            pumped.flowLps > direct.flowLps * 1.5,
+            pumped.flowLps > direct.flowLps * (usarAlturaRelativa ? 1.2 : 1.5),
             `Bomba deve elevar a vazao do tanque: altura=${usarAlturaRelativa}, direto=${direct.flowLps}, bomba=${pumped.flowLps}`
         );
         assert.ok(

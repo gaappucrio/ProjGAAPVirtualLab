@@ -4,6 +4,7 @@
 // ===================================
 
 import { translateLiteral } from '../i18n/LanguageManager.js';
+import { DEFAULT_ATMOSPHERIC_PRESSURE_BAR } from '../../domain/units/HydraulicUnits.js';
 
 export function parseStrictNumber(value) {
     if (typeof value === 'number') return Number.isFinite(value) ? value : NaN;
@@ -59,6 +60,17 @@ export class InputValidator {
      */
     static validatePressure(value, maxPressure = 100, fieldName = 'Pressão') {
         return this.validateNumber(value, 0, maxPressure, fieldName);
+    }
+
+    /**
+     * Valida pressão manométrica de fronteira (bar g). Negativa é vácuo, até o zero absoluto (−Patm),
+     * como as correntes do DWSIM sob vácuo.
+     */
+    static validateGaugePressure(value, maxPressure = 100, fieldName = 'Pressão', atmosphericBar = DEFAULT_ATMOSPHERIC_PRESSURE_BAR) {
+        const patm = Number.isFinite(Number(atmosphericBar)) && Number(atmosphericBar) > 0
+            ? Number(atmosphericBar)
+            : DEFAULT_ATMOSPHERIC_PRESSURE_BAR;
+        return this.validateNumber(value, -patm, maxPressure, fieldName);
     }
 
     /**

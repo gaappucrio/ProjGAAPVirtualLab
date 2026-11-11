@@ -249,11 +249,15 @@ export class SistemaSimulacao extends Observable {
         clearComponentVisualRegistryHandler?.();
         this.connectionStateStore.clear();
         this.globalHydraulicSolver.reset();
+        const wasRunning = this.isRunning;
         this.isRunning = false;
         this.elapsedTime = 0;
         this.steadyStateMonitor.reset();
         this.selectionStore.clear();
         this.notify(EngineEventPayloads.selection(null, null));
+        // Sem estes avisos, o botão continuava em "Pausar" e o indicador de R.P. mostrava a planta apagada.
+        if (wasRunning) this.notify(EngineEventPayloads.motorState(false));
+        this.notify(EngineEventPayloads.panelUpdate(0));
         if (portStateUpdater) portStateUpdater();
         if (typeof this.monitorController?.syncWithEngine === 'function') {
             this.monitorController.syncWithEngine();

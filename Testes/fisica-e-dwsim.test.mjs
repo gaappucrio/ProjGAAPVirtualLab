@@ -15,6 +15,7 @@ import { DrenoLogico } from '../js/domain/components/DrenoLogico.js';
 import { FonteLogica } from '../js/domain/components/FonteLogica.js';
 import { TanqueLogico } from '../js/domain/components/TanqueLogico.js';
 import { TrocadorCalorLogico } from '../js/domain/components/TrocadorCalorLogico.js';
+import { calculateMeanSpecificHeat, createFluidoFromProperties } from '../js/domain/components/Fluido.js';
 import { ValvulaLogica, cvToKv } from '../js/domain/components/ValvulaLogica.js';
 import { referenciaPerdaBocal } from '../js/domain/components/BocalHidraulico.js';
 import { restoreFlowchartDocument } from '../js/presentation/flowchart/FlowchartPersistence.js';
@@ -308,6 +309,8 @@ function montarVasoTravado(aberturaSaida) {
     const dreno = new DrenoLogico(`D-trava-${aberturaSaida}`, 'D', 600, 0);
     fonte.pressaoFonteBar = 100;
     fonte.vazaoMaxima = 50;
+    vaso.tipoTanque = 'fechado';
+    vaso.pressaoAlivioBar = null; // sem PSV: exercita a trava hidráulica (reserva)
     vaso.capacidadeMaxima = 1000;
     vaso.volumeAtual = 500;
     vaso.pressaoPreCargaBar = 0.5;
@@ -360,6 +363,7 @@ test('vaso fechado enche ate o equilibrio de Boyle sem ultrapassa-lo (colchao im
     const vaso = new TanqueLogico('T-boyle-impl', 'T', 200, 0);
     fonte.pressaoFonteBar = 5;
     fonte.vazaoMaxima = 10;
+    vaso.tipoTanque = 'fechado';
     vaso.capacidadeMaxima = 1000;
     vaso.volumeAtual = 500;
     vaso.pressaoPreCargaBar = 0.5;
@@ -377,6 +381,8 @@ test('vaso fechado enche ate o equilibrio de Boyle sem ultrapassa-lo (colchao im
 test('vaso fechado nos casos dificeis do colchao: massa conservada e estados ativos convergem', () => {
     const vasoDe = (id, volumeL) => {
         const vaso = new TanqueLogico(id, id, 200, 0);
+        vaso.tipoTanque = 'fechado';
+        vaso.pressaoAlivioBar = null; // sem PSV: exercita a trava hidráulica (reserva)
         vaso.capacidadeMaxima = 1000;
         vaso.volumeAtual = volumeL;
         vaso.pressaoPreCargaBar = 0.5;
@@ -500,6 +506,8 @@ test('vaso cheio e fonte no teto em ramos separados: os dois tetos ficam ativos,
     const dreno = new DrenoLogico('D-pp', 'D', 200, 200);
     fonteVaso.pressaoFonteBar = 100;
     fonteVaso.vazaoMaxima = 50;
+    vaso.tipoTanque = 'fechado';
+    vaso.pressaoAlivioBar = null; // sem PSV: exercita a trava hidráulica (reserva)
     vaso.capacidadeMaxima = 1000;
     vaso.volumeAtual = 979;
     vaso.pressaoPreCargaBar = 0.5;
@@ -663,7 +671,8 @@ test('Bernoulli com atrito no cano inclinado: descida, subida e cano sem vazao b
 
         const fluido = engine.fluidoOperante;
         const deltaZ = dyPx / 80;
-        const comprimentoM = (Math.hypot(240, dyPx) / 80) + extraLengthM;
+        // Com altura relativa, o cano reto tem o desnível (mínimo 1 m); o dx de 240 px é só layout.
+        const comprimentoM = Math.max(1, Math.abs(dyPx) / 80) + extraLengthM;
         const area = (Math.PI * CANO_BERNOULLI.diameterM ** 2) / 4;
         // Padrão (DWSIM): K do dreno na velocidade do cano. Com a geometria do bocal: K na velocidade
         // do bocal + expansão de Borda-Carnot do cano Ø 0,05 para o bocal Ø 0,08, (1 − A_cano/A_bocal)²·v_cano².
@@ -774,7 +783,7 @@ test('Torricelli com atrito: tanque aberto com nivel fixo drenando por cano 2,1 
         const fluido = engine.fluidoOperante;
         const nivelM = 0.6 * 2.4;
         const deltaZ = (160 + (0.1 * 80)) / 80;
-        const comprimentoM = Math.hypot(240, 168) / 80;
+        const comprimentoM = Math.max(1, 168 / 80); // só o desnível; o dx de 240 px é layout
         const areaCano = (Math.PI * CANO_BERNOULLI.diameterM ** 2) / 4;
         const areaBocal = (Math.PI * 0.08 ** 2) / 4;
         const cargaM = (considerarColuna ? nivelM - 0.1 : 0) + deltaZ;
@@ -924,9 +933,15 @@ test('trocador: saida responde com atraso de 1a ordem tau = V/Q e converge ao e-
 
     engine.tickPipeline.advance(dt);
     approx(trocador.vazao1Lps, 1, 1e-6, 'Vazao limitada pela fonte');
-    const capacidadeWK = trocador.vazaoMassaKgS * 4182;
-    const alvoC = 25 + ((1 - Math.exp(-trocador.uaWPorK / capacidadeWK)) * (80 - 25));
-    approx(trocador.temperaturaSaidaAlvoC, alvoC, 1e-9, 'Alvo de regime pelo e-NTU');
+    // Água com cp(T): o cp é o médio na faixa percorrida (Δh/ΔT), resolvido por ponto fixo.
+    const agua25 = createFluidoFromProperties({ temperatura: 25 });
+    let alvoC = 25;
+    let cpMedio = agua25.calorEspecificoJkgK;
+    for (let i = 0; i < 50; i += 1) {
+        alvoC = 25 + ((1 - Math.exp(-trocador.uaWPorK / (trocador.vazaoMassaKgS * cpMedio))) * (80 - 25));
+        cpMedio = calculateMeanSpecificHeat(agua25, 25, alvoC);
+    }
+    approx(trocador.temperaturaSaidaAlvoC, alvoC, 1e-6, 'Alvo de regime pelo e-NTU (iteração do cp converge a ~1e-9 relativo)');
     approx(trocador.temperaturaSaidaC, 25, 1e-9, 'Na partida sai o fluido que estava parado no trocador');
 
     // Integração exata do atraso: a cada passo seguinte o desvio cai por exp(-dt/tau), tau = 2 L / 1 L/s.
@@ -938,8 +953,9 @@ test('trocador: saida responde com atraso de 1a ordem tau = V/Q e converge ao e-
     approx(engine.getConnectionState(saida).fluid.temperatura, trocador.temperaturaSaidaC, 1e-12, 'Cano a jusante recebe a temperatura que sai do trocador');
 
     for (let passoAtual = 0; passoAtual < 600; passoAtual += 1) engine.tickPipeline.advance(dt);
-    approx(trocador.temperaturaSaidaC, alvoC, 1e-9, 'Regime permanente = e-NTU');
-    approx(trocador.cargaTermicaW, capacidadeWK * (trocador.temperaturaSaidaC - 25), 1e-6 * trocador.cargaTermicaW, 'Em regime Q = m cp dT');
+    approx(trocador.temperaturaSaidaC, alvoC, 1e-6, 'Regime permanente = e-NTU');
+    // Q = m·Δh: com o cp médio da faixa, igual a m·c̄p·ΔT.
+    approx(trocador.cargaTermicaW, trocador.vazaoMassaKgS * calculateMeanSpecificHeat(agua25, 25, trocador.temperaturaSaidaC) * (trocador.temperaturaSaidaC - 25), 1e-6 * trocador.cargaTermicaW, 'Em regime Q = m·Δh');
 });
 
 test('trocador: volume interno nulo reproduz a resposta instantanea do e-NTU', () => {
@@ -1223,4 +1239,172 @@ test('trocador em vacuo: pressoes de saida negativas e risco de ebulicao pela pr
     // a 0 barg (pressão cortada) a mesma água não ferveria.
     assert.ok(trocador.temperaturaSaidaC > 80, `Agua quente na saida: ${trocador.temperaturaSaidaC}`);
     assert.equal(trocador.riscoEbulicao1, true, 'Risco de ebulicao na saida em vacuo');
+});
+
+test('cp(T) da água × IAPWS-IF97, mistura por entalpia e trocador com balanço fechado', async () => {
+    const {
+        calculateSensibleEnthalpyJkg, calculateSpecificHeatAtTemp, cloneFluido, mixFluidos
+    } = await import('../js/domain/components/Fluido.js');
+
+    // Referência: pacote Python `iapws` (IAPWS-IF97, líquido a 1 atm até 99 °C e logo acima da saturação depois).
+    const iapwsCp = [[5, 4204.9], [25, 4181.9], [50, 4179.6], [80, 4195.5], [100, 4216.6], [150, 4310.2], [200, 4493.6], [250, 4862.3]];
+    iapwsCp.forEach(([temperaturaC, cp]) => {
+        const agua = createFluidoFromProperties({ temperatura: temperaturaC });
+        approx(agua.calorEspecificoJkgK, cp, 0.001 * cp, `cp da água a ${temperaturaC} °C`);
+    });
+
+    // A entalpia é a primitiva do cp (diferença central).
+    const agua = createFluidoFromProperties({ temperatura: 25 });
+    [10, 60, 140, 230].forEach((temperaturaC) => {
+        const derivada = (calculateSensibleEnthalpyJkg(agua, temperaturaC + 0.01) - calculateSensibleEnthalpyJkg(agua, temperaturaC - 0.01)) / 0.02;
+        approx(derivada, calculateSpecificHeatAtTemp(agua, temperaturaC), 1e-6 * derivada, `dh/dT = cp a ${temperaturaC} °C`);
+    });
+
+    // Fluido personalizado e óleo seguem com cp constante (sem referência validável).
+    const oleo = createFluidoFromProperties({ nome: 'Óleo leve', calorEspecificoJkgK: 2000, temperatura: 25 });
+    assert.equal(cloneFluido(oleo, { temperatura: 150 }).calorEspecificoJkgK, 2000);
+
+    // Mistura 1:1 em massa de 20 °C e 200 °C: ∫cp dT da IAPWS dá 111,528 °C (cp constante daria 110,0;
+    // Σm·cp(T)·T, 113,2). O h da IAPWS a pressões diferentes daria 111,62, porque inclui o trabalho v·ΔP.
+    const fria = createFluidoFromProperties({ temperatura: 20 });
+    const quente = createFluidoFromProperties({ temperatura: 200 });
+    const mistura = mixFluidos([
+        { fluido: fria, volumeL: 1000 / fria.densidade },
+        { fluido: quente, volumeL: 1000 / quente.densidade }
+    ]);
+    approx(mistura.temperatura, 111.5283, 0.01, 'T de mistura pelo balanço de entalpia');
+    const entalpiaAntes = calculateSensibleEnthalpyJkg(fria, 20) + calculateSensibleEnthalpyJkg(quente, 200);
+    const entalpiaDepois = calculateSensibleEnthalpyJkg(fria, mistura.temperatura) + calculateSensibleEnthalpyJkg(quente, mistura.temperatura);
+    approx(entalpiaDepois, entalpiaAntes, 1e-9 * entalpiaAntes, 'a mistura conserva a entalpia');
+
+    // Contracorrente água 25 °C × água 200 °C, 1 kg/s cada, UA = 5000 W/K. Referência integrada com o cp
+    // local da IAPWS (marcha em 400 passos): saída quente 106,87 °C, fria 121,11 °C, Q = 403,52 kW.
+    const trocador = new TrocadorCalorLogico('HX-cp', 'HX-cp', 0, 0);
+    trocador.uaWPorK = 5000;
+    trocador.efetividadeMaxima = 1;
+    trocador.temDuasCorrentesConectadas = () => true;
+    const vazaoLps = (fluido) => 1000 / fluido.densidade;
+    const frio25 = createFluidoFromProperties({ temperatura: 25 });
+    const resultado = trocador.calcularTrocaTermicaGlobal(frio25, vazaoLps(frio25), quente, vazaoLps(quente), 'contracorrente');
+    approx(resultado.t2Out, 106.87, 0.2, 'saída quente × referência IAPWS');
+    approx(resultado.t1Out, 121.11, 0.2, 'saída fria × referência IAPWS');
+    approx(resultado.duty, 403520, 0.005 * 403520, 'carga térmica × referência IAPWS');
+    const recebido = calculateSensibleEnthalpyJkg(frio25, resultado.t1Out) - calculateSensibleEnthalpyJkg(frio25, 25);
+    const cedido = calculateSensibleEnthalpyJkg(quente, 200) - calculateSensibleEnthalpyJkg(quente, resultado.t2Out);
+    approx(recebido, resultado.duty, 1e-6 * resultado.duty, 'Q = m·Δh na corrente fria');
+    approx(cedido, resultado.duty, 1e-6 * resultado.duty, 'Q = m·Δh na corrente quente');
+});
+
+test('cp(T): bordas da faixa, cp digitado reancorado, mistura água + glicol e corrente ausente no trocador', async () => {
+    const {
+        calculateSensibleEnthalpyJkg, calculateSpecificHeatAtTemp, cloneFluido, mixFluidos, updateFluidoProperties
+    } = await import('../js/domain/components/Fluido.js');
+    const agua = createFluidoFromProperties({ temperatura: 25 });
+
+    // Fora de 0–250 °C o cp fica no valor da borda e a entalpia segue linear (derivada contínua).
+    assert.equal(calculateSpecificHeatAtTemp(agua, -15), calculateSpecificHeatAtTemp(agua, 0));
+    assert.equal(calculateSpecificHeatAtTemp(agua, 300), calculateSpecificHeatAtTemp(agua, 250));
+    const inclinacao = (t) => (calculateSensibleEnthalpyJkg(agua, t + 0.01) - calculateSensibleEnthalpyJkg(agua, t - 0.01)) / 0.02;
+    approx(inclinacao(250), calculateSpecificHeatAtTemp(agua, 250), 1e-3 * inclinacao(250), 'sem degrau na borda de 250 °C');
+    approx(inclinacao(0), calculateSpecificHeatAtTemp(agua, 0), 1e-3 * inclinacao(0), 'sem degrau na borda de 0 °C');
+
+    // cp digitado a 80 °C vira a referência a 80 °C; a 25 °C a correlação parte dele.
+    const editada = updateFluidoProperties(cloneFluido(agua, { temperatura: 80 }), { calorEspecificoJkgK: 4000 });
+    assert.equal(editada.refCalorEspecificoJkgK, 4000);
+    assert.equal(editada.refTemperatura, 80);
+    const fria = cloneFluido(editada, { temperatura: 25 });
+    approx(fria.calorEspecificoJkgK, 4000 * calculateSpecificHeatAtTemp(agua, 25) / calculateSpecificHeatAtTemp(agua, 80), 1e-9);
+
+    // Água quente + glicol (cp constante): a entalpia total se conserva.
+    const quente = createFluidoFromProperties({ temperatura: 90 });
+    const { FLUID_PRESETS } = await import('../js/application/config/FluidPresets.js');
+    const glicol = createFluidoFromProperties({ ...FLUID_PRESETS.glicol_30, temperatura: 10 });
+    const mistura = mixFluidos([{ fluido: quente, volumeL: 2 }, { fluido: glicol, volumeL: 1 }]);
+    const massaQuente = 2 * quente.densidade;
+    const massaGlicol = 1 * glicol.densidade;
+    const antes = (massaQuente * calculateSensibleEnthalpyJkg(quente, 90)) + (massaGlicol * calculateSensibleEnthalpyJkg(glicol, 10));
+    const depois = (massaQuente * calculateSensibleEnthalpyJkg(quente, mistura.temperatura))
+        + (massaGlicol * calculateSensibleEnthalpyJkg(glicol, mistura.temperatura));
+    approx(depois, antes, 1e-9 * Math.abs(antes), 'água + glicol conserva a entalpia');
+
+    // Corrente 1 ausente (utilidade na corrente 2): converge numa passada, sem iterar à toa.
+    const trocador = new TrocadorCalorLogico('HX-borda', 'HX-borda', 0, 0);
+    trocador.uaWPorK = 3000;
+    trocador.temDuasCorrentesConectadas = () => false;
+    let passadas = 0;
+    const calcular = trocador._calcularTrocaComCp.bind(trocador);
+    trocador._calcularTrocaComCp = (...args) => { passadas += 1; return calcular(...args); };
+    const resultado = trocador.calcularTrocaTermicaGlobal(null, 0, createFluidoFromProperties({ temperatura: 30 }), 1);
+    assert.ok(resultado.t2Out > 30, 'a utilidade aquece a corrente 2');
+    assert.ok(passadas <= 4, `corrente ausente não deve esgotar a iteração (${passadas} passadas)`);
+});
+
+test('PSV ideal do vaso fechado: segura o gás no set, alivia o excedente com massa fechando e fecha quando a rede puxa', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-psv', 'F', 0, 0);
+    const vaso = new TanqueLogico('T-psv', 'T', 200, 0);
+    const valvula = criarValvula('V-psv', 5);
+    const dreno = new DrenoLogico('D-psv', 'D', 600, 0);
+    fonte.pressaoFonteBar = 5;
+    fonte.vazaoMaxima = 10;
+    vaso.tipoTanque = 'fechado';
+    vaso.pressaoAlivioBar = 2;
+    vaso.pressaoPreCargaBar = 0;
+    vaso.capacidadeMaxima = 1000;
+    vaso.volumeAtual = 500;
+    valvula.setAbertura(0);
+    valvula.aberturaEfetiva = 0;
+    [fonte, vaso, valvula, dreno].forEach((c) => engine.add(c));
+    conectar(engine, fonte, vaso, TUBO_DESPREZIVEL);
+    conectar(engine, vaso, valvula, TUBO_DESPREZIVEL);
+    conectar(engine, valvula, dreno, TUBO_DESPREZIVEL);
+
+    const atm = vaso.getFluidoConteudo().pressaoAtmosfericaBar;
+    const volumeSetL = 1000 * (1 - (atm / (2 + atm))); // Boyle: P_set,abs·V_gás = P_pré,abs·V_total
+    approx(vaso.getVolumeAlivioL(), volumeSetL, 1e-9, 'volume em que o gás chega ao set');
+
+    const balanco = (passos) => {
+        let entrouL = 0;
+        let saiuL = 0;
+        let aliviadoL = 0;
+        const volumeInicialL = vaso.volumeAtual;
+        for (let i = 0; i < passos; i += 1) {
+            engine.tickPipeline.advance(0.1);
+            entrouL += vaso.lastQin * 0.1;
+            saiuL += vaso.lastQout * 0.1;
+            aliviadoL += vaso.vazaoAlivioLps * 0.1;
+        }
+        return { entrouL, saiuL, aliviadoL, deltaL: vaso.volumeAtual - volumeInicialL };
+    };
+
+    // Saída fechada: enche até V_set; daí em diante o gás fica no set e toda a entrada é aliviada.
+    const fase1 = balanco(1200);
+    approx(vaso.volumeAtual, volumeSetL, 1e-6, 'para no volume do set');
+    approx(vaso.getPressaoGasBar(), 2, 1e-6, 'gás segurado no set da PSV');
+    // A rede enxerga o set no bocal (sem altura relativa a entrada vê só o gás), e não a pressão da fonte.
+    approx(vaso.estadoHidraulico.pressaoNoPorta.in, 2, 1e-4, 'pressão resolvida pela rede no bocal de entrada');
+    approx(vaso.vazaoAlivioLps, fonte.vazaoMaxima, 1e-6, 'alivia toda a entrada (fonte no teto)');
+    approx(fase1.entrouL, fase1.deltaL + fase1.saiuL + fase1.aliviadoL, 1e-9, 'massa fecha com o alívio contabilizado');
+
+    // Sem a PSV o mesmo vaso subiria até a pressão da fonte (5 bar), muito acima do set.
+    assert.ok(fonte.pressaoFonteBar > 2 + 1);
+
+    // A alimentação cai abaixo do set e a saída abre: a PSV fecha e a pressão cai abaixo do set.
+    fonte.pressaoFonteBar = 1;
+    valvula.setAbertura(100);
+    valvula.aberturaEfetiva = 100;
+    const fase2 = balanco(300);
+    assert.equal(vaso.vazaoAlivioLps, 0, 'PSV fecha quando a rede puxa líquido');
+    assert.ok(vaso.getPressaoGasBar() < 2 - 1e-3, `pressão abaixo do set: ${vaso.getPressaoGasBar()}`);
+    approx(fase2.entrouL, fase2.deltaL + fase2.saiuL + fase2.aliviadoL, 1e-9, 'massa fecha ao fechar a PSV');
+
+    // Set abaixo da pré-carga: o set efetivo é a pré-carga, e o gás reportado bate com ele.
+    const baixo = new TanqueLogico('T-psv-baixo', 'T', 0, 0);
+    baixo.tipoTanque = 'fechado';
+    baixo.pressaoPreCargaBar = 3;
+    baixo.pressaoAlivioBar = 2;
+    baixo.volumeAtual = 0;
+    assert.equal(baixo.getPressaoAlivioEfetivaBar(), 3);
+    assert.equal(baixo.getVolumeAlivioL(), 0);
+    approx(baixo.getPressaoGasBar(), baixo.getPressaoAlivioEfetivaBar(), 1e-9, 'gás no V_set = set efetivo');
 });

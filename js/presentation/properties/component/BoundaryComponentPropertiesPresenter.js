@@ -1,10 +1,11 @@
 import { FLUID_PRESETS } from '../../../application/config/FluidPresets.js';
+import { DEFAULT_ATMOSPHERIC_PRESSURE_BAR } from '../../../domain/units/HydraulicUnits.js';
 import {
     CUSTOM_FLUID_COLOR_OPTIONS,
     getFluidVisualStyle,
     resolveCustomFluidColor
 } from '../../../infrastructure/rendering/FluidVisualStyle.js';
-import { formatUnitValue, getUnitStep, toDisplayValue } from '../../units/DisplayUnits.js';
+import { getUnitStep, toDisplayValue } from '../../units/DisplayUnits.js';
 import { getFluidNameVariants, translateFluidName } from '../../i18n/LanguageManager.js';
 import {
     ComponentEventPayloads,
@@ -19,6 +20,7 @@ import {
     displayEditableUnitValue,
     displayStep,
     displayUnitValue,
+    escapeHtml,
     getPresentationEngine,
     hintAttr,
     makeLabel,
@@ -97,8 +99,56 @@ function renderCustomColorSwatches(fluido, currentPreset) {
     `;
 }
 
+// Texto de cada campo do fluido, igual na renderização e na ressincronização depois de aplicar.
+function sourceFluidFieldValues(fluido) {
+    return {
+        'input-source-fluid-density': String(Number(Number(fluido.densidade).toFixed(2))),
+        'input-source-fluid-temp': toDisplayValue('temperature', fluido.temperatura).toFixed(1),
+        'input-source-fluid-viscosity': String(Number(Number(fluido.viscosidadeDinamicaPaS).toPrecision(4))),
+        'input-source-fluid-cp': String(Number(Number(fluido.calorEspecificoJkgK).toFixed(1))),
+        'input-source-fluid-vapor': displayUnitValue('pressure', fluido.pressaoVaporBar, 3),
+        'input-source-fluid-atm': displayUnitValue('pressure', fluido.pressaoAtmosfericaBar, 3)
+    };
+}
+
+// O painel só é redesenhado na troca de seleção. Sem isto, os campos ficavam com o valor antigo e,
+// como value ≠ defaultValue, a próxima edição de temperatura reenviava ρ/μ/Pv do preset como
+// "editados", travando-os na temperatura do preset.
+function syncSourceFluidInputs(fluido, { manterNomeDigitado = false } = {}) {
+    Object.entries(sourceFluidFieldValues(fluido)).forEach(([id, text]) => {
+        const input = byId(id);
+        if (!input) return;
+        input.value = text;
+        input.defaultValue = text;
+    });
+    // O nome é aplicado a cada tecla: reescrevê-lo durante a digitação apagaria espaços no fim.
+    const inputName = byId('input-source-fluid-name');
+    if (inputName) {
+        if (!manterNomeDigitado) inputName.value = translateFluidName(fluido.nome);
+        inputName.defaultValue = inputName.value;
+    }
+}
+
+// Ponto único de aplicação: grava no domínio e realinha seletor, cores e campos com o estado real.
+function applySourceFluid(comp, dados, presetId, { manterNomeDigitado = false } = {}) {
+    comp.atualizarFluidoEntrada(dados, { presetId });
+    const presetSelect = byId('sel-source-fluid-preset');
+    if (presetSelect) presetSelect.value = presetId;
+    updateCustomColorControls(presetId === 'custom');
+    syncSourceFluidInputs(comp.fluidoEntrada, { manterNomeDigitado });
+    comp.notify(ComponentEventPayloads.state({ fluidUpdate: true }));
+    notifyPanelRefresh();
+}
+
+// Piso da pressão manométrica da fonte: o zero absoluto na Patm do próprio fluido de entrada.
+function sourceAtmosphericBar(comp) {
+    const patm = Number(comp?.fluidoEntrada?.pressaoAtmosfericaBar);
+    return Number.isFinite(patm) && patm > 0 ? patm : DEFAULT_ATMOSPHERIC_PRESSURE_BAR;
+}
+
 function renderSourceFluidFields(comp) {
     const fluido = ensureSourceFluid(comp);
+    const campos = sourceFluidFieldValues(fluido);
     const currentPreset = getCurrentSourceFluidPresetId(comp);
     const fluidOptions = Object.entries(FLUID_PRESETS)
         .map(([id, preset]) => `<option value="${id}" ${currentPreset === id ? 'selected' : ''}>${preset.nome}</option>`)
@@ -114,31 +164,31 @@ function renderSourceFluidFields(comp) {
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.fluido.nome}">Nome do Fluido</label>
-            <input type="text" id="input-source-fluid-name" title="${TOOLTIPS.fluido.nome}" value="${fluido.nome}">
+            <input type="text" id="input-source-fluid-name" title="${TOOLTIPS.fluido.nome}" value="${escapeHtml(fluido.nome)}">
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.fluido.densidade}">Densidade (kg/m³)</label>
-            <input type="number" id="input-source-fluid-density" title="${TOOLTIPS.fluido.densidade}" value="${fluido.densidade}" step="1" min="100">
+            <input type="number" id="input-source-fluid-density" title="${TOOLTIPS.fluido.densidade}" value="${campos['input-source-fluid-density']}" step="any" min="100">
         </div>
         <div class="prop-group">
             ${makeUnitLabel('Temperatura', 'temperature', TOOLTIPS.fluido.temperatura)}
-            <input type="number" id="input-source-fluid-temp" title="${TOOLTIPS.fluido.temperatura}" value="${toDisplayValue('temperature', fluido.temperatura).toFixed(1)}" step="${getUnitStep('temperature')}" min="${toDisplayValue('temperature', -20).toFixed(1)}" max="${toDisplayValue('temperature', 200).toFixed(1)}">
+            <input type="number" id="input-source-fluid-temp" title="${TOOLTIPS.fluido.temperatura}" value="${campos['input-source-fluid-temp']}" step="${getUnitStep('temperature')}" min="${toDisplayValue('temperature', -20).toFixed(1)}" max="${toDisplayValue('temperature', 200).toFixed(1)}">
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.fluido.viscosidade}">Viscosidade Dinâmica (Pa.s)</label>
-            <input type="number" id="input-source-fluid-viscosity" title="${TOOLTIPS.fluido.viscosidade}" value="${fluido.viscosidadeDinamicaPaS}" step="0.0001" min="0.0001">
+            <input type="number" id="input-source-fluid-viscosity" title="${TOOLTIPS.fluido.viscosidade}" value="${campos['input-source-fluid-viscosity']}" step="0.0001" min="0.0001">
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.fluido.calorEspecifico}">Calor Específico (J/kg.K)</label>
-            <input type="number" id="input-source-fluid-cp" title="${TOOLTIPS.fluido.calorEspecifico}" value="${fluido.calorEspecificoJkgK}" step="10" min="500" max="10000">
+            <input type="number" id="input-source-fluid-cp" title="${TOOLTIPS.fluido.calorEspecifico}" value="${campos['input-source-fluid-cp']}" step="any" min="500" max="10000">
         </div>
         <div class="prop-group">
             ${makeUnitLabel('Pressão de Vapor', 'pressure', TOOLTIPS.fluido.pressaoVapor)}
-            <input type="number" id="input-source-fluid-vapor" title="${TOOLTIPS.fluido.pressaoVapor}" value="${displayUnitValue('pressure', fluido.pressaoVaporBar, 3)}" step="${displayStep('pressure', 0.001)}" min="${displayBound('pressure', 0.0001)}" max="${displayBound('pressure', 5)}">
+            <input type="number" id="input-source-fluid-vapor" title="${TOOLTIPS.fluido.pressaoVapor}" value="${campos['input-source-fluid-vapor']}" step="${displayStep('pressure', 0.001)}" min="${displayBound('pressure', 0.0001)}" max="${displayBound('pressure', 5)}">
         </div>
         <div class="prop-group">
             ${makeUnitLabel('Pressão Atmosférica', 'pressure', TOOLTIPS.fluido.pressaoAtmosferica)}
-            <input type="number" id="input-source-fluid-atm" title="${TOOLTIPS.fluido.pressaoAtmosferica}" value="${displayUnitValue('pressure', fluido.pressaoAtmosfericaBar, 3)}" step="${displayStep('pressure', 0.001)}" min="${displayBound('pressure', 0.5)}" max="${displayBound('pressure', 2)}">
+            <input type="number" id="input-source-fluid-atm" title="${TOOLTIPS.fluido.pressaoAtmosferica}" value="${campos['input-source-fluid-atm']}" step="${displayStep('pressure', 0.001)}" min="${displayBound('pressure', 0.5)}" max="${displayBound('pressure', 2)}">
         </div>
         ${renderCustomColorSwatches(fluido, currentPreset)}
     `;
@@ -157,7 +207,7 @@ function getSourceFluidColorValue(fluido, presetId) {
     return resolveCustomFluidColor(valueOf('input-source-fluid-color')) || getDefaultCustomFluidColor(fluido);
 }
 
-function applySourceFluidFromInputs(comp, { preferredPresetId = null } = {}) {
+function applySourceFluidFromInputs(comp) {
     const fluido = ensureSourceFluid(comp);
     const inputDensity = byId('input-source-fluid-density');
     const inputViscosity = byId('input-source-fluid-viscosity');
@@ -221,32 +271,28 @@ function applySourceFluidFromInputs(comp, { preferredPresetId = null } = {}) {
     }
     clearInputError(inputAtm);
 
-    // Em edição manual, ρ, μ e Pv só seguem como valores explícitos quando o usuário editou o campo;
-    // caso contrário o domínio os recalcula na nova temperatura (ex.: aquecer a água muda Pv e o NPSHa).
-    // Presets e troca de cor continuam enviando o estado completo exibido.
-    const editedByUser = (input) => preferredPresetId !== null || input.value !== input.defaultValue;
-    const nextPresetId = preferredPresetId || 'custom';
-    comp.atualizarFluidoEntrada(
-        {
-            nome: InputValidator.sanitizeText(valueOf('input-source-fluid-name'), 50),
-            temperatura: temperatureResult.value,
-            calorEspecificoJkgK: specificHeatResult.value,
-            pressaoAtmosfericaBar: atmResult.value,
-            corVisual: getSourceFluidColorValue(fluido, nextPresetId),
-            ...(editedByUser(inputDensity) ? { densidade: densityResult.value } : {}),
-            ...(editedByUser(inputViscosity) ? { viscosidadeDinamicaPaS: viscosityResult.value } : {}),
-            ...(editedByUser(inputVapor) ? { pressaoVaporBar: vaporResult.value } : {})
-        },
-        { presetId: nextPresetId }
+    // Só vai ao domínio o que o aluno editou. O resto fica como está (cp, Patm, nome) ou é recalculado
+    // na nova temperatura (ρ, μ, Pv). Reenviar o texto da tela arredondaria valores: 25 °C exibido como
+    // 298,1 K voltava como 24,95 °C, e Patm 1,01325 virava 1,013.
+    const inputName = byId('input-source-fluid-name');
+    const edited = (input) => Boolean(input) && input.value !== input.defaultValue;
+    const dados = {
+        ...(edited(inputName) ? { nome: InputValidator.sanitizeText(inputName.value, 50) } : {}),
+        ...(edited(inputTemp) ? { temperatura: temperatureResult.value } : {}),
+        ...(edited(inputSpecificHeat) ? { calorEspecificoJkgK: specificHeatResult.value } : {}),
+        ...(edited(inputAtm) ? { pressaoAtmosfericaBar: atmResult.value } : {}),
+        ...(edited(inputDensity) ? { densidade: densityResult.value } : {}),
+        ...(edited(inputViscosity) ? { viscosidadeDinamicaPaS: viscosityResult.value } : {}),
+        ...(edited(inputVapor) ? { pressaoVaporBar: vaporResult.value } : {})
+    };
+    if (Object.keys(dados).length === 0) return;
+
+    applySourceFluid(
+        comp,
+        { ...dados, corVisual: getSourceFluidColorValue(fluido, 'custom') },
+        'custom',
+        { manterNomeDigitado: dados.nome !== undefined }
     );
-
-    const presetSelect = byId('sel-source-fluid-preset');
-    if (presetSelect) {
-        presetSelect.value = nextPresetId;
-    }
-
-    comp.notify(ComponentEventPayloads.state({ fluidUpdate: true }));
-    notifyPanelRefresh();
 }
 
 function updateCustomColorControls(isCustom) {
@@ -273,41 +319,37 @@ function setSelectedCustomColor(color) {
 
 function bindSourceFluidProperties(comp) {
     const fluido = ensureSourceFluid(comp);
-    setValue('input-source-fluid-name', translateFluidName(fluido.nome));
+    syncSourceFluidInputs(fluido);
 
     bind('sel-source-fluid-preset', 'change', (event) => {
         const presetId = event.target.value;
         if (presetId === 'custom') {
-            comp.fluidoEntradaPresetId = 'custom';
             setSelectedCustomColor(getDefaultCustomFluidColor(comp.fluidoEntrada));
-            comp.atualizarFluidoEntrada({
-                corVisual: getSourceFluidColorValue(comp.fluidoEntrada, 'custom')
-            }, { presetId: 'custom' });
-            updateCustomColorControls(true);
-            comp.notify(ComponentEventPayloads.state({ fluidUpdate: true }));
-            notifyPanelRefresh();
+            applySourceFluid(comp, { corVisual: getSourceFluidColorValue(comp.fluidoEntrada, 'custom') }, 'custom');
             return;
         }
 
         const preset = FLUID_PRESETS[presetId];
         if (!preset) return;
-
-        setValue('input-source-fluid-name', translateFluidName(preset.nome));
-        setValue('input-source-fluid-density', preset.densidade);
-        setValue('input-source-fluid-viscosity', preset.viscosidadeDinamicaPaS);
-        setValue('input-source-fluid-cp', preset.calorEspecificoJkgK);
-        setValue('input-source-fluid-temp', toDisplayValue('temperature', preset.temperatura).toFixed(1));
-        setValue('input-source-fluid-vapor', formatUnitValue('pressure', preset.pressaoVaporBar, 3));
-        setValue('input-source-fluid-atm', formatUnitValue('pressure', preset.pressaoAtmosfericaBar, 3));
-        updateCustomColorControls(false);
-        applySourceFluidFromInputs(comp, { preferredPresetId: presetId });
+        // Valores exatos do preset, sem passar pelo texto arredondado dos campos.
+        applySourceFluid(comp, {
+            nome: preset.nome,
+            densidade: preset.densidade,
+            temperatura: preset.temperatura,
+            viscosidadeDinamicaPaS: preset.viscosidadeDinamicaPaS,
+            calorEspecificoJkgK: preset.calorEspecificoJkgK,
+            pressaoVaporBar: preset.pressaoVaporBar,
+            pressaoAtmosfericaBar: preset.pressaoAtmosfericaBar,
+            corVisual: preset.corVisual || null
+        }, presetId);
     });
 
+    // Trocar a cor não mexe nas propriedades físicas (antes reancorava ρ/μ/Pv no texto arredondado).
     document.querySelectorAll?.('.fluid-color-swatch').forEach((button) => {
         button.addEventListener('click', () => {
             if (button.disabled) return;
             setSelectedCustomColor(button.dataset.fluidColor);
-            applySourceFluidFromInputs(comp, { preferredPresetId: 'custom' });
+            applySourceFluid(comp, { corVisual: getSourceFluidColorValue(comp.fluidoEntrada, 'custom') }, 'custom');
         });
     });
 
@@ -329,7 +371,7 @@ export const SOURCE_PROPERTIES_PRESENTER = {
         const basicContent = `
             <div class="prop-group">
                 ${makeUnitLabel('Pressão de alimentação', 'pressure', TOOLTIP.sourcePressure)}
-                <input type="number" id="input-pressao-fonte" ${hintAttr(TOOLTIP.sourcePressure)} value="${displayEditableUnitValue('pressure', comp.pressaoFonteBar, 3)}" step="${displayStep('pressure', 0.01)}" min="${displayBound('pressure', 0)}" max="${displayBound('pressure', 20)}">
+                <input type="number" id="input-pressao-fonte" ${hintAttr(TOOLTIP.sourcePressure)} value="${displayEditableUnitValue('pressure', comp.pressaoFonteBar, 3)}" step="${displayStep('pressure', 0.01)}" min="${displayBound('pressure', -sourceAtmosphericBar(comp))}" max="${displayBound('pressure', 20)}">
             </div>
             <div class="prop-group">
                 ${makeUnitLabel('Vazão máxima', 'flow', TOOLTIP.sourceFlow)}
@@ -355,7 +397,7 @@ export const SOURCE_PROPERTIES_PRESENTER = {
         bind('input-pressao-fonte', 'change', () => {
             validateInputWithFeedback(
                 inputPressure,
-                (value, name) => InputValidator.validatePressure(baseFromDisplay('pressure', value), 20, name),
+                (value, name) => InputValidator.validateGaugePressure(baseFromDisplay('pressure', value), 20, name, sourceAtmosphericBar(comp)),
                 'Pressão da fonte',
                 (value) => { comp.pressaoFonteBar = value; }
             );
@@ -383,7 +425,7 @@ export const SINK_PROPERTIES_PRESENTER = {
         const basicContent = `
             <div class="prop-group">
                 ${makeUnitLabel('Contrapressão imposta', 'pressure', TOOLTIP.sinkPressure)}
-                <input type="number" id="input-pressao-dreno" ${hintAttr(TOOLTIP.sinkPressure)} value="${displayEditableUnitValue('pressure', comp.pressaoSaidaBar, 3)}" step="${displayStep('pressure', 0.01)}" min="${displayBound('pressure', 0)}" max="${displayBound('pressure', 10)}">
+                <input type="number" id="input-pressao-dreno" ${hintAttr(TOOLTIP.sinkPressure)} value="${displayEditableUnitValue('pressure', comp.pressaoSaidaBar, 3)}" step="${displayStep('pressure', 0.01)}" min="${displayBound('pressure', -DEFAULT_ATMOSPHERIC_PRESSURE_BAR)}" max="${displayBound('pressure', 10)}">
             </div>
             <div class="prop-group">
                 ${makeUnitLabel('Vazão recebida', 'flow', TOOLTIP.sinkCurrentFlow)}
@@ -427,7 +469,7 @@ export const SINK_PROPERTIES_PRESENTER = {
         bind('input-pressao-dreno', 'change', () => {
             validateInputWithFeedback(
                 inputPressure,
-                (value, name) => InputValidator.validatePressure(baseFromDisplay('pressure', value), 10, name),
+                (value, name) => InputValidator.validateGaugePressure(baseFromDisplay('pressure', value), 10, name),
                 'Contrapressão da saída',
                 (value) => {
                     comp.pressaoSaidaBar = value;

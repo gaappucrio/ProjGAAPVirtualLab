@@ -41,10 +41,51 @@ export function getFluidFamily(name) {
 }
 
 const PRESET_REFERENCE_STATES = Object.freeze({
-    [FLUID_FAMILY.WATER]: Object.freeze({ temp: 25, density: 997, vaporPressure: 0.0317, viscosity: 0.00089 }),
-    [FLUID_FAMILY.OIL]: Object.freeze({ temp: 25, density: 860, vaporPressure: 0.003, viscosity: 0.035 }),
-    [FLUID_FAMILY.GLYCOL]: Object.freeze({ temp: 25, density: 1045, vaporPressure: 0.02, viscosity: 0.0035 })
+    [FLUID_FAMILY.WATER]: Object.freeze({ temp: 25, density: 997, vaporPressure: 0.0317, viscosity: 0.00089, specificHeat: 4182 }),
+    [FLUID_FAMILY.OIL]: Object.freeze({ temp: 25, density: 860, vaporPressure: 0.003, viscosity: 0.035, specificHeat: 2000 }),
+    [FLUID_FAMILY.GLYCOL]: Object.freeze({ temp: 25, density: 1045, vaporPressure: 0.02, viscosity: 0.0035, specificHeat: 3800 })
 });
+
+// cp da água líquida (J/(kg·K)): polinômio de grau 7 em x = T/100 (T em °C) ajustado à IAPWS-IF97
+// (região 1, a 1 atm até 99 °C e logo acima da saturação acima disso), de 0 a 250 °C, com erro
+// máximo de 0,054%. Coeficientes do maior para o menor grau. Fora da faixa o cp fica no valor da
+// borda e a entalpia segue linear, com derivada contínua.
+const WATER_CP_POLY = Object.freeze([
+    -7.716152913, 79.20377028, -320.2330813, 684.8990943,
+    -822.4866861, 645.983407, -259.861236, 4216.693475
+]);
+const WATER_CP_MIN_T = 0;
+const WATER_CP_MAX_T = 250;
+
+function waterCpPolynomial(T) {
+    const x = T / 100;
+    return WATER_CP_POLY.reduce((acc, coef) => (acc * x) + coef, 0);
+}
+
+// ∫₀ᵀ cp dT do polinômio (T em °C, resultado em J/kg): primitiva termo a termo, × 100 pela troca x = T/100.
+function waterCpIntegralFromZero(T) {
+    const x = T / 100;
+    const degree = WATER_CP_POLY.length - 1;
+    const primitive = WATER_CP_POLY.reduce((acc, coef, index) => {
+        const power = degree - index + 1;
+        return acc + ((coef / power) * Math.pow(x, power));
+    }, 0);
+    return 100 * primitive;
+}
+
+function getWaterSpecificHeat(T) {
+    const safeT = Math.max(WATER_CP_MIN_T, Math.min(WATER_CP_MAX_T, Number(T) || 0));
+    return waterCpPolynomial(safeT);
+}
+
+function getWaterSensibleEnthalpy(T) {
+    const t = Number(T) || 0;
+    if (t < WATER_CP_MIN_T) return getWaterSpecificHeat(WATER_CP_MIN_T) * (t - WATER_CP_MIN_T);
+    if (t > WATER_CP_MAX_T) {
+        return waterCpIntegralFromZero(WATER_CP_MAX_T) + (getWaterSpecificHeat(WATER_CP_MAX_T) * (t - WATER_CP_MAX_T));
+    }
+    return waterCpIntegralFromZero(t);
+}
 
 function getComponentRefState(name, fluido) {
     const family = getFluidFamily(name);
@@ -56,7 +97,8 @@ function getComponentRefState(name, fluido) {
             temp: fluido && fluido.refTemperatura !== undefined ? fluido.refTemperatura : DEFAULT_FLUID_TEMPERATURE,
             density: fluido && fluido.refDensidade !== undefined ? fluido.refDensidade : DEFAULT_FLUID_DENSITY,
             vaporPressure: fluido && fluido.refPressaoVaporBar !== undefined ? fluido.refPressaoVaporBar : DEFAULT_FLUID_VAPOR_PRESSURE_BAR,
-            viscosity: fluido && fluido.refViscosidadeDinamicaPaS !== undefined ? fluido.refViscosidadeDinamicaPaS : DEFAULT_FLUID_VISCOSITY_PA_S
+            viscosity: fluido && fluido.refViscosidadeDinamicaPaS !== undefined ? fluido.refViscosidadeDinamicaPaS : DEFAULT_FLUID_VISCOSITY_PA_S,
+            specificHeat: getFluidRefSpecificHeat(fluido)
         };
     }
 
@@ -66,8 +108,76 @@ function getComponentRefState(name, fluido) {
         temp: isPure && fluido.refTemperatura !== undefined ? fluido.refTemperatura : preset.temp,
         density: isPure && fluido.refDensidade !== undefined ? fluido.refDensidade : preset.density,
         vaporPressure: isPure && fluido.refPressaoVaporBar !== undefined ? fluido.refPressaoVaporBar : preset.vaporPressure,
-        viscosity: isPure && fluido.refViscosidadeDinamicaPaS !== undefined ? fluido.refViscosidadeDinamicaPaS : preset.viscosity
+        viscosity: isPure && fluido.refViscosidadeDinamicaPaS !== undefined ? fluido.refViscosidadeDinamicaPaS : preset.viscosity,
+        specificHeat: isPure ? getFluidRefSpecificHeat(fluido, preset.specificHeat) : preset.specificHeat
     };
+}
+
+// cp de referência (na refTemperatura). Arquivos anteriores ao cp(T) não têm o campo: o cp gravado
+// era constante, igual ao valor de referência do preset, então ele serve de referência.
+function getFluidRefSpecificHeat(fluido, fallback = DEFAULT_FLUID_SPECIFIC_HEAT_JKGK) {
+    const ref = Number(fluido?.refCalorEspecificoJkgK);
+    if (Number.isFinite(ref) && ref > 0) return ref;
+    const current = Number(fluido?.calorEspecificoJkgK);
+    return Number.isFinite(current) && current > 0 ? current : fallback;
+}
+
+// Componentes da composição com peso em massa (fração volumétrica × ρ de referência) e estado de
+// referência; base comum do cp e da entalpia da mistura ideal.
+function getMassWeightedComponents(fluido) {
+    const composition = fluido?.composicao || { [fluido?.nome || DEFAULT_FLUID_NAME]: 1 };
+    return Object.entries(composition)
+        .map(([name, fraction]) => {
+            const ref = getComponentRefState(name, fluido);
+            return { family: getFluidFamily(name), ref, massWeight: Number(fraction) * Math.max(1, ref.density) };
+        })
+        .filter((component) => Number.isFinite(component.massWeight) && component.massWeight > 0);
+}
+
+/**
+ * cp (J/(kg·K)) do fluido na temperatura T (°C). A água segue a IAPWS-IF97 ancorada no cp de
+ * referência: cp(T) = cp_ref · F(T)/F(T_ref). Óleo, glicol e fluidos personalizados têm cp constante
+ * (sem referência validável no projeto). Misturas: média ponderada pela massa (mistura ideal).
+ */
+export function calculateSpecificHeatAtTemp(fluido, T) {
+    const components = getMassWeightedComponents(fluido);
+    const totalMass = components.reduce((sum, component) => sum + component.massWeight, 0);
+    if (!(totalMass > 0)) return getFluidRefSpecificHeat(fluido);
+    const weighted = components.reduce((sum, { family, ref, massWeight }) => {
+        const cp = family === FLUID_FAMILY.WATER
+            ? ref.specificHeat * (getWaterSpecificHeat(T) / getWaterSpecificHeat(ref.temp))
+            : ref.specificHeat;
+        return sum + (massWeight * cp);
+    }, 0);
+    return weighted / totalMass;
+}
+
+/**
+ * Entalpia sensível (J/kg) relativa a 0 °C: h(T) = ∫₀ᵀ cp dT, coerente com calculateSpecificHeatAtTemp.
+ * Só diferenças de entalpia têm sentido físico; a referência comum se cancela nos balanços.
+ */
+export function calculateSensibleEnthalpyJkg(fluido, T) {
+    const components = getMassWeightedComponents(fluido);
+    const totalMass = components.reduce((sum, component) => sum + component.massWeight, 0);
+    const t = Number(T) || 0;
+    if (!(totalMass > 0)) return getFluidRefSpecificHeat(fluido) * t;
+    const weighted = components.reduce((sum, { family, ref, massWeight }) => {
+        const h = family === FLUID_FAMILY.WATER
+            ? (ref.specificHeat / getWaterSpecificHeat(ref.temp)) * getWaterSensibleEnthalpy(t)
+            : ref.specificHeat * t;
+        return sum + (massWeight * h);
+    }, 0);
+    return weighted / totalMass;
+}
+
+/**
+ * cp médio na faixa [T1, T2] = Δh/ΔT: com ele, m·cp·ΔT fecha o balanço de energia exatamente.
+ */
+export function calculateMeanSpecificHeat(fluido, T1, T2) {
+    const t1 = Number(T1) || 0;
+    const t2 = Number(T2) || 0;
+    if (Math.abs(t2 - t1) < 1e-9) return calculateSpecificHeatAtTemp(fluido, t1);
+    return (calculateSensibleEnthalpyJkg(fluido, t2) - calculateSensibleEnthalpyJkg(fluido, t1)) / (t2 - t1);
 }
 
 function getWaterDensityFactor(T) {
@@ -307,19 +417,26 @@ export function updateFluidoProperties(fluido, dados = {}) {
         fluido.refDensidade = fluido.densidade !== undefined ? fluido.densidade : DEFAULT_FLUID_DENSITY;
         fluido.refViscosidadeDinamicaPaS = fluido.viscosidadeDinamicaPaS !== undefined ? fluido.viscosidadeDinamicaPaS : DEFAULT_FLUID_VISCOSITY_PA_S;
         fluido.refPressaoVaporBar = fluido.pressaoVaporBar !== undefined ? fluido.pressaoVaporBar : DEFAULT_FLUID_VAPOR_PRESSURE_BAR;
+        fluido.refCalorEspecificoJkgK = positiveNumber(
+            dados.calorEspecificoJkgK,
+            fluido.calorEspecificoJkgK ?? DEFAULT_FLUID_SPECIFIC_HEAT_JKGK,
+            1
+        );
     }
 
     if (dados.refTemperatura !== undefined) fluido.refTemperatura = dados.refTemperatura;
     if (dados.refDensidade !== undefined) fluido.refDensidade = dados.refDensidade;
     if (dados.refViscosidadeDinamicaPaS !== undefined) fluido.refViscosidadeDinamicaPaS = dados.refViscosidadeDinamicaPaS;
     if (dados.refPressaoVaporBar !== undefined) fluido.refPressaoVaporBar = dados.refPressaoVaporBar;
+    if (dados.refCalorEspecificoJkgK !== undefined) fluido.refCalorEspecificoJkgK = dados.refCalorEspecificoJkgK;
 
     const hasExplicitDensity = dados.densidade !== undefined;
     const hasExplicitTemp = dados.temperatura !== undefined;
     const hasExplicitVisc = dados.viscosidadeDinamicaPaS !== undefined;
     const hasExplicitVapor = dados.pressaoVaporBar !== undefined;
+    const hasExplicitCp = dados.calorEspecificoJkgK !== undefined;
 
-    if (hasExplicitDensity || hasExplicitVisc || hasExplicitVapor) {
+    if (hasExplicitDensity || hasExplicitVisc || hasExplicitVapor || hasExplicitCp) {
         if (hasExplicitDensity && dados.refDensidade === undefined) {
             fluido.refDensidade = positiveNumber(dados.densidade, DEFAULT_FLUID_DENSITY, 1);
         }
@@ -329,10 +446,17 @@ export function updateFluidoProperties(fluido, dados = {}) {
         if (hasExplicitVapor && dados.refPressaoVaporBar === undefined) {
             fluido.refPressaoVaporBar = positiveNumber(dados.pressaoVaporBar, DEFAULT_FLUID_VAPOR_PRESSURE_BAR, 0.0001);
         }
-        if (dados.refTemperatura === undefined && hasExplicitTemp) {
-            // Reancora as propriedades não informadas na nova temperatura de referência; sem isso,
-            // editar só a densidade a 90 °C deixaria μ e Pv de 25 °C presos à referência de 90 °C.
-            const novaRefTemperatura = Number(dados.temperatura);
+        if (hasExplicitCp && dados.refCalorEspecificoJkgK === undefined) {
+            fluido.refCalorEspecificoJkgK = positiveNumber(dados.calorEspecificoJkgK, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK, 1);
+        }
+        if (dados.refTemperatura === undefined) {
+            // Reancora as propriedades não informadas na temperatura em que o valor explícito vale; sem
+            // isso, editar só a densidade a 90 °C deixaria μ e Pv de 25 °C presos à referência de 90 °C.
+            // Sem temperatura no pedido, vale a atual: o painel só envia o campo editado, e ρ digitado
+            // a 80 °C não pode virar a referência de 25 °C (a edição seguinte mudaria ρ sozinho).
+            const novaRefTemperatura = hasExplicitTemp
+                ? Number(dados.temperatura)
+                : (fluido.temperatura ?? DEFAULT_FLUID_TEMPERATURE);
             if (!hasExplicitDensity && dados.refDensidade === undefined) {
                 fluido.refDensidade = calculateDensityAtTemp(fluido, novaRefTemperatura);
             }
@@ -341,6 +465,9 @@ export function updateFluidoProperties(fluido, dados = {}) {
             }
             if (!hasExplicitVapor && dados.refPressaoVaporBar === undefined) {
                 fluido.refPressaoVaporBar = calculateVaporPressureAtTemp(fluido, novaRefTemperatura);
+            }
+            if (!hasExplicitCp && dados.refCalorEspecificoJkgK === undefined) {
+                fluido.refCalorEspecificoJkgK = calculateSpecificHeatAtTemp(fluido, novaRefTemperatura);
             }
             fluido.refTemperatura = novaRefTemperatura;
         }
@@ -376,11 +503,11 @@ export function updateFluidoProperties(fluido, dados = {}) {
     }
     fluido.viscosidade = fluido.viscosidadeDinamicaPaS;
 
-    fluido.calorEspecificoJkgK = positiveNumber(
-        dados.calorEspecificoJkgK,
-        fluido.calorEspecificoJkgK ?? DEFAULT_FLUID_SPECIFIC_HEAT_JKGK,
-        1
-    );
+    if (hasExplicitCp) {
+        fluido.calorEspecificoJkgK = positiveNumber(dados.calorEspecificoJkgK, fluido.calorEspecificoJkgK ?? DEFAULT_FLUID_SPECIFIC_HEAT_JKGK, 1);
+    } else {
+        fluido.calorEspecificoJkgK = calculateSpecificHeatAtTemp(fluido, targetTemp);
+    }
 
     if (hasExplicitVapor) {
         fluido.pressaoVaporBar = positiveNumber(dados.pressaoVaporBar, fluido.pressaoVaporBar ?? DEFAULT_FLUID_VAPOR_PRESSURE_BAR, 0.0001);
@@ -415,7 +542,6 @@ export function cloneFluido(fluido, overrides = {}) {
     const baseProps = {
         nome: fluido?.nome ?? DEFAULT_FLUID_NAME,
         temperatura: newTemp,
-        calorEspecificoJkgK: fluido?.calorEspecificoJkgK ?? DEFAULT_FLUID_SPECIFIC_HEAT_JKGK,
         pressaoAtmosfericaBar: fluido?.pressaoAtmosfericaBar ?? DEFAULT_ATMOSPHERIC_PRESSURE_BAR,
         composicao: fluido?.composicao,
         corVisual: fluido?.corVisual,
@@ -423,10 +549,12 @@ export function cloneFluido(fluido, overrides = {}) {
         refTemperatura: fluido?.refTemperatura ?? fluido?.temperatura ?? DEFAULT_FLUID_TEMPERATURE,
         refDensidade: fluido?.refDensidade ?? fluido?.densidade ?? DEFAULT_FLUID_DENSITY,
         refPressaoVaporBar: fluido?.refPressaoVaporBar ?? fluido?.pressaoVaporBar ?? DEFAULT_FLUID_VAPOR_PRESSURE_BAR,
-        refViscosidadeDinamicaPaS: fluido?.refViscosidadeDinamicaPaS ?? fluido?.viscosidadeDinamicaPaS ?? DEFAULT_FLUID_VISCOSITY_PA_S
+        refViscosidadeDinamicaPaS: fluido?.refViscosidadeDinamicaPaS ?? fluido?.viscosidadeDinamicaPaS ?? DEFAULT_FLUID_VISCOSITY_PA_S,
+        refCalorEspecificoJkgK: getFluidRefSpecificHeat(fluido)
     };
 
     if (!tempChanged) {
+        baseProps.calorEspecificoJkgK = fluido?.calorEspecificoJkgK ?? DEFAULT_FLUID_SPECIFIC_HEAT_JKGK;
         baseProps.densidade = fluido?.densidade ?? DEFAULT_FLUID_DENSITY;
         baseProps.pressaoVaporBar = fluido?.pressaoVaporBar ?? DEFAULT_FLUID_VAPOR_PRESSURE_BAR;
         baseProps.viscosidadeDinamicaPaS = fluido?.viscosidadeDinamicaPaS ?? DEFAULT_FLUID_VISCOSITY_PA_S;
@@ -467,6 +595,9 @@ export function mixFluidos(contributions = [], fallback = null, { nome = 'Mistur
     let vaporPressure = 0;
     let refVaporPressure = 0;
     let atmosphericPressure = 0;
+    let enthalpyWeighted = 0;
+    let refHeatCapacityWeighted = 0;
+    const massContributions = [];
     const colorComposition = {};
 
     validContributions.forEach(({ fluido, weight }) => {
@@ -505,6 +636,9 @@ export function mixFluidos(contributions = [], fallback = null, { nome = 'Mistur
         heatCapacityMassWeight += massWeight;
         heatCapacityWeighted += heatCapacityContribution;
         thermalEnergyWeighted += heatCapacityContribution * fluidTemperature;
+        enthalpyWeighted += massWeight * calculateSensibleEnthalpyJkg(fluido, fluidTemperature);
+        refHeatCapacityWeighted += massWeight * getFluidRefSpecificHeat(fluido);
+        massContributions.push({ fluido, massWeight });
         vaporPressure += fraction * fluidVaporPressure;
         refVaporPressure += fraction * fluidRefVaporPressure;
         atmosphericPressure += fraction * positiveNumber(fluido.pressaoAtmosfericaBar, DEFAULT_ATMOSPHERIC_PRESSURE_BAR, 0.5);
@@ -528,18 +662,42 @@ export function mixFluidos(contributions = [], fallback = null, { nome = 'Mistur
         .sort(([, a], [, b]) => b - a)
         .map(([componentName, fraction]) => `${componentName} ${(fraction * 100).toFixed(0)}%`);
 
+    // Balanço de energia por entalpia (mistura ideal, sem calor de mistura): T_mix resolve
+    // Σ mᵢ·hᵢ(T_mix) = Σ mᵢ·hᵢ(Tᵢ), por Newton com derivada Σ mᵢ·cpᵢ(T) > 0. Com cp constante,
+    // a 1ª estimativa (Σ m·cp·T / Σ m·cp) já é a raiz.
+    let mixTemperature = heatCapacityWeighted > 0
+        ? thermalEnergyWeighted / heatCapacityWeighted
+        : DEFAULT_FLUID_TEMPERATURE;
+    let mixSpecificHeat = heatCapacityMassWeight > 0
+        ? heatCapacityWeighted / heatCapacityMassWeight
+        : DEFAULT_FLUID_SPECIFIC_HEAT_JKGK;
+    if (heatCapacityMassWeight > 0) {
+        for (let iteration = 0; iteration < 30; iteration += 1) {
+            let residual = -enthalpyWeighted;
+            let derivative = 0;
+            massContributions.forEach(({ fluido, massWeight }) => {
+                residual += massWeight * calculateSensibleEnthalpyJkg(fluido, mixTemperature);
+                derivative += massWeight * calculateSpecificHeatAtTemp(fluido, mixTemperature);
+            });
+            if (!(derivative > 0)) break;
+            mixSpecificHeat = derivative / heatCapacityMassWeight;
+            const step = residual / derivative;
+            mixTemperature -= step;
+            if (Math.abs(step) < 1e-10) break;
+        }
+    }
+
     return createFluidoFromProperties({
         nome: compositionNames.length > 1 ? `${nome}: ${compositionNames.join(' / ')}` : compositionNames[0]?.replace(/\s\d+%$/, '') || nome,
         densidade: density,
         refDensidade: refDensity,
         refTemperatura: refTemperature,
-        temperatura: heatCapacityWeighted > 0
-            ? thermalEnergyWeighted / heatCapacityWeighted
-            : DEFAULT_FLUID_TEMPERATURE,
+        temperatura: mixTemperature,
         viscosidadeDinamicaPaS: Math.exp(logViscosity),
         refViscosidadeDinamicaPaS: Math.exp(refLogViscosity),
-        calorEspecificoJkgK: heatCapacityMassWeight > 0
-            ? heatCapacityWeighted / heatCapacityMassWeight
+        calorEspecificoJkgK: mixSpecificHeat,
+        refCalorEspecificoJkgK: heatCapacityMassWeight > 0
+            ? refHeatCapacityWeighted / heatCapacityMassWeight
             : DEFAULT_FLUID_SPECIFIC_HEAT_JKGK,
         pressaoVaporBar: vaporPressure,
         refPressaoVaporBar: refVaporPressure,

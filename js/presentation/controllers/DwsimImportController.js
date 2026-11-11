@@ -51,7 +51,14 @@ export function setupDwsimImportController({ engine, undoManager } = {}) {
             const skippedMsg = stats.skipped > 0
                 ? '\n' + t('toolbar.importDwsimSkipped', { count: stats.skipped })
                 : '';
-            alertUser(successMsg + skippedMsg);
+            const elevationMsg = (stats.ignoredElevations || []).map((item) => '\n' + t('toolbar.importDwsimElevationIgnored', {
+                pipes: item.pipeTags.join(', ') || '?',
+                elevationM: item.elevationM,
+                // Ordem de grandeza para água (ρ ≈ 1000 kg/m³): ρ·g·Δz em bar.
+                headBar: Math.abs(item.elevationM) * 1000 * 9.80665 / 1e5
+            })).join('');
+            const elevationHint = elevationMsg ? '\n' + t('toolbar.importDwsimElevationHint') : '';
+            alertUser(successMsg + skippedMsg + elevationMsg + elevationHint);
         } catch (error) {
             console.error('Falha ao importar DWSIM:', error);
             alertUser(`${t('toolbar.importDwsimError')}\n${error?.message || ''}`);

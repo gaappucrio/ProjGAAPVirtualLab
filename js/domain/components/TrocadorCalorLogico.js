@@ -7,7 +7,7 @@ import {
     lpsToM3s
 } from '../units/HydraulicUnits.js';
 import { clamp, ComponenteFisico, pressureLossFromFlow } from './BaseComponente.js';
-import { cloneFluido } from './Fluido.js';
+import { calculateMeanSpecificHeat, cloneFluido } from './Fluido.js';
 
 const TEMPERATURA_SERVICO_PADRAO_C = 80;
 const UA_PADRAO_W_K = 2500;
@@ -230,7 +230,31 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         return 'contracorrente';
     }
 
+    // ε-NTU com cp(T): o cp de cada corrente é o médio na faixa que ela percorre, Δh/ΔT entre a entrada
+    // e a saída, iterado a partir do cp na entrada. Na convergência, Q = m·Δh nas duas correntes (o
+    // balanço fecha por entalpia, como no DWSIM). Com cp constante converge na 1ª passada.
     calcularTrocaTermicaGlobal(fluido1, vazao1, fluido2, vazao2, modo = this.getModoEscoamento()) {
+        const t1 = numeroSeguro(fluido1?.temperatura, 25);
+        const corrente2Ativa = Boolean(fluido2) && vazao2 > EPSILON_FLOW;
+        const t2 = corrente2Ativa ? numeroSeguro(fluido2.temperatura, 25) : this.temperaturaServicoC;
+        // Corrente ausente fica no cp padrão: sem isso, undefined − undefined = NaN nunca convergia.
+        let cp1 = numeroSeguro(fluido1?.calorEspecificoJkgK, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK);
+        let cp2 = numeroSeguro(fluido2?.calorEspecificoJkgK, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK);
+        let resultado = this._calcularTrocaComCp(fluido1, vazao1, fluido2, vazao2, modo, cp1, cp2);
+        for (let iteracao = 0; iteracao < 20; iteracao += 1) {
+            const novoCp1 = fluido1 ? calculateMeanSpecificHeat(fluido1, t1, resultado.t1Out) : cp1;
+            const novoCp2 = corrente2Ativa ? calculateMeanSpecificHeat(fluido2, t2, resultado.t2Out) : cp2;
+            const convergiu = Math.abs(novoCp1 - cp1) <= 1e-9 * Math.abs(novoCp1)
+                && (!corrente2Ativa || Math.abs(novoCp2 - cp2) <= 1e-9 * Math.abs(novoCp2));
+            cp1 = novoCp1;
+            cp2 = novoCp2;
+            if (convergiu) break;
+            resultado = this._calcularTrocaComCp(fluido1, vazao1, fluido2, vazao2, modo, cp1, cp2);
+        }
+        return resultado;
+    }
+
+    _calcularTrocaComCp(fluido1, vazao1, fluido2, vazao2, modo, cpCorrente1, cpCorrente2) {
         const t1 = numeroSeguro(fluido1?.temperatura, 25);
         const t2 = (fluido2 && vazao2 > EPSILON_FLOW) ? numeroSeguro(fluido2.temperatura, 25) : this.temperaturaServicoC;
         const ua = this.uaWPorK;
@@ -251,7 +275,7 @@ export class TrocadorCalorLogico extends ComponenteFisico {
                 return { t1Out: t1, t2Out: t2, duty: 0, ef: 0, dt1: 0, dt2: 0, modo: modoEfetivo, maxHeat: 0, lmtd: 0, ft: 1.0, minDt: 0 };
             }
             if (vazao1 <= EPSILON_FLOW && vazao2 > EPSILON_FLOW) {
-                const cp2 = Math.max(1, numeroSeguro(fluido2?.calorEspecificoJkgK, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK));
+                const cp2 = Math.max(1, numeroSeguro(cpCorrente2, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK));
                 const den2 = Math.max(1, numeroSeguro(fluido2?.densidade, DEFAULT_FLUID_DENSITY_KG_M3));
                 const m2 = lpsToM3s(vazao2) * den2;
                 const c2 = m2 * cp2;
@@ -289,7 +313,7 @@ export class TrocadorCalorLogico extends ComponenteFisico {
             }
         }
 
-        const cp1 = Math.max(1, numeroSeguro(fluido1?.calorEspecificoJkgK, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK));
+        const cp1 = Math.max(1, numeroSeguro(cpCorrente1, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK));
         const den1 = Math.max(1, numeroSeguro(fluido1?.densidade, DEFAULT_FLUID_DENSITY_KG_M3));
         const m1 = lpsToM3s(vazao1) * den1;
         const c1 = m1 * cp1;
@@ -300,7 +324,7 @@ export class TrocadorCalorLogico extends ComponenteFisico {
         let cr = 0;
 
         if (fluido2 && vazao2 > EPSILON_FLOW) {
-            const cp2 = Math.max(1, numeroSeguro(fluido2.calorEspecificoJkgK, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK));
+            const cp2 = Math.max(1, numeroSeguro(cpCorrente2, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK));
             const den2 = Math.max(1, numeroSeguro(fluido2.densidade, DEFAULT_FLUID_DENSITY_KG_M3));
             const m2 = lpsToM3s(vazao2) * den2;
             c2 = m2 * cp2;

@@ -119,6 +119,11 @@ test('geometria de conexão considera altura relativa somente quando habilitada'
     assert.notEqual(relativeGeometry.straightLengthM, schematicGeometry.straightLengthM);
     assert.notEqual(relativeGeometry.headGainM, 0);
     assert.deepEqual(rotatedVisualGeometry, relativeGeometry, 'Rotação visual não deve alterar geometria física da conexão');
+    // Só o desnível conta: dy = 120 px = 1,5 m, então L = max(1 m, |Δz|) = 1,5 m.
+    assert.equal(relativeGeometry.straightLengthM, 1.5);
+    assert.equal(relativeGeometry.headGainM, 1.5);
+    tanque.x += 400;
+    assert.deepEqual(engine.getConnectionGeometry(connection), relativeGeometry, 'afastar na horizontal não muda a geometria física');
 });
 
 test('pausa da simulação preserva último estado hidráulico visível', () => {
@@ -1013,9 +1018,10 @@ function simulateTicks(engine, ticks = 30, dt = 0.1) {
     for (let i = 0; i < ticks; i += 1) engine.tickPipeline.advance(dt);
 }
 
-test('tanque novo nasce fechado e o tipo gravado no arquivo é respeitado ao abrir', () => {
+test('tanque novo nasce aberto e o tipo gravado no arquivo é respeitado ao abrir', () => {
     const novo = new TanqueLogico('T-novo', 'T-novo', 0, 0);
-    assert.equal(novo.tipoTanque, 'fechado');
+    assert.equal(novo.tipoTanque, 'atmosferico', 'padrão aberto (decisão do usuário, 2026-11-11)');
+    assert.equal(novo.pressaoAlivioBar, 10, 'PSV padrão de 10 barg, usada só se o tanque virar fechado');
     assert.equal(novo.considerarPerdasBocais, false, 'Tanque novo sem perdas nos bocais, como no DWSIM');
     assert.equal(novo.usarGeometriaBocal, false, 'Perdas na velocidade do cano por padrao');
     assert.equal(new DrenoLogico('D-novo', 'D-novo', 0, 0).usarGeometriaBocal, false, 'K do dreno na velocidade do cano por padrao');
@@ -1028,12 +1034,16 @@ test('tanque novo nasce fechado e o tipo gravado no arquivo é respeitado ao abr
     tanque.usarGeometriaBocal = true;
     tanque.diametroConexaoM = 0.05;
     engine.add(tanque);
-    engine.add(new TanqueLogico('T-fechado', 'T-fechado', 200, 0));
+    const fechado = new TanqueLogico('T-fechado', 'T-fechado', 200, 0);
+    fechado.tipoTanque = 'fechado';
+    fechado.pressaoAlivioBar = 3.5;
+    engine.add(fechado);
     const restaurado = createEngine();
     assert.equal(restoreFlowchartDocument(restaurado, createFlowchartDocument(engine)).restored, true);
     const tipoDe = (tag) => restaurado.componentes.find((c) => c.tag === tag).tipoTanque;
     assert.equal(tipoDe('T-aberto'), 'atmosferico');
     assert.equal(tipoDe('T-fechado'), 'fechado');
+    assert.equal(restaurado.componentes.find((c) => c.tag === 'T-fechado').pressaoAlivioBar, 3.5, 'set da PSV é salvo no arquivo');
     const aberto = restaurado.componentes.find((c) => c.tag === 'T-aberto');
     assert.equal(aberto.considerarColunaLiquido, false, 'Check da coluna de liquido e salvo no arquivo');
     assert.equal(aberto.considerarPerdasBocais, false, 'Check das perdas nos bocais e salvo no arquivo');
@@ -1181,7 +1191,7 @@ test('controle de nivel PID estabiliza o tanque no set point sem ciclo limite', 
     assert.equal(tanque.vazaoTransbordoLps, 0);
 });
 
-test('importacao de planta teste: teste_trocatroca.json (3 cenarios termicos: utilidade, paralelo e contracorrente)', () => {
+test('importacao de planta teste: teste_trocatroca.json (3 cenarios termicos: utilidade, paralelo e contracorrente)', async () => {
     const raw = fs.readFileSync(path.join(PLANTAS_TESTE_DIR, 'teste_trocatroca.json'), 'utf8');
     const engine = createEngine();
     const { restored } = restoreFlowchartDocument(engine, raw);
@@ -1203,7 +1213,12 @@ test('importacao de planta teste: teste_trocatroca.json (3 cenarios termicos: ut
     assert.equal(tcUtil.temDuasCorrentesConectadas(), false);
     // A válvula a 10% passaria mais que a fonte entrega: a vazão é a máxima da fonte (1 L/s).
     approx(tcUtil.vazao1Lps, 1, 1e-3, 'Corrente 1 limitada pela vazao maxima da fonte');
-    const capacidade = (massKgS) => massKgS * 4182;
+    // Água com cp(T): capacidade pelo cp médio na faixa percorrida (Δh/ΔT entre 25 °C e a saída).
+    const { calculateMeanSpecificHeat, createFluidoFromProperties } = await import('../js/domain/components/Fluido.js');
+    // Fluido que entra em cada porta (o arquivo grava a fonte quente a 80 °C com a própria referência).
+    const capacidadeCorrente = (tc, porta, massKgS, tEntrada, tSaida) => massKgS
+        * calculateMeanSpecificHeat(tc.getFluidoEntradaMisturadoPorPorta(porta) || createFluidoFromProperties({ temperatura: tEntrada }), tEntrada, tSaida);
+    const capacidade = (massKgS) => capacidadeCorrente(tcUtil, 'in1', massKgS, 25, tcUtil.temperaturaSaidaC);
     const ntuUtil = tcUtil.uaWPorK / capacidade(tcUtil.vazaoMassaKgS);
     approx(tcUtil.efetividadeAtual, 1 - Math.exp(-ntuUtil), 1e-6, 'Utilidade: e = 1 - exp(-NTU)');
     approx(tcUtil.temperaturaSaidaC, 25 + (tcUtil.efetividadeAtual * (80 - 25)), 1e-6, 'Saida em utilidade pelo e-NTU');
@@ -1213,9 +1228,11 @@ test('importacao de planta teste: teste_trocatroca.json (3 cenarios termicos: ut
     assert.ok(tcParalelo, 'Trocador em paralelo deve ser localizado na cota y=680');
     assert.equal(tcParalelo.temDuasCorrentesConectadas(), true);
     assert.equal(tcParalelo.getModoEscoamento(engine), 'paralelo');
-    const cMinParalelo = capacidade(Math.min(tcParalelo.vazaoMassaKgS, tcParalelo.vazaoMassa2KgS));
-    const crAnaliticoParalelo = Math.min(tcParalelo.vazaoMassaKgS, tcParalelo.vazaoMassa2KgS)
-        / Math.max(tcParalelo.vazaoMassaKgS, tcParalelo.vazaoMassa2KgS);
+    // Capacidade de cada corrente na própria faixa (fria 25 °C → saída 1; quente 80 °C → saída 2).
+    const c1ParaleloWK = capacidadeCorrente(tcParalelo, 'in1', tcParalelo.vazaoMassaKgS, 25, tcParalelo.temperaturaSaidaC);
+    const c2ParaleloWK = capacidadeCorrente(tcParalelo, 'in2', tcParalelo.vazaoMassa2KgS, 80, tcParalelo.temperaturaSaida2C);
+    const cMinParalelo = Math.min(c1ParaleloWK, c2ParaleloWK);
+    const crAnaliticoParalelo = cMinParalelo / Math.max(c1ParaleloWK, c2ParaleloWK);
     const ntuParalelo = tcParalelo.uaWPorK / cMinParalelo;
     approx(
         tcParalelo.efetividadeAtual,
@@ -1229,18 +1246,20 @@ test('importacao de planta teste: teste_trocatroca.json (3 cenarios termicos: ut
     const c2Paralelo = tcParalelo.vazaoMassa2KgS;
     const crParalelo = Math.min(c1Paralelo, c2Paralelo) / Math.max(c1Paralelo, c2Paralelo);
     assert.ok(tcParalelo.efetividadeAtual <= 1 / (1 + crParalelo) + 1e-6, `Efetividade em paralelo nao pode ultrapassar o teto termodinamico 1/(1+Cr): ${tcParalelo.efetividadeAtual}`);
-    const calorRecebido = c1Paralelo * (tcParalelo.temperaturaSaidaC - 25);
-    const calorCedido = c2Paralelo * (80 - tcParalelo.temperaturaSaida2C);
-    assert.ok(Math.abs(calorRecebido - calorCedido) / calorCedido < 0.01, `Balanco de energia sensivel deve fechar: recebido=${calorRecebido}, cedido=${calorCedido}`);
+    // Balanço por entalpia (m·Δh): com o cp médio da faixa ele fecha exatamente.
+    const calorRecebido = c1ParaleloWK * (tcParalelo.temperaturaSaidaC - 25);
+    const calorCedido = c2ParaleloWK * (80 - tcParalelo.temperaturaSaida2C);
+    assert.ok(Math.abs(calorRecebido - calorCedido) / calorCedido < 1e-6, `Balanco de energia deve fechar: recebido=${calorRecebido}, cedido=${calorCedido}`);
 
     // Cenário 3: Trocador Dual-Stream em Contracorrente (TC-01 - copia, inferior)
     const tcContra = tcList.find((c) => c.y === 960);
     assert.ok(tcContra, 'Trocador em contracorrente deve ser localizado na cota y=960');
     assert.equal(tcContra.temDuasCorrentesConectadas(), true);
     assert.equal(tcContra.getModoEscoamento(engine), 'contracorrente');
-    const crContra = Math.min(tcContra.vazaoMassaKgS, tcContra.vazaoMassa2KgS)
-        / Math.max(tcContra.vazaoMassaKgS, tcContra.vazaoMassa2KgS);
-    const ntuContra = tcContra.uaWPorK / capacidade(Math.min(tcContra.vazaoMassaKgS, tcContra.vazaoMassa2KgS));
+    const c1ContraWK = capacidadeCorrente(tcContra, 'in1', tcContra.vazaoMassaKgS, 25, tcContra.temperaturaSaidaC);
+    const c2ContraWK = capacidadeCorrente(tcContra, 'out2', tcContra.vazaoMassa2KgS, 80, tcContra.temperaturaSaida2C);
+    const crContra = Math.min(c1ContraWK, c2ContraWK) / Math.max(c1ContraWK, c2ContraWK);
+    const ntuContra = tcContra.uaWPorK / Math.min(c1ContraWK, c2ContraWK);
     const efetividadeContraAnalitica = Math.abs(1 - crContra) < 1e-3
         ? ntuContra / (1 + ntuContra)
         : (1 - Math.exp(-ntuContra * (1 - crContra))) / (1 - (crContra * Math.exp(-ntuContra * (1 - crContra))));
@@ -1666,4 +1685,232 @@ test('monitorController sincroniza historico de slots e compact chart ao restaur
 
 
 
+
+test('Limpar Área avisa a UI: botão de rodar e indicador de R.P. voltam ao estado inicial', async () => {
+    const { ENGINE_EVENTS } = await import('../js/application/events/EventTypes.js');
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-01', 'Fonte 01', 0, 0);
+    const dreno = new DrenoLogico('D-01', 'Dreno 01', 200, 0);
+    engine.add(fonte);
+    engine.add(dreno);
+    engine.addConnection(new ConnectionModel({ id: 'conn-0001', sourceId: fonte.id, targetId: dreno.id }));
+    for (let i = 0; i < 20; i++) engine.tickPipeline.advance(0.1);
+    assert.ok(engine.elapsedTime > 0);
+
+    const eventos = [];
+    engine.subscribe((dados) => eventos.push(dados));
+    engine.clear();
+
+    const motor = eventos.find((e) => e.tipo === ENGINE_EVENTS.MOTOR_STATE);
+    assert.equal(motor?.rodando, false, 'clear com a simulação rodando deve avisar que o motor parou');
+    assert.ok(eventos.some((e) => e.tipo === ENGINE_EVENTS.PANEL_UPDATE), 'clear deve pedir atualização do painel/indicador');
+    assert.equal(engine.elapsedTime, 0);
+    assert.equal(engine.getSteadyStateStatus().steady, false);
+
+    eventos.length = 0;
+    engine.clear();
+    assert.ok(!eventos.some((e) => e.tipo === ENGINE_EVENTS.MOTOR_STATE), 'parado, não repete o aviso de motor');
+});
+
+test('painel da fonte: preset não trava ρ/μ/Pv e o domínio não recebe o texto arredondado dos campos', async () => {
+    const { setPresentationEngine } = await import('../js/presentation/context/PresentationEngineContext.js');
+    const { SOURCE_PROPERTIES_PRESENTER } = await import('../js/presentation/properties/component/BoundaryComponentPropertiesPresenter.js');
+    const { createFluidoFromProperties, updateFluidoProperties } = await import('../js/domain/components/Fluido.js');
+    const { setUnitPreference } = await import('../js/presentation/units/DisplayUnits.js');
+    const prevDoc = global.document;
+    const elementos = new Map();
+    const swatches = [];
+    const criarElemento = (id, value) => {
+        const ouvintes = {};
+        return {
+            id, value, defaultValue: value, dataset: {}, style: {}, title: '', hidden: false, disabled: false,
+            classList: { toggle() {}, add() {}, remove() {} },
+            setAttribute() {}, closest: () => null,
+            addEventListener(evento, fn) { (ouvintes[evento] ||= []).push(fn); },
+            disparar(evento) { (ouvintes[evento] || []).forEach((fn) => fn({ target: this })); }
+        };
+    };
+    const montarPainel = (fonte) => {
+        elementos.clear();
+        swatches.length = 0;
+        const html = SOURCE_PROPERTIES_PRESENTER.render(fonte);
+        for (const tag of html.match(/<(?:input|select)[^>]*>/g)) {
+            const id = tag.match(/id="([^"]+)"/)?.[1];
+            if (id) elementos.set(id, criarElemento(id, tag.match(/value="([^"]*)"/)?.[1] ?? ''));
+        }
+        for (const cor of html.matchAll(/data-fluid-color="([^"]+)"/g)) {
+            const botao = criarElemento(null, '');
+            botao.dataset.fluidColor = cor[1];
+            swatches.push(botao);
+        }
+        SOURCE_PROPERTIES_PRESENTER.bind(fonte);
+    };
+    const editar = (id, valor) => {
+        const input = elementos.get(id);
+        input.value = valor;
+        input.disparar('change');
+    };
+    try {
+        global.document = {
+            getElementById: (id) => elementos.get(id) || null,
+            querySelectorAll: (seletor) => (seletor === '.fluid-color-swatch' ? swatches : []),
+            querySelector: () => null
+        };
+        const engine = new SistemaSimulacao();
+        setPresentationEngine(engine);
+
+        // 1) Preset e depois só a temperatura: ρ/μ/Pv seguem a correlação, como no domínio puro.
+        const fonte = new FonteLogica('F-01', 'Fonte 01', 0, 0);
+        engine.add(fonte);
+        montarPainel(fonte);
+        editar('sel-source-fluid-preset', 'oleo_leve');
+        const oleo = FLUID_PRESETS.oleo_leve;
+        approx(fonte.fluidoEntrada.densidade, oleo.densidade, 1e-9);
+
+        editar('input-source-fluid-temp', '80');
+        const fluido = fonte.fluidoEntrada;
+        assert.equal(fluido.temperatura, 80);
+        const referencia = updateFluidoProperties(createFluidoFromProperties({ ...oleo }), { temperatura: 80 });
+        approx(fluido.densidade, referencia.densidade, 1e-6, 'ρ recalculado a 80 °C');
+        approx(fluido.viscosidadeDinamicaPaS, referencia.viscosidadeDinamicaPaS, 1e-9, 'μ recalculado a 80 °C');
+        approx(fluido.pressaoVaporBar, referencia.pressaoVaporBar, 1e-9, 'Pv recalculado a 80 °C');
+        assert.ok(fluido.viscosidadeDinamicaPaS < oleo.viscosidadeDinamicaPaS, 'o óleo aquecido fica menos viscoso');
+        assert.equal(elementos.get('input-source-fluid-density').value, String(Number(fluido.densidade.toFixed(2))),
+            'o campo mostra a densidade atual, não a do preset');
+
+        // 2) Trocar a cor não mexe nas propriedades físicas.
+        const densidadeAntes = fluido.densidade;
+        swatches[1].disparar('click');
+        assert.equal(fonte.fluidoEntrada.densidade, densidadeAntes, 'a cor não reancora ρ no valor arredondado');
+
+        editar('input-source-fluid-temp', '25');
+        approx(fonte.fluidoEntrada.densidade, oleo.densidade, 1e-6, 'voltar a 25 °C devolve o preset');
+        approx(fonte.fluidoEntrada.viscosidadeDinamicaPaS, oleo.viscosidadeDinamicaPaS, 1e-9);
+
+        // 2b) ρ digitado a 80 °C vale a 80 °C: editar outro campo depois não pode mudá-lo sozinho.
+        editar('input-source-fluid-temp', '80');
+        editar('input-source-fluid-density', '800');
+        editar('input-source-fluid-cp', '2000');
+        assert.equal(fonte.fluidoEntrada.densidade, 800, 'ρ ancorado na temperatura em que foi digitado');
+        assert.equal(fonte.fluidoEntrada.refTemperatura, 80);
+
+        // 3) Em kelvin, o preset e a edição de outro campo não arredondam T nem Patm.
+        setUnitPreference('temperature', 'k');
+        const fonteK = new FonteLogica('F-02', 'Fonte 02', 0, 0);
+        engine.add(fonteK);
+        montarPainel(fonteK);
+        editar('sel-source-fluid-preset', 'agua');
+        editar('input-source-fluid-cp', '4100');
+        assert.equal(fonteK.fluidoEntrada.calorEspecificoJkgK, 4100);
+        assert.equal(fonteK.fluidoEntrada.temperatura, FLUID_PRESETS.agua.temperatura, '25 °C exibido como 298,1 K não volta 24,95 °C');
+        assert.equal(fonteK.fluidoEntrada.pressaoAtmosfericaBar, FLUID_PRESETS.agua.pressaoAtmosfericaBar, 'Patm não vira 1,013');
+    } finally {
+        setUnitPreference('temperature', 'c');
+        setPresentationEngine(null);
+        global.document = prevDoc;
+    }
+});
+
+test('fonte e dreno aceitam pressão manométrica negativa (vácuo) até o zero absoluto', async () => {
+    const { setPresentationEngine } = await import('../js/presentation/context/PresentationEngineContext.js');
+    const { SOURCE_PROPERTIES_PRESENTER, SINK_PROPERTIES_PRESENTER } = await import('../js/presentation/properties/component/BoundaryComponentPropertiesPresenter.js');
+    const { InputValidator } = await import('../js/presentation/validation/InputValidator.js');
+    const { setUnitPreference } = await import('../js/presentation/units/DisplayUnits.js');
+
+    // Validador: vácuo até −Patm; a validação comum (não manométrica) segue sem negativos.
+    assert.equal(InputValidator.validateGaugePressure(-0.6, 20, 'P').valid, true);
+    assert.equal(InputValidator.validateGaugePressure(-1.01325, 20, 'P').valid, true, 'zero absoluto é o limite');
+    assert.equal(InputValidator.validateGaugePressure(-1.02, 20, 'P').valid, false, 'abaixo do zero absoluto é impossível');
+    assert.equal(InputValidator.validateGaugePressure(-0.95, 20, 'P', 0.9).valid, false, 'o piso segue a Patm informada');
+    assert.equal(InputValidator.validatePressure(-0.1, 20, 'P').valid, false);
+
+    const prevDoc = global.document;
+    const elementos = new Map();
+    const criarElemento = (id, value) => {
+        const ouvintes = {};
+        return {
+            id, value, defaultValue: value, dataset: {}, style: {}, title: '', hidden: false, disabled: false,
+            classList: { toggle() {}, add() {}, remove() {} },
+            setAttribute() {}, closest: () => null,
+            addEventListener(evento, fn) { (ouvintes[evento] ||= []).push(fn); },
+            disparar(evento) { (ouvintes[evento] || []).forEach((fn) => fn({ target: this })); }
+        };
+    };
+    const montar = (presenter, comp) => {
+        elementos.clear();
+        const html = presenter.render(comp);
+        for (const tag of html.match(/<(?:input|select)[^>]*>/g)) {
+            const id = tag.match(/id="([^"]+)"/)?.[1];
+            if (id) elementos.set(id, Object.assign(criarElemento(id, tag.match(/value="([^"]*)"/)?.[1] ?? ''), { tag }));
+        }
+        presenter.bind(comp);
+    };
+    try {
+        global.document = { getElementById: (id) => elementos.get(id) || null, querySelectorAll: () => [], querySelector: () => null };
+        setUnitPreference('pressure', 'kpa');
+        const engine = new SistemaSimulacao();
+        setPresentationEngine(engine);
+
+        const dreno = new DrenoLogico('D-01', 'Dreno 01', 0, 0);
+        engine.add(dreno);
+        montar(SINK_PROPERTIES_PRESENTER, dreno);
+        const campoDreno = elementos.get('input-pressao-dreno');
+        assert.match(campoDreno.tag, /min="-101\.325"/, 'o campo do dreno aceita até −1 atm em kPa');
+        campoDreno.value = '-62';
+        campoDreno.disparar('change');
+        approx(dreno.pressaoSaidaBar, -0.62, 1e-12, 'dreno sob vácuo (como no template do DWSIM)');
+
+        const fonte = new FonteLogica('F-01', 'Fonte 01', 0, 0);
+        engine.add(fonte);
+        montar(SOURCE_PROPERTIES_PRESENTER, fonte);
+        const campoFonte = elementos.get('input-pressao-fonte');
+        assert.match(campoFonte.tag, /min="-101\.325"/);
+        campoFonte.value = '-51';
+        campoFonte.disparar('change');
+        approx(fonte.pressaoFonteBar, -0.51, 1e-12, 'fonte sob vácuo');
+    } finally {
+        setUnitPreference('pressure', 'kpa');
+        setPresentationEngine(null);
+        global.document = prevDoc;
+    }
+});
+
+test('painel do tanque: tipo, pré-carga e PSV ficam na aba Avançado; PSV e alívio só aparecem no vaso fechado', async () => {
+    const { setPresentationEngine } = await import('../js/presentation/context/PresentationEngineContext.js');
+    const { TANK_PROPERTIES_PRESENTER } = await import('../js/presentation/properties/component/TankComponentPropertiesPresenter.js');
+    const prevDoc = global.document;
+    try {
+        global.document = { body: { classList: { contains: () => false } } };
+        const engine = new SistemaSimulacao();
+        setPresentationEngine(engine);
+        const tanque = new TanqueLogico('T-ui', 'T-ui', 0, 0);
+        engine.add(tanque);
+
+        let html = TANK_PROPERTIES_PRESENTER.render(tanque);
+        const inicioAvancado = html.indexOf('data-tab-panel="advanced"');
+        assert.ok(inicioAvancado > 0);
+        ['input-tipo-tanque', 'input-precarga-tanque', 'input-psv-ativa-tanque', 'input-pressao-alivio-tanque'].forEach((id) => {
+            assert.ok(html.indexOf(`id="${id}"`) > inicioAvancado, `${id} fica na aba Avançado`);
+        });
+        assert.match(html, /id="grp-psv-tanque" style="display:none;"/, 'tanque aberto (padrão) esconde a PSV');
+        assert.match(html, /id="grp-alivio-display-tanque" style="display:none;"/);
+
+        tanque.tipoTanque = 'fechado';
+        html = TANK_PROPERTIES_PRESENTER.render(tanque);
+        assert.match(html, /id="grp-psv-tanque" style="display:block;"/, 'vaso fechado mostra a PSV');
+        assert.match(html, /id="grp-alivio-display-tanque" style="display:block;"/);
+        assert.match(html, /id="input-psv-ativa-tanque"[^>]*checked/, 'PSV ligada por padrão no vaso fechado');
+        // Checkbox e set em prop-groups separados: o associador automático liga cada <label> ao 1º input do grupo.
+        const trechoPsv = html.slice(html.indexOf('id="input-psv-ativa-tanque"'), html.indexOf('id="input-pressao-alivio-tanque"'));
+        assert.match(trechoPsv, /<\/div>\s*<div class="prop-group">/, 'rótulo do set não pode cair no checkbox');
+
+        tanque.pressaoAlivioBar = null;
+        html = TANK_PROPERTIES_PRESENTER.render(tanque);
+        assert.doesNotMatch(html, /id="input-psv-ativa-tanque"[^>]*checked/);
+        assert.match(html, /id="input-pressao-alivio-tanque"[^>]*disabled/, 'sem PSV, o campo do set fica desabilitado');
+    } finally {
+        setPresentationEngine(null);
+        global.document = prevDoc;
+    }
+});
 

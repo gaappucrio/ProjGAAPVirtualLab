@@ -6,6 +6,7 @@ import {
     lpsToM3s
 } from '../../domain/units/HydraulicUnits.js';
 import { getGridColors } from './ChartTheme.js';
+import { calculateMeanSpecificHeat } from '../../domain/components/Fluido.js';
 
 const HEAT_EXCHANGER_CURVE_POINT_COUNT = 40;
 const DEFAULT_WATER_DENSITY_KG_M3 = 997;
@@ -77,13 +78,14 @@ export function buildHeatExchangerCurveDatasets(component, options = {}) {
     const f1 = component?.getFluidoEntradaMisturadoPorPorta?.('in1')
         || context.queries?.getComponentFluid?.(component)
         || context.fluidoOperante;
-    const cp1 = Math.max(1, finiteNumber(f1?.calorEspecificoJkgK, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK));
+    // Mesmo cp do cálculo (médio na faixa, Δh/ΔT), para o perfil terminar nas saídas calculadas.
+    const cp1 = Math.max(1, finiteNumber(f1 ? calculateMeanSpecificHeat(f1, t1In, t1Out) : NaN, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK));
     const den1 = Math.max(1, finiteNumber(f1?.densidade, DEFAULT_WATER_DENSITY_KG_M3));
     const m1 = lpsToM3s(v1) * den1;
     const c1 = m1 * cp1;
 
     const f2 = component?.getFluidoEntradaMisturadoPorPorta?.('in2') || context.fluidoOperante;
-    const cp2 = Math.max(1, finiteNumber(f2?.calorEspecificoJkgK, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK));
+    const cp2 = Math.max(1, finiteNumber(f2 ? calculateMeanSpecificHeat(f2, t2In, t2Out) : NaN, DEFAULT_FLUID_SPECIFIC_HEAT_JKGK));
     const den2 = Math.max(1, finiteNumber(f2?.densidade, DEFAULT_WATER_DENSITY_KG_M3));
     const m2 = lpsToM3s(v2) * den2;
     const c2 = v2 > EPSILON_FLOW ? (m2 * cp2) : 0;

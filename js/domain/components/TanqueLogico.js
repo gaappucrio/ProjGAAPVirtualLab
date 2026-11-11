@@ -27,6 +27,8 @@ const TEMPO_MINIMO_ALERTA_SATURACAO_S = 1.5;
 export const TIPO_TANQUE_ATMOSFERICO = 'atmosferico';
 export const TIPO_TANQUE_FECHADO = 'fechado';
 const VOLUME_GAS_MINIMO_FRACAO = 0.02;
+// PSV ideal do vaso fechado (barg): valor didático para tanques novos, editável na aba Avançado.
+export const PRESSAO_ALIVIO_PADRAO_BAR = 10;
 
 export class TanqueLogico extends ComponenteFisico {
     constructor(id, tag, x, y) {
@@ -41,8 +43,13 @@ export class TanqueLogico extends ComponenteFisico {
         this.alturaBocalSaidaM = 0.1;
         this.volumeInicial = 0;
         this.pressaoFundoBar = 0;
-        this.tipoTanque = TIPO_TANQUE_FECHADO;
+        // Padrão aberto (decisão do usuário, 2026-11-11); o tipo fica na aba Avançado.
+        this.tipoTanque = TIPO_TANQUE_ATMOSFERICO;
         this.pressaoPreCargaBar = 0.5;
+        // PSV ideal do vaso fechado: ao atingir este set (barg) a pressão do gás para e o excedente sai
+        // como alívio contabilizado. null = sem PSV (o vaso enche até a trava hidráulica).
+        this.pressaoAlivioBar = PRESSAO_ALIVIO_PADRAO_BAR;
+        this.vazaoAlivioLps = 0;
         // Idealizações opcionais (aba Avançado): desligadas, o tanque se aproxima do vaso
         // passante do DWSIM estacionário, sem coluna de líquido nem perdas singulares nos bocais.
         // As perdas nos bocais vêm desligadas, como no DWSIM, que só as tem como acessório do cano.
@@ -199,6 +206,30 @@ export class TanqueLogico extends ComponenteFisico {
 
     getPressaoGasBar(fluido = null) {
         return this.getPressaoGasParaNivelBar(fluido, this.getNivelNormalizado());
+    }
+
+    // Set da PSV em vigor (barg), ou null: só o vaso fechado tem PSV. Um set abaixo da pré-carga
+    // aliviaria o próprio gás; sem inventário de gás no modelo, o set efetivo não fica abaixo dela
+    // (com set = pré-carga, V_set = 0 e o Boyle em V = 0 dá exatamente o set).
+    getPressaoAlivioEfetivaBar() {
+        if (this.tipoTanque !== TIPO_TANQUE_FECHADO) return null;
+        const set = Number(this.pressaoAlivioBar);
+        if (this.pressaoAlivioBar === null || this.pressaoAlivioBar === '' || !Number.isFinite(set)) return null;
+        return Math.max(set, Math.max(0, Number(this.pressaoPreCargaBar) || 0));
+    }
+
+    // Volume de líquido em que o gás (Boyle) chega ao set da PSV: P_set,abs·V_gás = P_pré,abs·V_total.
+    // Acima dele a pressão não sobe mais: o excedente é aliviado. null sem PSV.
+    getVolumeAlivioL(fluido = null) {
+        const setBar = this.getPressaoAlivioEfetivaBar();
+        if (setBar === null) return null;
+        const pressaoAtmosfericaBar = Number(this._resolverFluidoHidrostatico(fluido)?.pressaoAtmosfericaBar)
+            || DEFAULT_ATMOSPHERIC_PRESSURE_BAR;
+        const volumeTotalL = Math.max(0, this.capacidadeMaxima);
+        const setAbsBar = setBar + pressaoAtmosfericaBar;
+        if (!(setAbsBar > 0)) return 0;
+        const preCargaAbsBar = Math.max(0, (Number(this.pressaoPreCargaBar) || 0) + pressaoAtmosfericaBar);
+        return clamp(volumeTotalL * (1 - (preCargaAbsBar / setAbsBar)), 0, volumeTotalL);
     }
 
     getPressaoBocalEntradaParaNivelBar(fluido = null, nivelNormalizado = this.getNivelNormalizado(), considerarAlturaBocal = true) {
@@ -831,7 +862,14 @@ export class TanqueLogico extends ComponenteFisico {
             && volumeBalancoL > this.capacidadeMaxima
             ? (volumeBalancoL - this.capacidadeMaxima) / dt
             : 0;
-        this.volumeAtual = clamp(volumeBalancoL, 0, this.capacidadeMaxima);
+        // Vaso fechado com PSV: no set, o solver segura o gás na pressão de alívio e o volume para em
+        // V_set; o que entra além disso sai pela PSV, contabilizado (a massa continua fechando).
+        const volumeAlivioL = this.getVolumeAlivioL(fluido);
+        this.vazaoAlivioLps = volumeAlivioL !== null && dt > 0 && volumeBalancoL > volumeAlivioL
+            ? (volumeBalancoL - volumeAlivioL) / dt
+            : 0;
+        const volumeLimiteL = volumeAlivioL !== null ? Math.min(volumeAlivioL, this.capacidadeMaxima) : this.capacidadeMaxima;
+        this.volumeAtual = clamp(volumeBalancoL, 0, volumeLimiteL);
         this.atualizarMisturaConteudo(dt, fluidoEntrada, volumeAnteriorL);
         const fluidoAtual = this.getFluidoConteudo();
         this.pressaoFundoBar = this.getPressaoGasBar(fluidoAtual) + this.getPressaoHidrostaticaBar(fluidoAtual);
@@ -845,6 +883,7 @@ export class TanqueLogico extends ComponenteFisico {
         this.lastQin = 0;
         this.lastQout = 0;
         this.vazaoTransbordoLps = 0;
+        this.vazaoAlivioLps = 0;
         this.resetEstadoHidraulico();
         this._notificarVolume();
     }

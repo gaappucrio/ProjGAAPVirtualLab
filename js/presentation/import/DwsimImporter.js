@@ -32,6 +32,7 @@ import {
     GRAVITY
 } from '../../domain/units/HydraulicUnits.js';
 import { createFluidoFromProperties } from '../../domain/components/Fluido.js';
+import { normalizarAberturaPercentual } from '../../domain/components/ValvulaLogica.js';
 
 // ----- Conversões de unidade DWSIM -> GAAP -----
 const PA_TO_BAR = 1e-5;
@@ -70,6 +71,23 @@ const DWSIM_PIPE_MATERIAL_ROUGHNESS_M = {
 const DWSIM_STRAIGHT_PIPE_SEGMENT_TYPES = new Set([
     '', 'tubulaosimples', 'straight tube section', 'straight tube', 'tubulação simples'
 ]);
+
+// Acessórios do Pipe do DWSIM (Pipe.vb, Kfit): o índice entre colchetes no TipoSegmento escolhe o
+// valor. `ld` é comprimento equivalente L/D (o DWSIM o calcula como cano reto de (L/D)·DI);
+// `k` é coeficiente local na velocidade do próprio acessório (ΔP = K·ρv²/2). O [27] (ΔP fixo, na
+// unidade do fluxograma) não é traduzido.
+const DWSIM_PIPE_FITTINGS = Object.freeze({
+    0: { ld: 14 }, 1: { ld: 16 }, 2: { ld: 50 }, 3: { ld: 55 }, 4: { ld: 40 }, 5: { ld: 3 },
+    6: { ld: 8 }, 7: { ld: 340 }, 8: { ld: 600 }, 9: { ld: 420 }, 10: { ld: 100 }, 11: { ld: 400 },
+    12: { ld: 20 }, 13: { ld: 60 }, 14: { k: 9.6 }, 15: { k: 96 }, 16: { k: 1.11 }, 17: { k: 0.25 },
+    18: { k: 0.78 }, 19: { k: 9 }, 20: { k: 225 }, 21: { k: 0.6 }, 22: { ld: 60 }, 23: { k: 5.67 },
+    24: { k: 0.65 }, 25: { k: 1 }, 26: { k: 1 }, 28: { ld: 30 }
+});
+
+function dwsimFittingIndex(tipoSegmento) {
+    const match = String(tipoSegmento ?? '').match(/\[(\d+)\]/);
+    return match ? Number(match[1]) : null;
+}
 
 // ----- Offset de posicionamento (evita componentes colados no canto) -----
 const POSITION_ORIGIN_X = 120;
@@ -769,32 +787,33 @@ function valveParameters(simEl) {
 
     // Valve.vb: com FlowCoefficient = Cv (enum 1) o campo <Kv> guarda um Cv. O DWSIM converte
     // com Kv = Cv/1,16; o GAAP usa 1 Cv = 1,156 Kv (diferença de 0,35%).
+    // O `cv` interno é sempre Cv; a unidade só define como o painel mostra o coeficiente,
+    // para o aluno ver o mesmo número que digitou no DWSIM.
+    const unit = flowCoeffUnit.trim().toLowerCase();
+    const arquivoEmCv = unit.includes('cv') || unit === '1';
     let cv = 160;
     if (rawCoeff > 0) {
-        const unit = flowCoeffUnit.trim().toLowerCase();
-        if (unit.includes('cv') || unit === '1') {
-            cv = rawCoeff;
-        } else {
-            cv = rawCoeff / KV_PER_CV;
-        }
+        cv = arquivoEmCv ? rawCoeff : rawCoeff / KV_PER_CV;
     }
 
     // Sem a relação abertura/Kv habilitada, o DWSIM usa o coeficiente cheio em qualquer abertura.
-    const relationshipEnabled = queryString(simEl, 'EnableOpeningKvRelationship', 'true').toLowerCase() !== 'false';
+    // Padrões do Valve.vb quando a tag falta: EnableOpeningKvRelationship = False e CharacteristicParameter = 50.
+    const relationshipEnabled = queryString(simEl, 'EnableOpeningKvRelationship', 'false').toLowerCase() !== 'false';
     const tipoCaracteristica = relationshipEnabled ? mapValveCharacteristic(characteristic) : 'linear';
-    const grauAbertura = relationshipEnabled ? clamp(openingPct, 0, 100) : 100;
+    const grauAbertura = relationshipEnabled ? normalizarAberturaPercentual(openingPct) : 100;
     // Na igual porcentagem o DWSIM usa <CharacteristicParameter> como rangeabilidade.
-    const characteristicParameter = queryNumeric(simEl, 'CharacteristicParameter', 0);
+    const characteristicParameter = queryNumeric(simEl, 'CharacteristicParameter', 50);
     const rangeabilidade = tipoCaracteristica === 'equal_percentage' && characteristicParameter > 1
         ? clamp(characteristicParameter, 5, 1000)
         : 30;
 
     return {
-        aberta: grauAbertura > 0.5,
+        // Mesma regra do domínio (ValvulaLogica.setAbertura): aberta acima do limiar de vedação de 0,05%.
+        aberta: grauAbertura > 0,
         grauAbertura,
         aberturaEfetiva: grauAbertura,
         cv: Math.max(0.05, cv),
-        unidadeCoeficienteVazao: 'cv',
+        unidadeCoeficienteVazao: arquivoEmCv ? 'cv' : 'kv',
         perdaLocalK: 0,
         considerarPerdaEstrangulamento: false,
         perfilCaracteristica: 'custom',
@@ -958,6 +977,8 @@ function tankParameters(simEl, tankName = '', simObjects = null, tankTag = '') {
         // O tanque do DWSIM estacionário é passante (P entrada = P saída); o vaso fechado do
         // GAAP reproduz isso no regime permanente, com o nível ajustando o colchão de gás.
         tipoTanque: 'fechado',
+        // O tanque do DWSIM não tem PSV (a ReliefValve é um equipamento à parte, só dinâmico).
+        pressaoAlivioBar: null,
         alturaBocalEntradaM,
         alturaBocalSaidaM,
         setpointAtivo,
@@ -1154,26 +1175,39 @@ function sectionRoughnessM(material, wallRoughnessM) {
     return wallRoughnessM > 0 ? wallRoughnessM : DEFAULT_PIPE_ROUGHNESS_MM / M_TO_MM;
 }
 
-// Seções de tubo reto de um Pipe do DWSIM, com o comprimento já multiplicado por
-// <Quantidade> (o DWSIM repete a seção). Acessórios (curvas, válvulas de linha etc.)
-// ainda não são traduzidos e ficam contados em `skippedFittings`.
+// Seções de um Pipe do DWSIM. O DWSIM repete cada seção <Quantidade> vezes (Pipe.vb, laço
+// `For iq = 1 To segmento.Quantidade`), acessórios inclusive. Tubo reto e acessório L/D viram
+// trechos retos; acessório K entra em `fittings` com o diâmetro dele. <Elevacao> só existe no
+// tubo reto (o DWSIM zera a do acessório) e é somada em `elevationM`.
 function pipeSections(simEl) {
     const sections = [];
+    const fittings = [];
     let skippedFittings = 0;
+    let elevationM = 0;
     const addSection = (read) => {
-        const tipo = String(read('TipoSegmento') ?? '').trim().toLowerCase();
+        const tipoOriginal = read('TipoSegmento') ?? '';
+        const tipo = String(tipoOriginal).trim().toLowerCase();
+        const quantidade = Number(read('Quantidade')) || 1;
+        const diIn = Number(read('DI'));
+        const diameterM = diIn > 0 ? diIn * INCH_TO_M : DEFAULT_PIPE_DIAMETER_M;
+        const roughnessM = sectionRoughnessM(read('Material'), Number(read('PipeWallRugosity')));
         if (!DWSIM_STRAIGHT_PIPE_SEGMENT_TYPES.has(tipo)) {
-            skippedFittings += 1;
+            const fitting = DWSIM_PIPE_FITTINGS[dwsimFittingIndex(tipoOriginal)];
+            if (!fitting || !(diIn > 0)) {
+                skippedFittings += 1;
+                return;
+            }
+            if (fitting.ld !== undefined) {
+                sections.push({ lengthM: fitting.ld * diameterM * quantidade, diameterM, roughnessM, equivalente: true });
+            } else {
+                fittings.push({ k: fitting.k * quantidade, diameterM });
+            }
             return;
         }
-        const lengthM = Number(read('Comprimento')) * (Number(read('Quantidade')) || 1);
-        const diIn = Number(read('DI'));
+        const lengthM = Number(read('Comprimento')) * quantidade;
         if (!(lengthM > 0)) return;
-        sections.push({
-            lengthM,
-            diameterM: diIn > 0 ? diIn * INCH_TO_M : DEFAULT_PIPE_DIAMETER_M,
-            roughnessM: sectionRoughnessM(read('Material'), Number(read('PipeWallRugosity')))
-        });
+        elevationM += (Number(read('Elevacao')) || 0) * quantidade;
+        sections.push({ lengthM, diameterM, roughnessM });
     };
 
     const sectionsEl = simEl?.querySelector?.(':scope > Sections') || simEl?.querySelector?.('Sections');
@@ -1192,7 +1226,7 @@ function pipeSections(simEl) {
     }
 
     // Fallback: campos diretos quando não há Sections.
-    if (sections.length === 0 && skippedFittings === 0 && simEl) {
+    if (sections.length === 0 && fittings.length === 0 && skippedFittings === 0 && simEl) {
         const lengthM = queryNumeric(simEl, 'TotalLength', 0)
             || queryNumeric(simEl, 'Length', 0)
             || queryNumericDeep(simEl, ['TotalLength', 'Length'], 0)
@@ -1207,7 +1241,7 @@ function pipeSections(simEl) {
         });
     }
 
-    return { sections, skippedFittings };
+    return { sections, fittings, skippedFittings, elevationM };
 }
 
 // Um Cano do GAAP tem um só diâmetro; os trechos em série do DWSIM entre dois equipamentos
@@ -1217,15 +1251,32 @@ function pipeSections(simEl) {
 function pipeParameters(pipeElements) {
     const elements = Array.isArray(pipeElements) ? pipeElements : [pipeElements];
     const sections = [];
+    const fittings = [];
     let skippedFittings = 0;
+    let elevationM = 0;
     elements.forEach((element) => {
         const result = pipeSections(element);
         sections.push(...result.sections);
+        fittings.push(...result.fittings);
         skippedFittings += result.skippedFittings;
+        elevationM += result.elevationM;
     });
-    if (sections.length === 0) return { ...defaultPipeParams(), skippedFittings };
+    if (sections.length === 0 && fittings.length === 0) return { ...defaultPipeParams(), skippedFittings, elevationM };
 
-    const reference = sections.reduce((a, b) => (b.lengthM > a.lengthM ? b : a));
+    // O diâmetro do cano vem do tubo reto mais longo; um acessório L/D (ex.: válvula globo de 2"
+    // num cano de 4") só define a referência se o cano não tiver tubo reto.
+    const longest = (list) => list.reduce((a, b) => (b.lengthM > a.lengthM ? b : a));
+    const straight = sections.filter((section) => !section.equivalente);
+    const reference = straight.length > 0
+        ? longest(straight)
+        : (sections.length > 0
+            ? longest(sections)
+            : { diameterM: fittings[0].diameterM, roughnessM: DEFAULT_PIPE_ROUGHNESS_MM / M_TO_MM });
+    // K de cada acessório na velocidade do cano do GAAP: ΔP = K·ρv_a²/2 = K·(D_ref/D_a)⁴·ρv_ref²/2.
+    const perdaLocalK = fittings.reduce((sum, fitting) => sum + (fitting.k * Math.pow(reference.diameterM / fitting.diameterM, 4)), 0);
+    if (sections.length === 0) {
+        return { ...defaultPipeParams(), diameterM: Math.max(0.005, reference.diameterM), perdaLocalK, skippedFittings, elevationM };
+    }
     // Rugosidade média ponderada pelo comprimento equivalente: o trecho que mais perde pesa mais.
     let equivalentLengthM = 0;
     let roughnessLengthSum = 0;
@@ -1240,8 +1291,9 @@ function pipeParameters(pipeElements) {
         roughnessMm: Math.max(0.001, (roughnessLengthSum / equivalentLengthM) * M_TO_MM),
         // O GAAP soma o trecho esquemático (1 m) ao comprimento extra.
         extraLengthM: Math.max(0, equivalentLengthM - DEFAULT_PIPE_SCHEMATIC_LENGTH_M),
-        perdaLocalK: 0,
-        skippedFittings
+        perdaLocalK,
+        skippedFittings,
+        elevationM
     };
 }
 
@@ -1390,7 +1442,10 @@ export function translateDwsimToWorkspace(parsed) {
     const stats = {
         created: 0,
         skipped: 0,
-        skippedTypes: new Set()
+        skippedTypes: new Set(),
+        // Canos com <Elevacao> ≠ 0: o desnível não é importado (as posições vêm do desenho do
+        // DWSIM, não das elevações), então a planta fica sem esse ρgΔz.
+        ignoredElevations: []
     };
 
     // ---- 1. Equipamentos reais (Pump / Valve / Tank / HeatExchanger / Cooler / Heater) ----
@@ -1505,7 +1560,7 @@ export function translateDwsimToWorkspace(parsed) {
                 const newPipes = [...pipes];
                 if (nextGObj.objectType === 'Pipe') {
                     const simObj = simObjects.get(current);
-                    if (simObj) newPipes.push(simObj);
+                    if (simObj) newPipes.push({ ...simObj, tag: nextGObj.tag || current });
                 }
 
                 for (const output of nextGObj.outputs) {
@@ -1546,6 +1601,12 @@ export function translateDwsimToWorkspace(parsed) {
             if (pipeParams.skippedFittings > 0) {
                 stats.skipped += pipeParams.skippedFittings;
                 stats.skippedTypes.add('PipeFitting');
+            }
+            if (Math.abs(pipeParams.elevationM || 0) > 0.005) {
+                stats.ignoredElevations.push({
+                    pipeTags: pipes.map((pipe) => pipe.tag).filter(Boolean),
+                    elevationM: pipeParams.elevationM
+                });
             }
 
             let sourcePort = 'out';

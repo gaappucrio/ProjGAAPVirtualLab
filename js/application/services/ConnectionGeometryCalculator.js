@@ -40,11 +40,14 @@ export function calculateConnectionGeometry(
     connection,
     useRelativeHeight = false
 ) {
-    const dx = targetPoint.x - sourcePoint.x;
     const dy = targetPoint.y - sourcePoint.y;
+    const desnivelM = dy / PIXELS_PER_METER;
 
+    // O eixo X é só organização visual, como a posição no fluxograma do DWSIM: afastar componentes
+    // na horizontal não muda o atrito. Com altura relativa, o cano tem ao menos o desnível vertical
+    // (L ≥ |Δz|); distâncias horizontais de projeto entram no comprimento extra.
     const straightLengthM = useRelativeHeight
-        ? Math.max(0.35, Math.sqrt(dx * dx + dy * dy) / PIXELS_PER_METER)
+        ? Math.max(DEFAULT_PIPE_SCHEMATIC_LENGTH_M, Math.abs(desnivelM))
         : DEFAULT_PIPE_SCHEMATIC_LENGTH_M;
 
     const extraLengthM = Math.max(0, connection.extraLengthM || 0);
@@ -52,6 +55,6 @@ export function calculateConnectionGeometry(
     return {
         straightLengthM,
         lengthM: straightLengthM + extraLengthM,
-        headGainM: useRelativeHeight ? (dy / PIXELS_PER_METER) : 0
+        headGainM: useRelativeHeight ? desnivelM : 0
     };
 }

@@ -147,7 +147,7 @@ Onde:
 *   $\varepsilon$ é a rugosidade absoluta da parede interna da tubulação ($\text{m}$, informada em $\text{mm}$ nas propriedades da conexão, padrão $0{,}045\text{ mm}$ para aço comercial).
 *   $D$ é o diâmetro interno da tubulação ($\text{m}$, padrão $0{,}05\text{ m} = 50\text{ mm}$).
 *   $A = \frac{\pi \cdot D^2}{4}$ é a área de seção transversal interna de escoamento ($\text{m}^2$).
-*   $L_{\text{total}} = L_{\text{esquemático}} + L_{\text{extra}}$ é o comprimento físico total da linha ($\text{m}$), somando a distância esquemática do canvas ao comprimento extra de projeto configurado pelo usuário.
+*   $L_{\text{total}} = L_{\text{esquemático}} + L_{\text{extra}}$ é o comprimento físico total da linha ($\text{m}$), somando o trecho esquemático (1 m, ou o desnível vertical com altura relativa) ao comprimento extra de projeto configurado pelo usuário.
 
 ---
 
@@ -161,7 +161,7 @@ Representada como um coeficiente de perda equivalente adimensional:
 
 $$K_{\text{distribuído}} = f \cdot \frac{L_{\text{total}}}{D}$$
 
-Onde $L_{\text{total}} = L_{\text{esquemático}} + L_{\text{extra}}$. Em modo sem altura relativa, $L_{\text{esquemático}}$ é fixado didaticamente em $1\text{ m}$.
+Onde $L_{\text{total}} = L_{\text{esquemático}} + L_{\text{extra}}$. Em modo sem altura relativa, $L_{\text{esquemático}}$ é fixado didaticamente em $1\text{ m}$. Com altura relativa, $L_{\text{esquemático}} = \max(1\text{ m}, |\Delta z|)$, com $\Delta z = \Delta y / 80$ (80 px = 1 m): só o desnível vertical conta, garantindo $L \ge |\Delta z|$. A posição horizontal ($x$) é puramente esquemática em qualquer modo, como a posição no fluxograma do DWSIM; distâncias horizontais de projeto entram em $L_{\text{extra}}$ (`ConnectionGeometryCalculator.calculateConnectionGeometry`).
 
 #### Perda Localizada
 Calculada a partir do coeficiente local adimensional de perda da conexão $K_{\text{local}}$ (configurado nas propriedades avançadas do cano):
@@ -320,7 +320,7 @@ $$\frac{dV}{dt} = \sum Q_{\text{entradas}} - \sum Q_{\text{saídas}}$$
 
 $$V_{\text{novo}} = \text{clamp}(V_{\text{anterior}} + (Q_{\text{in}} - Q_{\text{out}}) \cdot dt, \; 0, \; V_{\text{máx}})$$
 
-Em tanques abertos (`tipoTanque !== 'fechado'`), o que excede $V_{\text{máx}}$ é contabilizado como $Q_{\text{transbordo}} = (V_{\text{balanço}} - V_{\text{máx}})/dt$; em tanques fechados, $Q_{\text{transbordo}} = 0$. A vazão de saída é limitada pelo inventário disponível no passo ($Q_{\text{out}} \le V_{\text{disponível}}/dt$, o volume acima do bocal de saída quando há altura relativa).
+Em tanques abertos (`tipoTanque !== 'fechado'`), o que excede $V_{\text{máx}}$ é contabilizado como $Q_{\text{transbordo}} = (V_{\text{balanço}} - V_{\text{máx}})/dt$; em tanques fechados, $Q_{\text{transbordo}} = 0$. Com a PSV ideal (`pressaoAlivioBar`, `getVolumeAlivioL`), o volume para em $V_{\text{set}} = V_{\text{total}}(1 - P_{\text{pré,abs}}/P_{\text{set,abs}})$ e o excedente vira $Q_{\text{alívio}} = (V_{\text{balanço}} - V_{\text{set}})/dt$ (`vazaoAlivioLps`). No solver global, o nó de gás tem `reliefPressureBar`; `updateReliefValves` o prende no set quando a pressão passaria dele, e o solta quando o desequilíbrio do nó (`nodeImbalanceLps`, que é o próprio alívio) ficaria negativo. Tanque novo nasce aberto, com PSV de 10 barg (que só age se o tipo virar fechado); o importador DWSIM grava fechado e sem PSV; arquivos sem o campo abrem sem PSV. A vazão de saída é limitada pelo inventário disponível no passo ($Q_{\text{out}} \le V_{\text{disponível}}/dt$, o volume acima do bocal de saída quando há altura relativa).
 
 O inventário é volumétrico, mas a massa é conservada: o conteúdo é um CSTR com densidade de mistura ideal (`atualizarMisturaConteudo`: a saída do passo leva o conteúdo anterior e a entrada fica retida, que é o Euler do CSTR). O teste `tanque conserva MASSA...` verifica isso com entrada de outra densidade. O DWSIM dinâmico acumula massa diretamente (`Tank.vb`).
 
@@ -347,11 +347,11 @@ A viscosidade dinâmica não segue uma mistura aritmética simples, visto que pe
 $$\ln(\mu_{\text{mix}}) = \sum \left( \frac{Q_i}{\sum Q} \cdot \ln(\mu_i) \right) \quad \implies \quad \mu_{\text{mix}} = e^{\sum x_i \cdot \ln(\mu_i)}$$
 
 #### Mistura de Temperaturas (Balanço de Energia Entálpico)
-Assumindo calor sensível ideal sem reação química associada:
+Assumindo calor sensível ideal sem reação química nem calor de mistura, a temperatura de mistura resolve o balanço de entalpia:
 
-$$T_{\text{mix}} = \frac{\sum (Q_i \cdot \rho_i \cdot Cp_i \cdot T_i)}{\sum (Q_i \cdot \rho_i \cdot Cp_i)}$$
+$$\sum_i \dot m_i\, h_i(T_{\text{mix}}) = \sum_i \dot m_i\, h_i(T_i), \qquad \dot m_i = Q_i \rho_i, \qquad h_i(T) = \int_0^T c_{p,i}\, dT$$
 
-Onde $Cp_i$ é o calor específico do fluido na entrada $i$ ($\text{J/(kg}\cdot\text{K)}$). Além das propriedades na temperatura resultante $T_{\text{mix}}$, `mixFluidos` também preserva e interpola as propriedades de referência de calibração (`refTemperatura`, `refDensidade`, `refViscosidadeDinamicaPaS`, `refPressaoVaporBar`), garantindo que aquecimentos ou resfriamentos posteriores (ex.: passagem por um trocador de calor a jusante de um nó de mistura ou tanque) recalculem $\rho(T)$, $\mu(T)$ e $P_{\text{vap}}(T)$ sem perder a âncora de $25^\circ\text{C}$.
+`mixFluidos` resolve por Newton (derivada $\sum \dot m_i c_{p,i}(T) > 0$), partindo de $\sum \dot m_i c_{p,i} T_i / \sum \dot m_i c_{p,i}$, que já é a raiz quando os $c_p$ são constantes. O $c_p$ da mistura é $\sum \dot m_i c_{p,i}(T_{\text{mix}}) / \sum \dot m_i$, e o de referência (`refCalorEspecificoJkgK`) é a média mássica das referências. Além das propriedades na temperatura resultante $T_{\text{mix}}$, `mixFluidos` também preserva e interpola as propriedades de referência de calibração (`refTemperatura`, `refDensidade`, `refViscosidadeDinamicaPaS`, `refPressaoVaporBar`), garantindo que aquecimentos ou resfriamentos posteriores (ex.: passagem por um trocador de calor a jusante de um nó de mistura ou tanque) recalculem $\rho(T)$, $\mu(T)$ e $P_{\text{vap}}(T)$ sem perder a âncora de $25^\circ\text{C}$.
 
 #### Termodinâmica de Fluidos Puros e Regularização de Singularidades
 Para além das misturas, as propriedades térmicas e de transporte dos componentes puros são regidas por modelos analíticos sensíveis à temperatura:
@@ -362,7 +362,8 @@ Para além das misturas, as propriedades térmicas e de transporte dos component
    Água: $\mu = \mu_{\text{ref}} \cdot 10^{247{,}8/(T_K-140) - 247{,}8/(T_{K,\text{ref}}-140)}$ (Vogel), a ≤ 1,2% da IAPWS de 5 a 250 °C. Óleo, glicol e personalizados: Arrhenius $e^{E(1/T_K - 1/T_{K,\text{ref}})}$. Há salvaguarda $T_K \ge 1\text{ K}$.
 3. **Pressão de Vapor (IAPWS-IF97):**
    Para a água, $P_{\text{vap}}(T) = P_{\text{vap,ref}} \cdot P_{\text{sat}}^{\text{IF97}}(T)/P_{\text{sat}}^{\text{IF97}}(T_{\text{ref}})$, com a equação de saturação da IF97 (região 4) e referência de 25 °C e 0,0317 bar. É exata de 0 °C ao ponto crítico; a 250 °C dá 39,76 bar, contra os 41,5 bar do Antoine antigo, que só valia até 100 °C. O simulador preserva $T_{\text{ref}}$ em fluidos puros quando a temperatura operacional varia, o que permite detectar flashing e cavitação a jusante de trocadores quentes.
-4. **Limitações:** o $c_p$ é constante (a água real tem +7,5% a 200 °C), e as misturas ponderam $\ln\mu$ e $P_{\text{vap}}$ pela fração volumétrica (aproximação; Raoult usaria fração molar). Ver `Equacoes_e_Fisica_GAAP.md` §5.1.
+4. **Calor específico da água (IAPWS-IF97):** $c_p(T) = c_{p,\text{ref}} \cdot F(T)/F(T_{\text{ref}})$, com $F$ polinômio de grau 7 ajustado à IF97 de 0 a 250 °C (erro máximo 0,054%; `WATER_CP_POLY`) e a entalpia $h(T)$ como sua primitiva analítica (`calculateSpecificHeatAtTemp`, `calculateSensibleEnthalpyJkg`, `calculateMeanSpecificHeat`). Um $c_p$ digitado vale na temperatura em que foi informado e vira a referência (`refCalorEspecificoJkgK`), como $\rho$, $\mu$ e $P_{\text{vap}}$. Arquivos antigos, sem o campo, usam o $c_p$ gravado como referência.
+5. **Limitações:** óleo, glicol e personalizados têm $c_p$ constante (sem referência validável; os presets serão reavaliados no passo 9h). As misturas ponderam $\ln\mu$ e $P_{\text{vap}}$ pela fração volumétrica (aproximação; Raoult usaria fração molar). Ver `Equacoes_e_Fisica_GAAP.md` §5.1.
 
 ---
 
@@ -376,6 +377,8 @@ Para cada corrente $i \in \{1, 2\}$ com vazão volumétrica $Q_i$ (em $\text{m}^
 
 $$\dot{m}_1 = Q_1 \cdot \rho_1, \qquad \dot{m}_2 = Q_2 \cdot \rho_2 \quad \text{[kg/s]}$$
 $$C_1 = \dot{m}_1 \cdot Cp_1, \qquad C_2 = \dot{m}_2 \cdot Cp_2 \quad \text{[W/K]}$$
+
+$Cp_i$ é o calor específico **médio na faixa** da corrente, $\Delta h_i/\Delta T_i$ entre a entrada e a saída. `calcularTrocaTermicaGlobal` itera `_calcularTrocaComCp` (ponto fixo a partir do $c_p$ na entrada, tolerância relativa $10^{-9}$, até 20 passadas); na convergência $\dot Q = \dot m_i \Delta h_i$ nas duas correntes. O gráfico do trocador (`HeatExchangerChartAdapter`) usa o mesmo $Cp_i$ médio.
 
 Quando operando com duas correntes de processo ativas ($Q_1 > 0$ e $Q_2 > 0$):
 $$C_{\min} = \min(C_1, C_2), \quad C_{\max} = \max(C_1, C_2), \quad C_r = \frac{C_{\min}}{C_{\max}}$$
@@ -625,9 +628,10 @@ Para promover interoperabilidade com plantas reais e modelos criados no DWSIM, o
     *   `Valve` $\to$ `ValvulaLogica` (`valve`) com conversão dimensional de $C_v$ e $K_v$ ($K_v \approx 0{,}865 \cdot C_v$).
     *   `Tank` $\to$ `TanqueLogico` (`tank`) com volume e geometria úteis. Caso exista um controlador PID (`PIDController`, `Controller`) ou medidor de nível (`LevelGauge`) associado ao tanque (diretamente ou via `SelectedObjectID`), o importador extrai o SetPoint, parâmetros $K_p$, $K_i$ e $K_d$, normaliza o setpoint em porcentagem (0–100% da altura útil) e ativa o controle dinâmico de nível (`setpointAtivo: true`).
     *   `HeatExchanger`, `ShellAndTubeHeatExchanger`, `PlateHeatExchanger`, `Cooler`, `Heater`, `AirCooler`, `FiredHeater` $\to$ `TrocadorCalorLogico` (`heat_exchanger`) com recuperação do coeficiente global de troca $UA$ ($\text{W/K}$), área de troca $A$ ($\text{m}^2$), coeficiente global $U$ ($\text{W/(m}^2\cdot\text{K)}$ com $UA = U \cdot A$), temperatura de serviço/utilidade ($T_{\text{serviço}}$), coeficiente de perda localizada $K$ e efetividade máxima configurada. A conversão de temperaturas absolutas em Kelvin para Celsius é realizada automaticamente ($T_{^\circ\text{C}} = T_{\text{K}} - 273{,}15$ para $T > 150$). Tags visuais são atribuídas conforme a função (`TC` para trocadores de processo, `RF` para resfriadores/air coolers e `AQ` para aquecedores/aquecedores a fogo).
-    *   `MaterialStream` sem nó a montante $\to$ `FonteLogica` (`source`) com temperatura (convertida de Kelvin para Celsius e associada diretamente ao objeto de fluido da fonte), pressão manométrica (convertida de Pascal absoluto do DWSIM para bar manométrico via $\max(0, P_{\text{Pa}}/10^5 - P_{\text{atm}})$), vazão máxima e propriedades termofísicas das fases da corrente ($\rho$, $\mu$, $c_p$, $P_{\text{vap}}$) importadas. Quando a temperatura da corrente diferir de 25 °C ou houver propriedades customizadas, o `fluidoEntradaPresetId` é definido como `'custom'` para garantir consistência termodinâmica.
-    *   `MaterialStream` sem nó a jusante $\to$ `DrenoLogico` (`sink`) com a contrapressão de descarga de processo convertida de Pascal absoluto para bar manométrico ($\max(0, P_{\text{Pa}}/10^5 - P_{\text{atm}})$).
-    *   `Pipe` (`PipeSegment`) $\to$ Parâmetros físicos do `ConnectionModel` (diâmetro interno $D$, comprimento físico $L$, rugosidade $\varepsilon$ e perda localizada $K$) extraídos recursivamente das seções serializadas sob `Profile > Sections`.
+    *   `MaterialStream` sem nó a montante $\to$ `FonteLogica` (`source`) com temperatura (convertida de Kelvin para Celsius e associada diretamente ao objeto de fluido da fonte), pressão manométrica (convertida de Pascal absoluto do DWSIM para bar manométrico via $\max(0, P_{\text{Pa}}/10^5 - P_{\text{atm}})$), vazão máxima e propriedades termofísicas das fases da corrente ($\rho$, $\mu$, $c_p$, $P_{\text{vap}}$) importadas. Quando a temperatura da corrente diferir de 25 °C ou houver propriedades customizadas, o `fluidoEntradaPresetId` é definido como `'custom'` para garantir consistência termodinâmica. O $c_p$ gravado pelo DWSIM na corrente vira o $c_p$ de referência na temperatura da corrente; para a água, a variação com $T$ segue a IAPWS a partir dele. Atenção: com o `RaoultPropertyPackage`, a entalpia do DWSIM não é a integral do $c_p$ que ele informa (no template, o $\Delta h$ da corrente quente implica $c_p$ = 4,270 kJ/(kg·K), enquanto o $c_p$ gravado é ~4,20), então temperaturas de saída de trocadores podem diferir alguns décimos de grau; para validar a térmica, prefira o pacote Steam Tables (IAPWS-IF97) no DWSIM.
+    *   `MaterialStream` sem nó a jusante $\to$ `DrenoLogico` (`sink`) com a contrapressão de descarga de processo convertida de Pascal absoluto para bar manométrico ($P_{\text{Pa}}/10^5 - P_{\text{atm}}$, negativo sob vácuo; o painel aceita até $-P_{\text{atm}}$).
+    *   `Pipe` (`PipeSegment`) $\to$ Parâmetros físicos do `ConnectionModel` (diâmetro interno $D$, comprimento físico $L$, rugosidade $\varepsilon$ e perda localizada $K$) extraídos recursivamente das seções serializadas sob `Profile > Sections`. Cada seção vale `Quantidade` vezes, como no laço do `Pipe.vb`. Acessórios seguem o `Kfit` do DWSIM pelo índice entre colchetes do `TipoSegmento`: os de L/D (curvas, válvulas de linha, tês, joelhos) viram comprimento equivalente $(L/D)\cdot D$; os de $K$ (entradas, saídas, contrações, expansões, reduções) somam-se a `perdaLocalK` convertidos para a velocidade do cano, $K\cdot(D_{\text{ref}}/D_{\text{acessório}})^4$. O ΔP fixo (`[27]`) e índices desconhecidos não são traduzidos e contam como ignorados.
+    *   **Elevação (`<Elevacao>`) não é importada:** o GAAP só tem desnível pela posição vertical com altura relativa, e as posições importadas vêm do desenho do DWSIM. O importador soma a elevação de cada cano (só tubo reto, × `Quantidade`) em `stats.ignoredElevations`, e a importação avisa o cano, o desnível e a ordem de grandeza de $\rho g \Delta z$, com a instrução de ligar a altura relativa e reposicionar os componentes. A planta importada sai sempre com a altura relativa desligada.
 *   **Mapeamento de Múltiplas Correntes e Sentido de Escoamento:** Em trocadores de calor com duas correntes de processo:
     *   O importador extrai os índices locais e remotos dos conectores DWSIM (`AttachedFromConnIndex`, `AttachedToConnIndex` e posição sequencial).
     *   A primeira corrente de processo (índice 0) vincula-se sempre à entrada `in1` (lado esquerdo) e saída `out1` (lado direito).

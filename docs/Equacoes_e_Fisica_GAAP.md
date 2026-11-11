@@ -11,7 +11,7 @@ $$\Delta P = f \cdot \frac{L}{D} \cdot \frac{\rho \cdot v^2}{2}$$
 Onde:
 - $\Delta P$: Perda de pressão (Pa, convertida para bar no simulador)
 - $f$: Fator de atrito de Darcy
-- $L$: Comprimento do tubo (m)
+- $L$: Comprimento do tubo (m): trecho esquemático (1 m; com altura relativa, $\max(1\text{ m}, |\Delta z|)$, só o desnível vertical) + comprimento extra. A posição horizontal no canvas não entra, como a posição no fluxograma do DWSIM.
 - $D$: Diâmetro interno (m)
 - $\rho$: Densidade do fluido (kg/m³)
 - $v$: Velocidade média do fluxo (m/s)
@@ -265,7 +265,10 @@ As alturas dos bocais ($z$) só valem com **altura relativa** ligada. Com ela de
 - **Vaso fechado cheio (trava hidráulica):** o colchão de gás tem um piso numérico de 2% do volume (proteção contra divisão por zero em Boyle), o que limita a pressão do gás a $(P_{\text{pré}} + P_{\text{atm}})\cdot 50 - P_{\text{atm}}$ (74,65 barg com pré-carga de 0,5 bar). Se a alimentação passa disso, o líquido para em 98% e o vaso só recebe o que sai: $Q_{in} \le (0{,}98\,V_{\text{total}} - V)/\Delta t + Q_{out}$. A entrada passa a ter a pressão que a rede impõe, e a massa é conservada (antes, o excedente era cortado em 100% sem ser contabilizado).
   - Na trava, os dois bocais ficam na pressão que a rede impõe (o vaso é passante).
 - **Colchão implícito (vaso fechado, solver global):** a pressão do gás usada no passo é a do fim do passo, $P_{\text{gás}}(V_0 + (Q_{in} - Q_{out})\,\Delta t)$ (Euler implícito). No explícito, um passo de 0,1 s a 50 L/s passava do equilíbrio de Boyle (+6% a 5 bar, +19% a 50 bar) e, sem fluxo reverso, a pressão ficava presa acima da alimentação. A ultrapassagem que sobra é física: a inércia da água no cano comprime o gás além do equilíbrio (massa-mola) e cresce com a vazão; sem fluxo reverso (como no DWSIM), ela fica retida.
-- **Padrão:** tanque novo e tanque importado do DWSIM nascem fechados; arquivos salvos antes da existência de `tipoTanque` abrem como abertos. No regime permanente, o vaso fechado é **passante**: o nível se ajusta até $P_{\text{gás}}$ igualar a pressão da rede, como o tanque do DWSIM estacionário.
+- **Válvula de alívio (PSV) ideal do vaso fechado:** com `pressaoAlivioBar` definida (padrão 10 barg para tanques novos), o gás não passa do set. O volume em que o gás chega ao set vem de Boyle:
+  $$V_{\text{set}} = V_{\text{total}}\left(1 - \frac{P_{\text{pré}} + P_{\text{atm}}}{P_{\text{set}} + P_{\text{atm}}}\right)$$
+  Acima dele, a entrada excedente sai pela PSV como **alívio**, contabilizado: $Q_{\text{alívio}} = (V_{\text{balanço}} - V_{\text{set}})/\Delta t$ (`vazaoAlivioLps`), e a massa fecha ($Q_{in} = \dot V + Q_{out} + Q_{\text{alívio}}$). No solver global, quando o nó de gás passaria do set, ele fica preso no set (estado ativo, como o teto da fonte), e a rede vê $P_{\text{set}}$ no bocal, e não a pressão da alimentação. A PSV fecha quando o alívio ficaria negativo (a rede passa a tirar líquido). É uma idealização didática, com capacidade infinita e sem acúmulo de sobrepressão. No DWSIM, a PSV é um equipamento à parte (`ReliefValve.vb`), que só age no modo dinâmico e tem abertura proporcional entre o set e a pressão de abertura total. Sem PSV (`null`), o vaso enche até a trava hidráulica acima.
+- **Padrão:** tanque novo nasce **aberto** (decisão do usuário, 2026-11-11). O tipo, a pré-carga e a PSV ficam na aba Avançado. O tanque importado do DWSIM nasce fechado e sem PSV, porque o tanque do DWSIM não tem PSV; arquivos salvos antes de `tipoTanque` abrem como abertos, e os salvos antes da PSV abrem sem ela. No regime permanente, o vaso fechado é **passante**: o nível se ajusta até $P_{\text{gás}}$ igualar a pressão da rede, como o tanque do DWSIM estacionário.
 - **Idealizações opcionais (aba Avançado):** a coluna de líquido vem ligada e as perdas nos bocais vêm desligadas, como no DWSIM, onde entrada e saída só existem como acessórios do cano. Arquivos salvos antes de `considerarPerdasBocais` abrem com as perdas ligadas.
   - `considerarColunaLiquido = false` zera o termo $\rho g h$ nos dois bocais e no fundo: $P_{\text{entrada}} = P_{\text{saída}} = P_{\text{gás}}$. Um tanque aberto assim não escoa por gravidade.
   - `considerarPerdasBocais = false` zera as perdas singulares dos bocais ($K = 1/C_d^2$ na saída e $K = 1$ na entrada, onde a energia cinética do jato se dissipa no líquido).
@@ -284,7 +287,7 @@ $$\Delta P = \frac{\rho}{2}\left[\left(\frac{1}{C_d^2} - 1\right)v_b^2 + v_c^2 +
 Assim a energia cinética não é cobrada duas vezes.
 
 ### Mistura de Fases e Balanceamento
-No caso de confluência de fluidos distintos (em nós da malha ou no interior do tanque), `mixFluidos` (`Fluido.js`) apura a densidade da mistura volumetricamente, a temperatura por balanço entálpico ($\sum V_i \rho_i c_{p,i} T_i / \sum V_i \rho_i c_{p,i}$) e a viscosidade dinâmica pelo modelo logarítmico de Arrhenius ($\ln \mu_{\text{mix}} = \sum \phi_i \ln \mu_i$, com $\phi_i$ = fração **volumétrica**; a forma clássica usa fração molar, ver §5.1), preservando também as propriedades termofísicas de referência (`refTemperatura`, `refDensidade`, `refViscosidadeDinamicaPaS`, `refPressaoVaporBar`) para que variações térmicas subsequentes na rede mantenham a âncora de calibração de $25^\circ\text{C}$:
+No caso de confluência de fluidos distintos (em nós da malha ou no interior do tanque), `mixFluidos` (`Fluido.js`) apura a densidade da mistura volumetricamente, a temperatura por balanço de entalpia ($T_{\text{mix}}$ resolve $\sum \dot m_i\, h_i(T_{\text{mix}}) = \sum \dot m_i\, h_i(T_i)$ por Newton, com derivada $\sum \dot m_i c_{p,i}(T) > 0$; com $c_p$ constante, isso se reduz a $\sum \dot m_i c_{p,i} T_i / \sum \dot m_i c_{p,i}$). Exemplo: água 1:1 em massa a 20 e 200 °C mistura a 111,53 °C (com $c_p$ constante seriam 110,0 °C; a média $\sum \dot m\,c_p(T_i)\,T_i$ sem entalpia daria 113,2 °C) e a viscosidade dinâmica pelo modelo logarítmico de Arrhenius ($\ln \mu_{\text{mix}} = \sum \phi_i \ln \mu_i$, com $\phi_i$ = fração **volumétrica**; a forma clássica usa fração molar, ver §5.1), preservando também as propriedades termofísicas de referência (`refTemperatura`, `refDensidade`, `refViscosidadeDinamicaPaS`, `refPressaoVaporBar`) para que variações térmicas subsequentes na rede mantenham a âncora de calibração de $25^\circ\text{C}$:
 
 $$\rho_{mix} = \frac{\rho_1 V_1 + \rho_2 V_2}{V_1 + V_2}$$
 
@@ -308,6 +311,8 @@ $$f_{\text{dens}}(T) = \max\left(0.1, \; 1 - \frac{(T - 3.98)^2 \cdot (T + 286.9
 
 Para evitar a singularidade numérica do denominador em $T = -68.12^\circ\text{C}$, a temperatura é limitada no intervalo seguro $[-30^\circ\text{C}, 350^\circ\text{C}]$, e impõe-se a cota física inferior $\rho \ge 100\text{ kg/m}^3$ para prevenir o colapso numérico da fase líquida.
 
+**Valor informado pelo usuário:** um $\rho$, $\mu$ ou $P_{vap}$ digitado vale na temperatura em que foi informado (a do próprio pedido ou, sem ela, a temperatura atual do fluido) e passa a ser a referência da correlação; as propriedades não informadas são reancoradas nessa mesma temperatura (`updateFluidoProperties`, `Fluido.js`). O painel da fonte só envia ao domínio os campos editados, e o preset aplica os valores exatos de `FLUID_PRESETS`, sem passar pelo texto arredondado dos campos.
+
 A viscosidade dinâmica da água usa a correlação de Vogel (forma $\mu = A \cdot 10^{247{,}8/(T_K - 140)}$, ancorada em $\mu_{\text{ref}}$ a 25 °C), com salvaguarda contra temperaturas absolutas inválidas ($T_K \ge 1\text{ K}$):
 
 $$\mu(T) = \mu_{\text{ref}} \cdot 10^{\,247{,}8/(T_K - 140) \; - \; 247{,}8/(T_{K,\text{ref}} - 140)}$$
@@ -328,7 +333,13 @@ Antes era usado o Antoine com B = 1730,63 e C = 233,426, válido só de 1 a 100 
 | 150 a 250 | ≤ 0,21% | ≤ 0,9% | ≤ 0,01% |
 | 300 | +1,9% | +4,9% | ≤ 0,01% |
 
-**Calor específico:** $c_p$ é constante por fluido (água: 4182 J/(kg·K), igual à IAPWS a 25 °C). A água real tem +0,8% a 100 °C, +7,5% a 200 °C e +16% a 250 °C, então o ε-NTU e a mistura térmica perdem precisão acima de ~150 °C. O $c_p(T)$ fica para o passo 9.
+**Calor específico:** o $c_p$ da água varia com a temperatura pela **IAPWS-IF97** (líquido, região 1), ancorado no valor de referência como $\rho$, $\mu$ e $P_{vap}$:
+
+$$c_p(T) = c_{p,\text{ref}} \cdot \frac{F(T)}{F(T_{\text{ref}})}, \qquad F(T) = \sum_{k=0}^{7} a_k \left(\frac{T}{100}\right)^k$$
+
+O polinômio $F$ (grau 7, $T$ em °C) foi ajustado à IF97 de 0 a 250 °C (a 1 atm até 99 °C e logo acima da saturação acima disso), com erro máximo de 0,054% (`WATER_CP_POLY`, `Fluido.js`). A referência é 4182 J/(kg·K) a 25 °C (IAPWS: 4181,9). Valores: 4205 a 5 °C, 4180 a 50 °C, 4217 a 100 °C, 4310 a 150 °C, 4494 a 200 °C e 4862 a 250 °C. Fora da faixa, o $c_p$ fica no valor da borda. Óleo, glicol e fluidos personalizados mantêm $c_p$ constante: não há, no projeto, referência validável para eles (pendência do passo 9h, reavaliação dos presets).
+
+**Entalpia sensível:** $h(T) = \int_0^T c_p\,dT$ é a primitiva analítica do mesmo polinômio (relativa a 0 °C; só diferenças têm sentido físico). Ela fecha os balanços de energia: o $c_p$ médio numa faixa é $\bar c_p = \Delta h/\Delta T$ (`calculateMeanSpecificHeat`). Misturas usam a média ponderada pela massa dos componentes (mistura ideal, sem calor de mistura).
 
 **Regras de mistura (aproximações):** densidade, $\ln\mu$ e $P_{\text{vap}}$ são ponderados pela fração **volumétrica**. A densidade assim é exata para mistura ideal e conserva massa. Para a $P_{\text{vap}}$ é uma aproximação: a Lei de Raoult usa fração molar e só vale para líquidos miscíveis, e imiscíveis (água + óleo) somariam as pressões parciais. O GAAP não tem massa molar dos fluidos; a temperatura sai do balanço de energia $\sum \dot m_i c_{p,i} T_i / \sum \dot m_i c_{p,i}$.
 
@@ -339,6 +350,8 @@ Os trocadores de calor do laboratório integram o **Método Efetividade-NTU ($\e
    As vazões mássicas são obtidas a partir das vazões volumétricas $Q_i$ e densidades $\rho_i$ das correntes:
    $$\dot{m}_1 = Q_1 \cdot \rho_1, \qquad \dot{m}_2 = Q_2 \cdot \rho_2 \quad [\text{kg/s}]$$
    $$C_1 = \dot{m}_1 \cdot c_{p,1}, \qquad C_2 = \dot{m}_2 \cdot c_{p,2} \quad [\text{W/K}]$$
+
+   **$c_p$ de cada corrente:** é o médio na faixa que ela percorre, $\bar c_{p,i} = [h_i(T_{i,\text{out}}) - h_i(T_{i,\text{in}})]/(T_{i,\text{out}} - T_{i,\text{in}})$. Como $T_{i,\text{out}}$ depende de $C_i$, o cálculo itera (ponto fixo, partindo do $c_p$ na entrada, até variação relativa $\le 10^{-9}$; no máximo 20 passadas). Na convergência $\dot Q = \dot m_i\,\Delta h_i$ nas duas correntes, ou seja, o balanço fecha por entalpia, como no DWSIM. Com $c_p$ constante converge na 1ª passada. Contracorrente água 25 °C × 200 °C (1 kg/s cada, UA = 5000 W/K): saídas 107,05 / 120,93 °C e $\dot Q$ = 402,8 kW, contra 106,87 / 121,11 °C e 403,5 kW da integração com o $c_p$ local da IAPWS (−0,19% em $\dot Q$); com $c_p$ constante o erro era −1,24%.
 
    - **Modo Duas Correntes Ativas ($Q_1 > 0$ e $Q_2 > 0$):**
      $$C_{\min} = \min(C_1, C_2), \qquad C_{\max} = \max(C_1, C_2), \qquad C_r = \frac{C_{\min}}{C_{\max}}$$

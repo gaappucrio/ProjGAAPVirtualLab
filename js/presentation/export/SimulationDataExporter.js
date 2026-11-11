@@ -117,6 +117,8 @@ const COMPONENT_COLUMNS = [
     'Tipo de tanque',
     'Pré-carga do gás (bar)',
     'Vazão de transbordo do tanque (L/s)',
+    'Pressão de alívio da PSV (bar)',
+    'Vazão de alívio do tanque (L/s)',
     'Pressão no fundo do tanque (bar)',
     'Vazão de entrada do tanque (L/s)',
     'Vazão de saída do tanque (L/s)',
@@ -249,6 +251,8 @@ const EXPORT_LABELS_EN = {
     'Volume interno por corrente do trocador': 'Heat exchanger holdup volume per stream',
     'Pré-carga do gás': 'Gas pre-charge',
     'Vazão de transbordo do tanque': 'Tank overflow flow',
+    'Pressão de alívio da PSV': 'PSV relief pressure',
+    'Vazão de alívio do tanque': 'Tank relief flow',
     'Tempo simulado': 'Simulated time',
     'Regime permanente': 'Steady state',
     'Regime permanente desde': 'Steady state since',
@@ -636,6 +640,9 @@ function buildComponentRow(component, engine = null) {
         row['Tipo de tanque'] = component.tipoTanque === 'fechado' ? 'Fechado (colchão de gás)' : 'Aberto (atmosférico)';
         row['Pré-carga do gás (bar)'] = numberValue(component.tipoTanque === 'fechado' ? component.pressaoPreCargaBar : 0, 5);
         row['Vazão de transbordo do tanque (L/s)'] = numberValue(component.vazaoTransbordoLps || 0, 5);
+        const setPsv = component.getPressaoAlivioEfetivaBar?.() ?? null;
+        row['Pressão de alívio da PSV (bar)'] = setPsv === null ? '' : numberValue(setPsv, 5);
+        row['Vazão de alívio do tanque (L/s)'] = numberValue(component.vazaoAlivioLps || 0, 5);
         row['Pressão no fundo do tanque (bar)'] = numberValue(component.pressaoFundoBar, 5);
         row['Vazão de entrada do tanque (L/s)'] = numberValue(component.lastQin, 5);
         row['Vazão de saída do tanque (L/s)'] = numberValue(component.lastQout, 5);

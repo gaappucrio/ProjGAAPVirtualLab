@@ -340,6 +340,27 @@ function simularAteRegime(engine) {
     return { tempoS, regime: false };
 }
 
+// Emojis de status ocupam 2 colunas no terminal; o resto do placar é texto de largura 1.
+const EMOJIS_LARGOS = new Set(['✅', '❌', '❓']);
+function larguraTexto(texto) {
+    return [...String(texto)].reduce((total, ch) => total + (EMOJIS_LARGOS.has(ch) ? 2 : 1), 0);
+}
+
+// Tabela compacta (sem a coluna de índice e as aspas do console.table), para caber no terminal.
+function imprimirTabela(linhas) {
+    if (linhas.length === 0) return;
+    const colunas = Object.keys(linhas[0]);
+    const larguras = colunas.map((col) => Math.max(larguraTexto(col), ...linhas.map((l) => larguraTexto(l[col]))));
+    const celula = (texto, i) => String(texto) + ' '.repeat(larguras[i] - larguraTexto(texto));
+    const borda = (esq, meio, dir) => esq + larguras.map((w) => '─'.repeat(w + 2)).join(meio) + dir;
+    const linha = (valores) => '│ ' + valores.map(celula).join(' │ ') + ' │';
+    console.log(borda('┌', '┬', '┐'));
+    console.log(linha(colunas));
+    console.log(borda('├', '┼', '┤'));
+    linhas.forEach((l) => console.log(linha(colunas.map((col) => l[col]))));
+    console.log(borda('└', '┴', '┘'));
+}
+
 // Linhas que não podem ser julgadas: a grandeza do GAAP existe, mas não representa o mesmo
 // estado que o DWSIM. Sem vazão, a pressão de um equipamento só copia o contorno vizinho; sem
 // as duas correntes, o lado quente do trocador não é identificável.
@@ -426,7 +447,8 @@ async function validarTemplate(arquivo) {
         const bomba = engine.componentes.filter((comp) => comp.tag === tag);
         if (bomba.length !== 1 || avaliar(bomba[0].fluxoReal, valores.vazaoLps, 'L/s').ok) return;
         const sinal = erroInterpolacao > 0 ? '+' : '';
-        curvaImprecisaPorIlha.set(ilhaDe(nome), `interpolação da curva de ${tag} no DWSIM (${sinal}${(erroInterpolacao * 100).toFixed(2)}% de carga)`);
+        // Rótulo curto: a explicação completa vai no aviso abaixo, para não alargar a coluna Erro da tabela.
+        curvaImprecisaPorIlha.set(ilhaDe(nome), `curva de ${tag}, ver aviso`);
         console.log(`⚠ ${tag}: o DWSIM avalia a carga ${sinal}${(erroInterpolacao * 100).toFixed(2)}% fora da curva suave e a vazão diverge; vazões, ΔP e NPSH divergentes dessa ilha ficam ❓.`);
     });
     referencias.forEach(({ nome: nomeObjeto, tag, tipo, valores, faseVapor }) => {
@@ -459,7 +481,7 @@ async function validarTemplate(arquivo) {
         });
     });
 
-    console.table(linhas);
+    imprimirTabela(linhas);
     const naoComparados = engine.componentes.filter((comp) => !comparados.has(comp));
     if (naoComparados.length > 0) {
         console.log(`⚠ Componentes do GAAP fora do placar: ${naoComparados.map((comp) => comp.tag).join(', ')}`);

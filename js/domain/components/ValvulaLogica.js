@@ -71,7 +71,8 @@ function normalizarUnidadeCoeficienteVazao(unidade) {
         : VALVE_FLOW_COEFFICIENT_UNITS.CV;
 }
 
-function normalizarAberturaPercentual(valor) {
+// Abaixo do limiar de vedação a válvula é tratada como fechada (sem vazão); vale também para o importador.
+export function normalizarAberturaPercentual(valor) {
     const abertura = clamp(Number(valor) || 0, 0, 100);
     return abertura <= LIMIAR_FECHAMENTO_PERCENTUAL ? 0 : abertura;
 }

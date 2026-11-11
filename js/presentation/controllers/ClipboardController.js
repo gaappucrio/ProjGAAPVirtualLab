@@ -73,6 +73,7 @@ const CLONEABLE_PROPERTIES_BY_TYPE = {
         'volumeInicial',
         'tipoTanque',
         'pressaoPreCargaBar',
+        'pressaoAlivioBar',
         'fluidoConteudo',
         'setpointAtivo',
         'setpoint',
@@ -210,6 +211,8 @@ export function applyComponentClipboardSnapshot(snapshot, component, { tag } = {
         const properties = snapshot.properties || {};
         if (!('tipoTanque' in properties)) component.tipoTanque = 'atmosferico';
         if (!('considerarPerdasBocais' in properties)) component.considerarPerdasBocais = true;
+        // Arquivos anteriores à PSV (2026-11-11) não tinham alívio: o vaso fechado ia até a trava.
+        if (!('pressaoAlivioBar' in properties)) component.pressaoAlivioBar = null;
     }
 
     if (tag !== undefined) component.tag = tag;
