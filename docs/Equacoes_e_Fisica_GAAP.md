@@ -77,6 +77,8 @@ Onde:
 
 Acima de $Q_{max} \cdot \omega$ a parábola continua negativa: a bomba deixa de somar carga e passa a dissipar, como uma resistência, e o solver emite o aviso `pump_beyond_curve`. O DWSIM, no modo Curves, interrompe o cálculo fora da faixa da curva (`Pump.vb`, `InterpolateCurve`).
 
+**Modo ΔP fixo (`modoCurva = 'dpFixo'`).** O DWSIM só usa curvas no modo *Curves*; em *Delta P*, *Pressão de saída* e *Potência* (`Pump.vb`, ramos `Delta_P`/`OutletPressure`/`Power`) o aumento de pressão é fixo e a eficiência é o valor digitado, ambos independentes da vazão. No GAAP esse modo faz $\Delta P = \Delta P_{fixo}\,\omega^2$ (só a afinidade do acionamento; em $\omega = 1$ é constante), sem fator de densidade (o ΔP do DWSIM é em pressão, não em carga), $\eta$ constante e NPSHr constante. Não há fim de curva nem aviso `pump_beyond_curve`; `pressaoMaxima` guarda o $\Delta P$ fixo e `vazaoNominal` serve só de faixa do gráfico e de chute inicial do solver. O importador usa esse modo quando `<CalcMode>` não é `Curves` e toma a vazão da corrente ligada à bomba para a faixa do gráfico (o `CurveFlow` do DWSIM só é preenchido no ramo Curves, então fica em 0 nos outros modos).
+
 O parâmetro `pressaoMaxima` da bomba é o $\Delta P$ de shutoff medido com a água de referência ($\rho_{\text{ref}} = 997\text{ kg/m}^3$). Como uma bomba centrífuga entrega a mesma **altura manométrica** para qualquer líquido, o ganho de pressão escala com a densidade do fluido bombeado:
 
 $$\Delta P_{\text{bomba}}(Q) = \rho \, g \, H(Q) = \Delta P_{\text{curva}}(Q) \cdot \frac{\rho}{\rho_{\text{ref}}}$$

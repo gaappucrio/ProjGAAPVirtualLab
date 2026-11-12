@@ -20,6 +20,9 @@ export class BombaLogica extends ComponenteFisico {
         this.fatorCavitacaoAtual = 1;
         this.tempoRampaSegundos = 1.6;
         this.fracaoMelhorEficiencia = 0.72;
+        // 'curva': parábola H(Q) + curva de η (padrão). 'dpFixo': ΔP e η constantes, como o DWSIM fora do modo Curves
+        // (Delta P, Pressão de saída, Potência); `pressaoMaxima` passa a ser o ΔP fixo e `vazaoNominal` só a faixa do gráfico.
+        this.modoCurva = 'curva';
         this.fluxoReal = 0;
         this.pressaoSucaoAtualBar = 0;
         this.pressaoDescargaAtualBar = 0;
@@ -62,18 +65,30 @@ export class BombaLogica extends ComponenteFisico {
         return Number.isFinite(densidade) && densidade > 0 ? densidade / DEFAULT_FLUID_DENSITY_KG_M3 : 1;
     }
 
+    usaDeltaPFixo() {
+        return this.modoCurva === 'dpFixo';
+    }
+
+    // No ΔP fixo não há fim de curva: a bomba entrega o mesmo ΔP em qualquer vazão.
+    temLimiteDeVazaoNaCurva() {
+        return !this.usaDeltaPFixo();
+    }
+
     getVazaoMaximaCurvaLps(drive = 1) {
         return Math.max(EPSILON_FLOW, this.vazaoNominal * Math.max(clamp(drive, 0, 1), 0.05));
     }
 
     getCurvaPressaoBar(flowLps, drive = 1, densidadeKgM3 = this.densidadeOperacaoKgM3) {
-        return Math.max(0, this.getCurvaPressaoEstendidaBar(Math.min(flowLps, this.getVazaoMaximaCurvaLps(drive)), drive, densidadeKgM3));
+        const vazaoNaCurva = this.usaDeltaPFixo() ? flowLps : Math.min(flowLps, this.getVazaoMaximaCurvaLps(drive));
+        return Math.max(0, this.getCurvaPressaoEstendidaBar(vazaoNaCurva, drive, densidadeKgM3));
     }
 
     // Acima do qMax a parábola continua negativa: além do fim da curva a bomba não soma carga, ela
     // dissipa, como uma resistência (o EPANET também estende a curva; o DWSIM interrompe o cálculo).
     getCurvaPressaoEstendidaBar(flowLps, drive = 1, densidadeKgM3 = this.densidadeOperacaoKgM3) {
         const driveClamped = clamp(drive, 0, 1);
+        // ΔP fixo do DWSIM é em pressão (Pa), não em carga: não escala com a densidade.
+        if (this.usaDeltaPFixo()) return this.pressaoMaxima * driveClamped * driveClamped;
         const qMax = this.getVazaoMaximaCurvaLps(driveClamped);
         const curveFrac = 1 - Math.pow(Math.max(0, flowLps) / qMax, 2);
         return this.pressaoMaxima * this.getFatorDensidadeCurva(densidadeKgM3)
@@ -92,6 +107,7 @@ export class BombaLogica extends ComponenteFisico {
     }
 
     getCurvaEficiencia(flowLps, drive = 1) {
+        if (this.usaDeltaPFixo()) return this.eficienciaHidraulica;
         const driveClamped = clamp(drive, 0, 1);
         const qMax = Math.max(EPSILON_FLOW, this.vazaoNominal * Math.max(driveClamped, 0.05));
         const qBep = Math.max(EPSILON_FLOW, qMax * this.fracaoMelhorEficiencia);
@@ -106,7 +122,7 @@ export class BombaLogica extends ComponenteFisico {
         const driveClamped = clamp(drive, 0, 1);
         const qMax = Math.max(EPSILON_FLOW, this.vazaoNominal * Math.max(driveClamped, 0.05));
         const normalizedFlow = clamp(flowLps / qMax, 0, 1);
-        const ratio = 0.42 + (0.58 * Math.pow(normalizedFlow, 1.8));
+        const ratio = this.usaDeltaPFixo() ? 1 : 0.42 + (0.58 * Math.pow(normalizedFlow, 1.8));
         const speedFactor = Math.max(0.05, driveClamped * driveClamped);
         return Math.max(0.02, this.npshRequeridoM * speedFactor * ratio);
     }

@@ -45,7 +45,8 @@ const CLONEABLE_PROPERTIES_BY_TYPE = {
         'npshRequeridoM',
         'npshRequeridoAtualM',
         'tempoRampaSegundos',
-        'fracaoMelhorEficiencia'
+        'fracaoMelhorEficiencia',
+        'modoCurva'
     ],
     valve: [
         'aberta',

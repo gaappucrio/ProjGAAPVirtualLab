@@ -608,7 +608,7 @@ export function createMonitorController({ engine }) {
     }
 
     function getAxisOptions(kind, component) {
-        const pressureUnit = getUnitSymbol('pressure');
+        const pressureUnit = getUnitSymbol('pressureDiff');
         const lengthUnit = getUnitSymbol('length');
         if (kind === 'pump') {
             return [

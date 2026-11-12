@@ -58,7 +58,7 @@ function formatValveSizingMetrics(diagnostico) {
     if (!diagnostico) return '';
 
     return [
-        `ΔP: ${displayUnitValue('pressure', diagnostico.quedaPressaoBar, 2)}`,
+        `ΔP: ${displayUnitValue('pressureDiff', diagnostico.quedaPressaoBar, 2)}`,
         `Abertura: ${diagnostico.aberturaPercent.toFixed(1)}%`,
         `Cv: ${diagnostico.cvAtual.toFixed(1)} -> ${diagnostico.cvSugerido.toFixed(1)}`,
         `K: ${diagnostico.perdaLocalKAtual.toFixed(3)} -> ${diagnostico.perdaLocalKSugerida.toFixed(3)}`
@@ -175,8 +175,8 @@ export const VALVE_PROPERTIES_PRESENTER = {
                 <input type="text" id="disp-vazao-valvula" ${hintAttr(TOOLTIP.valveCurrentFlow)} value="${displayUnitValue('flow', comp.fluxoReal, 2)}" disabled>
             </div>
             <div class="prop-group">
-                ${makeUnitLabel('Queda de pressão atual', 'pressure', TOOLTIP.valveCurrentDeltaP)}
-                <input type="text" id="disp-deltap-valvula" ${hintAttr(TOOLTIP.valveCurrentDeltaP)} value="${displayUnitValue('pressure', comp.deltaPAtualBar, 2)}" disabled>
+                ${makeUnitLabel('Queda de pressão atual', 'pressureDiff', TOOLTIP.valveCurrentDeltaP)}
+                <input type="text" id="disp-deltap-valvula" ${hintAttr(TOOLTIP.valveCurrentDeltaP)} value="${displayUnitValue('pressureDiff', comp.deltaPAtualBar, 2)}" disabled>
             </div>
         `;
         const advancedContent = `
@@ -200,7 +200,7 @@ export const VALVE_PROPERTIES_PRESENTER = {
                 ${controladaPorSetpoint ? '<p style="margin:6px 0 0; font-size:11px; line-height:1.45; color:#c0392b;">Com o ponto de ajuste ativo, trocar o perfil altera a geometria/curva usada pelo controle. Cv/Kv, K, estrangulamento, curva, rangeabilidade e tempo de curso continuam bloqueados para evitar ajustes finos acidentais durante a malha fechada.</p>' : ''}
             </div>
             <div class="prop-group">
-                ${makeLabel('Unidade do coeficiente de vazão', TOOLTIP.valveFlowCoefficientUnit)}
+                ${makeLabel('Tipo do Coeficiente', TOOLTIP.valveFlowCoefficientUnit)}
                 <div class="custom-select-wrapper" id="input-unidade-coeficiente-valvula-wrapper">
                     <input type="hidden" id="input-unidade-coeficiente-valvula" value="${unidadeCoeficiente}">
                     <div class="custom-select-trigger" id="input-unidade-coeficiente-valvula-trigger" ${hintAttr(TOOLTIP.valveFlowCoefficientUnit)}>
@@ -228,7 +228,7 @@ export const VALVE_PROPERTIES_PRESENTER = {
                 </label>
             </div>
             <div class="prop-group">
-                ${makeLabel('Característica da válvula', TOOLTIP.valveCharacteristic)}
+                ${makeLabel('Relação Abertura / Kv[Cv]', TOOLTIP.valveCharacteristic)}
                 <div class="custom-select-wrapper ${bloqueioParametrosAttr ? 'disabled' : ''}" id="input-caracteristica-valvula-wrapper">
                     <input type="hidden" id="input-caracteristica-valvula" value="${comp.tipoCaracteristica}">
                     <div class="custom-select-trigger" id="input-caracteristica-valvula-trigger" ${hintAttr(selectedCharacteristicHint)}>

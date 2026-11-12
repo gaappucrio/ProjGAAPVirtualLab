@@ -309,7 +309,7 @@ const GRANDEZAS = {
     npshDisponivelM: ['NPSHa sem v²/2g', 'm', 'resultado'],
     pressaoEntradaBarg: ['P entrada', 'barg', 'resultado'],
     pressaoSaidaBarg: ['P saída', 'barg', 'resultado'],
-    cargaTermicaKw: ['Carga térmica', 'kW', 'resultado'],
+    cargaTermicaKw: ['Calor Trocado', 'kW', 'resultado'],
     temperaturaSaidaQuenteC: ['T saída quente', '°C', 'resultado'],
     temperaturaSaidaFriaC: ['T saída fria', '°C', 'resultado'],
     vazaoMaximaFonteLps: ['Vazão máxima da fonte', 'L/s', 'entrada'],

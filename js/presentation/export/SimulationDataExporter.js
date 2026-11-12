@@ -54,6 +54,7 @@ const COMPONENT_COLUMNS = [
     'Geometria do bocal ativa',
     'Vazão recebida (L/s)',
     'Bomba ligada',
+    'Tipo de curva da bomba',
     'Acionamento desejado (%)',
     'Acionamento efetivo (%)',
     'Vazão nominal da bomba (L/s)',
@@ -212,6 +213,7 @@ const EXPORT_LABELS_EN = {
     'Geometria do bocal ativa': 'Nozzle geometry active',
     'Vazão recebida': 'Received flow',
     'Bomba ligada': 'Pump on',
+    'Tipo de curva da bomba': 'Pump curve type',
     'Acionamento desejado': 'Target drive',
     'Acionamento efetivo': 'Effective drive',
     'Vazão nominal da bomba': 'Pump nominal flow',
@@ -346,7 +348,9 @@ const EXPORT_VALUE_TRANSLATIONS_EN = {
     custom: 'Custom',
     equal_percentage: 'Equal percentage',
     linear: 'Linear',
-    quick_opening: 'Quick opening'
+    quick_opening: 'Quick opening',
+    'ΔP fixo': 'Fixed ΔP',
+    Curva: 'Curve'
 };
 
 const LOCALIZED_VALUE_COLUMNS = new Set([
@@ -358,6 +362,7 @@ const LOCALIZED_VALUE_COLUMNS = new Set([
     'Tipo de destino',
     'Preset do fluido',
     'Bomba ligada',
+    'Tipo de curva da bomba',
     'Válvula aberta',
     'Set point ativo',
     'Alerta de saturação ativo',
@@ -411,7 +416,11 @@ function splitTrailingUnit(label) {
 
 function getUnitRule(column) {
     if (column.includes('(L/s)')) return { category: 'flow', sourceToBase: (value) => value };
-    if (column.includes('(bar)')) return { category: 'pressure', sourceToBase: (value) => value };
+    if (column.includes('(bar)')) {
+        // ΔP, carga e pressões absolutas na base (vapor, atmosférica) só ganham o fator da unidade; as demais são manométricas.
+        const isDifferenceOrAbsolute = /Queda|Delta P|Perda|Carga gerada|Pressão máxima da bomba|Pressão de vapor|Pressão atmosférica/.test(column);
+        return { category: isDifferenceOrAbsolute ? 'pressureDiff' : 'pressure', sourceToBase: (value) => value };
+    }
     if (column.includes('(mm)')) return { category: 'length', sourceToBase: (value) => value / 1000 };
     if (column.includes('(m)')) return { category: 'length', sourceToBase: (value) => value };
     if (column.includes('(L)')) return { category: 'volume', sourceToBase: (value) => value };
@@ -565,6 +574,7 @@ function buildComponentRow(component, engine = null) {
 
     if (component instanceof BombaLogica) {
         row['Bomba ligada'] = booleanValue(component.isOn);
+        row['Tipo de curva da bomba'] = component.usaDeltaPFixo?.() ? 'ΔP fixo' : 'Curva';
         row['Acionamento desejado (%)'] = numberValue(component.grauAcionamento, 3);
         row['Acionamento efetivo (%)'] = numberValue(component.acionamentoEfetivo, 3);
         row['Vazão nominal da bomba (L/s)'] = numberValue(component.vazaoNominal, 5);

@@ -25,7 +25,7 @@ export function buildPumpCurveDatasets(component) {
     const drive = Number.isFinite(rawDrive) && rawDrive > 0 ? rawDrive : 1;
     const qMax = Math.max(1, component.vazaoNominal);
     const qCurveMax = Math.max(0.1, qMax * drive);
-    const pressureUnit = getUnitSymbol('pressure');
+    const pressureUnit = getUnitSymbol('pressureDiff');
     const flowUnit = getUnitSymbol('flow');
     const lengthUnit = getUnitSymbol('length');
     const headPoints = [];
@@ -35,7 +35,7 @@ export function buildPumpCurveDatasets(component) {
     for (let i = 0; i <= PUMP_CURVE_POINT_COUNT; i += 1) {
         const flowLps = (qCurveMax * i) / PUMP_CURVE_POINT_COUNT;
         const flowDisplay = toDisplayValue('flow', flowLps);
-        headPoints.push({ x: flowDisplay, y: toDisplayValue('pressure', component.getCurvaPressaoBar(flowLps, drive)) });
+        headPoints.push({ x: flowDisplay, y: toDisplayValue('pressureDiff', component.getCurvaPressaoBar(flowLps, drive)) });
         efficiencyPoints.push({ x: flowDisplay, y: component.getCurvaEficiencia(flowLps, drive) * 100 });
         npshPoints.push({ x: flowDisplay, y: toDisplayValue('length', component.getCurvaNpshRequeridoM(flowLps, drive)) });
     }
@@ -45,7 +45,7 @@ export function buildPumpCurveDatasets(component) {
         efficiencyPoints,
         npshPoints,
         currentFlow: toDisplayValue('flow', component.fluxoReal),
-        currentHead: toDisplayValue('pressure', component.cargaGeradaBar || 0),
+        currentHead: toDisplayValue('pressureDiff', component.cargaGeradaBar || 0),
         flowUnit,
         pressureUnit,
         lengthUnit,
@@ -53,7 +53,7 @@ export function buildPumpCurveDatasets(component) {
         pressureAxisMax: Math.max(
             1,
             getMaxPointValue(headPoints) * 1.08,
-            toDisplayValue('pressure', Math.max(0, component.pressaoMaxima || 0)) * 1.08
+            toDisplayValue('pressureDiff', Math.max(0, component.pressaoMaxima || 0)) * 1.08
         ),
         npshAxisMax: toDisplayValue('length', Math.max(DEFAULT_NPSH_AXIS_MAX_M, component.npshRequeridoM || 0))
     };

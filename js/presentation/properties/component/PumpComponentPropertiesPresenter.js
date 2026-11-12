@@ -5,6 +5,7 @@ import {
     TOOLTIP,
     baseFromDisplay,
     bind,
+    bindCustomSelect,
     byId,
     displayBound,
     displayEditableUnitValue,
@@ -15,10 +16,12 @@ import {
     makeLabel,
     makeUnitLabel,
     notifyPanelRefresh,
+    renderCustomSelectHtml,
     renderPropertyTabs,
     setValue,
     validateInputWithFeedback
 } from '../PropertyPresenterShared.js';
+import { translateLiteral } from '../../i18n/LanguageManager.js';
 
 function getThemeAwareAlertColors(isDark, severity) {
     if (severity === 'error') {
@@ -179,6 +182,7 @@ export const PUMP_PROPERTIES_PRESENTER = {
         const condicaoSucao = comp.getCondicaoSucaoAtual?.()
             ?? (margemNpshM < 0 ? 'Risco de cavitação' : margemNpshM < 0.5 ? 'No limite' : 'Com folga');
 
+        const dpFixo = comp.usaDeltaPFixo?.() === true;
         const basicContent = `
             ${renderPumpSuctionAlert(comp, condicaoSucao, margemNpshM)}
             <div class="prop-group">
@@ -190,36 +194,49 @@ export const PUMP_PROPERTIES_PRESENTER = {
                 <input type="range" id="input-acionamento" min="0" max="100" value="${acionamentoExibido}" ${hintAttr(TOOLTIP.pumpDrive)} ${bloqueioAttr}>
                 ${bloqueadaPorSetpoint ? '<p style="margin:6px 0 0; font-size:11px; color:#c0392b;">Bomba fixa em 100% durante o set point; o PI ajusta apenas válvulas.</p>' : ''}
             </div>
-            <div class="prop-group">
+            <div class="prop-group" id="grp-vazmax-bomba" style="display:${dpFixo ? 'none' : 'block'};">
                 ${makeUnitLabel('Vazão nominal máx.', 'flow', TOOLTIP.pumpFlow)}
                 <input type="number" id="input-vazmax" ${hintAttr(TOOLTIP.pumpFlow)} value="${displayEditableUnitValue('flow', comp.vazaoNominal, 3)}" step="${displayStep('flow', 0.5)}" min="${displayBound('flow', 5)}" max="${displayBound('flow', 500)}">
             </div>
             <div class="prop-group">
-                ${makeUnitLabel('Carga máxima da curva', 'pressure', TOOLTIP.pumpPressure)}
-                <input type="number" id="input-pressao-max-bomba" ${hintAttr(TOOLTIP.pumpPressure)} value="${displayEditableUnitValue('pressure', comp.pressaoMaxima, 3)}" step="${displayStep('pressure', 0.01)}" min="${displayBound('pressure', 0.5)}" max="${displayBound('pressure', 20)}">
+                <span id="rot-carga-curva-bomba" style="display:${dpFixo ? 'none' : 'inline'};">${makeUnitLabel('Carga máxima da curva', 'pressureDiff', TOOLTIP.pumpPressure)}</span>
+                <span id="rot-dp-fixo-bomba" style="display:${dpFixo ? 'inline' : 'none'};">${makeUnitLabel('Aumento de pressão (ΔP fixo)', 'pressureDiff', TOOLTIP.pumpPressure)}</span>
+                <input type="number" id="input-pressao-max-bomba" ${hintAttr(TOOLTIP.pumpPressure)} value="${displayEditableUnitValue('pressureDiff', comp.pressaoMaxima, 3)}" step="${displayStep('pressureDiff', 0.01)}" min="${displayBound('pressureDiff', 0.5)}" max="${displayBound('pressureDiff', 20)}">
             </div>
             <div class="prop-group">
                 ${makeUnitLabel('Vazão atual', 'flow', TOOLTIP.pumpCurrentFlow)}
                 <input type="text" id="disp-vazao-bomba" ${hintAttr(TOOLTIP.pumpCurrentFlow)} value="${displayUnitValue('flow', comp.fluxoReal, 2)}" disabled>
             </div>
             <div class="prop-group">
-                ${makeUnitLabel('Aumento de pressão atual', 'pressure', TOOLTIP.pumpPressureIncrease)}
-                <input type="text" id="disp-carga-bomba" ${hintAttr(TOOLTIP.pumpPressureIncrease)} value="${displayUnitValue('pressure', comp.cargaGeradaBar, 2)}" disabled>
+                ${makeUnitLabel('Aumento de pressão atual', 'pressureDiff', TOOLTIP.pumpPressureIncrease)}
+                <input type="text" id="disp-carga-bomba" ${hintAttr(TOOLTIP.pumpPressureIncrease)} value="${displayUnitValue('pressureDiff', comp.cargaGeradaBar, 2)}" disabled>
             </div>
             <div class="prop-group">
-                ${makeUnitLabel('Pressão de sucção', 'pressure', TOOLTIP.pumpSuctionPressure)}
+                ${makeUnitLabel('Pressão na Entrada', 'pressure', TOOLTIP.pumpSuctionPressure)}
                 <input type="text" id="disp-succao-bomba" ${hintAttr(TOOLTIP.pumpSuctionPressure)} value="${displayUnitValue('pressure', comp.pressaoSucaoAtualBar, 2)}" disabled>
             </div>
             <div class="prop-group">
-                ${makeUnitLabel('Pressão de descarga', 'pressure', TOOLTIP.pumpDischargePressure)}
+                ${makeUnitLabel('Pressão na Saída', 'pressure', TOOLTIP.pumpDischargePressure)}
                 <input type="text" id="disp-descarga-bomba" ${hintAttr(TOOLTIP.pumpDischargePressure)} value="${displayUnitValue('pressure', comp.pressaoDescargaAtualBar, 2)}" disabled>
             </div>
         `;
 
         const advancedContent = `
             <div class="prop-group">
+                ${makeLabel('Tipo de curva', TOOLTIP.pumpCurveMode)}
+                ${renderCustomSelectHtml({
+                    id: 'input-modo-curva-bomba',
+                    value: dpFixo ? 'dpFixo' : 'curva',
+                    title: TOOLTIP.pumpCurveMode,
+                    options: [
+                        { value: 'curva', label: translateLiteral('Curva (parábola)') },
+                        { value: 'dpFixo', label: translateLiteral('ΔP fixo (como o DWSIM)') }
+                    ]
+                })}
+            </div>
+            <div class="prop-group">
                 ${makeLabel('Eficiência hidráulica (%)', TOOLTIP.pumpEfficiency)}
-                <input type="number" id="input-eficiencia-bomba" ${hintAttr(TOOLTIP.pumpEfficiency)} value="${(comp.eficienciaHidraulica * 100).toFixed(0)}" step="1" min="20" max="100">
+                <input type="number" id="input-eficiencia-bomba" ${hintAttr(TOOLTIP.pumpEfficiency)} value="${(comp.eficienciaHidraulica * 100).toFixed(0)}" step="1" min="${dpFixo ? 5 : 20}" max="100">
             </div>
             <div class="prop-group">
                 ${makeLabel('Tempo de rampa (s)', TOOLTIP.pumpRamp)}
@@ -309,10 +326,26 @@ export const PUMP_PROPERTIES_PRESENTER = {
                 }
             );
         });
+        bindCustomSelect('input-modo-curva-bomba');
+        bind('input-modo-curva-bomba', 'change', (event) => {
+            comp.modoCurva = event.target.value === 'dpFixo' ? 'dpFixo' : 'curva';
+            const dpFixo = comp.usaDeltaPFixo();
+            const mostrar = (id, visivel, tipo = 'block') => {
+                const el = byId(id);
+                if (el) el.style.display = visivel ? tipo : 'none';
+            };
+            mostrar('grp-vazmax-bomba', !dpFixo);
+            mostrar('rot-carga-curva-bomba', !dpFixo, 'inline');
+            mostrar('rot-dp-fixo-bomba', dpFixo, 'inline');
+            const campoEficiencia = byId('input-eficiencia-bomba');
+            if (campoEficiencia) campoEficiencia.min = dpFixo ? 5 : 20;
+            comp.recalcularMetricasDerivadasCurva?.();
+            notifyPanelRefresh();
+        });
         bind('input-pressao-max-bomba', 'change', (event) => {
             validateInputWithFeedback(
                 event.target,
-                (value, name) => InputValidator.validatePressure(baseFromDisplay('pressure', value), 20, name),
+                (value, name) => InputValidator.validatePressure(baseFromDisplay('pressureDiff', value), 20, name),
                 'Carga máxima',
                 (validated) => {
                     comp.pressaoMaxima = validated;
@@ -323,7 +356,7 @@ export const PUMP_PROPERTIES_PRESENTER = {
         bind('input-eficiencia-bomba', 'change', (event) => {
             validateInputWithFeedback(
                 event.target,
-                (value, name) => InputValidator.validateNumber(value, 20, 100, name),
+                (value, name) => InputValidator.validateNumber(value, comp.usaDeltaPFixo?.() ? 5 : 20, 100, name),
                 'Eficiência',
                 (validated) => {
                     comp.eficienciaHidraulica = validated / 100;

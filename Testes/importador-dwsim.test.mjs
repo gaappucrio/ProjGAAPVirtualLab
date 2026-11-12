@@ -420,6 +420,37 @@ test('bomba sem curva de NPSHr: o <NPSH> do DWSIM é o disponível e não vira N
     approx(comCurva.npshRequeridoM, 3.2, 1e-9, 'NPSHr do CurveNPSHr');
 });
 
+test('bomba fora do modo Curves: ΔP e η fixos, vazão da corrente e nada de vazão máxima de 0,1 L/s', () => {
+    const planta = (corpoBomba) => importarXml(documento([
+        grafico('F', 'MaterialStream', { saidas: [['B']] }),
+        grafico('B', 'Pump', { entradas: [['F']], saidas: [['D']] }),
+        grafico('D', 'MaterialStream', { entradas: [['B']] })
+    ], [
+        corrente('F', { vazaoM3s: 0.004 }),
+        simulacao('B', 'DWSIM.UnitOperations.UnitOperations.Pump', corpoBomba),
+        corrente('D')
+    ]));
+    // Pump.vb: CurveFlow só é preenchido no ramo Curves, então fica em 0 nos outros modos.
+    for (const modo of ['Delta_P', 'OutletPressure', 'Power']) {
+        const bomba = componentePorTag(planta(`<CalcMode>${modo}</CalcMode><PressureIncrease>300000</PressureIncrease><DeltaP>300000</DeltaP><Efficiency>70</Efficiency><CurveFlow>0</CurveFlow>`).workspace, 'B');
+        assert.equal(bomba.modoCurva, 'dpFixo', modo);
+        approx(bomba.pressaoMaxima, 3, 1e-9, `${modo}: ΔP fixo (bar)`);
+        approx(bomba.eficienciaHidraulica, 0.7, 1e-9, `${modo}: η digitado`);
+        approx(bomba.vazaoNominal, 8, 1e-9, `${modo}: faixa do gráfico = 2× a vazão da corrente (L/s)`);
+    }
+    const semCorrente = importarXml(documento([
+        grafico('B', 'Pump')
+    ], [
+        simulacao('B', 'DWSIM.UnitOperations.UnitOperations.Pump', '<CalcMode>Delta_P</CalcMode><PressureIncrease>100000</PressureIncrease><Efficiency>60</Efficiency>')
+    ]));
+    assert.ok(componentePorTag(semCorrente.workspace, 'B').vazaoNominal >= 1, 'sem corrente ligada ainda há faixa útil');
+});
+
+test('bomba em modo Curves continua com curva (modoCurva padrão)', async () => {
+    const { workspace } = await importarTemplate(TEMPLATE_BOMBA_TANQUE);
+    assert.equal(componentePorTag(workspace, 'PUMP-1').modoCurva, 'curva');
+});
+
 // Interpolante racional de 1ª ordem (Berrut, Floater-Hormann com d = 0): reproduz a carga, a
 // eficiência e a potência que o DWSIM grava para as bombas em modo Curves.
 function interpolarComoDwsim(xs, ys, x) {

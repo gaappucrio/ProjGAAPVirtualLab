@@ -96,8 +96,8 @@ export function renderConnectionProperties({
             <input type="text" id="disp-pipe-fluid-temp" title="Temperatura atual do fluido que escoa neste Cano." value="${displayUnitValue('temperature', currentFluid?.temperatura ?? 25, 2)}" disabled>
         </div>
         <div class="prop-group">
-            <label title="${TOOLTIPS.conexao.deltaPTrecho}">Queda de Pressão no Cano (${getUnitSymbol('pressure')})</label>
-            <input type="text" id="disp-pipe-deltap" title="${TOOLTIPS.conexao.deltaPTrecho}" value="${displayUnitValue('pressure', pressureProfile.pressureDropBar, 3)}" disabled>
+            <label title="${TOOLTIPS.conexao.deltaPTrecho}">Queda de Pressão no Cano (${getUnitSymbol('pressureDiff')})</label>
+            <input type="text" id="disp-pipe-deltap" title="${TOOLTIPS.conexao.deltaPTrecho}" value="${displayUnitValue('pressureDiff', pressureProfile.pressureDropBar, 3)}" disabled>
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.comprimentoTotal}">Comprimento Total (${getUnitSymbol('length')})</label>

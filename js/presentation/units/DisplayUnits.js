@@ -1,14 +1,36 @@
 // Preferencias e conversoes de exibicao da interface.
 
+const P_ATM_DISPLAY_BAR = 1.01325;
+
+// factor: unidade por bar. plainSymbol: símbolo sem g (usado em ΔP e em pressões já absolutas na base).
+function pressureUnit(label, plainSymbol, factor, step, digits, absolute) {
+    const offsetBar = absolute ? P_ATM_DISPLAY_BAR : 0;
+    return {
+        label,
+        symbol: label,
+        plainSymbol,
+        factor,
+        fromBase: (v) => (v + offsetBar) * factor,
+        toBase: (v) => (v / factor) - offsetBar,
+        step,
+        digits
+    };
+}
+
 const UNIT_CONFIG = {
+    // Pressão: g = manométrica, sem g = absoluta (padrão, como no DWSIM) (Patm somada na exibição).
+    // O estado interno do solver continua manométrico em bar. Nomes como no DWSIM (kPag, barg, psig).
     pressure: {
         label: 'Pressão',
         default: 'kpa',
         units: {
-            bar: { label: 'bar', symbol: 'bar', fromBase: (v) => v, toBase: (v) => v, step: 0.05, digits: 2 },
-            kpa: { label: 'kPa', symbol: 'kPa', fromBase: (v) => v * 100, toBase: (v) => v / 100, step: 1, digits: 1 },
-            psi: { label: 'psi', symbol: 'psi', fromBase: (v) => v * 14.5037738, toBase: (v) => v / 14.5037738, step: 0.5, digits: 1 },
-            mca: { label: 'mca', symbol: 'mca', fromBase: (v) => v / 0.0980665, toBase: (v) => v * 0.0980665, step: 0.1, digits: 2 }
+            kpag: pressureUnit('kPag', 'kPa', 100, 1, 1, false),
+            kpa: pressureUnit('kPa', 'kPa', 100, 1, 1, true),
+            barg: pressureUnit('barg', 'bar', 1, 0.05, 2, false),
+            bar: pressureUnit('bar', 'bar', 1, 0.05, 2, true),
+            psig: pressureUnit('psig', 'psi', 14.5037738, 0.5, 1, false),
+            psi: pressureUnit('psi', 'psi', 14.5037738, 0.5, 1, true),
+            mca: pressureUnit('mca', 'mca', 1 / 0.0980665, 0.1, 2, false)
         }
     },
     flow: {
@@ -59,6 +81,19 @@ const unitPreferences = Object.fromEntries(
 const listeners = new Set();
 
 function getUnitEntry(category) {
+    if (category === 'pressureDiff') {
+        // ΔP, carga e pressões já absolutas na base (vapor, atmosférica): só o fator da unidade escolhida, sem deslocamento.
+        const selected = UNIT_CONFIG.pressure.units[unitPreferences.pressure];
+        if (!selected) return null;
+        return {
+            label: selected.plainSymbol,
+            symbol: selected.plainSymbol,
+            fromBase: (v) => v * selected.factor,
+            toBase: (v) => v / selected.factor,
+            step: selected.step,
+            digits: selected.digits
+        };
+    }
     const config = UNIT_CONFIG[category];
     const unitId = unitPreferences[category];
     return config?.units?.[unitId] || null;

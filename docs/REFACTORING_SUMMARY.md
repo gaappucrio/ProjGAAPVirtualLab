@@ -614,7 +614,8 @@ Representa bomba centrífuga simplificada.
 Propriedades principais:
 
 - Vazão nominal.
-- Pressão máxima.
+- Pressão máxima (no modo `dpFixo`, o ΔP fixo).
+- Modo da curva (`modoCurva`: `curva` ou `dpFixo`).
 - Acionamento.
 - Acionamento efetivo.
 - Eficiência hidráulica.
@@ -1316,4 +1317,5 @@ O sistema já possui suporte funcional para montagem visual, seleção múltipla
   5. **UI, exportação e i18n:** grupo da PSV (checkbox e set) e vazão de alívio só aparecem no vaso fechado; colunas "Pressão de alívio da PSV (bar)" e "Vazão de alívio do tanque (L/s)" na exportação; tooltips e rótulos PT/EN.
   5b. **Revisão do agy (Flash), 3 achados, todos aplicados:** (a) o checkbox e o set da PSV estavam no mesmo `prop-group`, e o associador automático de rótulos (`LanguageManager`, liga ao 1º input do grupo) ligava "Pressão de alívio" ao checkbox; agora são grupos separados; (b) com set ≤ pré-carga, V_set = 0, mas o Boyle em V = 0 dava a pré-carga (> set), e o gás reportado não batia com o nó fixo do solver; agora o set efetivo é max(set, pré-carga) e a UI exige set ≥ pré-carga (o GAAP não modela o inventário de gás); (c) trocar para aberto com a simulação pausada deixava a vazão de alívio antiga no painel e na exportação; agora é zerada.
   6. **Testes:** PSV no solver (enche até V_set, gás e bocal no set, alivia toda a entrada, massa fecha, PSV fecha quando a alimentação cai e a saída abre; a mutação "solver sem PSV" é pega pela pressão no bocal) e UI (campos na aba Avançado, visibilidade por tipo). Os testes da trava e do colchão passaram a declarar `tipoTanque = 'fechado'` (e `pressaoAlivioBar = null` onde exercitam a trava). `npm test` 230/230 (com as asserções novas de set baixo e de rótulos).
+- Resolvido em 2026-11-12 (passo 9): bomba sem curvas. O importador lia o `CurveFlow` (0 fora do modo Curves, `Pump.vb`) como vazão máxima e a bomba virava 0,1 L/s. Novo modo `modoCurva = 'dpFixo'` em `BombaLogica` (ΔP e η constantes, sem fim de curva, sem aviso), importado dos modos Delta P / Pressão de saída / Potência do DWSIM, com seletor "Tipo de curva" na aba Avançado, coluna no export e persistência (`modoCurva` no snapshot; arquivo antigo abre em `curva`). Seções 2.3 de Equacoes_e_Fisica_GAAP e 8.3 daqui.
 - Resolvido em 2026-11-11: a 1ª tabela do `npm run validar:dwsim` quebrava linha no terminal (~200 colunas). As linhas ❓ da bomba levavam a explicação inteira na coluna Erro, e o `console.table` somava índice e aspas. Agora a coluna mostra um rótulo curto (a explicação fica no aviso "⚠" acima da tabela) e uma impressora própria (`imprimirTabela`) alinha os emojis como 2 colunas: 138 e 106 colunas. Placar inalterado.

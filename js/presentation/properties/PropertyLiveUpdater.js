@@ -180,7 +180,7 @@ function updateConnectionValues(engine, connection) {
     setFieldValue('disp-pipe-fluid-temp', fluid?.temperatura ?? 25, 'temperature', 2);
     setValue('disp-pipe-fluid-density', fluid?.densidade ? fluid.densidade.toFixed(1) : '0.0');
     setValue('disp-pipe-fluid-viscosity', fluid?.viscosidadeDinamicaPaS ? fluid.viscosidadeDinamicaPaS.toFixed(5) : '0.00000');
-    setFieldValue('disp-pipe-deltap', pressureProfile.pressureDropBar, 'pressure', 3);
+    setFieldValue('disp-pipe-deltap', pressureProfile.pressureDropBar, 'pressureDiff', 3);
     setFieldValue('disp-pipe-length', state.lengthM, 'length', 2);
     setValue('disp-pipe-residence-time', formatResidenceTime(calculateConnectionResidenceTimeS(
         connection,
@@ -303,7 +303,7 @@ function updateValveSizingAlert(component, blockedBySetpoint) {
     if (metricsEl) {
         metricsEl.style.color = state.color;
         metricsEl.textContent = [
-            `ΔP: ${formatMeasuredValue('pressure', diagnostico.quedaPressaoBar, 2)}`,
+            `ΔP: ${formatMeasuredValue('pressureDiff', diagnostico.quedaPressaoBar, 2)}`,
             `Abertura: ${diagnostico.aberturaPercent.toFixed(1)}%`,
             `Cv: ${diagnostico.cvAtual.toFixed(1)} -> ${diagnostico.cvSugerido.toFixed(1)}`,
             `K: ${diagnostico.perdaLocalKAtual.toFixed(3)} -> ${diagnostico.perdaLocalKSugerida.toFixed(3)}`
@@ -364,7 +364,7 @@ function updateValveValues(engine, component, { monitorController } = {}) {
     if (cursoInput && !isActive(cursoInput)) cursoInput.value = component.tempoCursoSegundos;
     setValue('disp-abertura-efetiva-valvula', component.aberturaEfetiva.toFixed(1));
     setFieldValue('disp-vazao-valvula', component.fluxoReal, 'flow', 2);
-    setFieldValue('disp-deltap-valvula', component.deltaPAtualBar, 'pressure', 2);
+    setFieldValue('disp-deltap-valvula', component.deltaPAtualBar, 'pressureDiff', 2);
     updateValveSizingAlert(component, bloqueadaPorSetpoint);
     monitorController?.refreshValve(component);
 }
@@ -378,7 +378,7 @@ function updatePumpValues(component, { monitorController } = {}) {
     }
     setValue('disp-acionamento-real-bomba', component.acionamentoEfetivo.toFixed(1));
     setFieldValue('disp-vazao-bomba', component.fluxoReal, 'flow', 2);
-    setFieldValue('disp-carga-bomba', component.cargaGeradaBar, 'pressure', 2);
+    setFieldValue('disp-carga-bomba', component.cargaGeradaBar, 'pressureDiff', 2);
     setFieldValue('disp-succao-bomba', component.pressaoSucaoAtualBar, 'pressure', 2);
     setFieldValue('disp-descarga-bomba', component.pressaoDescargaAtualBar, 'pressure', 2);
     setValue('disp-cavitacao-bomba', `${(component.fatorCavitacaoAtual * 100).toFixed(0)}%`);
@@ -429,14 +429,14 @@ function updateHeatExchangerValues(component, engine = null, { monitorController
     setFieldValue('disp-hx-temp-in', component.temperaturaEntradaC, 'temperature', 2);
     setFieldValue('disp-hx-temp-out', component.temperaturaSaidaC, 'temperature', 2);
     setValue('disp-hx-delta-t', (component.deltaTemperaturaC || 0).toFixed(2));
-    setFieldValue('disp-hx-deltap', component.deltaPAtualBar, 'pressure', 2);
+    setFieldValue('disp-hx-deltap', component.deltaPAtualBar, 'pressureDiff', 2);
 
     // Corrente 2
     setFieldValue('disp-hx-flow-2', component.vazao2Lps ?? 0, 'flow', 2);
     setFieldValue('disp-hx-temp-in-2', component.temperaturaEntrada2C ?? component.temperaturaServicoC, 'temperature', 2);
     setFieldValue('disp-hx-temp-out-2', component.temperaturaSaida2C ?? component.temperaturaServicoC, 'temperature', 2);
     setValue('disp-hx-delta-t-2', (component.deltaTemperatura2C || 0).toFixed(2));
-    setFieldValue('disp-hx-deltap-2', component.deltaP2AtualBar ?? 0, 'pressure', 2);
+    setFieldValue('disp-hx-deltap-2', component.deltaP2AtualBar ?? 0, 'pressureDiff', 2);
 
     monitorController?.refreshHeatExchanger(component);
 }
@@ -458,7 +458,7 @@ export function updatePropertyPanelValues({
         const drenoFluid = component.getFluidoEntradaMisturado?.(engine.fluidoOperante);
         setFieldValue('disp-vazao-dreno', component.vazaoRecebidaLps, 'flow', 2);
         setFieldValue('disp-pressao-final-dreno', pressureProfile.finalNetworkPressureBar, 'pressure', 2);
-        setFieldValue('disp-deltap-entrada-dreno', pressureProfile.entryPressureDropBar, 'pressure', 2);
+        setFieldValue('disp-deltap-entrada-dreno', pressureProfile.entryPressureDropBar, 'pressureDiff', 2);
         setValue('disp-dreno-fluid', drenoFluid?.nome || '-');
         setFieldValue('disp-dreno-fluid-temp', drenoFluid?.temperatura ?? 25, 'temperature', 2);
     }

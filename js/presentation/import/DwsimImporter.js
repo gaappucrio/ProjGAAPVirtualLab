@@ -649,7 +649,19 @@ function findDynamicProperty(simEl, propertyName) {
     return null;
 }
 
-function pumpParameters(simEl) {
+// Vazão da corrente de entrada (ou, na falta, de saída) da bomba, em m³/s. Fora do modo Curves o DWSIM
+// não grava a vazão no bloco da bomba (CurveFlow só é preenchido em Pump.vb no ramo Curves).
+function pumpStreamFlowM3s(gObj, simObjects) {
+    if (!gObj || !simObjects) return null;
+    const names = [...(gObj.inputs || []).map((c) => c.sourceName), ...(gObj.outputs || []).map((c) => c.targetName)];
+    for (const name of names) {
+        const flow = streamMixtureProperties(simObjects.get(name)?.element)?.flowM3s;
+        if (Number.isFinite(flow) && flow > 0) return flow;
+    }
+    return null;
+}
+
+function pumpParameters(simEl, streamFlowM3s = null) {
     // DWSIM: Pressão em Pa, vazão em m³/s.
     // GAAP:  Pressão em bar, vazão em L/s.
     const pressureIncreasePa = queryNumeric(simEl, 'PressureIncrease', 0)
@@ -674,7 +686,29 @@ function pumpParameters(simEl) {
 
     // Sem curvas, sobra o ponto de operação gravado pelo DWSIM: aproximação grosseira,
     // porque o GAAP lê pressaoMaxima como shutoff e vazaoNominal como vazão máxima.
-    const curve = queryString(simEl, 'CalcMode') === 'Curves' ? pumpCurveParameters(simEl) : null;
+    const calcMode = queryString(simEl, 'CalcMode');
+    const curve = calcMode === 'Curves' ? pumpCurveParameters(simEl) : null;
+    // Delta P / Pressão de saída / Potência: no DWSIM o ΔP é fixo e η é o valor digitado, sem curvas.
+    // O ΔP e η gravados são os do ponto resolvido, que valem em qualquer vazão.
+    if (calcMode && calcMode !== 'Curves') {
+        const eficienciaFixa = clamp(efficiency / 100, 0.05, 1) || 0.78;
+        const npshFixoM = curveNpshrM > 0 ? Math.max(0.05, curveNpshrM) : 2.5;
+        return {
+            isOn: false,
+            grauAcionamento: 100,
+            acionamentoEfetivo: 0,
+            modoCurva: 'dpFixo',
+            // Só a faixa do gráfico e o chute inicial do solver: ΔP fixo não tem vazão máxima.
+            vazaoNominal: Math.max(1, 2 * (streamFlowM3s ?? 0.01) * M3S_TO_LPS),
+            pressaoMaxima: Math.max(0, pressureIncreasePa * PA_TO_BAR),
+            eficienciaHidraulica: eficienciaFixa,
+            eficienciaAtual: eficienciaFixa,
+            npshRequeridoM: npshFixoM,
+            npshRequeridoAtualM: npshFixoM,
+            tempoRampaSegundos: 1.6,
+            fracaoMelhorEficiencia: 0.72
+        };
+    }
     const pressaoMaximaBar = curve?.pressaoMaximaBar ?? Math.max(0.05, pressureIncreasePa * PA_TO_BAR);
     const vazaoNominalLps = curve?.vazaoMaximaLps ?? Math.max(0.1, curveFlowM3s * M3S_TO_LPS);
     const eficienciaHidraulica = clamp((curve?.eficienciaMaximaPct ?? efficiency) / 100, 0.18, 0.95) || 0.78;
@@ -686,6 +720,7 @@ function pumpParameters(simEl) {
         isOn: false,
         grauAcionamento: 100,
         acionamentoEfetivo: 0,
+        modoCurva: 'curva',
         vazaoNominal: vazaoNominalLps,
         pressaoMaxima: pressaoMaximaBar,
         eficienciaHidraulica,
@@ -1406,7 +1441,7 @@ function defaultTagFor(gaapType, dwsimType = '') {
 function extractPropertiesFor(gaapType, simObj, gObj = null, simObjects = null) {
     const element = simObj?.element || null;
     const dwsimType = gObj?.objectType || simObj?.type || '';
-    if (gaapType === 'pump') return pumpParameters(element);
+    if (gaapType === 'pump') return pumpParameters(element, pumpStreamFlowM3s(gObj, simObjects));
     if (gaapType === 'valve') return valveParameters(element);
     if (gaapType === 'tank') return tankParameters(element, gObj?.name, simObjects, gObj?.tag);
     if (gaapType === 'heat_exchanger') return heatExchangerParameters(element, dwsimType);

@@ -106,8 +106,8 @@ function sourceFluidFieldValues(fluido) {
         'input-source-fluid-temp': toDisplayValue('temperature', fluido.temperatura).toFixed(1),
         'input-source-fluid-viscosity': String(Number(Number(fluido.viscosidadeDinamicaPaS).toPrecision(4))),
         'input-source-fluid-cp': String(Number(Number(fluido.calorEspecificoJkgK).toFixed(1))),
-        'input-source-fluid-vapor': displayUnitValue('pressure', fluido.pressaoVaporBar, 3),
-        'input-source-fluid-atm': displayUnitValue('pressure', fluido.pressaoAtmosfericaBar, 3)
+        'input-source-fluid-vapor': displayUnitValue('pressureDiff', fluido.pressaoVaporBar, 3),
+        'input-source-fluid-atm': displayUnitValue('pressureDiff', fluido.pressaoAtmosfericaBar, 3)
     };
 }
 
@@ -183,19 +183,19 @@ function renderSourceFluidFields(comp) {
             <input type="number" id="input-source-fluid-cp" title="${TOOLTIPS.fluido.calorEspecifico}" value="${campos['input-source-fluid-cp']}" step="any" min="500" max="10000">
         </div>
         <div class="prop-group">
-            ${makeUnitLabel('Pressão de Vapor', 'pressure', TOOLTIPS.fluido.pressaoVapor)}
-            <input type="number" id="input-source-fluid-vapor" title="${TOOLTIPS.fluido.pressaoVapor}" value="${campos['input-source-fluid-vapor']}" step="${displayStep('pressure', 0.001)}" min="${displayBound('pressure', 0.0001)}" max="${displayBound('pressure', 5)}">
+            ${makeUnitLabel('Pressão de Vapor', 'pressureDiff', TOOLTIPS.fluido.pressaoVapor)}
+            <input type="number" id="input-source-fluid-vapor" title="${TOOLTIPS.fluido.pressaoVapor}" value="${campos['input-source-fluid-vapor']}" step="${displayStep('pressureDiff', 0.001)}" min="${displayBound('pressureDiff', 0.0001)}" max="${displayBound('pressureDiff', 5)}">
         </div>
         <div class="prop-group">
-            ${makeUnitLabel('Pressão Atmosférica', 'pressure', TOOLTIPS.fluido.pressaoAtmosferica)}
-            <input type="number" id="input-source-fluid-atm" title="${TOOLTIPS.fluido.pressaoAtmosferica}" value="${campos['input-source-fluid-atm']}" step="${displayStep('pressure', 0.001)}" min="${displayBound('pressure', 0.5)}" max="${displayBound('pressure', 2)}">
+            ${makeUnitLabel('Pressão Atmosférica', 'pressureDiff', TOOLTIPS.fluido.pressaoAtmosferica)}
+            <input type="number" id="input-source-fluid-atm" title="${TOOLTIPS.fluido.pressaoAtmosferica}" value="${campos['input-source-fluid-atm']}" step="${displayStep('pressureDiff', 0.001)}" min="${displayBound('pressureDiff', 0.5)}" max="${displayBound('pressureDiff', 2)}">
         </div>
         ${renderCustomColorSwatches(fluido, currentPreset)}
     `;
 }
 
 function pressureInputValue(id, fallback) {
-    return baseFromDisplay('pressure', valueOf(id), fallback);
+    return baseFromDisplay('pressureDiff', valueOf(id), fallback);
 }
 
 function temperatureInputValue(id, fallback) {
@@ -436,8 +436,8 @@ export const SINK_PROPERTIES_PRESENTER = {
                 <input type="text" id="disp-pressao-final-dreno" ${hintAttr(TOOLTIP.sinkFinalPressure)} value="${displayUnitValue('pressure', pressureProfile.finalNetworkPressureBar, 2)}" disabled>
             </div>
             <div class="prop-group">
-                ${makeUnitLabel('Queda na entrada da saída', 'pressure', TOOLTIP.sinkEntryPressureDrop)}
-                <input type="text" id="disp-deltap-entrada-dreno" ${hintAttr(TOOLTIP.sinkEntryPressureDrop)} value="${displayUnitValue('pressure', pressureProfile.entryPressureDropBar, 2)}" disabled>
+                ${makeUnitLabel('Queda na entrada da saída', 'pressureDiff', TOOLTIP.sinkEntryPressureDrop)}
+                <input type="text" id="disp-deltap-entrada-dreno" ${hintAttr(TOOLTIP.sinkEntryPressureDrop)} value="${displayUnitValue('pressureDiff', pressureProfile.entryPressureDropBar, 2)}" disabled>
             </div>
             <div class="prop-group">
                 <label title="Fluido atualmente recebido nesta saída.">Fluido Recebido</label>

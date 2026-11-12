@@ -2098,7 +2098,7 @@ test('refinamentos fisicos: curvas da bomba em rotacao parcial, preservacao de r
     bomba.recalcularMetricasDerivadasCurva();
 
     const datasetsMeiaRotacao = buildPumpCurveDatasets(bomba);
-    approx(datasetsMeiaRotacao.headPoints[0].y, toDisplayValue('pressure', 1.0), 1e-6, 'Shutoff head no grafico a 50% deve ser 0.25 * 4.0 = 1.0 bar');
+    approx(datasetsMeiaRotacao.headPoints[0].y, toDisplayValue('pressureDiff', 1.0), 1e-6, 'Shutoff head no grafico a 50% deve ser 0.25 * 4.0 = 1.0 bar');
     approx(datasetsMeiaRotacao.headPoints.at(-1).x, toDisplayValue('flow', 20.0), 1e-6, 'Vazao maxima da curva a 50% deve ser 0.5 * 40 = 20 L/s');
 
     // 2. Misturas sucessivas preservam refTemperatura e refDensidade sem deriva termica

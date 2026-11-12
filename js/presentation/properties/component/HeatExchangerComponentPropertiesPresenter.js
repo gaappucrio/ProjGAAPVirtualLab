@@ -121,11 +121,11 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
                 <input type="number" id="input-hx-ua" ${hintAttr(TOOLTIP.heatExchangerUA)} value="${comp.uaWPorK}" step="100" min="0" max="100000">
             </div>
             <div class="prop-group">
-                ${makeLabel('Carga térmica', TOOLTIP.heatExchangerDuty)}
+                ${makeLabel('Calor Trocado', TOOLTIP.heatExchangerDuty)}
                 <input type="text" id="disp-hx-duty" ${hintAttr(TOOLTIP.heatExchangerDuty)} value="${thermalPowerText(comp.cargaTermicaW)}" disabled>
             </div>
             <div class="prop-group">
-                ${makeLabel('Carga térmica máxima', 'Troca térmica teórica máxima admissível pela Segunda Lei da Termodinâmica.')}
+                ${makeLabel('Calor Trocado máximo', 'Troca térmica teórica máxima admissível pela Segunda Lei da Termodinâmica.')}
                 <input type="text" id="disp-hx-max-duty" value="${thermalPowerText(comp.cargaTermicaMaximaW)}" disabled>
             </div>
             <div class="prop-group">
@@ -133,7 +133,7 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
                 <input type="text" id="disp-hx-effectiveness" ${hintAttr(TOOLTIP.heatExchangerEffectiveness)} value="${(comp.efetividadeAtual * 100).toFixed(1)}%" disabled>
             </div>
             <div class="prop-group">
-                ${makeLabel('Arranjo térmico')}
+                ${makeLabel('Direção do Fluxo')}
                 <input type="text" id="disp-hx-flow-mode" value="${comp.getModoEscoamento?.(engine) === 'paralelo' ? translateLiteral('Corrente Paralela (Co-corrente)') : translateLiteral('Contracorrente')}" disabled>
             </div>
 
@@ -156,7 +156,7 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
             </div>
             <div class="prop-group">
                 ${makeLabel('Queda de pressão 1', TOOLTIP.heatExchangerPressureDrop)}
-                <input type="text" id="disp-hx-deltap" ${hintAttr(TOOLTIP.heatExchangerPressureDrop)} value="${displayUnitValue('pressure', comp.deltaPAtualBar, 2)}" disabled>
+                <input type="text" id="disp-hx-deltap" ${hintAttr(TOOLTIP.heatExchangerPressureDrop)} value="${displayUnitValue('pressureDiff', comp.deltaPAtualBar, 2)}" disabled>
             </div>
 
             <div style="font-weight: bold; margin: 12px 0 8px 0; color: ${isDark ? '#f39c12' : '#d35400'}; border-bottom: 1px solid ${isDark ? '#2d3748' : '#e2e8f0'}; padding-bottom: 4px;">${translateLiteral('Corrente 2 (Serviço - in2 / out2)')}</div>
@@ -178,14 +178,14 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
             </div>
             <div class="prop-group">
                 ${makeLabel('Queda de pressão 2', TOOLTIP.heatExchangerPressureDrop2 || TOOLTIP.heatExchangerPressureDrop)}
-                <input type="text" id="disp-hx-deltap-2" ${hintAttr(TOOLTIP.heatExchangerPressureDrop2 || TOOLTIP.heatExchangerPressureDrop)} value="${displayUnitValue('pressure', comp.deltaP2AtualBar ?? 0, 2)}" disabled>
+                <input type="text" id="disp-hx-deltap-2" ${hintAttr(TOOLTIP.heatExchangerPressureDrop2 || TOOLTIP.heatExchangerPressureDrop)} value="${displayUnitValue('pressureDiff', comp.deltaP2AtualBar ?? 0, 2)}" disabled>
             </div>
         `;
 
         const advancedContent = `
             <div style="font-weight: bold; margin-bottom: 8px; color: ${isDark ? '#d8e4ec' : '#2c3e50'}; border-bottom: 1px solid ${isDark ? '#2d3748' : '#e2e8f0'}; padding-bottom: 4px;">${translateLiteral('Análise Térmica Rigorosa')}</div>
             <div class="prop-group">
-                ${makeLabel('LMTD (Média Logarítmica)', 'Diferença Média Logarítmica de Temperatura entre as correntes: força motriz térmica média ao longo do trocador.')}
+                ${makeLabel('MLDT (Média Logarítmica)', 'Diferença Média Logarítmica de Temperatura entre as correntes: força motriz térmica média ao longo do trocador.')}
                 <input type="text" id="disp-hx-lmtd" value="${(comp.lmtdC || 0).toFixed(2)} °C" disabled>
             </div>
             <div class="prop-group">
@@ -193,7 +193,7 @@ export const HEAT_EXCHANGER_PROPERTIES_PRESENTER = {
                 <input type="text" id="disp-hx-ft" value="${(comp.fatorCorrecaoLmtd || 1.0).toFixed(2)}" disabled>
             </div>
             <div class="prop-group">
-                ${makeLabel('Pinch Point (ΔT mín)', 'Menor diferença pontual de temperatura entre os dois fluidos ao longo do trocador (ponto de estrangulamento térmico).')}
+                ${makeLabel('Diferença Mínima de Temperaturas', 'Menor diferença pontual de temperatura entre os dois fluidos ao longo do trocador (ponto de estrangulamento térmico).')}
                 <input type="text" id="disp-hx-pinch" value="${(comp.pinchPointMinDeltaTC || 0).toFixed(2)} °C" disabled>
             </div>
             <div style="font-weight: bold; margin: 12px 0 8px 0; color: ${isDark ? '#d8e4ec' : '#2c3e50'}; border-bottom: 1px solid ${isDark ? '#2d3748' : '#e2e8f0'}; padding-bottom: 4px;">${translateLiteral('Parâmetros Hidráulicos e de Limite')}</div>

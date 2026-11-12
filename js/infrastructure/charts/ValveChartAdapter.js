@@ -94,7 +94,7 @@ function getScaleProfile({ expanded = false } = {}) {
 }
 
 function buildValveCurveDatasets(component) {
-    const pressureUnit = getUnitSymbol('pressure');
+    const pressureUnit = getUnitSymbol('pressureDiff');
     const flowUnit = getUnitSymbol('flow');
     const fluid = getValveFluid(component);
     const coefficientUnit = getValveCoefficientUnit(component);
@@ -126,7 +126,7 @@ function buildValveCurveDatasets(component) {
         });
         pressureDropPoints.push({
             x: openingPercent,
-            y: pressureDropBar === null ? null : toDisplayValue('pressure', pressureDropBar)
+            y: pressureDropBar === null ? null : toDisplayValue('pressureDiff', pressureDropBar)
         });
         lossCoeffPoints.push({
             x: openingPercent,
@@ -144,7 +144,7 @@ function buildValveCurveDatasets(component) {
     const currentPressureDropBar = measuredCurrentPressureDropBar > 0
         ? measuredCurrentPressureDropBar
         : estimatedCurrentPressureDropBar;
-    const currentPressureDrop = toDisplayValue('pressure', Math.max(0, currentPressureDropBar));
+    const currentPressureDrop = toDisplayValue('pressureDiff', Math.max(0, currentPressureDropBar));
     const currentFlow = toDisplayValue('flow', currentFlowLps);
     const pressureAxisMax = Math.max(1, getMaxPointValue(pressureDropPoints) * 1.08, currentPressureDrop * 1.08);
     const lossCoeffAxisMax = Math.max(1, getMaxPointValue(lossCoeffPoints) * 1.08);

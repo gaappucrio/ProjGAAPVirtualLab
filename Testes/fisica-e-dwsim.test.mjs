@@ -1154,6 +1154,40 @@ test('bomba acima do qMax dissipa pela parabola estendida em vez de virar um can
     assert.ok(codigos.includes('pump_beyond_curve'), `Aviso de fora da curva: ${codigos}`);
 });
 
+test('bomba em modo ΔP fixo (DWSIM fora do Curves): ΔP e η constantes, sem fim de curva nem aviso', () => {
+    const { engine, bomba } = montarBombaValvula(10);
+    bomba.modoCurva = 'dpFixo';
+    bomba.pressaoMaxima = 3;
+    bomba.eficienciaHidraulica = 0.7;
+    simular(engine, 30);
+
+    // 10 + 3 = ΔP_valvula(Q): bem acima dos 45 L/s da faixa do gráfico, que não limita o ΔP fixo.
+    const kv = cvToKv(400);
+    const qEsperado = (kv / 3.6) * Math.sqrt(13 * (999.016 / RHO_AGUA));
+    assert.ok(qEsperado > 45, `A referência tem de passar da faixa do gráfico: ${qEsperado}`);
+    approx(bomba.fluxoReal, qEsperado, 0.005 * qEsperado, 'Vazão com ΔP fixo');
+    approx(bomba.cargaGeradaBar, 3, 1e-6, 'ΔP gerado independe da vazão');
+    approx(bomba.eficienciaAtual, 0.7, 1e-12, 'η constante');
+    approx(bomba.getCurvaPressaoBar(0, 1), 3, 1e-12, 'ΔP em vazão zero');
+    approx(bomba.getCurvaPressaoBar(500, 1), 3, 1e-12, 'ΔP em vazão enorme');
+    approx(bomba.getCurvaEficiencia(1, 1), bomba.getCurvaEficiencia(400, 1), 1e-12, 'η em qualquer vazão');
+    // ΔP fixo é em pressão (Pa), não em carga: não escala com a densidade do fluido.
+    approx(bomba.getCurvaPressaoBar(10, 1, 1500), 3, 1e-12, 'sem fator de densidade');
+    const codigos = engine.globalHydraulicSolver.getMetrics().lastDiagnostics.map((d) => d.code);
+    assert.ok(!codigos.includes('pump_beyond_curve'), `Sem aviso de fora da curva: ${codigos}`);
+});
+
+test('bomba em modo curva continua com parábola e η variável (padrão)', () => {
+    const bomba = new BombaLogica('P-curva', 'P', 0, 0);
+    bomba.pressaoMaxima = 5;
+    bomba.vazaoNominal = 45;
+    assert.equal(bomba.modoCurva, 'curva');
+    assert.ok(bomba.getCurvaPressaoBar(45, 1) < 1e-9, 'fim da curva');
+    assert.ok(bomba.getCurvaEficiencia(1, 1) < bomba.getCurvaEficiencia(45 * 0.72, 1), 'η máxima no BEP');
+    bomba.modoCurva = 'valor-invalido';
+    assert.ok(bomba.getCurvaPressaoBar(45, 1) < 1e-9, 'valor desconhecido cai na curva');
+});
+
 test('estados ativos sem estabilizar: o ultimo passe resolve a rede e devolve vazoes consistentes', () => {
     const { engine, bomba, valvula } = montarBombaValvula(0.5);
     simular(engine, 10);

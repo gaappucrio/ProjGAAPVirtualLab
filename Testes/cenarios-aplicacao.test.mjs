@@ -1059,6 +1059,35 @@ test('tanque novo nasce aberto e o tipo gravado no arquivo é respeitado ao abri
     assert.equal(legado.considerarPerdasBocais, true, 'Snapshot sem o check abre com as perdas nos bocais ligadas, como foi feito');
 });
 
+test('bomba ΔP fixo: modo vai no snapshot/arquivo, arquivo antigo abre em curva e o painel esconde a vazão máxima', async () => {
+    const { createComponentClipboardSnapshot } = await import('../js/presentation/controllers/ClipboardController.js');
+    const { setPresentationEngine } = await import('../js/presentation/context/PresentationEngineContext.js');
+    const { PUMP_PROPERTIES_PRESENTER } = await import('../js/presentation/properties/component/PumpComponentPropertiesPresenter.js');
+    const original = new BombaLogica('P-dp', 'P-dp', 0, 0);
+    original.modoCurva = 'dpFixo';
+    original.pressaoMaxima = 3;
+    const copia = applyComponentClipboardSnapshot(createComponentClipboardSnapshot(original), new BombaLogica('P-copia', 'P-copia', 0, 0));
+    assert.equal(copia.modoCurva, 'dpFixo', 'o modo acompanha copiar/colar, desfazer e arquivo');
+    assert.equal(copia.pressaoMaxima, 3);
+    const antigo = applyComponentClipboardSnapshot({ type: 'pump', tag: 'P-antiga', properties: { pressaoMaxima: 5 } }, new BombaLogica('P-antiga', 'P-antiga', 0, 0));
+    assert.equal(antigo.modoCurva, 'curva', 'arquivo sem o campo abre como curva');
+
+    const prevDoc = global.document;
+    try {
+        global.document = { body: { classList: { contains: () => false } } };
+        setPresentationEngine(new SistemaSimulacao());
+        const htmlDp = PUMP_PROPERTIES_PRESENTER.render(original);
+        assert.match(htmlDp, /id="grp-vazmax-bomba" style="display:none;"/, 'ΔP fixo não tem vazão máxima');
+        assert.match(htmlDp, /id="input-modo-curva-bomba"[^>]*value="dpFixo"/);
+        const htmlCurva = PUMP_PROPERTIES_PRESENTER.render(new BombaLogica('P-c', 'P-c', 0, 0));
+        assert.match(htmlCurva, /id="grp-vazmax-bomba" style="display:block;"/);
+        assert.match(htmlCurva, /id="input-modo-curva-bomba"[^>]*value="curva"/);
+    } finally {
+        setPresentationEngine(null);
+        global.document = prevDoc;
+    }
+});
+
 test('importacao de planta teste: teste planta.json (6 ilhas / cenarios integrados)', () => {
     const raw = fs.readFileSync(path.join(PLANTAS_TESTE_DIR, 'teste planta.json'), 'utf8');
     const engine = createEngine();
@@ -1326,6 +1355,15 @@ test('traduções em inglês para o trocador de calor e seletor estão completas
         assert.equal(translateLiteral('Parâmetros Hidráulicos e de Limite'), 'Hydraulic and Limit Parameters');
         assert.equal(translateLiteral('LMTD (Média Logarítmica)'), 'Log Mean Temperature Difference (LMTD)');
         assert.equal(translateLiteral('Fator de correção FT'), 'FT correction factor');
+
+        // Nomes alinhados ao DWSIM (PT = resx base do DWSIM)
+        assert.equal(translateLiteral('Calor Trocado'), 'Heat Exchanged');
+        assert.equal(translateLiteral('Direção do Fluxo'), 'Flow Direction');
+        assert.equal(translateLiteral('MLDT (Média Logarítmica)'), 'Log Mean Temperature Difference (LMTD)');
+        assert.equal(translateLiteral('Diferença Mínima de Temperaturas'), 'Min Temperature Difference');
+        assert.equal(translateLiteral('Tipo do Coeficiente'), 'Flow Coefficient Type');
+        assert.equal(translateLiteral('Pressão na Saída (kPa)'), 'Outlet Pressure (kPa)');
+        assert.equal(translateLiteral('Pressão na Entrada (bar)'), 'Inlet Pressure (bar)');
 
         // Renderização do HTML deve conter as strings traduzidas
         assert.ok(html.includes('Spatial Profile (T × Length)'), 'HTML do painel deve conter opções do seletor em inglês');
@@ -1847,7 +1885,7 @@ test('fonte e dreno aceitam pressão manométrica negativa (vácuo) até o zero 
     };
     try {
         global.document = { getElementById: (id) => elementos.get(id) || null, querySelectorAll: () => [], querySelector: () => null };
-        setUnitPreference('pressure', 'kpa');
+        setUnitPreference('pressure', 'kpag');
         const engine = new SistemaSimulacao();
         setPresentationEngine(engine);
 
@@ -1872,6 +1910,39 @@ test('fonte e dreno aceitam pressão manométrica negativa (vácuo) até o zero 
         setUnitPreference('pressure', 'kpa');
         setPresentationEngine(null);
         global.document = prevDoc;
+    }
+});
+
+test('unidades de pressão: g = manométrica, sem g = absoluta (padrão); ΔP e pressões absolutas na base não levam Patm', async () => {
+    const du = await import('../js/presentation/units/DisplayUnits.js');
+    const anterior = du.getUnitPreferences().pressure;
+    try {
+        assert.equal(anterior, 'kpa', 'padrão = kPa (absoluta), como no DWSIM');
+        const casos = [
+            ['kpag', 'kPag', 'kPa', 0, 0],
+            ['kpa', 'kPa', 'kPa', 0, 101.325],
+            ['barg', 'barg', 'bar', 2, 2],
+            ['bar', 'bar', 'bar', 2, 3.01325],
+            ['psig', 'psig', 'psi', 1, 14.5037738],
+            ['psi', 'psi', 'psi', 0, 14.6959488]
+        ];
+        for (const [id, simbolo, simboloPlano, baseBar, esperado] of casos) {
+            du.setUnitPreference('pressure', id);
+            assert.equal(du.getUnitSymbol('pressure'), simbolo);
+            assert.equal(du.getUnitSymbol('pressureDiff'), simboloPlano);
+            assert.ok(Math.abs(du.toDisplayValue('pressure', baseBar) - esperado) < 1e-4, `${id}: ${du.toDisplayValue('pressure', baseBar)} ≠ ${esperado}`);
+            // ida e volta
+            assert.ok(Math.abs(du.toBaseValue('pressure', du.toDisplayValue('pressure', 1.7)) - 1.7) < 1e-12);
+            // ΔP e pressão absoluta da base: só o fator, sem Patm
+            const fator = du.toDisplayValue('pressureDiff', 1);
+            assert.ok(Math.abs(du.toDisplayValue('pressureDiff', 0)) < 1e-12);
+            assert.ok(Math.abs(du.toBaseValue('pressureDiff', fator) - 1) < 1e-12);
+        }
+        du.setUnitPreference('pressure', 'kpa');
+        assert.ok(Math.abs(du.toDisplayValue('pressureDiff', 0.0234) - 2.34) < 1e-9, 'Pvap (absoluta na base) em kPa abs = fator puro');
+        assert.ok(Math.abs(du.toBaseValue('pressure', 101.325)) < 1e-12, '101,325 kPa abs = 0 barg');
+    } finally {
+        du.setUnitPreference('pressure', anterior);
     }
 });
 

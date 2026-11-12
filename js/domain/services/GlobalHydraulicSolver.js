@@ -1467,7 +1467,7 @@ export class GlobalHydraulicSolver {
             else pump.fatorCavitacaoAtual = link.open ? link.cavitationFactor : suction.cavitationFactor;
             pump.eficienciaAtual = pump.getEficienciaInstantanea(flowLps);
             if (flowLps > EPSILON_FLOW) pump.limparSucaoSemLiquido?.();
-            if (flowLps > pump.getVazaoMaximaCurvaLps(link.drive) * (1 + PUMP_CURVE_RANGE_TOLERANCE)) beyondCurve.push(pump.tag || pump.id);
+            if (pump.temLimiteDeVazaoNaCurva?.() !== false && flowLps > pump.getVazaoMaximaCurvaLps(link.drive) * (1 + PUMP_CURVE_RANGE_TOLERANCE)) beyondCurve.push(pump.tag || pump.id);
         });
         // O DWSIM interrompe o cálculo quando a vazão sai da faixa da curva; aqui a curva é estendida
         // (a bomba passa a dissipar) e o motivo é sinalizado.
