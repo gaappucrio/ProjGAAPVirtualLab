@@ -45,25 +45,28 @@ O pipeline de execução do tick ocorre na seguinte ordem seqüencial:
 
 ```mermaid
 graph TD
-    A["1. calculateDeltaTime(timestamp)"] --> B["2. updateHighLevelControls(dt)"]
-    B --> C["3. updateComponentDynamics(dt)"]
-    C --> D["4. resolveHydraulicNetwork(dt)"]
-    D --> E["5. syncComponentMetrics(dt)"]
-    E --> F["6. updateVisuals()"]
-    F --> G["7. publishUpdates()"]
-    G --> H["8. updateSolverMetrics()"]
+    A["calculateDeltaTime(timestamp)"] --> B["advance(dt)"]
+    subgraph ADV["advance(dt)"]
+        B1["updateHighLevelControls(dt)"] --> B2["updateComponentDynamics(dt)"]
+        B2 --> B3["solveHydraulicNetwork(dt)"]
+        B3 --> B4["syncPhysicalMetrics(dt)"]
+        B4 --> B5["steadyStateMonitor.update"]
+    end
+    B --> ADV
+    ADV --> V["engine.updatePipesVisual()"]
+    V --> P["notify(panelUpdate)"]
 ```
 
-1.  **`calculateDeltaTime(timestamp)`**: Calcula e limita o $dt$ do frame corrente.
+1.  **`calculateDeltaTime(timestamp)`**: Calcula e limita o $dt$ do frame corrente (só em `run`; `advance(dt)` recebe o $dt$ pronto).
 2.  **`updateHighLevelControls(dt)`**: Executa o controlador de nível (PID) dos tanques antes da resolução física da rede. A saída do controle modula a abertura das válvulas, influenciando diretamente a hidráulica a ser resolvida.
 3.  **`updateComponentDynamics(dt)`**: Aplica dinâmicas físicas transientes de equipamentos, tais como o avanço da rampa de rotação de bombas, o tempo de curso de posicionamento de válvulas e o atraso térmico de 1ª ordem das saídas do trocador de calor ($\tau = V/Q$, seção 4.5).
-4.  **`resolveHydraulicNetwork(dt)`**: Invoca o solver hidráulico global (seção 5) para resolver simultaneamente pressões e vazões de toda a rede, com a inércia do fluido nos tubos, e propagar as propriedades dos fluidos.
-5.  **`syncComponentMetrics(dt)`**: Sincroniza estados internos finais de conservação de massa e integra variáveis dinâmicas acumuladas (ex: inventário volumétrico do tanque, tempo de residência).
-6.  **`updateVisuals()`**: Atualiza estados visuais do DOM e de portas na camada de infraestrutura.
-7.  **`publishUpdates()`**: Dispara eventos de atualização da aplicação para atualizar painéis de propriedades e séries temporais de monitoramento.
-8.  **`updateSolverMetrics()`**: Atualiza os contadores internos de performance do solver para monitorar convergência.
+4.  **`solveHydraulicNetwork(dt)`**: Invoca `engine.resolveHydraulicNetwork`, que chama o solver hidráulico global (seção 5) para resolver simultaneamente pressões e vazões de toda a rede, com a inércia do fluido nos tubos, e propagar as propriedades dos fluidos.
+5.  **`syncPhysicalMetrics(dt)`**: Sincroniza estados internos finais de conservação de massa e integra variáveis dinâmicas acumuladas (ex: inventário volumétrico do tanque, tempo de residência).
+6.  **`steadyStateMonitor.update`**: avalia se a planta atingiu regime permanente (seção 5.6).
+7.  **`updatePipesVisual()`** (só em `run`): atualiza o visual dos canos e notifica os atuadores mantidos por setpoint.
+8.  **`notify(panelUpdate)`** (só em `run`): dispara o evento que atualiza painéis de propriedades e séries temporais de monitoramento.
 
-Os passos 2–5 formam `SimulationTickPipeline.advance(dt)`, um passo físico completo independente do relógio do navegador (usado também pelos testes). Ao final de cada passo, `SteadyStateMonitor` (seção 5.6) avalia se a planta atingiu regime permanente.
+Os passos 2–6 formam `SimulationTickPipeline.advance(dt)`, um passo físico completo independente do relógio do navegador (usado pelos testes; o modo debug usa `run`, que chama `advance`).
 
 ---
 

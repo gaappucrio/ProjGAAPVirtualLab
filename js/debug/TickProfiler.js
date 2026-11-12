@@ -1,7 +1,7 @@
 // =============================================
 // DEBUG: medidor de tempo por fase do tick
 // Arquivo: js/debug/TickProfiler.js
-// A lista de fases abaixo segue a ordem real de SimulationTickPipeline.run().
+// A lista de fases abaixo segue a ordem real de SimulationTickPipeline.run() (advance + updatePipesVisual).
 // =============================================
 
 import { wrapMethod } from './MethodWrap.js';
@@ -11,8 +11,18 @@ export const TICK_PHASES = Object.freeze([
     { owner: 'pipeline', method: 'updateComponentDynamics', descricao: 'rampas de bombas e curso de válvulas' },
     { owner: 'pipeline', method: 'solveHydraulicNetwork', descricao: 'solver hidráulico global' },
     { owner: 'pipeline', method: 'syncPhysicalMetrics', descricao: 'inventário dos tanques e métricas dos componentes' },
+    { owner: 'monitor', method: 'update', key: 'steadyStateMonitor.update', descricao: 'detector de regime permanente' },
     { owner: 'engine', method: 'updatePipesVisual', descricao: 'visual dos canos + avisos de setpoint' }
 ]);
+
+// Nome da fase na tabela e no relatório (o monitor tem método `update`, genérico demais).
+export const phaseKey = ({ method, key }) => key || method;
+
+function phaseTarget({ owner }, engine) {
+    if (owner === 'engine') return engine;
+    if (owner === 'monitor') return engine.steadyStateMonitor;
+    return engine.tickPipeline;
+}
 
 const REST_LABEL = 'restante (evento update_painel → painéis e gráficos)';
 
@@ -65,9 +75,11 @@ export function createTickProfiler({ engine, now = () => globalThis.performance.
             const pipeline = engine.tickPipeline;
             restoreFns = [
                 wrapMethod(pipeline, 'run', createRunWrapper),
-                ...TICK_PHASES.map(({ owner, method }) =>
-                    wrapMethod(owner === 'engine' ? engine : pipeline, method, createPhaseWrapper(method))
-                )
+                ...TICK_PHASES
+                    .filter((phase) => typeof phaseTarget(phase, engine)?.[phase.method] === 'function')
+                    .map((phase) =>
+                        wrapMethod(phaseTarget(phase, engine), phase.method, createPhaseWrapper(phaseKey(phase)))
+                    )
             ];
         },
 
@@ -86,15 +98,15 @@ export function createTickProfiler({ engine, now = () => globalThis.performance.
                 maxMs: round(Math.max(...values))
             });
 
-            const rows = TICK_PHASES.map(({ method, descricao }, index) => ({
+            const rows = TICK_PHASES.map((phase, index) => ({
                 ordem: index + 1,
-                fase: method,
-                descricao,
-                ...stats(ticks.map((tick) => tick.fases[method] || 0))
+                fase: phaseKey(phase),
+                descricao: phase.descricao,
+                ...stats(ticks.map((tick) => tick.fases[phaseKey(phase)] || 0))
             }));
 
             const rest = ticks.map((tick) => Math.max(0,
-                tick.totalMs - TICK_PHASES.reduce((sum, { method }) => sum + (tick.fases[method] || 0), 0)
+                tick.totalMs - TICK_PHASES.reduce((sum, phase) => sum + (tick.fases[phaseKey(phase)] || 0), 0)
             ));
             rows.push({ ordem: rows.length + 1, fase: 'notify(panelUpdate)', descricao: REST_LABEL, ...stats(rest) });
             rows.push({ ordem: '', fase: 'TOTAL', descricao: `${ticks.length} tick(s)`, ...stats(ticks.map((tick) => tick.totalMs)) });

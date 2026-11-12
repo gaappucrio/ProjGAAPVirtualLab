@@ -121,9 +121,10 @@ Cada `passo` mostra no console:
    1. `updateHighLevelControls` — controle de nível (PID) dos tanques
    2. `updateComponentDynamics` — rampas de bombas, curso de válvulas e atraso térmico do trocador
    3. `solveHydraulicNetwork` — solver hidráulico global simultâneo
-   4. `syncPhysicalMetrics` — inventário dos tanques, métricas dos componentes e monitor de regime permanente
-   5. `updatePipesVisual` — visual dos canos e avisos de setpoint
-   6. `notify(panelUpdate)` — descrito na tabela como "restante (evento update_painel → painéis e gráficos)": é o tempo do tick que sobra fora das fases acima
+   4. `syncPhysicalMetrics` — inventário dos tanques e métricas dos componentes
+   5. `steadyStateMonitor.update` — detector de regime permanente
+   6. `updatePipesVisual` — visual dos canos e avisos de setpoint
+   7. `notify(panelUpdate)` — descrito na tabela como "restante (evento update_painel → painéis e gráficos)": é o tempo do tick que sobra fora das fases acima
 
    A última linha, `TOTAL`, traz o tempo do tick inteiro e quantos ticks foram medidos.
 3. Uma tabela **só com o que mudou**: onde (tag ou id da conexão), campo, antes, depois e delta.
@@ -218,8 +219,8 @@ As tolerâncias foram calibradas com as plantas de `Testes/plantas teste/` (cent
 - **Sem dependência do domínio:** as ferramentas interceptam métodos de fora via `js/debug/MethodWrap.js` (camadas que podem ser ligadas/desligadas em qualquer ordem). Não importe nada de `js/debug/` nas camadas do app.
 - **Se o pipeline do tick mudar** (nova fase, outra ordem), atualize `TICK_PHASES` em `js/debug/TickProfiler.js` — um teste falha para avisar.
 - **Integração com a física e o solver global na `main`:**
-  - O pipeline expõe `advance(dt)` e `steadyStateMonitor.update` — o medidor contabiliza esse tempo dentro do tick.
+  - O pipeline expõe `advance(dt)` (controle, dinâmica, solver, métricas, monitor) e `run()` chama `advance` + `updatePipesVisual`; `steadyStateMonitor.update` é uma fase própria do medidor.
   - O trocador possui atraso térmico (`volumeInternoL`): a checagem da 2ª lei (`TEMPERATURA_TROCADOR`) avalia `temperaturaSaidaAlvoC` / `temperaturaSaida2AlvoC` quando disponíveis.
   - Solver global (`GlobalHydraulicSolver.js`): as checagens o detectam automaticamente e validam conservação de massa (incluindo `vazaoTransbordoLps` em tanques abertos e `vazaoTransbordoLps = 0` em vasos fechados).
-  - `package.json`: suíte unificada com 9 arquivos de teste (incluindo `Testes/fisica-e-dwsim.test.mjs` e os 5 arquivos de teste do modo debug), totalizando 179 testes automatizados.
+  - `package.json`: suíte unificada com 10 arquivos de teste (incluindo `Testes/fisica-e-dwsim.test.mjs` e os 5 arquivos de teste do modo debug), totalizando 236 testes automatizados (conte com `npm test`).
 - **Validação:** `npm test` e `node -c <arquivo>` em cada arquivo alterado.

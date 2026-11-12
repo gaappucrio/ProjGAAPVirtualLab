@@ -118,7 +118,7 @@ A arquitetura do GAAP Virtual Lab emprega os seguintes padrões de projeto:
     *   Presenters de Painel: a estratégia de renderização e bind é selecionada em tempo de execução com base no tipo do equipamento selecionado.
 *   **Pipeline Pattern (Tubo e Filtros):**
     *   `SimulationTickPipeline.js`: coordena o fluxo de execução contínuo do frame em uma sequência ordenada de etapas:
-      `calculateDeltaTime` $\to$ `updateHighLevelControls` $\to$ `updateComponentDynamics` $\to$ `resolveHydraulicNetwork` $\to$ `syncComponentMetrics` $\to$ `updateVisuals` $\to$ `publishUpdates` $\to$ `updateSolverMetrics`.
+      `calculateDeltaTime` $\to$ `advance(dt)` (`updateHighLevelControls` $\to$ `updateComponentDynamics` $\to$ `solveHydraulicNetwork` $\to$ `syncPhysicalMetrics` $\to$ `steadyStateMonitor.update`) $\to$ `updatePipesVisual` $\to$ `notify(panelUpdate)`.
 *   **Command & Memento:**
     *   `UndoController.js`: captura o estado da aplicação através de snapshots (Memento) e gerencia uma pilha de histórico bidirecional de desfazer/refazer (Command) acionada por atalhos (`Ctrl+Z` / `Ctrl+Y`).
     *   `ClipboardController.js`: utiliza os snapshots para duplicar e colar blocos de componentes e conexões no workspace.

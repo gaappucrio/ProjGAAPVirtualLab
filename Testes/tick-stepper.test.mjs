@@ -12,7 +12,7 @@ import { createEventTracer } from '../js/debug/EventTracer.js';
 import { wrapMethod } from '../js/debug/MethodWrap.js';
 import { diffSnapshots, snapshotState } from '../js/debug/StateSnapshot.js';
 import { createTickStepper } from '../js/debug/TickStepper.js';
-import { TICK_PHASES } from '../js/debug/TickProfiler.js';
+import { TICK_PHASES, phaseKey } from '../js/debug/TickProfiler.js';
 
 const silentLogger = {};
 
@@ -75,7 +75,7 @@ test('passo: mede todas as fases na ordem real do pipeline', () => {
 
     assert.deepEqual(
         fases.slice(0, TICK_PHASES.length).map((row) => row.fase),
-        TICK_PHASES.map((phase) => phase.method)
+        TICK_PHASES.map(phaseKey)
     );
     assert.equal(fases.at(-1).fase, 'TOTAL');
     assert.equal(fases.at(-1).descricao, '3 tick(s)');
@@ -87,12 +87,13 @@ test('passo: a lista de fases do medidor corresponde aos métodos chamados por r
     TICK_PHASES.filter(({ owner }) => owner === 'pipeline').forEach(({ method }) => {
         pipeline[method] = () => calls.push(method);
     });
+    pipeline.engine.steadyStateMonitor = { update: () => calls.push('steadyStateMonitor.update') };
     pipeline.engine.updatePipesVisual = () => calls.push('updatePipesVisual');
 
     pipeline.run(16);
 
-    assert.deepEqual(calls, TICK_PHASES.map(({ method }) => method),
-        'se o pipeline mudar de ordem ou ganhar fases, atualize TICK_PHASES em js/debug/TickProfiler.js');
+    assert.deepEqual(calls, TICK_PHASES.map(phaseKey),
+        'se o pipeline mudar a ordem das fases listadas (uma fase NOVA não é detectada aqui; confira advance() à mão), atualize TICK_PHASES em js/debug/TickProfiler.js');
 });
 
 test('passo: se a simulação estiver rodando, pausa via engine.stop()', () => {
