@@ -12,6 +12,8 @@ export const STEADY_STATE_FLOW_RATE_TOLERANCE_LPS_PER_S = 1e-3;
 export const STEADY_STATE_VOLUME_RATE_TOLERANCE_LPS = 1e-3;
 export const STEADY_STATE_TEMPERATURE_RATE_TOLERANCE_C_PER_S = 1e-3;
 export const STEADY_STATE_HOLD_TIME_S = 10;
+// Transbordo/alívio abaixo da resolução prática da vazão não gera aviso.
+export const OVERFLOW_WARNING_MIN_FLOW_LPS = 1e-3;
 
 function finiteOrNull(value) {
     return Number.isFinite(value) ? value : null;
@@ -34,6 +36,7 @@ export class SteadyStateMonitor {
     }
 
     reset() {
+        this.overflows = [];
         this.previousSamples = null;
         this.stableTimeS = 0;
         this.steady = false;
@@ -68,9 +71,28 @@ export class SteadyStateMonitor {
         return samples;
     }
 
+    // Tanque aberto cheio joga o excedente fora e vaso fechado alivia pela PSV: as vazões ficam estáveis
+    // e o nível trava, então o regime parece "permanente" mesmo com perda de massa. Reportar à parte.
+    collectOverflows(engine) {
+        const overflows = [];
+        engine.componentes.forEach((component) => {
+            if (!(component instanceof TanqueLogico)) return;
+            const overflowLps = finiteOrNull(component.vazaoTransbordoLps) ?? 0;
+            const reliefLps = finiteOrNull(component.vazaoAlivioLps) ?? 0;
+            if (overflowLps > OVERFLOW_WARNING_MIN_FLOW_LPS) {
+                overflows.push({ tag: component.tag, kind: 'overflow', flowLps: overflowLps });
+            }
+            if (reliefLps > OVERFLOW_WARNING_MIN_FLOW_LPS) {
+                overflows.push({ tag: component.tag, kind: 'relief', flowLps: reliefLps });
+            }
+        });
+        return overflows;
+    }
+
     update(engine, dt) {
         if (!(dt > 0)) return this.getStatus();
 
+        this.overflows = this.collectOverflows(engine);
         const samples = this.collectSamples(engine);
         const previous = this.previousSamples;
         this.previousSamples = samples;
@@ -119,6 +141,7 @@ export class SteadyStateMonitor {
             stableTimeS: this.stableTimeS,
             holdTimeS: this.holdTimeS,
             observing: this.previousSamples !== null,
+            overflows: this.overflows.map((entry) => ({ ...entry })),
             dominantVariation: this.dominantVariation ? { ...this.dominantVariation } : null
         };
     }

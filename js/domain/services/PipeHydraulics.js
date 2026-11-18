@@ -6,11 +6,10 @@
 import {
     DEFAULT_FLUID_VISCOSITY_PA_S,
     DEFAULT_PIPE_DIAMETER_M,
-    DEFAULT_PIPE_EXTRA_LENGTH_M,
+    DEFAULT_PIPE_LENGTH_M,
     DEFAULT_PIPE_FRICTION,
     DEFAULT_PIPE_MINOR_LOSS,
     DEFAULT_PIPE_ROUGHNESS_MM,
-    DEFAULT_PIPE_SCHEMATIC_LENGTH_M,
     DEFAULT_DESIGN_VELOCITY_MPS,
     areaFromDiameter,
     lpsToM3s
@@ -136,7 +135,7 @@ export function getPipeHydraulics(conn, geometry, areaM2, flowLps, density, visc
     const safeAreaM2 = positiveNumber(areaM2, conn.areaM2);
     const lengthM = nonNegativeNumber(
         geometry?.lengthM,
-        DEFAULT_PIPE_SCHEMATIC_LENGTH_M + conn.extraLengthM
+        conn.comprimentoM
     );
     const reynolds = reynoldsFromFlow(flowLps, conn.diameterM, safeAreaM2, density, viscosityPaS);
     const relativeRoughness = conn.diameterM > 0
@@ -162,7 +161,7 @@ export function getConnectionResponseTimeS(conn, geometry, fluidoOperante) {
     ensureConnectionProperties(conn);
     const lengthM = nonNegativeNumber(
         geometry?.lengthM,
-        DEFAULT_PIPE_SCHEMATIC_LENGTH_M + conn.extraLengthM
+        conn.comprimentoM
     );
     const density = positiveNumber(fluidoOperante?.densidade, 997);
     const viscosityPaS = positiveNumber(fluidoOperante?.viscosidadeDinamicaPaS, DEFAULT_FLUID_VISCOSITY_PA_S);
@@ -179,7 +178,7 @@ export function getConnectionResponseTimeS(conn, geometry, fluidoOperante) {
 export function ensureConnectionProperties(conn) {
     conn.diameterM = positiveNumber(conn.diameterM, DEFAULT_PIPE_DIAMETER_M);
     conn.roughnessMm = nonNegativeNumber(conn.roughnessMm, DEFAULT_PIPE_ROUGHNESS_MM);
-    conn.extraLengthM = nonNegativeNumber(conn.extraLengthM, DEFAULT_PIPE_EXTRA_LENGTH_M);
+    conn.comprimentoM = nonNegativeNumber(conn.comprimentoM, DEFAULT_PIPE_LENGTH_M);
     conn.perdaLocalK = nonNegativeNumber(conn.perdaLocalK, DEFAULT_PIPE_MINOR_LOSS);
     conn.designVelocityMps = positiveNumber(conn.designVelocityMps, DEFAULT_DESIGN_VELOCITY_MPS);
     conn.designFlowLps = nonNegativeNumber(conn.designFlowLps, 0);

@@ -251,17 +251,17 @@ test('canos: trechos em série somam, Quantidade multiplica, rugosidade sai do m
     const fonteValvula = workspace.connections.find((c) => c.sourceId === idFonte && c.targetId === idValvula);
     const valvulaDreno = workspace.connections.find((c) => c.sourceId === idValvula && c.targetId === idDreno);
 
-    // 3 m (P1) + 2 curvas 45° com L/D = 16 (Pipe.vb, Kfit [1]) + 2 m (P2); o GAAP já soma 1 m esquemático.
+    // 3 m (P1) + 2 curvas 45° com L/D = 16 (Pipe.vb, Kfit [1]) + 2 m (P2): é o comprimento do cano no GAAP.
     const curvaM = 2 * 16 * 3.149608 * 0.0254;
-    approx(fonteValvula.extraLengthM, 3 + curvaM + 2 - 1, 1e-9, 'comprimento extra (m)');
+    approx(fonteValvula.comprimentoM, 3 + curvaM + 2, 1e-9, 'comprimento (m)');
     approx(fonteValvula.diameterM, 0.08, 1e-6, 'diâmetro (m)');
     approx(fonteValvula.roughnessMm, ((3 + curvaM) * 0.0457 + 2 * 0.1) / (5 + curvaM), 1e-9, 'rugosidade média ponderada (mm)');
     assert.equal(fonteValvula.perdaLocalK, 0, 'acessório L/D não vira K');
     assert.equal(stats.skipped, 1, 'só o ΔP fixo [27] fica sem tradução');
     assert.ok(stats.skippedTypes.has('PipeFitting'), 'acessório não traduzido fica registrado');
 
-    // Ligação direta por corrente: no DWSIM não há perda; no GAAP sobra só o trecho esquemático.
-    assert.equal(valvulaDreno.extraLengthM, 0);
+    // Ligação direta por corrente: no DWSIM não há perda; no GAAP o cano ideal tem 0 m.
+    assert.equal(valvulaDreno.comprimentoM, 0);
 });
 
 test('canos: acessórios K do DWSIM viram perda local na velocidade do cano, com Quantidade', () => {
@@ -281,7 +281,7 @@ test('canos: acessórios K do DWSIM viram perda local na velocidade do cano, com
         secao({ TipoSegmento: 'Reducao Normal 2:1 [23]', Quantidade: 1, Material: 'Steel', Comprimento: 0.1, DI: 2 })
     ]);
     approx(conexao(comK).perdaLocalK, 0.78 + (2 * 1) + (5.67 * 16), 1e-9, 'Σ K na velocidade do cano');
-    approx(conexao(comK).extraLengthM, 10 - 1, 1e-9, 'acessório K não soma comprimento');
+    approx(conexao(comK).comprimentoM, 10, 1e-9, 'acessório K não soma comprimento');
     assert.equal(comK.stats.skipped, 0);
 
     // Só acessórios K, sem tubo reto: o cano fica com o diâmetro do acessório e o K dele.
@@ -296,7 +296,7 @@ test('canos: acessórios K do DWSIM viram perda local na velocidade do cano, com
         secao({ TipoSegmento: 'Valvula Globo [7]', Quantidade: 1, Material: 'Steel', Comprimento: 0.1, DI: 2 })
     ]);
     approx(conexao(globo).diameterM, 4 * 0.0254, 1e-9, 'referência no tubo reto, não no acessório');
-    approx(conexao(globo).extraLengthM, 1 + (340 * 2 * 0.0254 * 32) - 1, 1e-9);
+    approx(conexao(globo).comprimentoM, 1 + (340 * 2 * 0.0254 * 32), 1e-9);
 
     // Índice desconhecido não é inventado.
     const desconhecido = planta([
@@ -361,8 +361,8 @@ test('canos em série com diâmetros diferentes viram comprimento equivalente no
     ]));
     const conexao = workspace.connections[0];
     approx(conexao.diameterM, 4 * 0.0254, 1e-9, 'diâmetro de referência');
-    // 1 m em 2" equivale a 1·(4/2)^5 = 32 m em 4": 10 + 32 − 1 (esquemático) = 41 m.
-    approx(conexao.extraLengthM, 41, 1e-9, 'comprimento equivalente (m)');
+    // 1 m em 2" equivale a 1·(4/2)^5 = 32 m em 4": 10 + 32 = 42 m.
+    approx(conexao.comprimentoM, 42, 1e-9, 'comprimento equivalente (m)');
 });
 
 test('canos: rugosidade média pesa pelo comprimento equivalente e aceita nome de material com espaço', () => {

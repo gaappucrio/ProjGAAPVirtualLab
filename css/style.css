@@ -409,6 +409,12 @@
       color: var(--gaap-success-title) !important;
   }
 
+  body.theme-dark .toolbar-note.steady-state-indicator[data-state="overflow"] {
+      background: var(--gaap-warning-bg) !important;
+      border-color: var(--gaap-warning-border) !important;
+      color: var(--gaap-warning-title) !important;
+  }
+
   body.theme-dark .toolbar-note.steady-state-indicator[data-state="transient"] {
       background: var(--gaap-neutral-bg) !important;
       border-color: var(--gaap-neutral-border) !important;

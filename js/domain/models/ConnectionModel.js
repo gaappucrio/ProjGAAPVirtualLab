@@ -1,6 +1,7 @@
 import {
     DEFAULT_PIPE_DIAMETER_M,
-    DEFAULT_PIPE_EXTRA_LENGTH_M,
+    DEFAULT_PIPE_LENGTH_M,
+    DEFAULT_PIPE_SCHEMATIC_LENGTH_M,
     DEFAULT_PIPE_MINOR_LOSS,
     DEFAULT_PIPE_ROUGHNESS_MM,
     DEFAULT_DESIGN_VELOCITY_MPS,
@@ -51,7 +52,9 @@ export class ConnectionModel {
         targetEndpoint,
         diameterM = DEFAULT_PIPE_DIAMETER_M,
         roughnessMm = DEFAULT_PIPE_ROUGHNESS_MM,
-        extraLengthM = DEFAULT_PIPE_EXTRA_LENGTH_M,
+        comprimentoM,
+        // Formato antigo (até 2026-11): trecho esquemático de 1 m + comprimento extra.
+        extraLengthM,
         perdaLocalK = DEFAULT_PIPE_MINOR_LOSS,
         designVelocityMps = DEFAULT_DESIGN_VELOCITY_MPS,
         designFlowLps = 0,
@@ -65,7 +68,10 @@ export class ConnectionModel {
         this.targetEndpoint = normalizeEndpoint(targetEndpoint, 'in');
         this.diameterM = positiveNumber(diameterM, DEFAULT_PIPE_DIAMETER_M);
         this.roughnessMm = nonNegativeNumber(roughnessMm, DEFAULT_PIPE_ROUGHNESS_MM);
-        this.extraLengthM = nonNegativeNumber(extraLengthM, DEFAULT_PIPE_EXTRA_LENGTH_M);
+        const comprimentoLegadoM = finiteNumber(extraLengthM) === null
+            ? null
+            : DEFAULT_PIPE_SCHEMATIC_LENGTH_M + nonNegativeNumber(extraLengthM, 0);
+        this.comprimentoM = nonNegativeNumber(comprimentoM ?? comprimentoLegadoM, DEFAULT_PIPE_LENGTH_M);
         this.perdaLocalK = nonNegativeNumber(perdaLocalK, DEFAULT_PIPE_MINOR_LOSS);
         this.designVelocityMps = positiveNumber(designVelocityMps, DEFAULT_DESIGN_VELOCITY_MPS);
         this.designFlowLps = nonNegativeNumber(designFlowLps, 0);

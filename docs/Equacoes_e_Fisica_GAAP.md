@@ -11,7 +11,7 @@ $$\Delta P = f \cdot \frac{L}{D} \cdot \frac{\rho \cdot v^2}{2}$$
 Onde:
 - $\Delta P$: Perda de pressão (Pa, convertida para bar no simulador)
 - $f$: Fator de atrito de Darcy
-- $L$: Comprimento do tubo (m): trecho esquemático (1 m; com altura relativa, $\max(1\text{ m}, |\Delta z|)$, só o desnível vertical) + comprimento extra. A posição horizontal no canvas não entra, como a posição no fluxograma do DWSIM.
+- $L$: Comprimento do tubo (m): o digitado pelo usuário (padrão 0 m, cano ideal; com altura relativa e $L>0$, $\max(L, |\Delta z|)$). A posição horizontal no canvas não entra, como a posição no fluxograma do DWSIM.
 - $D$: Diâmetro interno (m)
 - $\rho$: Densidade do fluido (kg/m³)
 - $v$: Velocidade média do fluxo (m/s)

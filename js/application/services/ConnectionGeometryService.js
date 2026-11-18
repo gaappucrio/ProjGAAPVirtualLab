@@ -2,7 +2,6 @@ import {
     calculateConnectionGeometry,
     calculatePortPosition
 } from './ConnectionGeometryCalculator.js';
-import { DEFAULT_PIPE_SCHEMATIC_LENGTH_M } from '../../domain/units/HydraulicUnits.js';
 
 const defaultVisualPosition = (component) => ({
     x: typeof component?.x === 'number' ? component.x : 0,
@@ -39,10 +38,10 @@ export class ConnectionGeometryService {
         const targetComponent = this.topology.getComponentById(connection.targetId);
 
         if (!sourceComponent || !targetComponent) {
-            const extraLengthM = Math.max(0, Number(connection?.extraLengthM) || 0);
+            const comprimentoM = Math.max(0, Number(connection?.comprimentoM) || 0);
             return {
-                straightLengthM: DEFAULT_PIPE_SCHEMATIC_LENGTH_M,
-                lengthM: DEFAULT_PIPE_SCHEMATIC_LENGTH_M + extraLengthM,
+                straightLengthM: comprimentoM,
+                lengthM: comprimentoM,
                 headGainM: 0
             };
         }

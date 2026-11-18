@@ -25,7 +25,6 @@ import {
     DEFAULT_PIPE_DIAMETER_M,
     DEFAULT_PIPE_MINOR_LOSS,
     DEFAULT_PIPE_ROUGHNESS_MM,
-    DEFAULT_PIPE_SCHEMATIC_LENGTH_M,
     DEFAULT_DESIGN_VELOCITY_MPS,
     DEFAULT_SOURCE_MAX_FLOW_LPS,
     DEFAULT_SOURCE_PRESSURE_BAR,
@@ -1324,8 +1323,7 @@ function pipeParameters(pipeElements) {
     return {
         diameterM: Math.max(0.005, reference.diameterM),
         roughnessMm: Math.max(0.001, (roughnessLengthSum / equivalentLengthM) * M_TO_MM),
-        // O GAAP soma o trecho esquemático (1 m) ao comprimento extra.
-        extraLengthM: Math.max(0, equivalentLengthM - DEFAULT_PIPE_SCHEMATIC_LENGTH_M),
+        comprimentoM: equivalentLengthM,
         perdaLocalK,
         skippedFittings,
         elevationM
@@ -1451,12 +1449,12 @@ function extractPropertiesFor(gaapType, simObj, gObj = null, simObjects = null) 
 }
 
 // Equipamentos ligados direto por corrente no DWSIM não têm perda de carga entre si;
-// no GAAP o menor cano possível é o trecho esquemático, sem comprimento extra.
+// no GAAP o cano ideal tem comprimento 0.
 function defaultPipeParams() {
     return {
         diameterM: DEFAULT_PIPE_DIAMETER_M,
         roughnessMm: DEFAULT_PIPE_ROUGHNESS_MM,
-        extraLengthM: 0,
+        comprimentoM: 0,
         perdaLocalK: DEFAULT_PIPE_MINOR_LOSS
     };
 }
@@ -1673,7 +1671,7 @@ export function translateDwsimToWorkspace(parsed) {
                 targetEndpoint: defaultEndpointFor(targetType, targetPort),
                 diameterM: pipeParams.diameterM,
                 roughnessMm: pipeParams.roughnessMm,
-                extraLengthM: pipeParams.extraLengthM,
+                comprimentoM: pipeParams.comprimentoM,
                 perdaLocalK: pipeParams.perdaLocalK,
                 designVelocityMps: DEFAULT_DESIGN_VELOCITY_MPS,
                 designFlowLps: 0,

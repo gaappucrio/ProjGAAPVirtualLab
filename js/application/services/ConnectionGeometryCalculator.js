@@ -1,4 +1,3 @@
-import { DEFAULT_PIPE_SCHEMATIC_LENGTH_M } from '../../domain/units/HydraulicUnits.js';
 
 const PIXELS_PER_METER = 80;
 
@@ -44,17 +43,17 @@ export function calculateConnectionGeometry(
     const desnivelM = dy / PIXELS_PER_METER;
 
     // O eixo X é só organização visual, como a posição no fluxograma do DWSIM: afastar componentes
-    // na horizontal não muda o atrito. Com altura relativa, o cano tem ao menos o desnível vertical
-    // (L ≥ |Δz|); distâncias horizontais de projeto entram no comprimento extra.
-    const straightLengthM = useRelativeHeight
-        ? Math.max(DEFAULT_PIPE_SCHEMATIC_LENGTH_M, Math.abs(desnivelM))
-        : DEFAULT_PIPE_SCHEMATIC_LENGTH_M;
-
-    const extraLengthM = Math.max(0, connection.extraLengthM || 0);
+    // na horizontal não muda o atrito. O comprimento é o digitado pelo usuário (padrão 0 m, cano
+    // ideal). Com altura relativa e cano com comprimento, L ≥ |Δz|; o desnível vale como carga
+    // estática mesmo com comprimento 0.
+    const comprimentoM = Math.max(0, connection.comprimentoM || 0);
+    const lengthM = useRelativeHeight && comprimentoM > 0
+        ? Math.max(comprimentoM, Math.abs(desnivelM))
+        : comprimentoM;
 
     return {
-        straightLengthM,
-        lengthM: straightLengthM + extraLengthM,
+        straightLengthM: lengthM,
+        lengthM,
         headGainM: useRelativeHeight ? desnivelM : 0
     };
 }

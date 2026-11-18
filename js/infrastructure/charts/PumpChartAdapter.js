@@ -4,6 +4,7 @@ import { getGridColors, formatAxisTick } from './ChartTheme.js';
 
 const DEFAULT_NPSH_AXIS_MAX_M = 5;
 const PUMP_CURVE_POINT_COUNT = 32;
+const OPERATION_DATASET_INDEX = 3;
 
 const PUMP_CHART_COLORS = Object.freeze({
     head: '#3498db',
@@ -18,6 +19,10 @@ const PUMP_CHART_COLORS = Object.freeze({
 
 function getMaxPointValue(points) {
     return Math.max(0, ...points.map((point) => Number(point.y) || 0));
+}
+
+function finiteOrZero(value) {
+    return Number.isFinite(Number(value)) ? Number(value) : 0;
 }
 
 export function buildPumpCurveDatasets(component) {
@@ -49,7 +54,8 @@ export function buildPumpCurveDatasets(component) {
         flowUnit,
         pressureUnit,
         lengthUnit,
-        flowAxisMax: toDisplayValue('flow', Math.max(qMax, component.fluxoReal || 0)),
+        // Eixo X fixo na vazão nominal: a bomba operando além dela não estica o gráfico (ver buildOperationPoint).
+        flowAxisMax: toDisplayValue('flow', qMax),
         pressureAxisMax: Math.max(
             1,
             getMaxPointValue(headPoints) * 1.08,
@@ -57,6 +63,57 @@ export function buildPumpCurveDatasets(component) {
         ),
         npshAxisMax: toDisplayValue('length', Math.max(DEFAULT_NPSH_AXIS_MAX_M, component.npshRequeridoM || 0))
     };
+}
+
+// Ponto de operação sempre dentro da área do gráfico. Vazão acima da nominal ou carga negativa
+// (além do fim da curva a bomba dissipa, ΔP < 0) são exibidas no limite, com o valor real guardado
+// em realX/realY e sinalizadas (clamped). Não altera a física: só a posição de desenho.
+export function buildOperationPoint(component, datasets, yAxisMode = 'yHead') {
+    const realX = finiteOrZero(toDisplayValue('flow', finiteOrZero(component.fluxoReal)));
+    let realY;
+    let maxY;
+    if (yAxisMode === 'yEff') {
+        realY = finiteOrZero(component.eficienciaAtual) * 100;
+        maxY = 100;
+    } else if (yAxisMode === 'yNpsh') {
+        realY = finiteOrZero(toDisplayValue('length', component.npshRequeridoAtualM || component.npshRequeridoM || 0));
+        maxY = datasets.npshAxisMax;
+    } else {
+        realY = finiteOrZero(datasets.currentHead);
+        maxY = datasets.pressureAxisMax;
+    }
+
+    const x = Math.min(Math.max(realX, 0), datasets.flowAxisMax);
+    const y = Math.min(Math.max(realY, 0), maxY);
+    return { x, y, realX, realY, clamped: x !== realX || y !== realY };
+}
+
+function getOperationPointStyle(operation) {
+    return operation.clamped ? 'triangle' : 'circle';
+}
+
+function formatPumpTooltipTitle(items, flowUnit) {
+    const first = items[0];
+    const flow = first?.raw && 'realX' in first.raw ? first.raw.realX : first?.parsed?.x;
+    return `${t('chart.flow')}: ${Number(flow).toFixed(2)} ${flowUnit}`;
+}
+
+function formatPumpTooltipLabel(ctx) {
+    if (ctx.raw && 'realY' in ctx.raw) {
+        const lines = [`${t('chart.currentPoint')}: ${Number(ctx.raw.realY).toFixed(2)}`];
+        if (ctx.raw.clamped) lines.push(t('chart.outsideCurve'));
+        return lines;
+    }
+    if (ctx.dataset.yAxisID === 'yHead') {
+        return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)}`;
+    }
+    if (ctx.dataset.yAxisID === 'yEff') {
+        return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(1)}`;
+    }
+    if (ctx.dataset.yAxisID === 'yNpsh') {
+        return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)}`;
+    }
+    return `${t('chart.currentPoint')}: ${Number(ctx.parsed.y).toFixed(2)}`;
 }
 
 function getScaleProfile({ expanded = false } = {}) {
@@ -180,20 +237,14 @@ function applyPumpChartPresentation(chart, datasets, { expanded = false } = {}) 
         chart.options.scales.yEff.display = false;
     }
 
-    chart.data.datasets[3].pointRadius = profile.pointRadius;
-    chart.data.datasets[3].pointHoverRadius = profile.pointHoverRadius;
-    chart.data.datasets[3].pointBorderWidth = expanded ? 2 : 1.5;
+    chart.data.datasets[OPERATION_DATASET_INDEX].pointRadius = profile.pointRadius;
+    chart.data.datasets[OPERATION_DATASET_INDEX].pointHoverRadius = profile.pointHoverRadius;
+    chart.data.datasets[OPERATION_DATASET_INDEX].pointBorderWidth = expanded ? 2 : 1.5;
 }
 
 export function createPumpChart(ctx, component, { expanded = false, yAxisMode = 'yHead' } = {}) {
     const datasets = buildPumpCurveDatasets(component);
-
-    let currentY = datasets.currentHead;
-    if (yAxisMode === 'yEff') {
-        currentY = (component.eficienciaAtual || 0) * 100;
-    } else if (yAxisMode === 'yNpsh') {
-        currentY = toDisplayValue('length', component.npshRequeridoAtualM || component.npshRequeridoM || 0);
-    }
+    const operation = buildOperationPoint(component, datasets, yAxisMode);
 
     const chart = new Chart(ctx, {
         type: 'line',
@@ -242,9 +293,10 @@ export function createPumpChart(ctx, component, { expanded = false, yAxisMode = 
                 {
                     label: t('chart.operation'),
                     type: 'scatter',
-                    data: [{ x: datasets.currentFlow, y: currentY }],
+                    data: [operation],
                     borderColor: PUMP_CHART_COLORS.operationBorder,
                     backgroundColor: PUMP_CHART_COLORS.operation,
+                    pointStyle: getOperationPointStyle(operation),
                     pointRadius: 5,
                     pointHoverRadius: 6,
                     pointBorderWidth: 1.5,
@@ -280,19 +332,8 @@ export function createPumpChart(ctx, component, { expanded = false, yAxisMode = 
                     titleColor: '#ffffff',
                     bodyColor: '#ffffff',
                     callbacks: {
-                        title: (ctx) => `${t('chart.flow')}: ${Number(ctx[0].parsed.x).toFixed(2)} ${datasets.flowUnit}`,
-                        label: (ctx) => {
-                            if (ctx.dataset.yAxisID === 'yHead') {
-                                return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)}`;
-                            }
-                            if (ctx.dataset.yAxisID === 'yEff') {
-                                return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(1)}`;
-                            }
-                            if (ctx.dataset.yAxisID === 'yNpsh') {
-                                return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)}`;
-                            }
-                            return `${t('chart.currentPoint')}: ${Number(ctx.parsed.y).toFixed(2)}`;
-                        }
+                        title: (ctx) => formatPumpTooltipTitle(ctx, datasets.flowUnit),
+                        label: formatPumpTooltipLabel
                     }
                 }
             },
@@ -351,13 +392,7 @@ export function refreshPumpChart(chart, component, { expanded = false } = {}) {
 
     const yAxisMode = chart.yAxisMode || 'yHead';
     const datasets = buildPumpCurveDatasets(component);
-
-    let currentY = datasets.currentHead;
-    if (yAxisMode === 'yEff') {
-        currentY = (component.eficienciaAtual || 0) * 100;
-    } else if (yAxisMode === 'yNpsh') {
-        currentY = toDisplayValue('length', component.npshRequeridoAtualM || component.npshRequeridoM || 0);
-    }
+    const operation = buildOperationPoint(component, datasets, yAxisMode);
 
     chart.data.datasets[0].label = `${t('chart.head')} (${datasets.pressureUnit})`;
     chart.data.datasets[0].data = datasets.headPoints;
@@ -365,23 +400,13 @@ export function refreshPumpChart(chart, component, { expanded = false } = {}) {
     chart.data.datasets[1].data = datasets.efficiencyPoints;
     chart.data.datasets[2].label = `NPSHr (${datasets.lengthUnit})`;
     chart.data.datasets[2].data = datasets.npshPoints;
-    chart.data.datasets[3].label = t('chart.operation');
-    chart.data.datasets[3].data = [{ x: datasets.currentFlow, y: currentY }];
-    chart.data.datasets[3].yAxisID = yAxisMode;
+    chart.data.datasets[OPERATION_DATASET_INDEX].label = t('chart.operation');
+    chart.data.datasets[OPERATION_DATASET_INDEX].data = [operation];
+    chart.data.datasets[OPERATION_DATASET_INDEX].pointStyle = getOperationPointStyle(operation);
+    chart.data.datasets[OPERATION_DATASET_INDEX].yAxisID = yAxisMode;
 
-    chart.options.plugins.tooltip.callbacks.title = (ctx) => `${t('chart.flow')}: ${Number(ctx[0].parsed.x).toFixed(2)} ${datasets.flowUnit}`;
-    chart.options.plugins.tooltip.callbacks.label = (ctx) => {
-        if (ctx.dataset.yAxisID === 'yHead') {
-            return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)}`;
-        }
-        if (ctx.dataset.yAxisID === 'yEff') {
-            return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(1)}`;
-        }
-        if (ctx.dataset.yAxisID === 'yNpsh') {
-            return `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)}`;
-        }
-        return `${t('chart.currentPoint')}: ${Number(ctx.parsed.y).toFixed(2)}`;
-    };
+    chart.options.plugins.tooltip.callbacks.title = (ctx) => formatPumpTooltipTitle(ctx, datasets.flowUnit);
+    chart.options.plugins.tooltip.callbacks.label = formatPumpTooltipLabel;
 
     applyPumpChartPresentation(chart, datasets, { expanded });
     chart.update();

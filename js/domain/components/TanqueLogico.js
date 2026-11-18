@@ -20,7 +20,6 @@ const FATOR_SEGURANCA_VAZAO_FONTE_SETPOINT = 0.98;
 const FATOR_DRENAGEM_TRANSITORIA_SETPOINT = 1.01;
 const PRESSAO_MINIMA_DIMENSIONAMENTO_BOMBA_BAR = 0.5;
 const PRESSAO_MAXIMA_DIMENSIONAMENTO_BOMBA_BAR = 20;
-const PRESSAO_MAXIMA_AJUSTE_FONTE_BAR = 20;
 const BANDA_MORTA_SETPOINT_NORMALIZADA = 0.0025;
 const BANDA_REATIVACAO_SETPOINT_NORMALIZADA = 0.0075;
 const TEMPO_MINIMO_ALERTA_SATURACAO_S = 1.5;
@@ -383,7 +382,10 @@ export class TanqueLogico extends ComponenteFisico {
         });
     }
 
-    _criarAjustesPressaoFontes(fontes, resumoBase) {
+    // A fonte entrega a vazão máxima sempre que a pressão permite, e com cano ideal quase não há perda
+    // no caminho: baixar a pressão não reduz a entrada. O que reduz é a vazão especificada (teto da fonte),
+    // como a vazão fixada na corrente de entrada do DWSIM.
+    _criarAjustesVazaoFontes(fontes, resumoBase) {
         if (
             fontes.length === 0
             || resumoBase.possuiBombasMontante
@@ -399,30 +401,36 @@ export class TanqueLogico extends ComponenteFisico {
         const fatorVazao = clamp(vazaoAlvoEntradaLps / resumoBase.vazaoEntradaAtualLps, 0, 1);
         if (fatorVazao >= 0.999) return [];
 
-        return fontes.map((fonte) => {
-            const pressaoAtualBar = Math.max(0, Number(fonte.pressaoFonteBar) || 0);
-            const pressaoMotoraAtualBar = Math.max(
-                0,
-                pressaoAtualBar - resumoBase.pressaoBaseEntradaAtualBar
-            );
-            const pressaoMotoraRecomendadaBar = pressaoMotoraAtualBar * fatorVazao * fatorVazao;
-            const pressaoRecomendadaBar = clamp(
-                resumoBase.pressaoBaseEntradaSetpointBar + pressaoMotoraRecomendadaBar,
-                0,
-                Math.min(pressaoAtualBar, PRESSAO_MAXIMA_AJUSTE_FONTE_BAR)
+        // Com a simulação rodando, só as fontes que entregam vazão são ajustadas (uma parada não é
+        // a causa do excesso nem deve ter o teto zerado). Sem vazões medidas, divide a entrada por igual.
+        const fluxoRealFonteLps = (fonte) => Math.max(0, Number(fonte.fluxoReal) || 0);
+        const vazoesMedidas = fontes.reduce((soma, fonte) => soma + fluxoRealFonteLps(fonte), 0) > EPSILON_FLOW;
+        const fontesAjustaveis = vazoesMedidas
+            ? fontes.filter((fonte) => fluxoRealFonteLps(fonte) > EPSILON_FLOW)
+            : fontes;
+
+        return fontesAjustaveis.map((fonte) => {
+            const vazaoMaximaAtualLps = Math.max(0, Number(fonte.vazaoMaxima) || 0);
+            // Cada fonte reduz a própria contribuição pelo mesmo fator, preservando a proporção entre elas.
+            const vazaoAtualFonteLps = vazoesMedidas
+                ? fluxoRealFonteLps(fonte)
+                : resumoBase.vazaoEntradaAtualLps / fontes.length;
+            const vazaoMaximaRecomendadaLps = Math.min(
+                vazaoMaximaAtualLps,
+                Math.max(EPSILON_FLOW, vazaoAtualFonteLps * fatorVazao)
             );
 
             return {
                 fonte,
                 fonteId: fonte.id,
                 tag: fonte.tag,
-                pressaoAtualBar,
-                pressaoRecomendadaBar,
+                vazaoMaximaAtualLps,
+                vazaoMaximaRecomendadaLps,
                 fatorReducaoEntrada: fatorVazao,
                 vazaoAlvoEntradaLps,
-                motivo: 'Sem bomba a montante, o ajuste didatico reduz a pressao da fonte uma unica vez para aproximar a entrada da capacidade fisica de saida no set point.'
+                motivo: 'Sem bomba a montante, o ajuste didatico reduz a vazao maxima da fonte uma unica vez para aproximar a entrada da capacidade fisica de saida no set point.'
             };
-        }).filter((ajuste) => ajuste.pressaoRecomendadaBar < ajuste.pressaoAtualBar - 1e-6);
+        }).filter((ajuste) => ajuste.vazaoMaximaRecomendadaLps < ajuste.vazaoMaximaAtualLps - 1e-6);
     }
 
     getValvulasDiretasSaidaControleNivel() {
@@ -504,7 +512,7 @@ export class TanqueLogico extends ComponenteFisico {
         const ajustesBomba = this._criarAjustesDimensionamentoBombas(bombas, resumoBase);
         const ajustesFonte = ajustesBomba.length > 0
             ? []
-            : this._criarAjustesPressaoFontes(fontes, resumoBase);
+            : this._criarAjustesVazaoFontes(fontes, resumoBase);
         const autoAjustavel = ajustesBomba.length > 0 || ajustesFonte.length > 0;
 
         return {
@@ -515,7 +523,7 @@ export class TanqueLogico extends ComponenteFisico {
             motivoAutoAjuste: ajustesBomba.length > 0
                 ? 'Dimensionamento didatico disponivel: o PA continua atuando somente nas valvulas, e a bomba a montante permanece operacionalmente em 100%, mas sua vazao nominal pode ser ajustada para a capacidade fisica da saida no set point.'
                 : ajustesFonte.length > 0
-                    ? 'Ajuste didatico disponivel: sem bomba a montante, a pressao da fonte pode ser reduzida uma unica vez para aproximar a entrada da capacidade fisica da saida no set point.'
+                    ? 'Ajuste didatico disponivel: sem bomba a montante, a vazao maxima da fonte pode ser reduzida uma unica vez para aproximar a entrada da capacidade fisica da saida no set point.'
                     : 'O set point atua somente nas valvulas. Para estabilizar, conecte uma bomba dimensionavel a montante, adicione uma valvula de entrada controlavel ou aumente a capacidade de saida.'
         };
     }
@@ -555,26 +563,26 @@ export class TanqueLogico extends ComponenteFisico {
 
         if (resumo.ajustesFonte?.length > 0) {
             resumo.ajustesFonte.forEach((ajuste) => {
-                ajuste.fonte.pressaoFonteBar = ajuste.pressaoRecomendadaBar;
+                ajuste.fonte.vazaoMaxima = ajuste.vazaoMaximaRecomendadaLps;
                 ajuste.fonte.sincronizarMetricasFisicas?.();
                 ajuste.fonte.notify(ComponentEventPayloads.state({
-                    pressaoFonteBar: ajuste.fonte.pressaoFonteBar
+                    vazaoMaxima: ajuste.fonte.vazaoMaxima
                 }));
             });
 
             this.notify(ComponentEventPayloads.setpointAutoPressure({
-                tipoAjuste: 'pressao_fonte',
+                tipoAjuste: 'vazao_fonte',
                 quantidadeFontes: resumo.ajustesFonte.length
             }));
 
             return {
                 aplicado: true,
-                tipoAjuste: 'pressao_fonte',
+                tipoAjuste: 'vazao_fonte',
                 quantidadeBombas: 0,
                 quantidadeFontes: resumo.ajustesFonte.length,
                 motivo: resumo.ajustesFonte.length === 1
-                    ? 'Pressao da fonte ajustada para a capacidade fisica de saida no set point.'
-                    : 'Pressoes das fontes ajustadas para a capacidade fisica de saida no set point.',
+                    ? 'Vazao maxima da fonte ajustada para a capacidade fisica de saida no set point.'
+                    : 'Vazoes maximas das fontes ajustadas para a capacidade fisica de saida no set point.',
                 resumo
             };
         }

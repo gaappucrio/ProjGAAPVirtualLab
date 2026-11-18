@@ -6,6 +6,7 @@ import {
     t
 } from '../i18n/LanguageManager.js';
 import { exportSimulationData } from '../export/SimulationDataExporter.js';
+import { formatMeasuredValue } from '../properties/PropertyValueFormatters.js';
 
 const THEME_STORAGE_KEY = 'gaap-lab-theme';
 const DARK_THEME_CLASS = 'theme-dark';
@@ -130,7 +131,8 @@ export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange, on
     // Indica, como num ensaio de bancada, se todas as leituras já se estabilizaram.
     const STEADY_STATE_COLORS = {
         steady: { color: '#1e7e45', backgroundColor: '#eafaf1', borderColor: '#9fdfb8' },
-        transient: { color: '#5f6f7f', backgroundColor: '#f4f7f8', borderColor: '#dfe6e9' }
+        transient: { color: '#5f6f7f', backgroundColor: '#f4f7f8', borderColor: '#dfe6e9' },
+        overflow: { color: '#8a4b00', backgroundColor: '#fff4e0', borderColor: '#f0c27a' }
     };
 
     function setIfChanged(target, key, value) {
@@ -146,7 +148,8 @@ export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange, on
         }
 
         // Cores só mudam na troca de estado: reescrevê-las a cada quadro reinicia as transições CSS.
-        const state = status.steady ? 'steady' : 'transient';
+        const overflows = status.overflows || [];
+        const state = overflows.length > 0 ? 'overflow' : (status.steady ? 'steady' : 'transient');
         if (force || steadyStateIndicator.hidden || steadyStateIndicator.dataset.state !== state) {
             steadyStateIndicator.dataset.state = state;
             steadyStateIndicator.style.borderStyle = 'solid';
@@ -156,6 +159,15 @@ export function setupToolbar({ engine, onClearCanvas, onTopologyVisualChange, on
         }
 
         const criterion = t('toolbar.steadyStateTitle', { hold: formatSeconds(status.holdTimeS) });
+        if (overflows.length > 0) {
+            const describe = (entry) => t(entry.kind === 'relief' ? 'toolbar.reliefItem' : 'toolbar.overflowItem', {
+                tag: entry.tag,
+                flow: formatMeasuredValue('flow', entry.flowLps, 2)
+            });
+            setIfChanged(steadyStateIndicator, 'textContent', t('toolbar.overflowState', { items: overflows.map(describe).join(' · ') }));
+            setIfChanged(steadyStateIndicator, 'title', [t('toolbar.overflowTitle'), status.steady ? criterion : ''].filter(Boolean).join('\n'));
+            return;
+        }
         if (status.steady) {
             setIfChanged(steadyStateIndicator, 'textContent', t('toolbar.steadyStateSince', { time: formatSeconds(status.steadySinceS) }));
             setIfChanged(steadyStateIndicator, 'title', criterion);

@@ -199,13 +199,13 @@ function formatPumpSizingText(alerta) {
     });
 }
 
-function formatSourcePressureText(alerta) {
+function formatSourceFlowText(alerta) {
     const ajustes = alerta.ajustesFonte || [];
     if (ajustes.length === 0) return '';
 
-    return t('saturation.sourcePressureSizing', {
+    return t('saturation.sourceFlowSizing', {
         count: ajustes.length,
-        pressure: formatMeasuredValue('pressure', ajustes[0].pressaoRecomendadaBar, 2)
+        flow: formatMeasuredValue('flow', ajustes.reduce((soma, ajuste) => soma + ajuste.vazaoMaximaRecomendadaLps, 0), 2)
     });
 }
 
@@ -305,7 +305,7 @@ function updateTankSaturationAlert(component) {
     const textoBombas = alerta.possuiBombasMontante
         ? t('saturation.pumps', { count: alerta.quantidadeBombasMontante })
         : '';
-    const textoDimensionamento = formatPumpSizingText(alerta) || formatSourcePressureText(alerta);
+    const textoDimensionamento = formatPumpSizingText(alerta) || formatSourceFlowText(alerta);
 
     setHtml('texto-alerta-saturacao', t('saturation.message', {
         setpoint: component.setpoint,
@@ -345,7 +345,7 @@ function bindTankSaturationAlertActions(component, { onAdjustmentApplied } = {})
     btnAjuste.onclick = () => {
         const resultado = component.aplicarAjustePressaoSetpoint();
         feedbackAjuste.textContent = resultado.aplicado
-            ? (resultado.tipoAjuste === 'pressao_fonte'
+            ? (resultado.tipoAjuste === 'vazao_fonte'
                 ? t(resultado.quantidadeFontes > 1 ? 'saturation.successSourceMany' : 'saturation.successSourceOne', {
                     count: resultado.quantidadeFontes
                 })

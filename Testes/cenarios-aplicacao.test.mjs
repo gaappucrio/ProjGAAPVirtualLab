@@ -1985,3 +1985,198 @@ test('painel do tanque: tipo, pré-carga e PSV ficam na aba Avançado; PSV e al�
     }
 });
 
+test('planta padrão fonte→tanque aberto→dreno com cano de 0 m fecha o balanço sem transbordar', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-p', 'F-p', 0, 0);
+    const tanque = new TanqueLogico('T-p', 'T-p', 160, 0);
+    const dreno = new DrenoLogico('D-p', 'D-p', 320, 0);
+    fonte.conectarSaida(tanque);
+    tanque.conectarSaida(dreno);
+    [fonte, tanque, dreno].forEach((c) => engine.add(c));
+    const entrada = new ConnectionModel({ sourceId: fonte.id, targetId: tanque.id });
+    const saida = new ConnectionModel({ sourceId: tanque.id, targetId: dreno.id });
+    engine.addConnection(entrada);
+    engine.addConnection(saida);
+    assert.equal(saida.comprimentoM, 0);
+
+    for (let i = 0; i < 6000; i += 1) engine.tickPipeline.advance(0.1);
+
+    const qIn = engine.getConnectionState(entrada).flowLps;
+    const qOut = engine.getConnectionState(saida).flowLps;
+    approx(qIn, 32 / 3.6, 1e-3, 'vazão de entrada é o padrão de 32 m³/h');
+    approx(qOut, qIn, 1e-3, 'saída = entrada em regime');
+    assert.equal(tanque.vazaoTransbordoLps, 0);
+    assert.ok(tanque.getNivelNormalizado() < 0.5, 'tanque não enche até o transbordo');
+
+    // Digitando 100 m no cano de saída, ele estrangula a saída (24,71 m³/h) e o tanque transborda.
+    saida.comprimentoM = 100;
+    for (let i = 0; i < 6000; i += 1) engine.tickPipeline.advance(0.1);
+    assert.ok(engine.getConnectionState(saida).flowLps < qIn - 1, 'cano longo estrangula a saída');
+    assert.ok(tanque.vazaoTransbordoLps > 0);
+});
+
+test('comprimentoM é salvo no arquivo e arquivo antigo (1 m + extraLengthM) abre com o mesmo comprimento', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-s', 'F-s', 0, 0);
+    const dreno = new DrenoLogico('D-s', 'D-s', 160, 0);
+    fonte.conectarSaida(dreno);
+    engine.add(fonte);
+    engine.add(dreno);
+    engine.addConnection(new ConnectionModel({ sourceId: fonte.id, targetId: dreno.id, comprimentoM: 12.5 }));
+
+    const documento = createFlowchartDocument(engine);
+    const restaurado = createEngine();
+    assert.equal(restoreFlowchartDocument(restaurado, documento).restored, true);
+    assert.equal(restaurado.conexoes[0].comprimentoM, 12.5, 'comprimento sobrevive ao salvar/abrir');
+
+    const antigo = JSON.parse(JSON.stringify(documento));
+    antigo.workspace.connections.forEach((c) => { delete c.comprimentoM; c.extraLengthM = 99; });
+    const aberto = createEngine();
+    assert.equal(restoreFlowchartDocument(aberto, antigo).restored, true);
+    assert.equal(aberto.conexoes[0].comprimentoM, 100, 'antigo: 1 m esquemático + 99 m extra');
+    assert.equal(aberto.getConnectionGeometry(aberto.conexoes[0]).lengthM, 100);
+});
+
+test('regime com tanque transbordando é reportado à parte do regime permanente', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-o', 'F-o', 0, 0);
+    const tanque = new TanqueLogico('T-o', 'T-o', 160, 0);
+    const valvula = new ValvulaLogica('V-o', 'V-o', 320, 0);
+    const dreno = new DrenoLogico('D-o', 'D-o', 480, 0);
+    fonte.conectarSaida(tanque);
+    tanque.conectarSaida(valvula);
+    valvula.conectarSaida(dreno);
+    [fonte, tanque, valvula, dreno].forEach((c) => engine.add(c));
+    [[fonte, tanque], [tanque, valvula], [valvula, dreno]].forEach(([a, b]) => {
+        engine.addConnection(new ConnectionModel({ sourceId: a.id, targetId: b.id }));
+    });
+    valvula.setAbertura(50);
+
+    for (let i = 0; i < 6000; i += 1) engine.tickPipeline.advance(0.1);
+
+    const status = engine.getSteadyStateStatus();
+    assert.equal(status.steady, true, 'as vazões estão estáveis');
+    assert.equal(status.overflows.length, 1);
+    assert.equal(status.overflows[0].tag, 'T-o');
+    assert.equal(status.overflows[0].kind, 'overflow');
+    // 32 m³/h entram e ~12,25 saem pela válvula a 50%: o resto transborda (balanço de massa fecha).
+    approx(status.overflows[0].flowLps * 3.6, 32 - 12.25, 0.1, 'vazão de transbordo (m³/h)');
+
+    valvula.setAbertura(100);
+    for (let i = 0; i < 6000; i += 1) engine.tickPipeline.advance(0.1);
+    assert.equal(engine.getSteadyStateStatus().overflows.length, 0, 'sem excedente, sem aviso');
+});
+
+test('ajuste automático da fonte reduz a vazão máxima e some o transbordo com saída saturada no set point', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-a', 'F-a', 0, 0);
+    const tanque = new TanqueLogico('T-a', 'T-a', 160, 0);
+    const valvula = new ValvulaLogica('V-a', 'V-a', 320, 0);
+    const dreno = new DrenoLogico('D-a', 'D-a', 480, 0);
+    fonte.conectarSaida(tanque);
+    tanque.conectarSaida(valvula);
+    valvula.conectarSaida(dreno);
+    [fonte, tanque, valvula, dreno].forEach((c) => engine.add(c));
+    const conexoes = [[fonte, tanque], [tanque, valvula], [valvula, dreno]].map(([a, b]) => {
+        const c = new ConnectionModel({ sourceId: a.id, targetId: b.id });
+        engine.addConnection(c);
+        return c;
+    });
+    valvula.cv = 60; // saída pequena: mesmo 100% aberta não escoa os 32 m³/h da fonte
+    valvula.setAbertura(50);
+    tanque.setpoint = 50;
+    assert.equal(tanque.setSetpointAtivo(true).ativado, true);
+
+    const rodar = () => { for (let i = 0; i < 6000; i += 1) engine.tickPipeline.advance(0.1); };
+    rodar();
+    assert.equal(tanque.alertaSaturacao?.ativo, true, 'saída saturada gera o alerta');
+    assert.ok(tanque.vazaoTransbordoLps > 0, 'tanque cheio transborda');
+    const pressaoAntes = fonte.pressaoFonteBar;
+    const tetoAntes = fonte.vazaoMaxima;
+
+    const resultado = tanque.aplicarAjustePressaoSetpoint();
+    assert.equal(resultado.aplicado, true);
+    assert.equal(resultado.tipoAjuste, 'vazao_fonte');
+    assert.ok(fonte.vazaoMaxima < tetoAntes, 'o teto de vazão da fonte caiu');
+    assert.equal(fonte.pressaoFonteBar, pressaoAntes, 'a pressão da fonte não é mexida');
+
+    rodar();
+    const qIn = engine.getConnectionState(conexoes[0]).flowLps;
+    const qOut = engine.getConnectionState(conexoes[2]).flowLps;
+    approx(qIn, fonte.vazaoMaxima, 1e-6, 'a entrada passou a seguir o novo teto');
+    // O tanque ainda drena do nível cheio rumo ao set point de 50%: a saída fica um pouco acima da entrada.
+    assert.ok(qOut >= qIn - 1e-6 && qOut < qIn * 1.1, 'saída ligeiramente acima da entrada enquanto drena');
+    assert.ok(tanque.getNivelNormalizado() < 0.6, 'nível desceu do cheio rumo ao set point');
+    assert.equal(tanque.vazaoTransbordoLps, 0, 'sem transbordo');
+    assert.equal(tanque.alertaSaturacao, null, 'alerta de saturação some');
+    assert.equal(engine.getSteadyStateStatus().overflows.length, 0);
+});
+
+test('ajuste automático da fonte com duas fontes só reduz a que entrega vazão e mantém a proporção', () => {
+    const engine = createEngine();
+    const ativa = new FonteLogica('F-ativa', 'F-ativa', 0, 0);
+    const parada = new FonteLogica('F-parada', 'F-parada', 0, 80);
+    const outra = new FonteLogica('F-outra', 'F-outra', 0, 160);
+    const tanque = new TanqueLogico('T-2f', 'T-2f', 160, 0);
+    const valvula = new ValvulaLogica('V-2f', 'V-2f', 320, 0);
+    [ativa, parada, outra].forEach((f) => f.conectarSaida(tanque));
+    tanque.conectarSaida(valvula);
+    [ativa, parada, outra, tanque, valvula].forEach((c) => engine.add(c));
+    // Sem coluna de líquido a saída no set point segue em 10 L/s (mesma premissa do teste de uma fonte).
+    tanque.tipoTanque = 'atmosferico';
+    tanque.considerarColunaLiquido = false;
+    tanque.capacidadeMaxima = 1000;
+    tanque.volumeAtual = 800;
+    tanque.setpoint = 50;
+    tanque.lastQin = 20;
+    tanque.lastQout = 10;
+    tanque.setpointAtivo = true;
+    tanque._ultimoEstadoControle = { u: -1, erro: -0.3 };
+    ativa.vazaoMaxima = 15; ativa.fluxoReal = 15;
+    outra.vazaoMaxima = 5; outra.fluxoReal = 5;
+    parada.vazaoMaxima = 30; parada.fluxoReal = 0;
+
+    const resumo = tanque.getResumoAjustePressaoSetpoint(engine.fluidoOperante, true);
+    const ajustes = new Map(resumo.ajustesFonte.map((a) => [a.tag, a]));
+    assert.equal(ajustes.has('F-parada'), false, 'fonte parada não é ajustada (teto intocado)');
+    const fator = (10 * 0.98) / 20;
+    approx(ajustes.get('F-ativa').vazaoMaximaRecomendadaLps, 15 * fator, 1e-9);
+    approx(ajustes.get('F-outra').vazaoMaximaRecomendadaLps, 5 * fator, 1e-9);
+
+    tanque.aplicarAjustePressaoSetpoint();
+    assert.equal(parada.vazaoMaxima, 30);
+    approx(ativa.vazaoMaxima + outra.vazaoMaxima, 20 * fator, 1e-9, 'a soma das entradas vai ao alvo de 98% da saída');
+});
+
+test('bomba com a sucção no piso da pressão de vapor não alterna a condição a cada passo', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-v', 'F-v', 0, 0);
+    const bomba = new BombaLogica('P-v', 'P-v', 80, 0);
+    const dreno = new DrenoLogico('D-v', 'D-v', 160, 0);
+    // Teto de 100 m³/h bem abaixo do que a bomba (45 L/s) puxa: a sucção cai ao piso da pressão de vapor.
+    fonte.vazaoMaxima = 100 / 3.6;
+    // NPSHr logo abaixo da carga cinética (~1,6 m a 100 m³/h em Ø 0,08 m): com degrau no NPSHa o
+    // aviso alternava entre "Cavitando" e "No limite" a cada passo.
+    bomba.npshRequeridoM = 1.4;
+    fonte.conectarSaida(bomba);
+    bomba.conectarSaida(dreno);
+    [fonte, bomba, dreno].forEach((c) => engine.add(c));
+    engine.addConnection(new ConnectionModel({ sourceId: fonte.id, targetId: bomba.id }));
+    engine.addConnection(new ConnectionModel({ sourceId: bomba.id, targetId: dreno.id }));
+    bomba.setAcionamento(100);
+
+    for (let i = 0; i < 400; i += 1) engine.tickPipeline.advance(0.05);
+
+    let anterior = bomba.getCondicaoSucaoAtual();
+    let trocas = 0;
+    const margens = [];
+    for (let i = 0; i < 800; i += 1) {
+        engine.tickPipeline.advance(0.05);
+        const condicao = bomba.getCondicaoSucaoAtual();
+        if (condicao !== anterior) trocas += 1;
+        anterior = condicao;
+        margens.push(bomba.margemNpshM);
+    }
+    assert.ok(trocas <= 1, `a condição da sucção não pode oscilar (trocas: ${trocas})`);
+    assert.ok(Math.max(...margens) - Math.min(...margens) < 0.2, 'a folga de NPSH não salta entre passos');
+});

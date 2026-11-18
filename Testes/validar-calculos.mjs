@@ -41,7 +41,7 @@ import {
     calculatePidLevelControl,
     createLevelControllerState
 } from '../js/domain/services/LevelController.js';
-import { buildPumpCurveDatasets } from '../js/infrastructure/charts/PumpChartAdapter.js';
+import { buildOperationPoint, buildPumpCurveDatasets } from '../js/infrastructure/charts/PumpChartAdapter.js';
 import { buildHeatExchangerCurveDatasets } from '../js/infrastructure/charts/HeatExchangerChartAdapter.js';
 import {
     formatUnitValue,
@@ -55,8 +55,7 @@ import {
 import { buildExportHtml } from '../js/presentation/export/SimulationDataExporter.js';
 import {
     DEFAULT_ATMOSPHERIC_PRESSURE_BAR,
-    DEFAULT_PIPE_EXTRA_LENGTH_M,
-    DEFAULT_PIPE_SCHEMATIC_LENGTH_M,
+    DEFAULT_PIPE_LENGTH_M,
     DEFAULT_SOURCE_MAX_FLOW_LPS,
     DEFAULT_SOURCE_PRESSURE_BAR,
     pressureFromHeadBar
@@ -76,7 +75,7 @@ function createEngine() {
     return engine;
 }
 
-test('padroes iniciais usam fonte de 150 kPa e cano esquematico de 100 m', () => {
+test('padroes iniciais usam fonte de 150 kPa e cano ideal de 0 m até o usuário digitar o comprimento', () => {
     const engine = new SistemaSimulacao();
     const fonte = new FonteLogica('F-default', 'Entrada-default', 0, 0);
     const dreno = new DrenoLogico('D-default', 'Saida-default', 160, 0);
@@ -91,16 +90,24 @@ test('padroes iniciais usam fonte de 150 kPa e cano esquematico de 100 m', () =>
 
     const geometry = engine.getConnectionGeometry(connection);
 
-    assert.equal(DEFAULT_PIPE_SCHEMATIC_LENGTH_M, 1);
-    assert.equal(DEFAULT_PIPE_EXTRA_LENGTH_M, 99);
-    assert.equal(connection.extraLengthM, 99);
+    assert.equal(DEFAULT_PIPE_LENGTH_M, 0);
+    assert.equal(connection.comprimentoM, 0);
+    assert.equal(connection.extraLengthM, undefined, 'a variável extra não existe mais');
     assert.equal(DEFAULT_SOURCE_PRESSURE_BAR, 1.5);
     assert.equal(fonte.pressaoFonteBar, 1.5);
-    assert.equal(geometry.straightLengthM, 1);
-    assert.equal(geometry.lengthM, 100);
+    assert.equal(geometry.straightLengthM, 0);
+    assert.equal(geometry.lengthM, 0);
 
-    connection.extraLengthM = 0;
-    assert.equal(engine.getConnectionGeometry(connection).lengthM, 1);
+    // O comprimento é só o que o usuário digita (aba Avançado do cano).
+    connection.comprimentoM = 25;
+    assert.equal(engine.getConnectionGeometry(connection).lengthM, 25);
+
+    // Formato antigo (1 m esquemático + extra) continua abrindo: comprimento = 1 + extra.
+    const legado = new ConnectionModel({ sourceId: fonte.id, targetId: dreno.id, extraLengthM: 99 });
+    assert.equal(legado.comprimentoM, 100);
+    assert.equal(legado.extraLengthM, undefined);
+    // Com os dois campos, o comprimento novo manda.
+    assert.equal(new ConnectionModel({ sourceId: 'a', targetId: 'b', comprimentoM: 7, extraLengthM: 99 }).comprimentoM, 7);
 });
 
 test('dimensionamento por continuidade calcula diâmetro a partir de vazão e velocidade', () => {
@@ -226,19 +233,19 @@ test('propriedades hidraulicas de conexao preservam zero fisico e reparam invali
         targetId: 'D-01',
         diameterM: 0.05,
         roughnessMm: 0,
-        extraLengthM: 0,
+        comprimentoM: 0,
         perdaLocalK: 0
     });
 
     assert.equal(semPerdas.roughnessMm, 0);
-    assert.equal(semPerdas.extraLengthM, 0);
+    assert.equal(semPerdas.comprimentoM, 0);
     assert.equal(semPerdas.perdaLocalK, 0);
     assert.ok(semPerdas.areaM2 > 0, 'Diametro valido deve gerar area positiva');
 
     const corrigida = ensureConnectionProperties({
         diameterM: -0.1,
         roughnessMm: -1,
-        extraLengthM: -2,
+        comprimentoM: -2,
         perdaLocalK: -3,
         designVelocityMps: 0,
         designFlowLps: -4,
@@ -248,7 +255,7 @@ test('propriedades hidraulicas de conexao preservam zero fisico e reparam invali
 
     assert.ok(corrigida.diameterM > 0, 'Diametro invalido deve voltar ao padrao positivo');
     assert.ok(corrigida.roughnessMm >= 0, 'Rugosidade nao pode ficar negativa');
-    assert.ok(corrigida.extraLengthM >= 0, 'Comprimento extra nao pode ficar negativo');
+    assert.ok(corrigida.comprimentoM >= 0, 'Comprimento nao pode ficar negativo');
     assert.ok(corrigida.perdaLocalK >= 0, 'Perda local nao pode ficar negativa');
     assert.ok(corrigida.designVelocityMps > 0, 'Velocidade de projeto deve ficar positiva');
     assert.equal(corrigida.designFlowLps, 0);
@@ -1111,6 +1118,65 @@ test('curva da bomba reflete alteração de NPSHr sem esconder a mudança pela e
     assert.equal(curvaBase.npshAxisMax, curvaAjustada.npshAxisMax);
 });
 
+test('ponto de operacao acima da vazao nominal fica dentro do grafico e sinalizado', () => {
+    const bomba = new BombaLogica('P-01', 'P-01', 0, 0);
+    bomba.vazaoNominal = 45;
+    bomba.pressaoMaxima = 5;
+    bomba.npshRequeridoM = 2.5;
+    bomba.npshDisponivelM = 6;
+    bomba.grauAcionamento = 100;
+    bomba.acionamentoEfetivo = 100;
+    bomba.fluxoReal = 169.7 / 3.6; // 169,7 m3/h, acima da nominal de 162 m3/h
+    bomba.recalcularMetricasDerivadasCurva();
+
+    const datasets = buildPumpCurveDatasets(bomba);
+    approx(datasets.flowAxisMax, toDisplayValue('flow', 45), 1e-9, 'Eixo X deve ficar na vazao nominal, nao esticar ate a vazao atual');
+
+    const carga = buildOperationPoint(bomba, datasets, 'yHead');
+    assert.ok(carga.realY < 0, 'Acima da nominal a carga da curva e negativa (dissipacao)');
+    assert.equal(carga.y, 0, 'Carga negativa deve ser exibida no piso do eixo, nao sumir abaixo dele');
+    assert.equal(carga.x, datasets.flowAxisMax, 'Vazao acima da nominal deve ser exibida na borda do eixo X');
+    assert.equal(carga.clamped, true, 'Ponto clampado deve ser sinalizado');
+
+    const npsh = buildOperationPoint(bomba, datasets, 'yNpsh');
+    assert.equal(npsh.x, datasets.flowAxisMax, 'NPSHr no modo NPSH tambem fica na borda do eixo X');
+    approx(npsh.y, datasets.npshPoints.at(-1).y, 1e-9, 'NPSHr exibido deve coincidir com o fim da curva de NPSHr');
+    assert.ok(npsh.realX > datasets.flowAxisMax, 'Valor real da vazao preservado para o tooltip');
+});
+
+test('ponto de operacao dentro da curva nao e sinalizado nem deslocado', () => {
+    const bomba = new BombaLogica('P-02', 'P-02', 0, 0);
+    bomba.vazaoNominal = 45;
+    bomba.pressaoMaxima = 5;
+    bomba.grauAcionamento = 100;
+    bomba.acionamentoEfetivo = 100;
+    bomba.npshDisponivelM = 6;
+    bomba.fluxoReal = 30;
+    bomba.recalcularMetricasDerivadasCurva();
+
+    const datasets = buildPumpCurveDatasets(bomba);
+    const op = buildOperationPoint(bomba, datasets, 'yHead');
+    assert.equal(op.clamped, false);
+    approx(op.x, toDisplayValue('flow', 30), 1e-9, 'Vazao dentro da curva deve ser plotada sem ajuste');
+    approx(op.y, datasets.currentHead, 1e-9, 'Carga positiva deve ser plotada no valor real');
+    assert.ok(op.y > 0);
+});
+
+test('bomba parada plota o ponto de operacao em (0, 0) no modo carga', () => {
+    const bomba = new BombaLogica('P-03', 'P-03', 0, 0);
+    bomba.vazaoNominal = 45;
+    bomba.pressaoMaxima = 5;
+    bomba.grauAcionamento = 0;
+    bomba.acionamentoEfetivo = 0;
+    bomba.fluxoReal = 0;
+    bomba.recalcularMetricasDerivadasCurva();
+
+    const datasets = buildPumpCurveDatasets(bomba);
+    const op = buildOperationPoint(bomba, datasets, 'yHead');
+    assert.deepEqual([op.x, op.y], [0, 0]);
+    assert.equal(op.clamped, false);
+});
+
 test('diagnóstico de saturação dimensiona bomba sem ajustar fonte de entrada', () => {
     const engine = createEngine();
     const fonte = new FonteLogica('F-01', 'Entrada-01', 0, 0);
@@ -1213,15 +1279,15 @@ test('diagnóstico de saturação em tanque aberto sem coluna de líquido não z
     tanque.setpointAtivo = true;
     tanque._ultimoEstadoControle = { u: -1, erro: -0.3 };
     fonte.pressaoFonteBar = 1.5;
+    fonte.vazaoMaxima = 25;
 
     // Sem coluna, a pressão do tanque não depende do nível: a saída no setpoint segue em 10 L/s.
-    const fatorVazao = (10 * 0.98) / 20;
     const resumo = tanque.getResumoAjustePressaoSetpoint(engine.fluidoOperante, true);
     assert.equal(resumo.ajustesFonte.length, 1);
-    approx(resumo.ajustesFonte[0].pressaoRecomendadaBar, 1.5 * fatorVazao * fatorVazao, 1e-9, 'Fonte reduzida pela razão quadrática de vazão, não zerada');
+    approx(resumo.ajustesFonte[0].vazaoMaximaRecomendadaLps, 10 * 0.98, 1e-9, 'Teto da fonte vai à capacidade de saída com folga, não é zerado');
 });
 
-test('diagnóstico de saturação ajusta pressão da fonte quando não há bomba', () => {
+test('diagnóstico de saturação ajusta a vazão máxima da fonte quando não há bomba', () => {
     const engine = createEngine();
     const fonte = new FonteLogica('F-01', 'Entrada-01', 0, 0);
     const tanque = new TanqueLogico('T-01', 'Tanque-01', 160, 0);
@@ -1243,29 +1309,28 @@ test('diagnóstico de saturação ajusta pressão da fonte quando não há bomba
     tanque.setpointAtivo = true;
     tanque._ultimoEstadoControle = { u: -1, erro: -0.3 };
     fonte.pressaoFonteBar = 1.5;
+    fonte.vazaoMaxima = 25;
 
     const densidade = engine.fluidoOperante.densidade;
     const pressaoSaidaAtual = pressureFromHeadBar(1.92 - 0.2, densidade);
     const pressaoSaidaSetpoint = pressureFromHeadBar(1.2 - 0.2, densidade);
     const vazaoSetpoint = 10 * Math.sqrt(pressaoSaidaSetpoint / pressaoSaidaAtual);
-    const fatorVazao = (vazaoSetpoint * 0.98) / 20;
-    const pressaoBaseAtual = pressureFromHeadBar(1.92 - 1.0, densidade);
-    const pressaoBaseSetpoint = pressureFromHeadBar(1.2 - 1.0, densidade);
-    const pressaoFonteEsperada = pressaoBaseSetpoint + ((1.5 - pressaoBaseAtual) * fatorVazao * fatorVazao);
+    // A entrada atual (20 L/s) é toda da fonte: o teto novo é a vazão de saída no set point com folga de 2%.
+    const vazaoMaximaEsperada = vazaoSetpoint * 0.98;
 
     const resumo = tanque.getResumoAjustePressaoSetpoint(engine.fluidoOperante, true);
     assert.equal(resumo.autoAjustavel, true);
     assert.equal(resumo.ajustesBomba.length, 0);
     assert.equal(resumo.ajustesFonte.length, 1);
     approx(
-        resumo.ajustesFonte[0].pressaoRecomendadaBar,
-        pressaoFonteEsperada,
+        resumo.ajustesFonte[0].vazaoMaximaRecomendadaLps,
+        vazaoMaximaEsperada,
         1e-9,
-        'Pressão recomendada da fonte deve reduzir a pressão motora pela razão quadrática de vazão'
+        'Teto de vazão recomendado da fonte é a capacidade de saída no set point com folga'
     );
     assert.ok(
-        resumo.ajustesFonte[0].pressaoRecomendadaBar < fonte.pressaoFonteBar,
-        'Ajuste de fonte deve reduzir a alimentação quando a entrada excede a saída no set point'
+        resumo.ajustesFonte[0].vazaoMaximaRecomendadaLps < fonte.vazaoMaxima,
+        'Ajuste de fonte deve reduzir o teto de vazão quando a entrada excede a saída no set point'
     );
 
     tanque._atualizarAlertaSaturacao(engine.fluidoOperante);
@@ -1274,14 +1339,15 @@ test('diagnóstico de saturação ajusta pressão da fonte quando não há bomba
     const resultado = tanque.aplicarAjustePressaoSetpoint();
 
     assert.equal(resultado.aplicado, true);
-    assert.equal(resultado.tipoAjuste, 'pressao_fonte');
+    assert.equal(resultado.tipoAjuste, 'vazao_fonte');
     assert.equal(resultado.quantidadeFontes, 1);
     approx(
-        fonte.pressaoFonteBar,
-        resultado.resumo.ajustesFonte[0].pressaoRecomendadaBar,
+        fonte.vazaoMaxima,
+        resultado.resumo.ajustesFonte[0].vazaoMaximaRecomendadaLps,
         1e-12,
-        'Pressão da fonte deve receber o ajuste recomendado'
+        'Teto de vazão da fonte deve receber o ajuste recomendado'
     );
+    approx(fonte.pressaoFonteBar, 1.5, 1e-12, 'A pressão da fonte não é mexida pelo ajuste');
 });
 
 test('controle de nivel fecha entrada e saida dentro da banda do set point', () => {

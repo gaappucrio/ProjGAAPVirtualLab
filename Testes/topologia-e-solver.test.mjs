@@ -134,7 +134,7 @@ test('agua tem maior vazao que oleo leve em ramais equivalentes para tanque', ()
         const fonte = new FonteLogica(`F-${presetId}`, `inlet-${presetId}`, 0, 0);
         const tanque = new TanqueLogico(`T-${presetId}`, `tank-${presetId}`, 160, 0);
         tanque.tipoTanque = 'atmosferico';
-        const connection = new ConnectionModel({ sourceId: fonte.id, targetId: tanque.id });
+        const connection = new ConnectionModel({ comprimentoM: 100, sourceId: fonte.id, targetId: tanque.id });
 
         fonte.pressaoFonteBar = 0.5;
         fonte.vazaoMaxima = 500;
@@ -827,7 +827,7 @@ test('fonte sem limite de vazao nao aplica perda oculta antes do primeiro cano',
     dreno.pressaoSaidaBar = 0;
     fonte.conectarSaida(dreno);
 
-    const connection = new ConnectionModel({ sourceId: fonte.id, targetId: dreno.id });
+    const connection = new ConnectionModel({ comprimentoM: 100, sourceId: fonte.id, targetId: dreno.id });
     engine.add(fonte);
     engine.add(dreno);
     engine.addConnection(connection);
@@ -868,8 +868,8 @@ test('tanque atmosferico desacopla a pressao: a saida enxerga apenas a coluna de
         fonte.conectarSaida(tanque);
         tanque.conectarSaida(dreno);
 
-        const entradaTanque = new ConnectionModel({ sourceId: fonte.id, targetId: tanque.id });
-        const saidaTanque = new ConnectionModel({ sourceId: tanque.id, targetId: dreno.id });
+        const entradaTanque = new ConnectionModel({ comprimentoM: 100, sourceId: fonte.id, targetId: tanque.id });
+        const saidaTanque = new ConnectionModel({ comprimentoM: 100, sourceId: tanque.id, targetId: dreno.id });
         [fonte, tanque, dreno].forEach((component) => engine.add(component));
         [entradaTanque, saidaTanque].forEach((connection) => engine.addConnection(connection));
 
@@ -926,9 +926,9 @@ test('bomba alimentando tanque aberto nao transmite a pressao de descarga para a
     bomba.conectarSaida(tanque);
     tanque.conectarSaida(dreno);
 
-    const fonteBomba = new ConnectionModel({ sourceId: fonte.id, targetId: bomba.id });
-    const entradaTanque = new ConnectionModel({ sourceId: bomba.id, targetId: tanque.id });
-    const saidaTanque = new ConnectionModel({ sourceId: tanque.id, targetId: dreno.id });
+    const fonteBomba = new ConnectionModel({ comprimentoM: 100, sourceId: fonte.id, targetId: bomba.id });
+    const entradaTanque = new ConnectionModel({ comprimentoM: 100, sourceId: bomba.id, targetId: tanque.id });
+    const saidaTanque = new ConnectionModel({ comprimentoM: 100, sourceId: tanque.id, targetId: dreno.id });
     engine.add(fonte);
     engine.add(bomba);
     engine.add(tanque);
@@ -1107,8 +1107,8 @@ test('malha fechada passiva sem fronteira nao cria vazao artificial', () => {
     valvulaA.conectarSaida(valvulaB);
     valvulaB.conectarSaida(valvulaA);
 
-    const ida = new ConnectionModel({ sourceId: valvulaA.id, targetId: valvulaB.id });
-    const volta = new ConnectionModel({ sourceId: valvulaB.id, targetId: valvulaA.id });
+    const ida = new ConnectionModel({ comprimentoM: 100, sourceId: valvulaA.id, targetId: valvulaB.id });
+    const volta = new ConnectionModel({ comprimentoM: 100, sourceId: valvulaB.id, targetId: valvulaA.id });
 
     [valvulaA, valvulaB].forEach((component) => engine.add(component));
     [ida, volta].forEach((connection) => engine.addConnection(connection));
@@ -1575,12 +1575,12 @@ test('trocador de calor opera com duas correntes hidraulicamente independentes e
 
     // Conexões:
     // Corrente 1: T2 -> TC(in1), TC(out1) -> T3
-    const cStream1In = new ConnectionModel({ sourceId: t2.id, targetId: tc.id, targetEndpoint: { portId: 'in1', portType: 'in' } });
-    const cStream1Out = new ConnectionModel({ sourceId: tc.id, targetId: t3.id, sourceEndpoint: { portId: 'out1', portType: 'out' } });
+    const cStream1In = new ConnectionModel({ comprimentoM: 100, sourceId: t2.id, targetId: tc.id, targetEndpoint: { portId: 'in1', portType: 'in' } });
+    const cStream1Out = new ConnectionModel({ comprimentoM: 100, sourceId: tc.id, targetId: t3.id, sourceEndpoint: { portId: 'out1', portType: 'out' } });
 
     // Corrente 2: T1 -> TC(in2), TC(out2) -> D1
-    const cStream2In = new ConnectionModel({ sourceId: t1.id, targetId: tc.id, targetEndpoint: { portId: 'in2', portType: 'in' } });
-    const cStream2Out = new ConnectionModel({ sourceId: tc.id, targetId: d1.id, sourceEndpoint: { portId: 'out2', portType: 'out' } });
+    const cStream2In = new ConnectionModel({ comprimentoM: 100, sourceId: t1.id, targetId: tc.id, targetEndpoint: { portId: 'in2', portType: 'in' } });
+    const cStream2Out = new ConnectionModel({ comprimentoM: 100, sourceId: tc.id, targetId: d1.id, sourceEndpoint: { portId: 'out2', portType: 'out' } });
 
     [t1, t2, t3, tc, d1].forEach(c => engine.add(c));
     [cStream1In, cStream1Out, cStream2In, cStream2Out].forEach(c => engine.addConnection(c));

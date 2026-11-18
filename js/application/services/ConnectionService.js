@@ -1,7 +1,7 @@
 import { ConnectionModel } from '../../domain/models/ConnectionModel.js';
 import {
     DEFAULT_PIPE_DIAMETER_M,
-    DEFAULT_PIPE_EXTRA_LENGTH_M,
+    DEFAULT_PIPE_LENGTH_M,
     DEFAULT_PIPE_MINOR_LOSS,
     DEFAULT_PIPE_ROUGHNESS_MM
 } from '../../domain/units/HydraulicUnits.js';
@@ -56,7 +56,7 @@ export class ConnectionService {
             targetEndpoint: payload.targetEndpoint,
             diameterM: DEFAULT_PIPE_DIAMETER_M,
             roughnessMm: DEFAULT_PIPE_ROUGHNESS_MM,
-            extraLengthM: DEFAULT_PIPE_EXTRA_LENGTH_M,
+            comprimentoM: DEFAULT_PIPE_LENGTH_M,
             perdaLocalK: DEFAULT_PIPE_MINOR_LOSS
         });
     }

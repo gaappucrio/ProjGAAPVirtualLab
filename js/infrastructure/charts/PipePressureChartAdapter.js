@@ -28,8 +28,7 @@ function hasFiniteNumber(value) {
 }
 
 function getConnectionFallbackLengthM(connection) {
-    const extraLengthM = Math.max(0, finiteNumber(connection?.extraLengthM, 0));
-    return DEFAULT_PIPE_SCHEMATIC_LENGTH_M + extraLengthM;
+    return Math.max(0, finiteNumber(connection?.comprimentoM, 0));
 }
 
 function getPressureProfileEndpointBar(state = {}, overrides = {}) {

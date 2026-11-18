@@ -44,7 +44,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Cálculo de perdas por atrito e perdas locais.
 - Cálculo de velocidade média, Reynolds, regime de escoamento e fator de atrito.
 - Dinâmica transitória de conexões pela inércia física do fluido nos tubos ($I = \rho L/A$, Euler implícito).
-- Indicador de regime permanente na toolbar (`SteadyStateMonitor.js`).
+- Indicador de regime permanente na toolbar (`SteadyStateMonitor.js`). Com tanque aberto transbordando (ou vaso fechado aliviando pela PSV) o indicador vira o aviso "⚠ Perda de massa · T-01 transborda X" (laranja), porque as vazões estáveis escondiam que a entrada é maior que a saída; `getSteadyStateStatus().overflows` lista tag, tipo e vazão.
 - Conservação de massa em componentes passantes, como válvulas e bombas.
 - Suporte a múltiplas saídas e redes com dezenas de componentes.
 - O fluido que entra na rede é definido pela fonte de entrada, não por uma configuração global.
@@ -62,6 +62,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 - Cálculo de NPSHa, NPSH requerido, margem contra cavitação e condição de sucção.
 - Fator de cavitação reduzindo desempenho quando NPSHa é insuficiente, podendo zerar a capacidade efetiva quando a sucção é fisicamente inviável.
 - Estado `Cavitando` separado do aviso preventivo de risco quando o solver já reduziu o desempenho da bomba por NPSH insuficiente.
+- A carga cinética (v²/2g) entra no NPSHa de forma gradual nos primeiros 0,004 bar de folga estática sobre a pressão de vapor (`NPSH_VELOCITY_HEAD_RAMP_BAR`). Antes era um degrau em folga = 0: com a sucção no piso da pressão de vapor, ruído numérico fazia o NPSHa saltar de 0 ao v²/2g inteiro e o aviso alternava entre "Cavitando" e "Sucção no limite" a cada passo (800 trocas em 40 s no teste de regressão).
 - Detecção explícita de falta de líquido na sucção da bomba, separada do cálculo de cavitação por NPSH.
 - Monitoramento por gráfico de curva com ponto de operação.
 - Exportação JSON individual da bomba a partir do gráfico de monitoramento, contendo curvas de carga, potência, eficiência e NPSHr no formato de CurveSet lido pelo DWSIM.
@@ -124,8 +125,7 @@ O projeto roda em JavaScript puro com ES Modules, sem framework de UI, sem bundl
 ### 2.7 Conexões e Tubulações
 
 - Diâmetro interno do Cano como propriedade física direta: o valor editado sempre altera área, velocidade, Reynolds, perda distribuída e tempo de residência.
-- Comprimento hidráulico total.
-- Comprimento extra equivalente.
+- Comprimento do cano digitado pelo usuário na aba Avançado (`comprimentoM`). O padrão é 0 m: cano ideal (adimensional), sem atrito de comprimento, como uma corrente do DWSIM. A variável antiga de comprimento extra foi removida; arquivo antigo com `extraLengthM` abre com 1 m + extra. Efeito na planta padrão fonte→tanque aberto→dreno: antes 32 entrava e 24,71 saía (cano de 100 m estrangulava, 7,29 m³/h transbordavam); agora entrada = saída.
 - Rugosidade absoluta.
 - Perda local adicional.
 - Velocidade média.
@@ -636,7 +636,7 @@ Comportamento:
 - Quando instalada na saída de um tanque, a bomba pode produzir pressão de sucção manométrica negativa; isso é esperado em cenários de sucção e é limitado por NPSH/cavitação.
 - Em sucção com líquido disponível, mas NPSHa abaixo do NPSHr e fator de cavitação menor que 100%, a condição passa a indicar `Cavitando`, diferenciando falha física de um aviso preventivo.
 - Quando a bomba está acionada mas a sucção não possui líquido disponível, por exemplo com tanque vazio ou bocal de saída descoberto, a condição passa a indicar `Sem líquido suficiente` em vez de reaproveitar uma folga de NPSH antiga.
-- No diagnóstico de saturação do set point, quando há bomba a montante, o ajuste didático dimensiona a bomba. Quando não há bomba, o mesmo botão pode reduzir a pressão da fonte uma única vez para aproximar a vazão de entrada da capacidade física de saída no set point.
+- No diagnóstico de saturação do set point, quando há bomba a montante, o ajuste didático dimensiona a bomba. Quando não há bomba, o mesmo botão reduz a **vazão máxima** da fonte (e não a pressão) uma única vez, com folga de 2%, para aproximar a entrada da capacidade física de saída no set point. Antes o botão baixava a pressão, o que não reduzia a entrada: a fonte entrega o teto de vazão sempre que a pressão permite, e com cano ideal quase não há perda no caminho (medido: pressão de 1,5 para 0,45 bar, entrada continuou em 32 m³/h).
 
 ### 8.4 `ValvulaLogica`
 
@@ -713,13 +713,13 @@ Propriedades principais:
 - Endpoint de destino.
 - Diâmetro.
 - Rugosidade.
-- Comprimento extra.
+- Comprimento do cano.
 - Perda local.
 - Vazão transitória.
 - Vazão resolvida.
 - Velocidade desejada para dimensionamento.
 - Vazão de referência para dimensionamento.
-- Comprimento hidráulico esquemático base de 1 m quando a altura relativa está desligada, sem usar distância visual para perda de carga.
+- Comprimento hidráulico = o `comprimentoM` digitado (padrão 0 m), sem usar distância visual para perda de carga; com altura relativa e comprimento > 0, ao menos o desnível.
 
 As referências visuais ficam em registries e renderizadores de infraestrutura, não no domínio.
 

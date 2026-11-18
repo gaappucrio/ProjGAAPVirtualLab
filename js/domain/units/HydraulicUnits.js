@@ -13,7 +13,9 @@ const PADROES_HIDRAULICOS = Object.freeze({
     fatorAtritoPadrao: 0.028,
     rugosidadePadraoMm: 0.045,
     comprimentoRetoEsquematicoPadraoM: 1,
-    comprimentoExtraPadraoM: 99,
+    // Cano novo é ideal (adimensional, 0 m, sem atrito de comprimento), como as correntes do DWSIM;
+    // o usuário digita o comprimento na aba Avançado do cano.
+    comprimentoPadraoM: 0,
     perdaLocalPadraoK: 0,
     perdaEntradaPadraoK: 0,
     velocidadeProjetoPadraoMps: 2.0,
@@ -34,7 +36,7 @@ export const DEFAULT_PIPE_DIAMETER_M = PADROES_HIDRAULICOS.diametroPadraoTuboM;
 export const DEFAULT_PIPE_FRICTION = PADROES_HIDRAULICOS.fatorAtritoPadrao;
 export const DEFAULT_PIPE_ROUGHNESS_MM = PADROES_HIDRAULICOS.rugosidadePadraoMm;
 export const DEFAULT_PIPE_SCHEMATIC_LENGTH_M = PADROES_HIDRAULICOS.comprimentoRetoEsquematicoPadraoM;
-export const DEFAULT_PIPE_EXTRA_LENGTH_M = PADROES_HIDRAULICOS.comprimentoExtraPadraoM;
+export const DEFAULT_PIPE_LENGTH_M = PADROES_HIDRAULICOS.comprimentoPadraoM;
 export const DEFAULT_PIPE_MINOR_LOSS = PADROES_HIDRAULICOS.perdaLocalPadraoK;
 export const DEFAULT_ENTRY_LOSS = PADROES_HIDRAULICOS.perdaEntradaPadraoK;
 export const DEFAULT_DESIGN_VELOCITY_MPS = PADROES_HIDRAULICOS.velocidadeProjetoPadraoMps;

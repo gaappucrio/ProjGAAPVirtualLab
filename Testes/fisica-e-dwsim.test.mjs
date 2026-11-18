@@ -23,7 +23,7 @@ import { resolvePipePressureProfile } from '../js/presentation/monitoring/PipePr
 import { parseDwsimXml, readDwsimFile, translateDwsimToWorkspace } from '../js/presentation/import/DwsimImporter.js';
 
 const RHO_AGUA = 997;
-const TUBO_DESPREZIVEL = Object.freeze({ extraLengthM: 0, diameterM: 0.3 });
+const TUBO_DESPREZIVEL = Object.freeze({ comprimentoM: 1, diameterM: 0.3 });
 
 function approx(actual, expected, tolerance, label) {
     assert.ok(
@@ -168,7 +168,7 @@ test('NPSHa segue o Hydraulic Institute: carga estatica absoluta + v^2/2g na vel
     bomba.acionamentoEfetivo = 100;
     [fonte, bomba, valvula, dreno].forEach((c) => engine.add(c));
     const diametroSucaoM = 0.05; // diferente do bocal fixo de 0,08 m da bomba
-    conectar(engine, fonte, bomba, { extraLengthM: 0, diameterM: diametroSucaoM });
+    conectar(engine, fonte, bomba, { comprimentoM: 1, diameterM: diametroSucaoM });
     conectar(engine, bomba, valvula, TUBO_DESPREZIVEL);
     conectar(engine, valvula, dreno, TUBO_DESPREZIVEL);
 
@@ -235,7 +235,7 @@ test('inercia do fluido: tubo longo acelera conforme dQ/dt = A/(rho L) * deltaP'
     fonte.pressaoFonteBar = 1.0;
     fonte.vazaoMaxima = 500;
     [fonte, dreno].forEach((c) => engine.add(c));
-    const tubo = conectar(engine, fonte, dreno, { extraLengthM: 499, diameterM: 0.08 });
+    const tubo = conectar(engine, fonte, dreno, { comprimentoM: 500, diameterM: 0.08 });
 
     passo(engine, 0.1);
     const primeiraVazao = engine.getConnectionState(tubo).flowLps;
@@ -609,7 +609,7 @@ test('tanque ideal (sem coluna nem perdas nos bocais) e passante como o vaso do 
 // Bernoulli com atrito feito à mão, independente do solver: Colebrook (não o Swamee-Jain do código)
 // e g = 9,80665. A altura relativa converte 80 px do desenho em 1 m; y cresce para baixo.
 const G_PADRAO = 9.80665;
-const CANO_BERNOULLI = Object.freeze({ diameterM: 0.05, roughnessMm: 0.045, extraLengthM: 0, perdaLocalK: 0 });
+const CANO_BERNOULLI = Object.freeze({ diameterM: 0.05, roughnessMm: 0.045, comprimentoM: 5, perdaLocalK: 0 });
 
 function fatorAtritoColebrook(reynolds, rugosidadeRelativa) {
     let f = 0.02;
@@ -645,17 +645,17 @@ function criarEngineAlturaRelativa() {
 test('Bernoulli com atrito no cano inclinado: descida, subida e cano sem vazao batem com a conta a mao', () => {
     // Fonte em (0, 0) e dreno em (240, dy): Δz = dy/80 e L = √(240² + dy²)/80.
     // Descarga livre (K = 0 no dreno): P_fonte + ρgΔz = f·(L/D)·ρv²/2.
-    // No último caso entram K local e comprimento extra no cano (L = desenho + extra, Δz só do desenho)
+    // No 4º caso entram K local e outro comprimento no cano (L = max(comprimento digitado, |Δz|))
     // e K no bocal do dreno, aplicado na área do bocal (Ø 0,08 m), não na do cano.
     const casos = [
         { nome: 'descida de 2 m', pressaoBar: 0.3, dyPx: 160 },
         { nome: 'subida de 2 m', pressaoBar: 0.5, dyPx: -160 },
         { nome: 'subida maior que a pressao da fonte', pressaoBar: 0.1, dyPx: -160 },
-        { nome: 'descida com K local, comprimento extra e K no dreno', pressaoBar: 0.3, dyPx: 160, perdaLocalK: 2, extraLengthM: 5, kDreno: 1 },
+        { nome: 'descida com K local, comprimento de 10 m e K no dreno', pressaoBar: 0.3, dyPx: 160, perdaLocalK: 2, comprimentoM: 10, kDreno: 1 },
         { nome: 'K no dreno com a geometria do bocal (Ø 0,08 m)', pressaoBar: 0.3, dyPx: 160, kDreno: 1, geometriaBocal: true }
     ];
 
-    casos.forEach(({ nome, pressaoBar, dyPx, perdaLocalK = 0, extraLengthM = 0, kDreno = 0, geometriaBocal = false }) => {
+    casos.forEach(({ nome, pressaoBar, dyPx, perdaLocalK = 0, comprimentoM = CANO_BERNOULLI.comprimentoM, kDreno = 0, geometriaBocal = false }) => {
         const engine = criarEngineAlturaRelativa();
         const fonte = new FonteLogica(`F-bern-${nome}`, 'F', 0, 0);
         const dreno = new DrenoLogico(`D-bern-${nome}`, 'D', 240, dyPx);
@@ -665,14 +665,14 @@ test('Bernoulli com atrito no cano inclinado: descida, subida e cano sem vazao b
         dreno.diametroConexaoM = 0.08;
         dreno.usarGeometriaBocal = geometriaBocal;
         [fonte, dreno].forEach((c) => engine.add(c));
-        const cano = conectar(engine, fonte, dreno, { ...CANO_BERNOULLI, perdaLocalK, extraLengthM });
+        const cano = conectar(engine, fonte, dreno, { ...CANO_BERNOULLI, perdaLocalK, comprimentoM });
 
         for (let i = 0; i < 600; i += 1) engine.tickPipeline.advance(0.1);
 
         const fluido = engine.fluidoOperante;
         const deltaZ = dyPx / 80;
-        // Com altura relativa, o cano reto tem o desnível (mínimo 1 m); o dx de 240 px é só layout.
-        const comprimentoM = Math.max(1, Math.abs(dyPx) / 80) + extraLengthM;
+        // Com altura relativa, o cano tem ao menos o desnível; o dx de 240 px é só layout.
+        const comprimentoHidraulicoM = Math.max(comprimentoM, Math.abs(dyPx) / 80);
         const area = (Math.PI * CANO_BERNOULLI.diameterM ** 2) / 4;
         // Padrão (DWSIM): K do dreno na velocidade do cano. Com a geometria do bocal: K na velocidade
         // do bocal + expansão de Borda-Carnot do cano Ø 0,05 para o bocal Ø 0,08, (1 − A_cano/A_bocal)²·v_cano².
@@ -683,7 +683,7 @@ test('Bernoulli com atrito no cano inclinado: descida, subida e cano sem vazao b
         const esperadoLps = vazaoBernoulliLps(
             (pressaoBar * 1e5) + (fluido.densidade * G_PADRAO * deltaZ),
             (q, f) => (fluido.densidade / 2) * (
-                ((perdaLocalK + (f * (comprimentoM / CANO_BERNOULLI.diameterM))) * ((q / area) ** 2))
+                ((perdaLocalK + (f * (comprimentoHidraulicoM / CANO_BERNOULLI.diameterM))) * ((q / area) ** 2))
                 + termoDreno(q)
             ),
             fluido
@@ -691,7 +691,7 @@ test('Bernoulli com atrito no cano inclinado: descida, subida e cano sem vazao b
         const estado = engine.getConnectionState(cano);
 
         approx(estado.headGainM, deltaZ, 1e-9, `${nome}: desnivel lido do desenho`);
-        approx(estado.lengthM, comprimentoM, 1e-9, `${nome}: comprimento lido do desenho`);
+        approx(estado.lengthM, comprimentoHidraulicoM, 1e-9, `${nome}: comprimento do cano (ou o desnivel, se maior)`);
         if (esperadoLps === 0) {
             assert.equal(estado.flowLps, 0, `${nome}: a fonte nao vence a coluna e o cano fica parado`);
         } else {
@@ -783,7 +783,7 @@ test('Torricelli com atrito: tanque aberto com nivel fixo drenando por cano 2,1 
         const fluido = engine.fluidoOperante;
         const nivelM = 0.6 * 2.4;
         const deltaZ = (160 + (0.1 * 80)) / 80;
-        const comprimentoM = Math.max(1, 168 / 80); // só o desnível; o dx de 240 px é layout
+        const comprimentoM = Math.max(CANO_BERNOULLI.comprimentoM, 168 / 80); // o dx de 240 px é layout
         const areaCano = (Math.PI * CANO_BERNOULLI.diameterM ** 2) / 4;
         const areaBocal = (Math.PI * 0.08 ** 2) / 4;
         const cargaM = (considerarColuna ? nivelM - 0.1 : 0) + deltaZ;

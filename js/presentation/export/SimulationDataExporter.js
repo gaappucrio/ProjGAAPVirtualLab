@@ -692,7 +692,7 @@ function buildConnectionRow(engine, connection, index) {
         'ID de destino': connection.targetId || '',
         'Diâmetro interno (m)': numberValue(connection.diameterM, 5),
         'Rugosidade absoluta (mm)': numberValue(connection.roughnessMm, 5),
-        'Comprimento extra (m)': numberValue(connection.extraLengthM, 5),
+        'Comprimento do cano (m)': numberValue(connection.comprimentoM, 5),
         'Perda local K': numberValue(connection.perdaLocalK, 5),
         'Velocidade desejada (m/s)': numberValue(connection.designVelocityMps, 5),
         'Vazão de referência (L/s)': numberValue(connection.designFlowLps, 5),

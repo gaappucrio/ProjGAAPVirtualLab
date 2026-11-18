@@ -150,7 +150,7 @@ Onde:
 *   $\varepsilon$ é a rugosidade absoluta da parede interna da tubulação ($\text{m}$, informada em $\text{mm}$ nas propriedades da conexão, padrão $0{,}045\text{ mm}$ para aço comercial).
 *   $D$ é o diâmetro interno da tubulação ($\text{m}$, padrão $0{,}05\text{ m} = 50\text{ mm}$).
 *   $A = \frac{\pi \cdot D^2}{4}$ é a área de seção transversal interna de escoamento ($\text{m}^2$).
-*   $L_{\text{total}} = L_{\text{esquemático}} + L_{\text{extra}}$ é o comprimento físico total da linha ($\text{m}$), somando o trecho esquemático (1 m, ou o desnível vertical com altura relativa) ao comprimento extra de projeto configurado pelo usuário.
+*   $L$ é o comprimento do cano ($\text{m}$), digitado pelo usuário na aba Avançado (`comprimentoM`). O padrão é $0\text{ m}$: cano ideal, sem perda de carga por comprimento, como uma corrente do DWSIM.
 
 ---
 
@@ -164,7 +164,7 @@ Representada como um coeficiente de perda equivalente adimensional:
 
 $$K_{\text{distribuído}} = f \cdot \frac{L_{\text{total}}}{D}$$
 
-Onde $L_{\text{total}} = L_{\text{esquemático}} + L_{\text{extra}}$. Em modo sem altura relativa, $L_{\text{esquemático}}$ é fixado didaticamente em $1\text{ m}$. Com altura relativa, $L_{\text{esquemático}} = \max(1\text{ m}, |\Delta z|)$, com $\Delta z = \Delta y / 80$ (80 px = 1 m): só o desnível vertical conta, garantindo $L \ge |\Delta z|$. A posição horizontal ($x$) é puramente esquemática em qualquer modo, como a posição no fluxograma do DWSIM; distâncias horizontais de projeto entram em $L_{\text{extra}}$ (`ConnectionGeometryCalculator.calculateConnectionGeometry`).
+Onde $L$ é o `comprimentoM` digitado (padrão $0\text{ m}$). Sem altura relativa, $L$ é exatamente o digitado. Com altura relativa e $L > 0$, $L = \max(L_{\text{digitado}}, |\Delta z|)$, com $\Delta z = \Delta y / 80$ (80 px = 1 m), garantindo $L \ge |\Delta z|$; com $L = 0$ o desnível continua valendo só como carga estática. A posição horizontal ($x$) é puramente esquemática em qualquer modo, como a posição no fluxograma do DWSIM (`ConnectionGeometryCalculator.calculateConnectionGeometry`). Arquivos antigos com `extraLengthM` abrem com $L = 1 + L_{\text{extra}}$.
 
 #### Perda Localizada
 Calculada a partir do coeficiente local adimensional de perda da conexão $K_{\text{local}}$ (configurado nas propriedades avançadas do cano):

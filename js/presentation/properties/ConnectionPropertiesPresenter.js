@@ -129,8 +129,8 @@ export function renderConnectionProperties({
             <input type="text" id="disp-pipe-target-flow" title="${TOOLTIPS.conexao.vazaoAlvo}" value="${displayUnitValue('flow', state.targetFlowLps, 2)}" disabled>
         </div>
         <div class="prop-group">
-            <label title="${TOOLTIPS.conexao.comprimentoExtra}">Comprimento Extra (${getUnitSymbol('length')})</label>
-            <input type="number" id="input-pipe-extra-length" title="${TOOLTIPS.conexao.comprimentoExtra}" value="${displayEditableUnitValue('length', connection.extraLengthM || 0, 4)}" step="${displayStep('length', 0.1)}" min="${displayBound('length', 0)}" max="${displayBound('length', 500)}">
+            <label title="${TOOLTIPS.conexao.comprimento}">Comprimento (${getUnitSymbol('length')})</label>
+            <input type="number" id="input-pipe-length" title="${TOOLTIPS.conexao.comprimento}" value="${displayEditableUnitValue('length', connection.comprimentoM || 0, 4)}" step="${displayStep('length', 0.1)}" min="${displayBound('length', 0)}" max="${displayBound('length', 500)}">
         </div>
         <div class="prop-group">
             <label title="${TOOLTIPS.conexao.rugosidade}">Rugosidade Absoluta (${getUnitSymbol('length')})</label>
@@ -214,12 +214,12 @@ export function renderConnectionProperties({
         );
     });
 
-    bind('input-pipe-extra-length', 'change', (event) => {
+    bind('input-pipe-length', 'change', (event) => {
         validatePipeInput(
             event.target,
             (value, name) => InputValidator.validateNumber(lengthInputValue(value), 0, 500, name),
-            'Comprimento Extra',
-            (value) => { connection.extraLengthM = value; }
+            'Comprimento',
+            (value) => { connection.comprimentoM = value; }
         );
     });
 

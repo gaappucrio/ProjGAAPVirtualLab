@@ -39,6 +39,10 @@ const STATUS_FLOW_TOLERANCE_LPS = 1e-6;
 const STATUS_PRESSURE_TOLERANCE_BAR = 1e-7;
 const INITIAL_GUESS_VELOCITY_MPS = 1;
 const CAVITATION_TOLERANCE = 1e-3;
+// A carga cinética só entra no NPSHa com folga estática sobre a pressão de vapor; a entrada é gradual nesta
+// faixa (bar). Um degrau em staticMargin = 0 fazia o NPSHa saltar de 0 ao v²/2g inteiro por ruído numérico
+// quando a sucção fica no piso da pressão de vapor, e o aviso da bomba alternava a cada passo.
+const NPSH_VELOCITY_HEAD_RAMP_BAR = 0.004;
 const CAVITATION_LOCAL_BRACKET = 0.05;
 // Coeficiente de perda na entrada de um tanque: a energia cinética do jato é dissipada no reservatório.
 const TANK_INLET_EXIT_LOSS_K = 1;
@@ -628,7 +632,8 @@ export class GlobalHydraulicSolver {
         // A pressão estática não pode cair abaixo da pressão de vapor: abaixo dela o líquido vaporiza
         // na própria linha de sucção (separação de coluna) e não sobra NPSH algum, mesmo com carga cinética.
         const staticMarginBar = atmosphericBar + suctionPressureBar - vaporBar;
-        const velocityHeadM = staticMarginBar > 0 ? (velocityMps * velocityMps) / (2 * GRAVITY) : 0;
+        const velocityHeadWeight = Math.min(1, Math.max(0, staticMarginBar / NPSH_VELOCITY_HEAD_RAMP_BAR));
+        const velocityHeadM = velocityHeadWeight * ((velocityMps * velocityMps) / (2 * GRAVITY));
         const npshAvailableM = staticMarginBar > 0
             ? ((staticMarginBar * BAR_TO_PA) / (link.density * GRAVITY)) + velocityHeadM
             : 0;

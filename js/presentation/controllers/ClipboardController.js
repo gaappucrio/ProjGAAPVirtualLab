@@ -167,7 +167,7 @@ function createConnectionClipboardSnapshot(connection) {
         targetEndpoint: cloneSnapshotValue(connection.targetEndpoint),
         diameterM: connection.diameterM,
         roughnessMm: connection.roughnessMm,
-        extraLengthM: connection.extraLengthM,
+        comprimentoM: connection.comprimentoM,
         perdaLocalK: connection.perdaLocalK,
         designVelocityMps: connection.designVelocityMps,
         designFlowLps: connection.designFlowLps
