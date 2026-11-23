@@ -312,6 +312,9 @@ test('trocador de calor com válvulas a jusante mantém independência hidráuli
 
         const fonte1 = new FonteLogica('F-01', 'Fonte-1', 0, 0);
         fonte1.pressaoFonteBar = 2.0;
+        // Teto folgado: com o padrão (8,89 L/s) a vazão ficaria no teto mesmo com a válvula a 50%, e a
+        // comparação aberta x 50% mediria só ruído numérico.
+        fonte1.vazaoMaxima = 100;
 
         const tc = new TrocadorCalorLogico('TC-01', 'TC-01', 100, 0);
         tc.uaWPorK = 3000;
@@ -1115,7 +1118,9 @@ test('importacao de planta teste: teste planta.json (6 ilhas / cenarios integrad
         const target = engine.getComponentById(conn.targetId);
         const source = engine.getComponentById(conn.sourceId);
         if (target instanceof DrenoLogico) {
-            approx(state.outletPressureBar, target.pressaoSaidaBar, 1e-9, `Pressao de chegada em ${target.tag}`);
+            // Dreno monitor (fonte no teto, sem tanque no caminho): a pressão de chegada é resultado, não a fixa.
+            if (!target.pressaoMonitorada) approx(state.outletPressureBar, target.pressaoSaidaBar, 1e-9, `Pressao de chegada em ${target.tag}`);
+            else approx(state.outletPressureBar, target.pressaoEntradaAtualBar, 1e-9, `Pressao de chegada em ${target.tag} (monitor)`);
         }
         if (source instanceof TanqueLogico) {
             // Euler explícito (como no DWSIM dinâmico): a vazão do passo usa a coluna do início do passo,
@@ -1125,13 +1130,18 @@ test('importacao de planta teste: teste planta.json (6 ilhas / cenarios integrad
         }
     });
 
-    // Ilha 1: fonte limitada a 8,89 L/s alimentando uma bomba de 45 L/s sem restrição a jusante.
-    // A bomba "puxa" mais do que a fonte entrega: a sucção cai e ela opera cavitando.
+    // Ilha 1: fonte limitada a 8,89 L/s (0,5 barg) alimentando uma bomba de 45 L/s, dreno em 0.
+    // O teto da fonte está ativo e não há tanque: o dreno vira monitor (como o DWSIM). A fonte mantém a
+    // pressão, a bomba entrega a carga da curva em 8,89 L/s e a pressão do dreno é resultado.
     const p1 = byTag('P-01');
+    const dreno1 = byTag('Saída-01');
     approx(p1.fluxoReal, 32 / 3.6, 1e-3, 'P-01 limitada pela vazao maxima da fonte');
-    assert.ok(p1.pressaoSucaoAtualBar < -0.9, `Succao de P-01 em vacuo: ${p1.pressaoSucaoAtualBar}`);
-    assert.ok(p1.fatorCavitacaoAtual < 1, `P-01 deve cavitar: ${p1.fatorCavitacaoAtual}`);
-    assert.equal(p1.getCondicaoSucaoAtual(), 'Cavitando');
+    approx(p1.pressaoSucaoAtualBar, 0.5, 0.01, 'P-01: a fonte mantém a pressão na sucção (só a perda do cano)');
+    assert.equal(p1.fatorCavitacaoAtual, 1, 'P-01 não cavita: a sucção não é puxada abaixo da fonte');
+    assert.equal(p1.getCondicaoSucaoAtual(), 'Com folga');
+    assert.equal(dreno1.pressaoMonitorada, true, 'dreno em modo monitor');
+    assert.equal(dreno1.pressaoSaidaBar, 0, 'o valor informado do dreno não é sobrescrito');
+    approx(dreno1.pressaoEntradaAtualBar, p1.pressaoDescargaAtualBar, 0.01, 'pressão do dreno = descarga da bomba menos a perda do cano');
     approx(p1.pressaoDescargaAtualBar - p1.pressaoSucaoAtualBar, p1.cargaGeradaBar, 1e-6, 'Ganho de P-01 igual a carga entregue');
 
     // Ilha 2: tanque aberto com nível baixo enche (entrada limitada pela fonte, saída por Torricelli).
@@ -1147,13 +1157,24 @@ test('importacao de planta teste: teste planta.json (6 ilhas / cenarios integrad
     approx(t1c.vazaoTransbordoLps, t1c.lastQin - t1c.lastQout, 1e-6, 'Massa conservada com transbordo');
     approx(v1.fluxoReal, t1c.lastQout, 1e-9, 'V-01 escoa a saida do tanque');
 
-    // Ilhas 4 e 6: bombas alimentadas por fonte limitada empurrando para tanque aberto também
-    // ficam limitadas pela cavitação, com a sucção estática na pressão de vapor.
+    // Ilhas 4 e 6: bombas alimentadas por fonte limitada (0,5 barg, 27,8 L/s) empurrando para tanque
+    // aberto. Com o teto ativo, a entrada do tanque aberto vira monitor como o dreno: a fonte mantém a
+    // pressão, a bomba entrega a carga da curva no teto e a pressão que chega ao tanque é resultado
+    // (o excesso sobre a coluna de líquido se dissipa no jato de entrada). Antes a sucção ia à pressão
+    // de vapor e as bombas cavitavam.
     ['P-02', 'P-05'].forEach((tag) => {
         const pump = byTag(tag);
+        const saida = engine.conexoes.find((conn) => conn.sourceId === pump.id);
+        const tanque = engine.getComponentById(saida.targetId);
         approx(pump.fluxoReal, 100 / 3.6, 1e-3, `${tag} limitada pela vazao maxima da fonte`);
-        approx(pump.pressaoSucaoAtualBar + pressaoAtmosfericaBar, pressaoVaporAbsBar, 0.005, `${tag} succao na pressao de vapor`);
-        assert.equal(pump.getCondicaoSucaoAtual(), 'Cavitando');
+        approx(pump.pressaoSucaoAtualBar, 0.5, 0.05, `${tag}: a fonte mantem a pressao na succao (so a perda do cano)`);
+        assert.equal(pump.fatorCavitacaoAtual, 1, `${tag} nao cavita`);
+        assert.equal(pump.getCondicaoSucaoAtual(), 'Com folga');
+        assert.equal(tanque.entradaMonitorada, true, `${tanque.tag}: entrada em modo monitor`);
+        assert.ok(
+            engine.getConnectionState(saida).outletPressureBar > tanque.pressaoEntradaAtualBar,
+            `${tag}: chega ao tanque acima da coluna de liquido (excesso dissipado no jato)`
+        );
     });
 
     // Ilha 5: válvula igual porcentagem a 50%: vazão dada pelo Cv efetivo com a pressão da fonte
@@ -1323,6 +1344,17 @@ test('trocador operado com apenas uma corrente adota modo contracorrente por pad
     const ptOut2 = datasets.operationPoints.find((pt) => pt.pointRole === 'out2');
     assert.equal(ptIn2?.x, 100, 'Ponto de entrada da Corrente 2 deve estar em x=100% no modo contracorrente');
     assert.equal(ptOut2?.x, 0, 'Ponto de saída da Corrente 2 deve estar em x=0% no modo contracorrente');
+});
+
+test('traduções em inglês do modo da pressão do dreno', () => {
+    try {
+        setLanguage('en');
+        assert.equal(translateLiteral('Calculada (monitor)'), 'Calculated (monitor)');
+        assert.equal(translateLiteral('Imposta'), 'Imposed');
+        assert.equal(translateLiteral('Modo da pressão'), 'Pressure mode');
+    } finally {
+        setLanguage('pt');
+    }
 });
 
 test('traduções em inglês para o trocador de calor e seletor estão completas', () => {
@@ -1847,6 +1879,25 @@ test('painel da fonte: preset não trava ρ/μ/Pv e o domínio não recebe o tex
         setPresentationEngine(null);
         global.document = prevDoc;
     }
+});
+
+test('painel do dreno mostra o modo da pressão e mantém a contrapressão editável em modo monitor', async () => {
+    const { setPresentationEngine } = await import('../js/presentation/context/PresentationEngineContext.js');
+    const { SINK_PROPERTIES_PRESENTER } = await import('../js/presentation/properties/component/BoundaryComponentPropertiesPresenter.js');
+    const engine = new SistemaSimulacao();
+    setPresentationEngine(engine);
+    const dreno = new DrenoLogico('D-modo', 'Dreno modo', 0, 0);
+    engine.add(dreno);
+
+    const campo = (html, id) => html.match(new RegExp(`<input[^>]*id="${id}"[^>]*>`))?.[0] || '';
+    let html = SINK_PROPERTIES_PRESENTER.render(dreno);
+    assert.match(campo(html, 'disp-modo-pressao-dreno'), /value="Imposta"/);
+    assert.doesNotMatch(campo(html, 'input-pressao-dreno'), /disabled/, 'pressão imposta: campo editável');
+
+    dreno.pressaoMonitorada = true;
+    html = SINK_PROPERTIES_PRESENTER.render(dreno);
+    assert.match(campo(html, 'disp-modo-pressao-dreno'), /value="Calculada \(monitor\)"/);
+    assert.doesNotMatch(campo(html, 'input-pressao-dreno'), /disabled/, 'monitor: o valor digitado é o limite de volta à pressão imposta');
 });
 
 test('fonte e dreno aceitam pressão manométrica negativa (vácuo) até o zero absoluto', async () => {

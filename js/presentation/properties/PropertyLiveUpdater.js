@@ -457,6 +457,8 @@ export function updatePropertyPanelValues({
         const pressureProfile = resolveSinkPressureProfile({ engine, sink: component });
         const drenoFluid = component.getFluidoEntradaMisturado?.(engine.fluidoOperante);
         setFieldValue('disp-vazao-dreno', component.vazaoRecebidaLps, 'flow', 2);
+        const monitorando = component.pressaoMonitorada === true;
+        setValue('disp-modo-pressao-dreno', translateLiteral(monitorando ? 'Calculada (monitor)' : 'Imposta'));
         setFieldValue('disp-pressao-final-dreno', pressureProfile.finalNetworkPressureBar, 'pressure', 2);
         setFieldValue('disp-deltap-entrada-dreno', pressureProfile.entryPressureDropBar, 'pressureDiff', 2);
         setValue('disp-dreno-fluid', drenoFluid?.nome || '-');

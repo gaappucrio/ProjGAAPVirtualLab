@@ -779,7 +779,7 @@ test('solver distribui fluxo em bifurcação simples', () => {
     assert.ok(fonte.fluxoReal >= drenoA.vazaoRecebidaLps + drenoB.vazaoRecebidaLps - 1e-9, 'A fonte deve suprir a soma dos ramos');
 });
 
-test('fonte limitada por vazao nao sustenta pressao nominal no dreno', () => {
+test('fonte no teto de vazao mantem a pressao e o dreno monitor mostra a pressao resultante', () => {
     const engine = createEngine();
     const fonte = new FonteLogica('F-limited', 'F-limited', 0, 0);
     const dreno = new DrenoLogico('D-limited', 'D-limited', 160, 0);
@@ -799,22 +799,268 @@ test('fonte limitada por vazao nao sustenta pressao nominal no dreno', () => {
     const state = engine.getConnectionState(connection);
 
     assert.ok(Math.abs(state.flowLps - fonte.vazaoMaxima) < 1e-6, `Fonte deve respeitar limite de vazao: ${state.flowLps}`);
+    // Antes o dreno em 0 mandava: a fonte soltava a pressão e todos os pontos caíam a ~0.
+    assert.ok(Math.abs(state.sourcePressureBar - fonte.pressaoFonteBar) < 1e-6, `Fonte mantem a pressao no teto: ${state.sourcePressureBar}`);
+    assert.equal(dreno.pressaoMonitorada, true, 'dreno em modo monitor');
+    assert.equal(dreno.pressaoSaidaBar, 0, 'o valor informado do dreno nao e sobrescrito');
     assert.ok(
-        state.outletPressureBar <= dreno.pressaoSaidaBar + 1e-9,
-        `Dreno de pressao fixa nao deve receber pressao nominal da fonte limitada: ${state.outletPressureBar}`
-    );
-    assert.ok(
-        Math.abs(dreno.pressaoEntradaAtualBar - dreno.pressaoSaidaBar) < 1e-9,
-        `Pressao final do dreno deve preservar zero como valor valido: ${dreno.pressaoEntradaAtualBar}`
-    );
-    assert.ok(
-        state.sourcePressureBar < fonte.pressaoFonteBar * 0.01,
-        `Pressao efetiva deve cair quando a fonte satura em vazao: ${state.sourcePressureBar}`
+        Math.abs(dreno.pressaoEntradaAtualBar - (fonte.pressaoFonteBar - state.totalLossBar)) < 1e-6,
+        `Pressao do dreno = pressao da fonte menos a perda do cano: ${dreno.pressaoEntradaAtualBar}`
     );
     assert.ok(
         Math.abs(state.deltaPBar + state.targetLossBar - state.totalLossBar) < 1e-9,
         'Perdas registradas devem ser consistentes com a vazao efetiva'
     );
+});
+
+test('dreno volta a pressao fixa quando a fonte nao esta no teto', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-free', 'F-free', 0, 0);
+    const dreno = new DrenoLogico('D-free', 'D-free', 160, 0);
+    fonte.pressaoFonteBar = 1;
+    fonte.vazaoMaxima = 500;
+    dreno.pressaoSaidaBar = 0;
+    fonte.conectarSaida(dreno);
+    const connection = new ConnectionModel({ sourceId: fonte.id, targetId: dreno.id, extraLengthM: 0 });
+    engine.add(fonte);
+    engine.add(dreno);
+    engine.addConnection(connection);
+
+    runPhysicsSteps(engine, 60, 0.1);
+
+    const state = engine.getConnectionState(connection);
+    assert.ok(state.flowLps > 0 && state.flowLps < fonte.vazaoMaxima, `vazao natural abaixo do teto: ${state.flowLps}`);
+    assert.equal(dreno.pressaoMonitorada, false);
+    assert.ok(Math.abs(state.outletPressureBar - dreno.pressaoSaidaBar) < 1e-9, 'chegada na pressao fixa do dreno');
+});
+
+function aproximadamente(atual, esperado, tolerancia, mensagem) {
+    assert.ok(Math.abs(atual - esperado) <= tolerancia, `${mensagem}: esperado ${esperado} +/- ${tolerancia}, recebido ${atual}`);
+}
+
+function montarFonteLimitadaAteDreno({ comprimentoM = 0, valvula = false, bomba = false, pressaoDrenoBar = 0 } = {}) {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-mon', 'F-mon', 0, 0);
+    const dreno = new DrenoLogico('D-mon', 'D-mon', 400, 0);
+    fonte.pressaoFonteBar = 10;
+    fonte.vazaoMaxima = 1;
+    dreno.pressaoSaidaBar = pressaoDrenoBar;
+    const meio = [];
+    if (valvula) meio.push(new ValvulaLogica('V-mon', 'V-mon', 150, 0));
+    if (bomba) {
+        const pump = new BombaLogica('B-mon', 'B-mon', 150, 0);
+        pump.grauAcionamento = 100;
+        pump.acionamentoEfetivo = 100;
+        meio.push(pump);
+    }
+    const cadeia = [fonte, ...meio, dreno];
+    cadeia.forEach((component) => engine.add(component));
+    const connections = [];
+    for (let i = 0; i < cadeia.length - 1; i += 1) {
+        const connection = new ConnectionModel({ comprimentoM, sourceId: cadeia[i].id, targetId: cadeia[i + 1].id });
+        connections.push(connection);
+        engine.addConnection(connection);
+    }
+    return { engine, fonte, dreno, meio, connections };
+}
+
+test('dreno monitor: valvula fechada e reaberta cai na pressao fixa e volta, sem perder massa', () => {
+    const { engine, dreno, meio, connections } = montarFonteLimitadaAteDreno({ valvula: true });
+    const [valvula] = meio;
+    const codigosProibidos = ['global_singular_matrix', 'global_status_not_settled', 'global_not_converged'];
+    const conferirSolver = (etapa) => {
+        const metrics = engine.getSolverMetrics();
+        assert.ok(metrics.lastError < 1e-6, `${etapa}: balanco de massa fecha (${metrics.lastError})`);
+        codigosProibidos.forEach((codigo) => {
+            assert.ok(!metrics.lastDiagnostics.some((diagnostic) => diagnostic.code === codigo), `${etapa}: sem ${codigo}`);
+        });
+    };
+    const abrir = (percentual) => {
+        valvula.setAbertura(percentual);
+        valvula.aberturaEfetiva = percentual;
+    };
+
+    abrir(100);
+    runPhysicsSteps(engine, 20, 0.1);
+    assert.equal(dreno.pressaoMonitorada, true, 'aberta e no teto: monitor');
+    aproximadamente(engine.getConnectionState(connections[1]).flowLps, 1, 1e-6, 'vazao no teto');
+    conferirSolver('aberta');
+
+    abrir(0);
+    runPhysicsSteps(engine, 20, 0.1);
+    assert.equal(dreno.pressaoMonitorada, false, 'fechada: sem caminho, volta a pressao fixa');
+    assert.equal(engine.getConnectionState(connections[1]).flowLps, 0);
+    conferirSolver('fechada');
+
+    abrir(100);
+    runPhysicsSteps(engine, 20, 0.1);
+    assert.equal(dreno.pressaoMonitorada, true, 'reaberta: monitor de novo');
+    aproximadamente(engine.getConnectionState(connections[1]).flowLps, 1, 1e-6, 'vazao volta ao teto');
+    conferirSolver('reaberta');
+});
+
+test('dreno monitor: NPSHa da bomba nao depende da pressao informada no dreno', () => {
+    const resultados = [0, 3].map((pressaoDrenoBar) => {
+        const { engine, dreno, meio, connections } = montarFonteLimitadaAteDreno({ bomba: true, pressaoDrenoBar });
+        const [bomba] = meio;
+        runPhysicsSteps(engine, 40, 0.1);
+        assert.equal(dreno.pressaoMonitorada, true, `dreno em ${pressaoDrenoBar}: monitor`);
+        aproximadamente(engine.getConnectionState(connections[1]).flowLps, 1, 1e-6, 'vazao no teto');
+        return { npsh: bomba.npshDisponivelM, sucao: bomba.pressaoSucaoAtualBar, dreno: dreno.pressaoEntradaAtualBar };
+    });
+    aproximadamente(resultados[0].npsh, resultados[1].npsh, 1e-9, 'NPSHa igual nos dois drenos');
+    aproximadamente(resultados[0].sucao, resultados[1].sucao, 1e-9, 'pressao de succao igual nos dois drenos');
+    aproximadamente(resultados[0].dreno, resultados[1].dreno, 1e-9, 'a pressao informada no dreno nao interfere no resultado');
+});
+
+test('entrada de tanque aberto vira monitor com a fonte no teto; vaso fechado nao', () => {
+    const montar = (tipoTanque) => {
+        const engine = createEngine();
+        const fonte = new FonteLogica('F-t', 'F-t', 0, 0);
+        const bomba = new BombaLogica('B-t', 'B-t', 100, 0);
+        const tanque = new TanqueLogico('T-t', 'T-t', 200, 0);
+        fonte.pressaoFonteBar = 0.5;
+        fonte.vazaoMaxima = 5;
+        bomba.grauAcionamento = 100;
+        bomba.acionamentoEfetivo = 100;
+        tanque.tipoTanque = tipoTanque;
+        tanque.capacidadeMaxima = 100000;
+        tanque.volumeAtual = 1000;
+        tanque.fluidoConteudo = { ...FLUID_PRESETS.agua };
+        [fonte, bomba, tanque].forEach((component) => engine.add(component));
+        const entrada = new ConnectionModel({ sourceId: fonte.id, targetId: bomba.id });
+        const saida = new ConnectionModel({ sourceId: bomba.id, targetId: tanque.id });
+        engine.addConnection(entrada);
+        engine.addConnection(saida);
+        runPhysicsSteps(engine, 30, 0.1);
+        return { engine, fonte, bomba, tanque, entrada, saida };
+    };
+
+    const aberto = montar('atmosferico');
+    assert.equal(aberto.tanque.entradaMonitorada, true, 'tanque aberto: entrada monitor');
+    aproximadamente(aberto.engine.getConnectionState(aberto.saida).flowLps, 5, 1e-6, 'vazao no teto da fonte');
+    aproximadamente(aberto.engine.getConnectionState(aberto.entrada).sourcePressureBar, 0.5, 1e-9, 'a fonte mantem a pressao');
+    assert.equal(aberto.bomba.fatorCavitacaoAtual, 1, 'a bomba nao cavita');
+    assert.ok(
+        aberto.engine.getConnectionState(aberto.saida).outletPressureBar > aberto.tanque.pressaoEntradaAtualBar,
+        'chega ao tanque acima da coluna de liquido'
+    );
+    assert.ok(aberto.engine.getSolverMetrics().lastError < 1e-6, 'massa fecha');
+    aberto.engine.resetHydraulicState();
+    assert.equal(aberto.tanque.entradaMonitorada, false, 'sem solucao hidraulica nao ha monitor');
+
+    const fechado = montar('fechado');
+    assert.equal(fechado.tanque.entradaMonitorada, false, 'vaso fechado: a entrada se liga ao gas, sem monitor');
+});
+
+test('dreno monitor nao se aplica com tanque, varios drenos ou varias fontes', () => {
+    // Tanque -> bomba -> dreno: a pressao do dreno continua fixa.
+    {
+        const engine = createEngine();
+        const tanque = new TanqueLogico('T-m', 'T-m', 0, 0);
+        const bomba = new BombaLogica('B-m', 'B-m', 100, 0);
+        const dreno = new DrenoLogico('D-m', 'D-m', 200, 0);
+        tanque.capacidadeMaxima = 1000;
+        tanque.volumeAtual = 800;
+        tanque.fluidoConteudo = { ...FLUID_PRESETS.agua };
+        bomba.grauAcionamento = 100;
+        bomba.acionamentoEfetivo = 100;
+        dreno.pressaoSaidaBar = 0;
+        [tanque, bomba, dreno].forEach((component) => engine.add(component));
+        const saida = new ConnectionModel({ sourceId: bomba.id, targetId: dreno.id });
+        engine.addConnection(new ConnectionModel({ sourceId: tanque.id, targetId: bomba.id }));
+        engine.addConnection(saida);
+        runPhysicsSteps(engine, 30, 0.1);
+        assert.equal(dreno.pressaoMonitorada, false, 'tanque no caminho: dreno na pressao fixa');
+        assert.ok(engine.getConnectionState(saida).flowLps > 0, 'a planta opera');
+        aproximadamente(engine.getConnectionState(saida).outletPressureBar, dreno.pressaoSaidaBar, 1e-9, 'chegada na pressao fixa');
+    }
+
+    // Uma fonte no teto alimentando dois drenos.
+    {
+        const engine = createEngine();
+        const fonte = new FonteLogica('F-2d', 'F-2d', 0, 0);
+        const drenoA = new DrenoLogico('D-2a', 'D-2a', 200, -50);
+        const drenoB = new DrenoLogico('D-2b', 'D-2b', 200, 50);
+        fonte.pressaoFonteBar = 10;
+        fonte.vazaoMaxima = 1;
+        [fonte, drenoA, drenoB].forEach((component) => engine.add(component));
+        const ca = new ConnectionModel({ sourceId: fonte.id, targetId: drenoA.id });
+        const cb = new ConnectionModel({ sourceId: fonte.id, targetId: drenoB.id });
+        engine.addConnection(ca);
+        engine.addConnection(cb);
+        runPhysicsSteps(engine, 30, 0.1);
+        assert.equal(drenoA.pressaoMonitorada, false);
+        assert.equal(drenoB.pressaoMonitorada, false);
+        aproximadamente(engine.getConnectionState(ca).flowLps + engine.getConnectionState(cb).flowLps, 1, 1e-6, 'a soma respeita o teto');
+        assert.ok(engine.getSolverMetrics().lastError < 1e-6, 'massa fecha');
+    }
+
+    // Duas fontes no teto alimentando um dreno.
+    {
+        const engine = createEngine();
+        const fonteA = new FonteLogica('F-2a', 'F-2a', 0, -50);
+        const fonteB = new FonteLogica('F-2b', 'F-2b', 0, 50);
+        const dreno = new DrenoLogico('D-2f', 'D-2f', 200, 0);
+        [fonteA, fonteB].forEach((fonte) => {
+            fonte.pressaoFonteBar = 10;
+            fonte.vazaoMaxima = 1;
+        });
+        [fonteA, fonteB, dreno].forEach((component) => engine.add(component));
+        const ca = new ConnectionModel({ sourceId: fonteA.id, targetId: dreno.id });
+        const cb = new ConnectionModel({ sourceId: fonteB.id, targetId: dreno.id });
+        engine.addConnection(ca);
+        engine.addConnection(cb);
+        runPhysicsSteps(engine, 30, 0.1);
+        assert.equal(dreno.pressaoMonitorada, false);
+        aproximadamente(engine.getConnectionState(ca).flowLps + engine.getConnectionState(cb).flowLps, 2, 1e-6, 'cada fonte no seu teto');
+        assert.ok(engine.getSolverMetrics().lastError < 1e-6, 'massa fecha');
+    }
+});
+
+test('dreno monitor: a partida a partir do repouso segue a inercia do cano sem pico nem oscilacao de modo', () => {
+    const { engine, dreno, connections } = montarFonteLimitadaAteDreno({ comprimentoM: 1000 });
+    const pressoes = [];
+    let semModoEstavel = 0;
+    for (let passo = 0; passo < 200; passo += 1) {
+        runPhysicsSteps(engine, 1, 0.1);
+        if (dreno.pressaoMonitorada) pressoes.push(dreno.pressaoEntradaAtualBar);
+        if (engine.getSolverMetrics().lastDiagnostics.some((diagnostic) => diagnostic.code === 'global_status_not_settled')) semModoEstavel += 1;
+    }
+    assert.equal(semModoEstavel, 0, 'o modo monitor nao oscila dentro do passo');
+    assert.ok(pressoes.length > 0, 'o monitor liga quando a vazao chega ao teto');
+    // A inercia do cano vale nos dois modos: ao ligar, a pressao calculada inclui o transiente
+    // (rho*L/A * dQ/dt), mas fica entre a pressao fixa do dreno e a da fonte e sobe ate o regime.
+    pressoes.forEach((pressao) => {
+        assert.ok(pressao >= dreno.pressaoSaidaBar - 1e-6 && pressao <= 10 + 1e-6, `pressao fora de [0, 10]: ${pressao}`);
+    });
+    aproximadamente(engine.getConnectionState(connections[0]).flowLps, 1, 1e-6, 'vazao no teto');
+    aproximadamente(pressoes.at(-1), pressoes.at(-2), 1e-9, 'pressao em regime');
+    assert.ok(pressoes.at(-1) > 9, `regime perto da pressao da fonte: ${pressoes.at(-1)}`);
+
+    // Limpar o estado hidraulico (parar a simulacao, limpar a area) desfaz a marca de monitor.
+    engine.resetHydraulicState();
+    assert.equal(dreno.pressaoMonitorada, false, 'sem solucao hidraulica nao ha modo monitor');
+});
+
+test('dreno monitor: queda da pressao da fonte e do teto com cano longo nao oscila entre os modos', () => {
+    // Regressao: com a inercia zerada no modo monitor, o empurrao inercial de uma desaceleracao ligava o
+    // monitor e, sem ele, a pressao calculada caia abaixo da fixa e desligava (global_status_not_settled).
+    const { engine, fonte, dreno } = montarFonteLimitadaAteDreno({ comprimentoM: 1000 });
+    fonte.pressaoFonteBar = 3;
+    fonte.vazaoMaxima = 6;
+    runPhysicsSteps(engine, 60, 0.1);
+    fonte.pressaoFonteBar = 0.05;
+    fonte.vazaoMaxima = 3;
+    let naoEstabilizou = 0;
+    for (let passo = 0; passo < 80; passo += 1) {
+        runPhysicsSteps(engine, 1, 0.1);
+        const metrics = engine.getSolverMetrics();
+        if (metrics.lastDiagnostics.some((diagnostic) => diagnostic.code === 'global_status_not_settled')) naoEstabilizou += 1;
+        assert.ok(metrics.lastError < 1e-6, `passo ${passo}: massa fecha (${metrics.lastError})`);
+    }
+    assert.equal(naoEstabilizou, 0, 'os estados ativos se estabilizam em todos os passos');
+    assert.equal(dreno.pressaoMonitorada, false, 'a rede passou a render menos que o teto: dreno de volta na pressao fixa');
 });
 
 test('fonte sem limite de vazao nao aplica perda oculta antes do primeiro cano', () => {

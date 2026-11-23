@@ -6,7 +6,7 @@ import {
     resolveCustomFluidColor
 } from '../../../infrastructure/rendering/FluidVisualStyle.js';
 import { getUnitStep, toDisplayValue } from '../../units/DisplayUnits.js';
-import { getFluidNameVariants, translateFluidName } from '../../i18n/LanguageManager.js';
+import { getFluidNameVariants, translateFluidName, translateLiteral } from '../../i18n/LanguageManager.js';
 import {
     ComponentEventPayloads,
     InputValidator,
@@ -422,7 +422,14 @@ export const SINK_PROPERTIES_PRESENTER = {
             engine: getPresentationEngine(),
             sink: comp
         });
+        // Dreno monitor: a pressão é calculada pela rede; o valor digitado segue editável porque é o limite
+        // abaixo do qual a saída volta a impor a contrapressão.
+        const monitorando = comp.pressaoMonitorada === true;
         const basicContent = `
+            <div class="prop-group">
+                ${makeLabel('Modo da pressão', TOOLTIP.sinkPressureMode)}
+                <input type="text" id="disp-modo-pressao-dreno" ${hintAttr(TOOLTIP.sinkPressureMode)} value="${translateLiteral(monitorando ? 'Calculada (monitor)' : 'Imposta')}" disabled>
+            </div>
             <div class="prop-group">
                 ${makeUnitLabel('Contrapressão imposta', 'pressure', TOOLTIP.sinkPressure)}
                 <input type="number" id="input-pressao-dreno" ${hintAttr(TOOLTIP.sinkPressure)} value="${displayEditableUnitValue('pressure', comp.pressaoSaidaBar, 3)}" step="${displayStep('pressure', 0.01)}" min="${displayBound('pressure', -DEFAULT_ATMOSPHERIC_PRESSURE_BAR)}" max="${displayBound('pressure', 10)}">

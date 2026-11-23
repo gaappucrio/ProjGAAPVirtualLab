@@ -887,6 +887,13 @@ export class TanqueLogico extends ComponenteFisico {
         this._notificarVolume();
     }
 
+    // Resultado do solver: true quando a pressão que chega à entrada é calculada (entrada monitor, fonte no
+    // teto); a coluna de líquido segue sendo a pressão do bocal e o excesso se dissipa no jato de entrada.
+    resetEstadoHidraulico() {
+        super.resetEstadoHidraulico();
+        this.entradaMonitorada = false;
+    }
+
     onSimulationStop() {
         this.lastQin = 0;
         this.lastQout = 0;

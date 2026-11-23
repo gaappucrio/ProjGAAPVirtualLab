@@ -296,9 +296,107 @@ export class GlobalHydraulicSolver {
         });
 
         this.assignPumpSuctionAreas(links);
+        this.assignMonitorSinks(nodes, links);
         this.reconcilePreviousFlows(links);
 
         return { nodes, links, componentById, dt };
+    }
+
+    // Dreno monitor (como o DWSIM): num grupo com uma fonte e um único destino (dreno ou entrada de
+    // tanque aberto) e nenhuma outra fronteira de pressão, quando o teto de vazão da fonte está ativo a
+    // fonte mantém a pressão e o destino passa a retirar a vazão máxima com pressão livre (resultado).
+    // Cada ramo do caminho devolve a queda por atrito, perdas locais, cota e a carga da bomba na vazão
+    // imposta. Aqui só se marcam os grupos qualificados; outras topologias (vaso fechado, saída de
+    // tanque no grupo, vários destinos ou fontes) seguem com a pressão fixa e o teto soltando a fonte.
+    assignMonitorSinks(nodes, links) {
+        const parent = new Map();
+        const find = (id) => {
+            let root = id;
+            while (parent.get(root) !== root) root = parent.get(root);
+            return root;
+        };
+        nodes.forEach((node) => parent.set(node.id, node.id));
+        links.forEach((link) => {
+            if (!parent.has(link.from) || !parent.has(link.to)) return;
+            parent.set(find(link.from), find(link.to));
+        });
+
+        const groups = new Map();
+        nodes.forEach((node) => {
+            const root = find(node.id);
+            if (!groups.has(root)) groups.set(root, { sources: [], sinks: [], otherBoundaries: 0 });
+            const group = groups.get(root);
+            if (node.boundaryKind === 'source') group.sources.push(node);
+            else if (node.boundaryKind === 'sink') group.sinks.push(node);
+            // Entrada de tanque aberto: o jato cai no tanque, como num dreno; a coluna de líquido é a
+            // pressão fixa. O vaso fechado fica de fora: a entrada dele se liga ao gás do vaso.
+            else if (node.boundaryKind === 'tank-inlet' && node.fixedPressureBar !== null
+                && node.component?.tipoTanque !== 'fechado') group.sinks.push(node);
+            else if (node.fixedPressureBar !== null || String(node.boundaryKind).startsWith('tank')) group.otherBoundaries += 1;
+        });
+
+        groups.forEach((group) => {
+            if (group.sources.length !== 1 || group.sinks.length !== 1 || group.otherBoundaries !== 0) return;
+            const [source] = group.sources;
+            const [sink] = group.sinks;
+            if (!(source.flowCapLps > EPSILON_FLOW) || !Number.isFinite(source.flowCapLps)) return;
+            sink.monitorSourceNodeId = source.id;
+            sink.monitorFlowLps = source.flowCapLps;
+            source.monitoredBySinkId = sink.id;
+        });
+    }
+
+    // Existe caminho de ramos abertos (no sentido do fluxo) da fonte até o dreno?
+    hasOpenPath(network, fromNodeId, toNodeId) {
+        const visited = new Set([fromNodeId]);
+        const queue = [fromNodeId];
+        while (queue.length > 0) {
+            const nodeId = queue.pop();
+            if (nodeId === toNodeId) return true;
+            network.links.forEach((link) => {
+                if (!link.open || link.from !== nodeId || visited.has(link.to)) return;
+                visited.add(link.to);
+                queue.push(link.to);
+            });
+        }
+        return false;
+    }
+
+    // Liga/desliga o dreno monitor de cada dreno qualificado.
+    // Liga quando o teto da fonte fica ativo: a rede, com o dreno na pressão fixa, puxaria mais que a
+    // vazão máxima. Em vez de soltar a pressão da fonte (e zerar a pressão de todos os pontos com o
+    // dreno em 0), a fonte mantém sua pressão, a vazão vale o teto e a pressão do dreno é resultado.
+    // Desliga quando essa pressão calculada cai abaixo da fixa (a rede passa a render menos que o teto)
+    // ou quando não há caminho aberto da fonte ao dreno (a retirada imposta perderia massa).
+    // A inércia dos canos vale nos dois modos: ligar e desligar têm de ver a mesma física. Zerá-la no
+    // modo monitor fazia a decisão oscilar (o empurrão inercial de uma desaceleração liga o monitor e,
+    // sem ele, a pressão calculada cai abaixo da fixa e desliga), estourando os passes de estado.
+    // Retorna true se algum modo mudou.
+    updateMonitorSinks(network, flows, nodeState) {
+        let changed = false;
+        network.nodes.forEach((node) => {
+            if (node.monitorSourceNodeId == null) return;
+            const state = nodeState.get(node.id);
+            const connected = this.hasOpenPath(network, node.monitorSourceNodeId, node.id);
+            if (!state.monitoring) {
+                if (!connected) return;
+                const outflowLps = network.links
+                    .filter((link) => link.open && link.from === node.monitorSourceNodeId)
+                    .reduce((sum, link) => sum + Math.max(0, flows[link.index]), 0);
+                if (!(outflowLps > node.monitorFlowLps + STATUS_FLOW_TOLERANCE_LPS)) return;
+                state.monitoring = true;
+                state.fixed = false;
+                state.injectionLps = -node.monitorFlowLps;
+                changed = true;
+            } else if (!connected || state.pressureBar < node.fixedPressureBar - STATUS_PRESSURE_TOLERANCE_BAR) {
+                state.monitoring = false;
+                state.fixed = true;
+                state.pressureBar = node.fixedPressureBar;
+                state.injectionLps = 0;
+                changed = true;
+            }
+        });
+        return changed;
     }
 
     // Vaso fechado: em vez de pressões fixas no início do passo, os bocais se ligam a um nó de gás cuja
@@ -1045,7 +1143,12 @@ export class GlobalHydraulicSolver {
             }
         });
 
+        if (this.updateMonitorSinks(network, flows, nodeState)) changed = true;
+
         network.nodes.forEach((node) => {
+            // Fonte de um grupo com dreno monitor: o teto é aplicado no dreno (updateMonitorSinks), e a
+            // fonte nunca solta a pressão.
+            if (node.monitoredBySinkId != null) return;
             const effectiveCapLps = this.getEffectiveNodeFlowCapLps(network, node, flows);
             if (effectiveCapLps === null) return;
             const state = nodeState.get(node.id);
@@ -1264,8 +1367,11 @@ export class GlobalHydraulicSolver {
     // Escrita dos resultados no contrato de estado consumido pela interface
     // ------------------------------------------------------------------
 
-    getTargetBoundaryPressureBar(link, pressures) {
-        if (link.target instanceof DrenoLogico) return finiteNumber(link.target.pressaoSaidaBar, 0);
+    getTargetBoundaryPressureBar(link, solution) {
+        const { pressures, nodeState } = solution;
+        if (link.target instanceof DrenoLogico && !nodeState.get(link.to)?.monitoring) {
+            return finiteNumber(link.target.pressaoSaidaBar, 0);
+        }
         return pressures.get(link.to) ?? 0;
     }
 
@@ -1311,7 +1417,7 @@ export class GlobalHydraulicSolver {
             state.pressureBar = activeFlowLps > 0 ? pipeOutletPressureBar : toPressureBar;
             state.outletPressureBar = toPressureBar;
             state.sourcePressureBar = fromPressureBar;
-            state.backPressureBar = this.getTargetBoundaryPressureBar(link, pressures);
+            state.backPressureBar = this.getTargetBoundaryPressureBar(link, solution);
             state.velocityMps = hydraulics.velocityMps;
             state.deltaPBar = activeFlowLps > 0 ? sourceLossBar + pipePressureDropBar : 0;
             state.pipeInletPressureBar = activeFlowLps > 0 ? pipeInletPressureBar : fromPressureBar;
@@ -1437,6 +1543,8 @@ export class GlobalHydraulicSolver {
             const estado = component.estadoHidraulico;
             if (!estado.pressaoNoPorta) estado.pressaoNoPorta = {};
             estado.pressaoNoPorta[node.port] = pressureBar;
+            if (node.boundaryKind === 'sink') component.pressaoMonitorada = solution.nodeState.get(node.id)?.monitoring === true;
+            if (node.boundaryKind === 'tank-inlet') component.entradaMonitorada = solution.nodeState.get(node.id)?.monitoring === true;
         });
 
         network.links.forEach((link) => {
