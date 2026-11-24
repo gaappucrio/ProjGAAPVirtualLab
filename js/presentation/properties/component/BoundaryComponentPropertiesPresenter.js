@@ -106,8 +106,8 @@ function sourceFluidFieldValues(fluido) {
         'input-source-fluid-temp': toDisplayValue('temperature', fluido.temperatura).toFixed(1),
         'input-source-fluid-viscosity': String(Number(Number(fluido.viscosidadeDinamicaPaS).toPrecision(4))),
         'input-source-fluid-cp': String(Number(Number(fluido.calorEspecificoJkgK).toFixed(1))),
-        'input-source-fluid-vapor': displayUnitValue('pressureDiff', fluido.pressaoVaporBar, 3),
-        'input-source-fluid-atm': displayUnitValue('pressureDiff', fluido.pressaoAtmosfericaBar, 3)
+        'input-source-fluid-vapor': displayUnitValue('pressureBaseAbs', fluido.pressaoVaporBar, 3),
+        'input-source-fluid-atm': displayUnitValue('pressureBaseAbs', fluido.pressaoAtmosfericaBar, 3)
     };
 }
 
@@ -183,11 +183,11 @@ function renderSourceFluidFields(comp) {
             <input type="number" id="input-source-fluid-cp" title="${TOOLTIPS.fluido.calorEspecifico}" value="${campos['input-source-fluid-cp']}" step="any" min="500" max="10000">
         </div>
         <div class="prop-group">
-            ${makeUnitLabel('Pressão de Vapor', 'pressureDiff', TOOLTIPS.fluido.pressaoVapor)}
+            ${makeUnitLabel('Pressão de Vapor', 'pressureBaseAbs', TOOLTIPS.fluido.pressaoVapor)}
             <input type="number" id="input-source-fluid-vapor" title="${TOOLTIPS.fluido.pressaoVapor}" value="${campos['input-source-fluid-vapor']}" step="${displayStep('pressureDiff', 0.001)}" min="${displayBound('pressureDiff', 0.0001)}" max="${displayBound('pressureDiff', 5)}">
         </div>
         <div class="prop-group">
-            ${makeUnitLabel('Pressão Atmosférica', 'pressureDiff', TOOLTIPS.fluido.pressaoAtmosferica)}
+            ${makeUnitLabel('Pressão Atmosférica', 'pressureBaseAbs', TOOLTIPS.fluido.pressaoAtmosferica)}
             <input type="number" id="input-source-fluid-atm" title="${TOOLTIPS.fluido.pressaoAtmosferica}" value="${campos['input-source-fluid-atm']}" step="${displayStep('pressureDiff', 0.001)}" min="${displayBound('pressureDiff', 0.5)}" max="${displayBound('pressureDiff', 2)}">
         </div>
         ${renderCustomColorSwatches(fluido, currentPreset)}

@@ -2,7 +2,7 @@
 
 const P_ATM_DISPLAY_BAR = 1.01325;
 
-// factor: unidade por bar. plainSymbol: símbolo sem g (usado em ΔP e em pressões já absolutas na base).
+// factor: unidade por bar. plainSymbol: símbolo sem referência (usado em ΔP e em pressões já absolutas na base).
 function pressureUnit(label, plainSymbol, factor, step, digits, absolute) {
     const offsetBar = absolute ? P_ATM_DISPLAY_BAR : 0;
     return {
@@ -18,18 +18,18 @@ function pressureUnit(label, plainSymbol, factor, step, digits, absolute) {
 }
 
 const UNIT_CONFIG = {
-    // Pressão: g = manométrica, sem g = absoluta (padrão, como no DWSIM) (Patm somada na exibição).
-    // O estado interno do solver continua manométrico em bar. Nomes como no DWSIM (kPag, barg, psig).
+    // Pressão: sem sufixo = manométrica (padrão; 1,5 bar na planta aparece como 150 kPa). "abs" = absoluta
+    // (Patm somada na exibição, como o DWSIM guarda). O estado interno do solver continua manométrico em bar.
     pressure: {
         label: 'Pressão',
         default: 'kpa',
         units: {
-            kpag: pressureUnit('kPag', 'kPa', 100, 1, 1, false),
-            kpa: pressureUnit('kPa', 'kPa', 100, 1, 1, true),
-            barg: pressureUnit('barg', 'bar', 1, 0.05, 2, false),
-            bar: pressureUnit('bar', 'bar', 1, 0.05, 2, true),
-            psig: pressureUnit('psig', 'psi', 14.5037738, 0.5, 1, false),
-            psi: pressureUnit('psi', 'psi', 14.5037738, 0.5, 1, true),
+            kpa: pressureUnit('kPa', 'kPa', 100, 1, 1, false),
+            kpaabs: pressureUnit('kPa abs', 'kPa', 100, 1, 1, true),
+            bar: pressureUnit('bar', 'bar', 1, 0.05, 2, false),
+            barabs: pressureUnit('bar abs', 'bar', 1, 0.05, 2, true),
+            psi: pressureUnit('psi', 'psi', 14.5037738, 0.5, 1, false),
+            psiabs: pressureUnit('psi abs', 'psi', 14.5037738, 0.5, 1, true),
             mca: pressureUnit('mca', 'mca', 1 / 0.0980665, 0.1, 2, false)
         }
     },
@@ -81,8 +81,23 @@ const unitPreferences = Object.fromEntries(
 const listeners = new Set();
 
 function getUnitEntry(category) {
+    if (category === 'pressureBaseAbs') {
+        // Pressões que já são absolutas na base (vapor, atmosférica): só o fator, e o rótulo diz "abs"
+        // para não se confundir com a pressão manométrica que usa o mesmo símbolo.
+        const selected = UNIT_CONFIG.pressure.units[unitPreferences.pressure];
+        if (!selected) return null;
+        const label = selected.plainSymbol === 'mca' ? 'mca abs' : `${selected.plainSymbol} abs`;
+        return {
+            label,
+            symbol: label,
+            fromBase: (v) => v * selected.factor,
+            toBase: (v) => v / selected.factor,
+            step: selected.step,
+            digits: selected.digits
+        };
+    }
     if (category === 'pressureDiff') {
-        // ΔP, carga e pressões já absolutas na base (vapor, atmosférica): só o fator da unidade escolhida, sem deslocamento.
+        // ΔP e carga (diferenças, sem referência): só o fator da unidade escolhida, sem deslocamento.
         const selected = UNIT_CONFIG.pressure.units[unitPreferences.pressure];
         if (!selected) return null;
         return {
