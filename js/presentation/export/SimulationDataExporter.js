@@ -417,9 +417,11 @@ function splitTrailingUnit(label) {
 function getUnitRule(column) {
     if (column.includes('(L/s)')) return { category: 'flow', sourceToBase: (value) => value };
     if (column.includes('(bar)')) {
-        // ΔP, carga e pressões absolutas na base (vapor, atmosférica) só ganham o fator da unidade; as demais são manométricas.
-        const isDifferenceOrAbsolute = /Queda|Delta P|Perda|Carga gerada|Pressão máxima da bomba|Pressão de vapor|Pressão atmosférica/.test(column);
-        return { category: isDifferenceOrAbsolute ? 'pressureDiff' : 'pressure', sourceToBase: (value) => value };
+        // ΔP e carga só ganham o fator da unidade; vapor e atmosférica são absolutas na base (fator e rótulo "abs");
+        // as demais são manométricas.
+        if (/Pressão de vapor|Pressão atmosférica/.test(column)) return { category: 'pressureBaseAbs', sourceToBase: (value) => value };
+        const isDifference = /Queda|Delta P|Perda|Carga gerada|Pressão máxima da bomba/.test(column);
+        return { category: isDifference ? 'pressureDiff' : 'pressure', sourceToBase: (value) => value };
     }
     if (column.includes('(mm)')) return { category: 'length', sourceToBase: (value) => value / 1000 };
     if (column.includes('(m)')) return { category: 'length', sourceToBase: (value) => value };

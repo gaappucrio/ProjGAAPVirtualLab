@@ -86,7 +86,7 @@ function getUnitEntry(category) {
         // para não se confundir com a pressão manométrica que usa o mesmo símbolo.
         const selected = UNIT_CONFIG.pressure.units[unitPreferences.pressure];
         if (!selected) return null;
-        const label = selected.plainSymbol === 'mca' ? 'mca abs' : `${selected.plainSymbol} abs`;
+        const label = `${selected.plainSymbol} abs`;
         return {
             label,
             symbol: label,

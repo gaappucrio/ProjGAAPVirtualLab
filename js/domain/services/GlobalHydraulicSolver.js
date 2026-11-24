@@ -297,6 +297,7 @@ export class GlobalHydraulicSolver {
 
         this.assignPumpSuctionAreas(links);
         this.assignMonitorSinks(nodes, links);
+        this.markParallelIdealBranches(links);
         this.reconcilePreviousFlows(links);
 
         return { nodes, links, componentById, dt };
@@ -343,6 +344,25 @@ export class GlobalHydraulicSolver {
             sink.monitorSourceNodeId = source.id;
             sink.monitorFlowLps = source.flowCapLps;
             source.monitoredBySinkId = sink.id;
+        });
+    }
+
+    // A indeterminação da divisão só existe com ramos ideais em paralelo (mesmo nó de origem ou de destino).
+    // Um ramo ideal sozinho mantém o valor plano de antes, sem o termo linear mínimo (ver evaluateLink).
+    markParallelIdealBranches(links) {
+        const countBy = (key) => {
+            const counts = new Map();
+            links.forEach((link) => {
+                if (link.kind !== 'connection' || !link.idealBranch) return;
+                counts.set(link[key], (counts.get(link[key]) || 0) + 1);
+            });
+            return counts;
+        };
+        const byFrom = countBy('from');
+        const byTo = countBy('to');
+        links.forEach((link) => {
+            if (link.kind !== 'connection' || !link.idealBranch) return;
+            link.idealBranch = byFrom.get(link.from) > 1 || byTo.get(link.to) > 1;
         });
     }
 
@@ -590,6 +610,10 @@ export class GlobalHydraulicSolver {
         }
 
         const inertanceBarPerLpsPerS = (density * lengthM) / (pipeAreaM2 * 1e8);
+        const idealBranch = lengthM === 0
+            && sourceLoss.lossCoeff === 0
+            && targetLoss.lossCoeff === 0
+            && !(finiteNumber(connection.perdaLocalK, 0) > 0);
         const forcedClosed = (source instanceof TanqueLogico
             && source.temLiquidoDisponivelSaida?.(this.context.usarAlturaRelativa) === false)
             || (source instanceof FonteLogica && !(finiteNumber(source.vazaoMaxima, 0) > EPSILON_FLOW));
@@ -613,6 +637,7 @@ export class GlobalHydraulicSolver {
             staticHeadBar: pressureFromHeadBar(finiteNumber(geometry?.headGainM, 0), density),
             inertanceBarPerLpsPerS,
             inertiaCoeff: dt > 0 ? inertanceBarPerLpsPerS / dt : 0,
+            idealBranch,
             previousFlowLps: Math.max(0, finiteNumber(connection.transientFlowLps, 0)),
             forcedClosed,
             open: !forcedClosed
@@ -755,7 +780,14 @@ export class GlobalHydraulicSolver {
 
     evaluateLink(link, flowLps) {
         if (link.kind === 'connection') {
+            // Ramo ideal (cano de 0 m e nenhum K): o valor é plano em Q, e o Newton só soma a mesma correção
+            // a todos os ramos em paralelo, então a divisão herda o histórico (drenos adicionados com a
+            // simulação rodando davam 7,4 | 13,6 | 2,5 | 8,6 L/s em vez de 8 × 4). O termo linear mínimo,
+            // o mesmo piso da derivada, torna a solução única; só ramos ideais em paralelo o recebem
+            // (markParallelIdealBranches) para não deslocar os demais: os status comparam pressões
+            // com tolerância de 1e-7 bar.
             return (Math.sign(flowLps) * this.connectionLossBar(link, flowLps))
+                + (link.idealBranch ? MIN_LINK_DERIVATIVE_BAR_PER_LPS * flowLps : 0)
                 - link.staticHeadBar
                 + (link.inertiaCoeff * (flowLps - link.previousFlowLps));
         }

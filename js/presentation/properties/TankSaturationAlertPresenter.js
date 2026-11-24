@@ -195,7 +195,7 @@ function formatPumpSizingText(alerta) {
     return t('saturation.pumpSizing', {
         count: ajustes.length,
         flow: formatMeasuredValue('flow', ajustes[0].vazaoNominalRecomendadaLps, 2),
-        pressure: formatMeasuredValue('pressure', ajustes[0].pressaoMaximaRecomendadaBar, 2)
+        pressure: formatMeasuredValue('pressureDiff', ajustes[0].pressaoMaximaRecomendadaBar, 2)
     });
 }
 

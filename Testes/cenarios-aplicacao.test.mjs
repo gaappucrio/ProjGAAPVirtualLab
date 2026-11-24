@@ -1024,7 +1024,7 @@ function simulateTicks(engine, ticks = 30, dt = 0.1) {
 test('tanque novo nasce aberto e o tipo gravado no arquivo é respeitado ao abrir', () => {
     const novo = new TanqueLogico('T-novo', 'T-novo', 0, 0);
     assert.equal(novo.tipoTanque, 'atmosferico', 'padrão aberto (decisão do usuário, 2026-11-11)');
-    assert.equal(novo.pressaoAlivioBar, 10, 'PSV padrão de 10 barg, usada só se o tanque virar fechado');
+    assert.equal(novo.pressaoAlivioBar, 10, 'PSV padrão de 10 bar manométrica, usada só se o tanque virar fechado');
     assert.equal(novo.considerarPerdasBocais, false, 'Tanque novo sem perdas nos bocais, como no DWSIM');
     assert.equal(novo.usarGeometriaBocal, false, 'Perdas na velocidade do cano por padrao');
     assert.equal(new DrenoLogico('D-novo', 'D-novo', 0, 0).usarGeometriaBocal, false, 'K do dreno na velocidade do cano por padrao');
@@ -1936,7 +1936,7 @@ test('fonte e dreno aceitam pressão manométrica negativa (vácuo) até o zero 
     };
     try {
         global.document = { getElementById: (id) => elementos.get(id) || null, querySelectorAll: () => [], querySelector: () => null };
-        setUnitPreference('pressure', 'kpag');
+        setUnitPreference('pressure', 'kpa');
         const engine = new SistemaSimulacao();
         setPresentationEngine(engine);
 
@@ -1964,34 +1964,52 @@ test('fonte e dreno aceitam pressão manométrica negativa (vácuo) até o zero 
     }
 });
 
-test('unidades de pressão: g = manométrica, sem g = absoluta (padrão); ΔP e pressões absolutas na base não levam Patm', async () => {
+test('unidades de pressão: sem sufixo = manométrica (padrão), "abs" = absoluta; ΔP e pressões absolutas na base não levam Patm', async () => {
     const du = await import('../js/presentation/units/DisplayUnits.js');
     const anterior = du.getUnitPreferences().pressure;
     try {
-        assert.equal(anterior, 'kpa', 'padrão = kPa (absoluta), como no DWSIM');
+        assert.equal(anterior, 'kpa', 'padrão = kPa manométrica (1,5 bar na planta = 150 kPa)');
         const casos = [
-            ['kpag', 'kPag', 'kPa', 0, 0],
-            ['kpa', 'kPa', 'kPa', 0, 101.325],
-            ['barg', 'barg', 'bar', 2, 2],
-            ['bar', 'bar', 'bar', 2, 3.01325],
-            ['psig', 'psig', 'psi', 1, 14.5037738],
-            ['psi', 'psi', 'psi', 0, 14.6959488]
+            ['kpa', 'kPa', 'kPa', 'kPa abs', 0, 0],
+            ['kpaabs', 'kPa abs', 'kPa', 'kPa abs', 0, 101.325],
+            ['bar', 'bar', 'bar', 'bar abs', 2, 2],
+            ['barabs', 'bar abs', 'bar', 'bar abs', 2, 3.01325],
+            ['psi', 'psi', 'psi', 'psi abs', 1, 14.5037738],
+            ['psiabs', 'psi abs', 'psi', 'psi abs', 0, 14.6959488]
         ];
-        for (const [id, simbolo, simboloPlano, baseBar, esperado] of casos) {
+        for (const [id, simbolo, simboloPlano, simboloAbsBase, baseBar, esperado] of casos) {
             du.setUnitPreference('pressure', id);
             assert.equal(du.getUnitSymbol('pressure'), simbolo);
-            assert.equal(du.getUnitSymbol('pressureDiff'), simboloPlano);
+            assert.equal(du.getUnitSymbol('pressureDiff'), simboloPlano, 'ΔP não tem referência');
+            assert.equal(du.getUnitSymbol('pressureBaseAbs'), simboloAbsBase, 'Pvap/Patm dizem "abs" para não se confundir com a manométrica');
             assert.ok(Math.abs(du.toDisplayValue('pressure', baseBar) - esperado) < 1e-4, `${id}: ${du.toDisplayValue('pressure', baseBar)} ≠ ${esperado}`);
             // ida e volta
             assert.ok(Math.abs(du.toBaseValue('pressure', du.toDisplayValue('pressure', 1.7)) - 1.7) < 1e-12);
             // ΔP e pressão absoluta da base: só o fator, sem Patm
-            const fator = du.toDisplayValue('pressureDiff', 1);
-            assert.ok(Math.abs(du.toDisplayValue('pressureDiff', 0)) < 1e-12);
-            assert.ok(Math.abs(du.toBaseValue('pressureDiff', fator) - 1) < 1e-12);
+            for (const categoria of ['pressureDiff', 'pressureBaseAbs']) {
+                const fator = du.toDisplayValue(categoria, 1);
+                assert.ok(Math.abs(du.toDisplayValue(categoria, 0)) < 1e-12);
+                assert.ok(Math.abs(du.toBaseValue(categoria, fator) - 1) < 1e-12);
+            }
         }
+        du.setUnitPreference('pressure', 'kpaabs');
+        assert.ok(Math.abs(du.toDisplayValue('pressureBaseAbs', 0.0234) - 2.34) < 1e-9, 'Pvap (absoluta na base) em kPa abs = fator puro');
+        assert.ok(Math.abs(du.toBaseValue('pressure', 101.325)) < 1e-12, '101,325 kPa abs = 0 kPa manométrica');
         du.setUnitPreference('pressure', 'kpa');
-        assert.ok(Math.abs(du.toDisplayValue('pressureDiff', 0.0234) - 2.34) < 1e-9, 'Pvap (absoluta na base) em kPa abs = fator puro');
-        assert.ok(Math.abs(du.toBaseValue('pressure', 101.325)) < 1e-12, '101,325 kPa abs = 0 barg');
+        assert.ok(Math.abs(du.toDisplayValue('pressure', 1.5) - 150) < 1e-9, 'padrão: 1,5 bar manométrica aparece como 150 kPa');
+        // fatores absolutos (um fator errado não pode passar só pela ida e volta)
+        assert.ok(Math.abs(du.toDisplayValue('pressureDiff', 1) - 100) < 1e-9, 'ΔP: 1 bar = 100 kPa');
+        du.setUnitPreference('pressure', 'mca');
+        assert.ok(Math.abs(du.toDisplayValue('pressure', 1) - 10.1972) < 1e-3, '1 bar = 10,197 mca');
+        assert.equal(du.getUnitSymbol('pressureBaseAbs'), 'mca abs');
+        // passo de um campo é uma diferença: sem somar Patm nem o zero da escala
+        const { displayStep } = await import('../js/presentation/properties/PropertyValueFormatters.js');
+        du.setUnitPreference('pressure', 'kpaabs');
+        assert.equal(displayStep('pressure', 0.01), 1, 'passo de 0,01 bar em kPa abs = 1 kPa (não 102,325)');
+        du.setUnitPreference('pressure', 'barabs');
+        assert.equal(displayStep('pressure', 0.01), 0.01);
+        du.setUnitPreference('temperature', 'k');
+        try { assert.equal(displayStep('temperature', 1), 1, 'passo de 1 °C em K = 1'); } finally { du.setUnitPreference('temperature', 'c'); }
     } finally {
         du.setUnitPreference('pressure', anterior);
     }

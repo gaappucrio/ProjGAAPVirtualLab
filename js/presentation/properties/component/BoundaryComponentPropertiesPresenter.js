@@ -184,11 +184,11 @@ function renderSourceFluidFields(comp) {
         </div>
         <div class="prop-group">
             ${makeUnitLabel('Pressão de Vapor', 'pressureBaseAbs', TOOLTIPS.fluido.pressaoVapor)}
-            <input type="number" id="input-source-fluid-vapor" title="${TOOLTIPS.fluido.pressaoVapor}" value="${campos['input-source-fluid-vapor']}" step="${displayStep('pressureDiff', 0.001)}" min="${displayBound('pressureDiff', 0.0001)}" max="${displayBound('pressureDiff', 5)}">
+            <input type="number" id="input-source-fluid-vapor" title="${TOOLTIPS.fluido.pressaoVapor}" value="${campos['input-source-fluid-vapor']}" step="${displayStep('pressureBaseAbs', 0.001)}" min="${displayBound('pressureBaseAbs', 0.0001)}" max="${displayBound('pressureBaseAbs', 5)}">
         </div>
         <div class="prop-group">
             ${makeUnitLabel('Pressão Atmosférica', 'pressureBaseAbs', TOOLTIPS.fluido.pressaoAtmosferica)}
-            <input type="number" id="input-source-fluid-atm" title="${TOOLTIPS.fluido.pressaoAtmosferica}" value="${campos['input-source-fluid-atm']}" step="${displayStep('pressureDiff', 0.001)}" min="${displayBound('pressureDiff', 0.5)}" max="${displayBound('pressureDiff', 2)}">
+            <input type="number" id="input-source-fluid-atm" title="${TOOLTIPS.fluido.pressaoAtmosferica}" value="${campos['input-source-fluid-atm']}" step="${displayStep('pressureBaseAbs', 0.001)}" min="${displayBound('pressureBaseAbs', 0.5)}" max="${displayBound('pressureBaseAbs', 2)}">
         </div>
         ${renderCustomColorSwatches(fluido, currentPreset)}
     `;

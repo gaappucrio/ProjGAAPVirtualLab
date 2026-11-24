@@ -26,7 +26,7 @@ const TEMPO_MINIMO_ALERTA_SATURACAO_S = 1.5;
 export const TIPO_TANQUE_ATMOSFERICO = 'atmosferico';
 export const TIPO_TANQUE_FECHADO = 'fechado';
 const VOLUME_GAS_MINIMO_FRACAO = 0.02;
-// PSV ideal do vaso fechado (barg): valor didático para tanques novos, editável na aba Avançado.
+// PSV ideal do vaso fechado (bar manométrica): valor didático para tanques novos, editável na aba Avançado.
 export const PRESSAO_ALIVIO_PADRAO_BAR = 10;
 
 export class TanqueLogico extends ComponenteFisico {
@@ -45,7 +45,7 @@ export class TanqueLogico extends ComponenteFisico {
         // Padrão aberto (decisão do usuário, 2026-11-11); o tipo fica na aba Avançado.
         this.tipoTanque = TIPO_TANQUE_ATMOSFERICO;
         this.pressaoPreCargaBar = 0.5;
-        // PSV ideal do vaso fechado: ao atingir este set (barg) a pressão do gás para e o excedente sai
+        // PSV ideal do vaso fechado: ao atingir este set (bar manométrica) a pressão do gás para e o excedente sai
         // como alívio contabilizado. null = sem PSV (o vaso enche até a trava hidráulica).
         this.pressaoAlivioBar = PRESSAO_ALIVIO_PADRAO_BAR;
         this.vazaoAlivioLps = 0;
@@ -207,7 +207,7 @@ export class TanqueLogico extends ComponenteFisico {
         return this.getPressaoGasParaNivelBar(fluido, this.getNivelNormalizado());
     }
 
-    // Set da PSV em vigor (barg), ou null: só o vaso fechado tem PSV. Um set abaixo da pré-carga
+    // Set da PSV em vigor (bar manométrica), ou null: só o vaso fechado tem PSV. Um set abaixo da pré-carga
     // aliviaria o próprio gás; sem inventário de gás no modelo, o set efetivo não fica abaixo dela
     // (com set = pré-carga, V_set = 0 e o Boyle em V = 0 dá exatamente o set).
     getPressaoAlivioEfetivaBar() {

@@ -43,7 +43,8 @@ export const displayEditableUnitValue = (category, baseValue, digits = 3) => {
     return Number(displayValue.toFixed(digits));
 };
 export const displayBound = (category, baseValue, digits = 3) => Number(toDisplayValue(category, baseValue).toFixed(digits));
-export const displayStep = (category, baseStep, digits = 6) => Math.max(Number(toDisplayValue(category, baseStep).toFixed(digits)), Number.EPSILON);
+// O passo é uma diferença: tira o deslocamento da unidade (Patm em kPa abs, 273,15 em K, 32 em °F).
+export const displayStep = (category, baseStep, digits = 6) => Math.max(Number((toDisplayValue(category, baseStep) - toDisplayValue(category, 0)).toFixed(digits)), Number.EPSILON);
 export const baseFromDisplay = (category, rawValue, fallback = NaN) => {
     const displayValue = parseStrictNumber(rawValue);
     if (!Number.isFinite(displayValue)) return fallback;

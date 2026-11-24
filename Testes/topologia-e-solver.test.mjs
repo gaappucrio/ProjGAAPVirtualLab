@@ -1882,3 +1882,24 @@ test('trocador de calor opera com duas correntes hidraulicamente independentes e
     );
 });
 
+test('cano ideal: drenos adicionados com a simulação rodando dividem a vazão igual, como após pausar', () => {
+    const engine = createEngine();
+    const fonte = new FonteLogica('F-par', 'F-par', 0, 0);
+    fonte.vazaoMaxima = 32 / 3.6;
+    engine.add(fonte);
+    const conexoes = [];
+    for (let i = 0; i < 4; i += 1) {
+        const dreno = new DrenoLogico(`D-par-${i}`, `D-par-${i}`, 400, i * 80);
+        engine.add(dreno);
+        fonte.conectarSaida(dreno);
+        const conexao = new ConnectionModel({ sourceId: fonte.id, targetId: dreno.id });
+        engine.addConnection(conexao);
+        conexoes.push(conexao);
+        // Cada dreno entra com a simulação em curso: o histórico das vazões anteriores não pode decidir a divisão.
+        for (let passo = 0; passo < 200; passo += 1) engine.tickPipeline.advance(0.05);
+    }
+    conexoes.forEach((conexao, i) => {
+        const vazaoM3h = engine.getConnectionState(conexao).flowLps * 3.6;
+        assert.ok(Math.abs(vazaoM3h - 8) < 0.01, `dreno ${i + 1}: ${vazaoM3h.toFixed(2)} m³/h em vez de 8`);
+    });
+});

@@ -33,7 +33,8 @@ export function displayBound(category, baseValue, digits = 3) {
 }
 
 export function displayStep(category, baseStep, digits = 6) {
-    return Math.max(Number(toDisplayValue(category, baseStep).toFixed(digits)), Number.EPSILON);
+    // O passo é uma diferença: tira o deslocamento da unidade (Patm em kPa abs, 273,15 em K, 32 em °F).
+    return Math.max(Number((toDisplayValue(category, baseStep) - toDisplayValue(category, 0)).toFixed(digits)), Number.EPSILON);
 }
 
 export function rawBaseValue(category, rawValue, fallback = NaN) {
